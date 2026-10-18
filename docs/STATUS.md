@@ -24,8 +24,8 @@ _Last updated: 2026-10-18_
 
 ## Decisions needed (Tucker)
 - Approve the M0 design (incl. SwanStation as the primary core).
-- OK to install DuckStation + PCSX-Redux into the Emulators folder?
-- Where agentic work happens: this cloud session or Claude Code on your PC (WSL2).
+- ~~Installs~~: approved (D10).
+- ~~Where agentic work happens~~: resolved. Claude Code on your PC (WSL2).
 - 5-minute check on a Thor: does RetroArch's SwanStation core install and run?
 
 ## Environment notes

@@ -27,3 +27,6 @@ Follow the Maria mod precedent: a Docker image or script that takes the user's o
 
 **D6: Dev loop and budget** (owner, 2026-10-18)
 The spec-driven loop is in `AGENTS.md`. Claude Pro subscription, ~1 month target. An upgrade will be considered if needed.
+
+## D10: Install DuckStation + PCSX-Redux for cross-checks, using OpenBIOS
+Approved by Tucker on 2026-10-18. Install both into `C:\Users\tucke\OneDrive\Desktop\Emulators`, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.

@@ -1,6 +1,6 @@
 # AGENTS.md: working on SOTN Co-op
 
-These instructions are for any AI coding agent (Claude or others) working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything.
+These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything.
 
 ## Roles
 - **Tucker (owner):** owns architecture, design, scope and game feel, and approves milestone designs and PRs. He is an experienced engineer, but his time is the scarcest resource on this project. Optimize for minimal owner time, not minimal agent effort.
@@ -26,7 +26,6 @@ These instructions are for any AI coding agent (Claude or others) working in `mo
 ## Engineering rules
 - **Never commit game data.** That covers disc images, extracted files, ROM-derived assets and savestates containing game RAM. Check `git status` before every commit.
 - **Keep it deterministic.** No uninitialized reads, and no timing- or emulator-dependent behavior. Netplay depends on bit-identical lockstep.
-- **Stock PS1 only.** Stay within 2MB RAM and the existing overlay budgets. Track free space as a metric.
 - **Minimize upstream diffs.** Put mod code in `mods/co-op/` and touch upstream `src/` through small, well-commented hooks. That keeps rebasing on upstream sotn-decomp cheap.
 - **Tooling in Python** where practical (test harness, bots, scripts), so Tucker can read and modify it easily.
 - **Evidence over claims.** "Works" means a harness test passes. Attach the results, plus a short clip or screenshot for anything visual.
@@ -52,6 +51,5 @@ These instructions are for any AI coding agent (Claude or others) working in `mo
 
 ## Budget
 The project runs on a Claude **Pro** subscription, with a target of **finishing in about a month**. Pro has rolling usage limits (resetting every 5 hours, plus possible weekly caps), so the budget is measured in usage windows, not tokens. See `docs/ROADMAP.md`.
-- Use the cheapest model that can do the job. Small or fast models handle bot play and bulk log reading. Reserve the strongest model for design and hard debugging.
 - Prefer RAM-text state over screenshots, and cache-friendly long sessions over many cold starts.
 - If a milestone runs about 50% over its budget, stop and report in `docs/STATUS.md` before continuing. Tucker may consider a plan upgrade.

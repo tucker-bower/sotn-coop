@@ -75,3 +75,10 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
 - Precedent: the Maria mod ships as a **Docker image that builds the mod from the user's own disc images**. No game data is distributed. Its guide says "Do not redistribute any files," and derivatives must stay open source (AGPL).
 - **The Maria mod requires a second disc:** *Dracula X Chronicles (EU, PSP)*, because her graphics and sounds come from the PSP version. Maria as P2 would therefore require the player to own that game too.
 - PPF patches are commonly shared in the community for small fixes.
+
+## SwanStation on Android (checked 2026-10-18)
+- The libretro buildbot ships a nightly `swanstation_libretro_android.so` for arm64-v8a (latest build 2026-10-18). It installs from RetroArch's built-in core downloader, with no sideloading.
+- The upstream repo (libretro/swanstation) is active, with commits as recent as 2026-10-15, including savestate-correctness fixes that matter for netplay rollback.
+- It's a libretro fork of DuckStation from before DuckStation's licence change, so it shares the 8MB support and the accuracy lineage.
+- Risk: commit notes say frame replay is identical "on the interpreter". Whether the recompiler is identical too is unverified. RetroArch netplay rollback needs deterministic replay, so M5 has to test netplay with the default (recompiler) CPU mode, and fall back to the interpreter if needed. The Thor has enough CPU headroom for that.
+- The only Android cost: ReARMed is RetroArch's default PS1 core, so users have to pick SwanStation once. The M5 instructions will cover that.
