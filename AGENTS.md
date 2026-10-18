@@ -1,6 +1,6 @@
 # AGENTS.md: working on SOTN Co-op
 
-These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything.
+These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything. Then run `scripts/doctor.py`: it checks the toolchain, discs and build. Every path (discs, emulators, savestates) is in `env.example.toml` / `env.toml`, and setup is in `SETUP.md`.
 
 ## Roles
 - **Tucker (owner):** owns architecture, design, scope and game feel, and approves milestone designs and PRs. He is an experienced engineer, but his time is the scarcest resource on this project. Optimize for minimal owner time, not minimal agent effort.
@@ -8,7 +8,7 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 
 ## The loop (spec-driven)
 1. **Design first.** Before each milestone, write a one-page proposal in `docs/design/Mx-<name>.md`. It should give 2–3 options, a recommendation, risks, and **testable acceptance criteria**. Don't write milestone code until Tucker approves it. Small spikes to de-risk the proposal are fine.
-2. **Build autonomously** on a branch named `coop/mx-<short-name>`.
+2. **Build autonomously** on a branch named `coop-mx-<short-name>` (git can't nest under the existing `coop` branch).
 3. **Open a PR** using the template below.
 4. **Playtest** at milestones: deliver a patched disc image and short testing instructions.
 

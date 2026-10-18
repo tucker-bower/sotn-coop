@@ -1,0 +1,3 @@
+# co-op: local machine state (never commit)
+.env/
+env.toml

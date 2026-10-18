@@ -1,6 +1,6 @@
 # M0 design: test harness, 8MB verification, disc builder skeleton
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** approved by Tucker on 2026-10-18 (SwanStation primary; Docker deferred, D14).
 **Budget:** 12% of the month. Spike so far: about half a day.
 
 ## Goal
@@ -61,7 +61,7 @@ Copy the debug module's proven pattern into `mods/co-op/module/`:
 3. A scenario walks Alucard through 3 entrance rooms, with assertions on room ID and position.
 4. The heartbeat module runs in 8MB on SwanStation (harness assertion). It also boots on DuckStation and PCSX-Redux on Tucker's PC (one manual check each, or via computer use).
 5. The lockstep check passes for 10 minutes of scripted play.
-6. Docker builds the heartbeat disc from a user-supplied image.
+6. A script builds the heartbeat disc from a user-supplied image. Docker is deferred to M5 (D14).
 
 ## Risks
 - **The intro takes a long time to script** (name entry, prologue). Mitigation: an RAM-poke shortcut that's allowed in the harness only.

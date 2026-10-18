@@ -82,3 +82,10 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
 - It's a libretro fork of DuckStation from before DuckStation's licence change, so it shares the 8MB support and the accuracy lineage.
 - Risk: commit notes say frame replay is identical "on the interpreter". Whether the recompiler is identical too is unverified. RetroArch netplay rollback needs deterministic replay, so M5 has to test netplay with the default (recompiler) CPU mode, and fall back to the interpreter if needed. The Thor has enough CPU headroom for that.
 - The only Android cost: ReARMed is RetroArch's default PS1 core, so users have to pick SwanStation once. The M5 instructions will cover that.
+
+## Dracula X Chronicles USA vs EU (checked 2026-10-18)
+- Tucker's copy is **ULUS-10277**, from `UMD_DATA.BIN`. The decomp builds and extracts from the EU release, ULES-00841.
+- Hashing `PSP_GAME/USRDIR/res/ps/PSPBIN/*.bin` against `config/check.pspeu.sha`: 0 of 65 are identical. They're the same `MWo3` overlay format at the same paths, but a different build (the USA files are dated Sep 2007).
+- `maria.bin`: the USA file is 212,864 bytes, against roughly 259,840 for the EU one (from the splat segment end 0x3F700). The EU file has font_eu and HUD graphics in 5 languages, so every asset offset in `config/assets.pspeu.yaml` shifts.
+- `res/ps/hdbin/*`: all 14 match `config/check.hd.sha`.
+- Conclusion → D15.
