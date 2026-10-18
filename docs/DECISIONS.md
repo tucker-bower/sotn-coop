@@ -19,10 +19,10 @@ DuckStation, RetroArch cores, PCSX-Redux. Real PS1 hardware is no longer a targe
 **D7: Richter and Maria as P2 are core goals; use 8MB dev-RAM mode from the start** (owner, 2026-10-18)
 Playing as Alucard + Richter or Alucard + Maria is a much better experience than two Alucards. Because we build from source, `RIC.BIN` (and the Maria mod's overlay) can be relinked into the 8MB expansion area instead of their normal slot, so they coexist with Alucard. The community already treats 8MB as standard ("most modern emulators have the 8MB available"). Cost: players must enable the emulator's 8MB option, and each target emulator's support must be verified in M0. Maria additionally requires the user to own *Dracula X Chronicles (EU, PSP)*.
 
-**D8: Ship as a patched PS1 disc image now; don't wait for the PC port** (agent-default, pending owner confirmation, 2026-10-18)
+**D8: Ship as a patched PS1 disc image now; don't wait for the PC port** (owner, 2026-10-18)
 The PC port has no release date and currently covers 23 of 41 stages. Our co-op code is shared C source, so it carries over to the port if and when that ships, and Android may follow quickly once it does.
 
-**D9: Distribution builds from the user's own disc** (agent-default, pending owner confirmation, 2026-10-18)
+**D9: Distribution builds from the user's own disc** (owner, 2026-10-18)
 Follow the Maria mod precedent: a Docker image or script that takes the user's own disc image(s) and outputs the patched image. We publish no game data and no pre-patched images. An xdelta/PPF patch is a possible convenience option, subject to an owner decision.
 
 **D6: Dev loop and budget** (owner, 2026-10-18)

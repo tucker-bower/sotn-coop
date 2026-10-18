@@ -10,8 +10,11 @@ _Last updated: 2026-10-18_
 - Research: Discord, wiki and codebase → `research.md`. Key finding: about 85% of enemy targeting goes through shared helpers in `st_common.h`.
 - Scope change (D7): Richter as P2 is now a core goal, using 8MB RAM mode. The roadmap has been re-planned.
 
+- M0 spike: rebuilt a modded disc, booted it headless at 3.5× speed in 8MB mode on open-source BIOS, deterministic. See `design/M0-harness.md`.
+- Finding: PCSX ReARMed and Beetle PSX don't support 8MB. SwanStation (RetroArch) is the co-op/netplay target.
+
 ## In flight
-- M0 design proposal (harness backend: native PC port vs. headless emulator).
+- M0 design doc, **awaiting approval**: `design/M0-harness.md`.
 
 ## Next
 - M0 implementation after approval.
@@ -20,8 +23,10 @@ _Last updated: 2026-10-18_
 - Month started 2026-10-18. Spent so far: setup only (~1 day).
 
 ## Decisions needed (Tucker)
-- Confirm D8 (ship as a patched disc now, not waiting for the PC port) and D9 (distribution builds from the user's own disc).
+- Approve the M0 design (incl. SwanStation as the primary core).
+- OK to install DuckStation + PCSX-Redux into the Emulators folder?
 - Where agentic work happens: this cloud session or Claude Code on your PC (WSL2).
+- 5-minute check on a Thor: does RetroArch's SwanStation core install and run?
 
 ## Environment notes
 - The cloud build needs local Go module mirrors (the proxy blocks proxy.golang.org). Setup lives outside the repo, in `~/gomirrors/env.sh`. TODO: script this into the M0 bootstrap.
