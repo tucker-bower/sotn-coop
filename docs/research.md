@@ -38,5 +38,40 @@ Richter mode replaces `ARC_F` + servant + weapons (`8013C000–8017FFFF`) with `
 - **sotn-player-mmx** (github.com/Xeeynamo/sotn-player-mmx): a custom player character (Mega Man X). It shows palette injection into `g_Clut` and per-frame palette uploads. Relevant to tinting P2.
 - No existing co-op or multiplayer work was found in the repo or wiki.
 
-## Discord
-_Pending: needs a Discord login in Claude's browser pane._ Plan: read pins and resources channels, and search for: multiplayer, co-op, "player 2", pad2, netplay, "second player", "pc port", replay, determinism.
+## Enemy targeting (codebase), which addresses the biggest risk
+The maintainer's view (Discord, below) is that enemies only interact with player 1. Most enemy AI, however, reads the player through **shared helpers in `src/st/st_common.h`**, which are compiled into every stage:
+
+| Helper | Call sites (stages + bosses) |
+|---|---|
+| `GetSideToPlayer` | 419 |
+| `GetDistanceToPlayerX` / `Y` | 350 |
+| `GetPlayerCollisionWith` | 111 |
+| Direct `PLAYER.posX/posY` / `g_Entities[0]` | about 135 |
+
+If those helpers are made to target "the nearest player" (or a per-enemy chosen target), roughly 85% of the targeting logic gets multi-player awareness from one small change. The remaining ~135 direct reads get fixed case by case, prioritized by the route we test. Damage *to* players and hits *from* player weapons go through engine hit detection in DRA. That needs a separate audit in the M2 design.
+
+## Discord (SOTN Decomp server, read 2026-10-18, read-only)
+Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-sotn, #xbla-sotn, #rom-modding (mods built on the decomp), #decompilation, #tooling, #naming, #picci (PC port). Searched for: multiplayer, co-op/coop, "player 2", 8MB, PPF/xdelta, android, release.
+
+**Co-op / multiplayer**
+- **Nobody has built this.** No co-op work exists on the decomp. The question comes up every few months: May 2024, Aug 2026 ("Richter and Alucard playing through the castle together?") and Sep 2026.
+- xeeynamo (maintainer), May 2024: "Yes we could add a Player 2 with a tiny bit of work, but it wouldn't be able to interact with almost anything in a map." Objects and monsters only interact with P1. That matches the targeting finding above, which is our proposed answer.
+- Another member, Aug 2026: they compare it to the Super Mario 64 co-op mod. They warn that bosses would need balance changes for two players, or they'll "implode."
+- **Prior art:** "Natan Vishera" made a PS1 SOTN mod, *Modo Multiplayer Co-op com Familiars v1.1* (P2 controls a familiar), plus an experimental "multiplayer with enemies" video. These are worth watching for ideas, but they're not built on the decomp. There's also a Sega Genesis fan port with a 2-player mode (Pigsy).
+- Trivia: the Xbox 360 version contains unused player-2 input code.
+
+**8MB RAM mode**
+- xeeynamo: "Most of the modern emulators have the 8MB available." It's enabled by writing the RAM_SIZE register at `0x1F801060`. The project's debug module already uses 8MB.
+- A rom-modding regular (2024): "Basically everyone uses 8mb mode now."
+- Modders already use the trick of putting a jump in the original code and placing new code in the 8MB area. **This supports D7.**
+
+**PC port (#picci)**
+- Built on **PsyZ**, xeeynamo's PS1 compatibility framework, which is meant to target Linux, Windows, macOS, Android, iOS and more.
+- Android (Aug 2026): "Would take me a day max to port it to Android." The infrastructure is in PsyZ, but it needs a separation between saves and game data first.
+- Active right now (Oct 2026): boss-fight replays run in CI as determinism tests, and they're chasing per-OS nondeterminism (OS `rand()` vs Psy-Q's).
+- **There is no release date anywhere.** The wiki's FAQ explicitly asks people not to ask.
+
+**Legal / distribution**
+- Precedent: the Maria mod ships as a **Docker image that builds the mod from the user's own disc images**. No game data is distributed. Its guide says "Do not redistribute any files," and derivatives must stay open source (AGPL).
+- **The Maria mod requires a second disc:** *Dracula X Chronicles (EU, PSP)*, because her graphics and sounds come from the PSP version. Maria as P2 would therefore require the player to own that game too.
+- PPF patches are commonly shared in the community for small fixes.
