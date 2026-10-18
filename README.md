@@ -6,7 +6,12 @@ A two-player co-op mod for *Castlevania: Symphony of the Night* (PS1, US / SLUS-
 
 Two people play a full run of the game together. Each player controls their own character, on the same screen, in the same castle.
 
-The target setup is two AYN Thor handhelds over home wifi, using RetroArch netplay. Netplay keeps two emulators in lockstep, so the mod itself only needs local two-player support (controller port 2). It doesn't need any networking code.
+The mod is a patched disc image that runs on the popular PS1 emulators: DuckStation, RetroArch (Beetle PSX, SwanStation, PCSX ReARMed), PCSX-Redux and ePSXe. It's also designed to run on real hardware. It plays over local wifi or the internet using standard tools:
+
+- **RetroArch netplay** (LAN, or internet via relay servers). This works on PC and Android handhelds such as the AYN Thor.
+- **Streaming tools** such as Parsec, Steam Remote Play Together or Moonlight. These work with any emulator, because P2 is just a second local controller.
+
+The mod itself only needs local two-player support (controller port 2). It contains no networking code.
 
 ## Scope
 
@@ -29,7 +34,15 @@ The target setup is two AYN Thor handhelds over home wifi, using RetroArch netpl
 ## Constraints
 - **Deterministic.** The same inputs must produce the same frames, or netplay desyncs.
 - **PS1 memory limits.** The game has 2MB of RAM and tight overlay budgets.
-- **Ships as a patched disc image** (`.cue`/`.bin`) that runs on stock RetroArch PS1 cores (Beetle PSX / SwanStation).
+- **Ships as a patched disc image** (`.cue`/`.bin`), with an xdelta/PPF patch for distribution.
+- **No emulator-specific tricks.** The mod stays within stock PS1 hardware: no 8MB dev-RAM mode and no emulator hooks, so it behaves the same everywhere.
+
+## Docs
+- [`AGENTS.md`](AGENTS.md): how AI agents work on this project
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): milestones and acceptance criteria
+- [`docs/STATUS.md`](docs/STATUS.md): current state, budget and decisions needed
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): decision log
+- [`docs/research.md`](docs/research.md): notes from the codebase, wiki and Discord
 
 ## Testing approach
 - A frame-stepped headless harness: savestates, scripted and bot inputs, and RAM assertions.
