@@ -17,7 +17,7 @@ from coop_env import COOP, TOOLS, savestate
 
 sys.path.insert(0, str(COOP))  # for `link`
 
-def _worker(conn, disc, start):
+def _worker(conn, disc, start, rank):
     from emu import Emu
     from link.adapter import HarnessAdapter
     from link.host import Host
@@ -31,7 +31,7 @@ def _worker(conn, disc, start):
                 emu.load_state_file(savestate(disc, start))
             mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
             transport = UdpTransport()  # any free port, so sessions can run in parallel
-            host = Host(mailbox, transport)
+            host = Host(mailbox, transport, rank)
             linked = True
             conn.send(("ok", transport.port))
             while True:
@@ -133,7 +133,7 @@ class Session:
         discs = self.disc if isinstance(self.disc, (tuple, list)) else (self.disc, self.disc)
         for i, start in enumerate(self.starts):
             parent, child = ctx.Pipe()
-            proc = ctx.Process(target=_worker, daemon=True, args=(child, str(discs[i]), start))
+            proc = ctx.Process(target=_worker, daemon=True, args=(child, str(discs[i]), start, i))
             proc.start()
             self.games.append(Game("AB"[i], parent, proc))
         ports = []

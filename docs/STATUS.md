@@ -13,20 +13,25 @@ _Last updated: 2026-10-18_
 - **Re-plan (2026-10-18):** the goal is now independent exploration, with one game per player and shared progression (D19–D31). `ROADMAP.md`, `README.md`, `AGENTS.md` and `research.md` are rewritten to match. The ghost-P2 M1 design is withdrawn (D29).
 
 ## In flight
-- PRs #1–#3 merged. They were stacked, so `coop` only got M0. **PR #4** lands M1–M3 on `coop` (no new changes).
-- **Designs awaiting approval:**
-  - `design/M3b-save-rooms.md`: the game's own save rooms end to end. The partner's game writes its own memory-card save, so both players resume from the title's Load menu.
-  - `design/M4-shared-rooms.md`: shared rooms, via room authority plus mirroring. Spikes first, then a checkpoint with Tucker.
+- PR #4 lands M1–M3 on `coop`. **M3b and M4 built, all criteria pass**, on `coop-m4-shared-rooms`.
+  - **M3b:** the game's own save rooms end to end. The partner's game writes its own card save, and both resume from the title's Load menu.
+  - **M4:** shared rooms. The same enemies for both, both deal and take damage, enemies go for the nearer player, and hand-over is clean.
+  - 36 scenarios pass, plus a 10-minute shared-room soak and the PCSX-Redux check.
 
 ## Next
-- Build M3b, then M4's spikes (S1–S4) and the checkpoint.
+- M5 design: bosses and cutscenes together:
+  - auto pull-in on boss-room entry;
+  - 2× boss HP;
+  - aggro switching, a 50% chance after each attack (D47);
+  - dead players stay dead until the boss falls (D24).
+- Then M6: the couch launcher and Tucker's playtest.
 
 ## Budget
 - Day 2 of the month (2026-10-19): M0 through M3 done, against budgets that ran to 2026-10-30. Far ahead of plan.
 
 ## Decisions needed (Tucker)
-- Merge PR #4.
-- Approve M3b and M4 (or redirect).
+- Merge PR #4, then the M3b+M4 PR.
+- At the M6 playtest: shared-room fights (D51/D52 limits), the real save room on hardware-like emulators.
 - **Before M7:** what mixed characters mean for shared progression, e.g. Richter with relics, equipment or levels, and Richter mode's world changes (D27).
 - **Later (Maria):** obtain DXC **EU**, or let me write a `pspus` asset map (D15).
 

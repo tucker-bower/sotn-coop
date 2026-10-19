@@ -11,7 +11,7 @@ CC_FLAGS  += -march=mips1 -mabi=32 -EL -mfp32 -fno-pic -mno-shared -mno-abicalls
 CPP_FLAGS := -isystem $(ROOT)/include -isystem $(ROOT)/include/psxsdk -undef
 CPP_FLAGS += -D_internal_version_$(VERSION) -Dmips -D__OPTIMIZE__ -D__mips__ -D__mips -Dpsx -D__psx__ -D__psx
 CPP_FLAGS += -D_PSYQ -D__EXTENSIONS__ -D_MIPSEL -DNO_LOGS -D_LANGUAGE_C -DLANGUAGE_C
-OBJS      := $(BUILD)/boot.o $(BUILD)/coop.o $(BUILD)/arrive.o $(BUILD)/progress.o $(BUILD)/flag_gated.o $(BUILD)/puppet.o
+OBJS      := $(BUILD)/boot.o $(BUILD)/coop.o $(BUILD)/arrive.o $(BUILD)/progress.o $(BUILD)/flag_gated.o $(BUILD)/shared.o $(BUILD)/overlay_table.o $(BUILD)/puppet.o
 # boot.bin must fit in DRA.BIN's last CD sector (DRA.BIN is 0x119870 bytes; 564 sectors = 0x11A000)
 BOOT_MAX  := 1936
 
@@ -36,7 +36,7 @@ $(BUILD)/symbols.ld.txt: $(CONFIG)/symbols.$(VERSION).txt $(DRA_MAP) Makefile
 	awk '$$1 ~ /^0x80/ && NF == 2 && $$2 ~ /^[A-Za-z_][A-Za-z0-9_]*$$/ { print $$2 " = " $$1 ";" }' $(DRA_MAP) >> $@
 	cat $(ROOT)/build/$(VERSION)/config/undefined_syms_auto.$(VERSION).dra.txt >> $@  # main.exe globals DRA uses
 
-$(BUILD)/%.o: %.c coop_api.h link.h arrive.h progress.h flag_gated.h puppet.h
+$(BUILD)/%.o: %.c coop_api.h link.h arrive.h progress.h flag_gated.h shared.h overlay_table.h puppet.h
 	mkdir -p $(BUILD)
 	$(CROSS)cpp $(CPP_FLAGS) -o $(BUILD)/$*.i $<
 	$(CROSS)gcc $(CC_FLAGS) -x cpp-output -o $@ $(BUILD)/$*.i

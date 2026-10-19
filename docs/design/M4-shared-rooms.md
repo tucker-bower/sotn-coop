@@ -1,6 +1,6 @@
 # M4 design: Shared rooms (the same enemies, fighting together)
 
-**Status:** approved 2026-10-19 ("everything for shared rooms sounds good").
+**Status:** built, all criteria pass (results at the end). Approved 2026-10-19.
 **Budget:** 25% of the month (the main risk). Target: 2026-11-04. Checkpoint after the spikes.
 **Context:** D23 ("same room means the same enemies"), `research.md` → "Shared rooms", M1–M3.
 
@@ -77,3 +77,24 @@ If S1 or S4 show that A can't be made to look right, the fallback is Option C li
 - **The ~135 direct player reads:** some enemies will only chase the authority's player at first. Accepted for M4. They're listed and fixed on the test route first.
 - **Bandwidth online:** 40 KB × 60/s is fine on one PC (couch first) and needs compression online (M7+).
 - **Bosses** are their own overlays, with M5's own rules (2× HP, pull-in, stay-dead). M4 makes sure ordinary rooms work. M5 builds bosses on top.
+
+## Results (2026-10-19)
+The spikes and the build went straight through. S1 (raw mirroring) looked identical to the authority, so there was no checkpoint stop. All tests run in the castle entrance hall, where A enters first (authority) and B arrives later (guest).
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Same enemies | ✅ `shared_same_enemies`: B's world holds exactly A's 7 stage entities, at the same room positions (camera shift applied), and none of its own. |
+| 2 | Both damage | ✅ `guest_hits_count`: B fights while A stands still. A's enemy loses HP to B's hits and dies after 195 frames. It's gone from both worlds, and its drop and death play once, in A's world. |
+| 3 | Both get hurt | ✅ `guest_gets_hurt`: a zombie's attack hurts B (85 → 66) through B's own hit detection against the copies. |
+| 4 | Targeting | ✅ `targeting_patched`: NO3's three helpers jump into the module (all 52 overlays are in the table). ✅ `targeting_nearer_player`: the hall's Warg wakes when B comes within range while A stays out of it, then goes for B and hits. |
+| 5 | In and out | ✅ `in_and_out`: B leaves (nobody shares), B comes back (shared again, A still authority), then A leaves. B carries on with all 7 enemies from where they were, with no jumps, losses or duplicates. |
+| 6 | Normal HP | ✅ Same HP in both worlds (`shared_same_enemies`). Nothing is scaled. |
+| 7 | Cost | ✅ A snapshot is 8 KB (one datagram). The guest runs 120 of 120 frames after two fixes (word copies, and keeping primitive chains between frames; it was at 99/120 before). `no_effect_on_play` still matches retail frame for frame. |
+| 8 | Soak | ✅ `shared_soak_10min`: random fighting in the hall for 10 minutes, shared most of the time, with regroups: no crash, and shared state converges. |
+| — | Regressions | ✅ All 36 scenarios pass. ✅ PCSX-Redux headless check. |
+
+**Known limits (D50–D52):**
+- A pickup by the guest goes to the authority's player, because the guest's touch is relayed as a hit. Items and gold are shared, so only hearts and hearts-like drops land on the authority.
+- Moving platforms don't carry the guest: they carry the player inside their own update, which the guest doesn't run.
+- The roughly 135 direct player reads still aim at the authority's player.
+- Players far apart in a big room each run their own part until their cameras meet.

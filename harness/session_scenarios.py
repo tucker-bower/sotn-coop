@@ -123,7 +123,8 @@ def presence_follows(run):
                flips=sorted(seen["flip"]), xs=len(seen["x"]))
     run.step(1)
     theirs, mine = a.mailbox("partner_presence"), b.mailbox("self_presence")
-    run.expect(replace(theirs, frame=0) == replace(mine, frame=0) and mine.frame - theirs.frame == 1,
+    same = lambda p: replace(p, frame=0, room_frames=0)  # both tick every frame
+    run.expect(same(theirs) == same(mine) and mine.frame - theirs.frame == 1,
                "A holds B's presence from the previous frame (latency 2 frames)")
     run.expect(a.mailbox("partner_age") <= 1 and b.mailbox("partner_age") == 0, "both partners fresh",
                age_a=a.mailbox("partner_age"), age_b=b.mailbox("partner_age"))

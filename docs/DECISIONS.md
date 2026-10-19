@@ -203,3 +203,26 @@ Added at the very end of the roadmap.
 **D49: Saving may freeze the partner; a coffin heals only its user** (owner, 2026-10-19)
 While one player saves at a save room, the partner's game may freeze; it writes its own card save during that time (M3b). The coffin's HP restore affects only the player who used it. HP isn't shared, so that's the natural result.
 
+---
+## M4 build (2026-10-19)
+
+**D50: Shared rooms work by room authority with mirroring, as designed** (agent, 2026-10-19)
+- **Authority:** the player who entered the room first; ties go to rank 0.
+- **When the room is shared:** same room, both in normal play, cameras within a screen of each other. A role change has to hold for 4 frames, and a clash (both picked the same role) is settled by rank.
+- **The guest:** stubs `g_api.o.Update` and `UpdateRoomPosition`. Each frame it copies the authority's snapshot in: stage entities, their primitives with stable index remapping, and stage BSS.
+- **Hits:** the guest's hits go to the authority as `EV_HIT`/`EV_HIT2` events. The authority applies them right after its own hit detection (the `g_api.o.HitDetection` wrapper).
+- **Targeting:** the helpers of every stage and boss overlay are patched in RAM to aim at the nearer player. The module checks each helper's first instruction before patching.
+
+**D51: A guest's pickup goes to the authority** (agent-default, 2026-10-19)
+The guest's touch on a mirrored drop reaches the authority as a hit, and the authority's player collects it. Items, relics and gold are shared anyway (M2), so this only affects hearts. A later fix could move the reward to the guest.
+
+**D52: Known shared-room gaps, left for later** (agent, 2026-10-19)
+- Moving platforms don't carry the guest.
+- About 135 direct player reads still target the authority's player.
+- Big rooms only share while the players' cameras overlap.
+
+All are listed in `design/M4-shared-rooms.md`.
+
+**D53: Per-frame copying uses word copies and reuses primitive chains** (agent, 2026-10-19)
+A first version dropped the guest to about 50 fps (D40). `COOP.BIN` is now 160 KB because the snapshot buffers are part of the image. Boot reads it in about half a second; moving the buffers out of the image is a possible trim later.
+

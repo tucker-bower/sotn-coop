@@ -6,6 +6,7 @@
 #include "arrive.h"
 #include "progress.h"
 #include "puppet.h"
+#include "shared.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -56,6 +57,7 @@ static void CapturePresence(CoopPresence* p) {
         p->flags |= PRESENCE_SPRITE;
     }
     ArrivePresence(p);
+    SharedPresence(p);
 }
 
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
@@ -70,6 +72,7 @@ static bool __attribute__((used)) UpdateHook(void) {
         g_CoopLink.partnerAge++;
     }
     ProgressUpdate();
+    SharedUpdate();
     DebugUpdate();
     return ArriveFrame();
 }
@@ -83,6 +86,7 @@ static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s
 // against it.
 static void __attribute__((used)) RenderEntitiesHook(void) {
     RenderEntities();
+    SharedAfterUpdate();
     CapturePresence(&g_CoopLink.self);
     if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES) {
         DrawPuppet(&g_CoopLink.partner);

@@ -4,17 +4,25 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 5
+LINK_VERSION = 6
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD = 1, 2, 4, 8, 16  # CoopPresence.flags
 
-_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhH")  # CoopPresence, 0x24 bytes
+_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhHH")  # CoopPresence, 0x2C bytes
+ROLE_NONE, ROLE_AUTHORITY, ROLE_GUEST = 0, 1, 2
 _HEADER = struct.Struct("<III")                # magic, version, heartbeat
-SELF, PARTNER = 0x0C, 0x30                     # offsets in CoopLink
-PARTNER_AGE = 0x54
-OUT_RING, IN_RING, DROPPED = 0x58, 0x860, 0x1068
-CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x106C, 0x107C, 0x1080, 0x1084, 0x2250
-SAVE_BLOCK, CARD_RESULT = 0x341C, 0x3420
+SELF, PARTNER = 0x0C, 0x38                     # offsets in CoopLink
+PARTNER_AGE = 0x64
+OUT_RING, IN_RING, DROPPED = 0x68, 0x870, 0x1078
+RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
+EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
+CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x107C, 0x108C, 0x1090, 0x1094, 0x2260
+SAVE_DATA_SIZE = 0x11CC
+CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
+_COMMAND = struct.Struct("<IHHHhhH")
+SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
+SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
+SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 SAVE_DATA_SIZE = 0x11CC
 CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
@@ -43,6 +51,10 @@ class Presence:
     room_id: int = 0
     ground_x: int = 0
     ground_y: int = 0
+    room_frames: int = 0
+    scroll_x: int = 0
+    scroll_y: int = 0
+    role: int = 0
     pad: int = 0
 
     SIZE = _PRESENCE.size
@@ -147,4 +159,19 @@ class Mailbox:
 
     def card_result(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + CARD_RESULT, 4))[0]
+
+    # --- shared rooms (design/M4)
+
+    def set_rank(self, rank):
+        self.adapter.write_bytes(self.address + RANK, struct.pack("<I", rank))
+
+    def snapshot_out(self):
+        """(seq, bytes) of this game's latest room snapshot (it's the authority)."""
+        seq, size = struct.unpack("<II", self.adapter.read_bytes(self.address + SNAP_OUT_SEQ, 8))
+        return seq, self.adapter.read_bytes(self.address + SNAP_OUT, min(size, SNAP_MAX)) if seq else b""
+
+    def put_snapshot(self, data):
+        seq, _ = struct.unpack("<II", self.adapter.read_bytes(self.address + SNAP_IN_SEQ, 8))
+        self.adapter.write_bytes(self.address + SNAP_IN, data[:SNAP_MAX])
+        self.adapter.write_bytes(self.address + SNAP_IN_SEQ, struct.pack("<II", seq + 1, len(data)))
 

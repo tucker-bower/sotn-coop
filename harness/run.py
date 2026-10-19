@@ -9,6 +9,7 @@ import session_scenarios  # noqa: F401
 import session_progress  # noqa: F401
 import session_travel  # noqa: F401
 import session_saverooms  # noqa: F401
+import session_shared  # noqa: F401
 from scenario import SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario
 

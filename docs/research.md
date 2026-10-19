@@ -112,6 +112,17 @@ Candidates to evaluate:
 - **Loads:** `ApplySaveData` + `D_8003C730 = 1` + `Game_NowLoading`/step 2 is the card-load path, from the title or from play. `InitStatsAndGear` keeps the status when `D_8003C730` is set. Door transitions: `D_8006C374` indexes `D_800A245C` (131 entries, `{x, y, roomId, unk6, stageId}`), and `g_RoomBossTeleports` follows it (M5).
 - **Flag-gated objects** (secret walls etc.) apply their flag in their init step, so re-running init with `step = 0` updates them. Breakable walls use the enemy fields (`enemyId` ≠ 0) to be hittable.
 
+### Findings from building M3b and M4 (2026-10-19)
+- **Save rooms** are marked by a room layer flag (`D_8003C708.flags & 0x20`), not an entity.
+  - Alchemy Lab save rooms: room IDs 184, 192, 200. Marble Gallery: 248, 256.
+  - In the coffin, Up heals and saves with no further input. The card save is the static state machine at `0x80103ED4` (reset `0x80103EAC`), with state 6 = saved and 7–11 = card errors.
+  - The title's Load path: Start → ✕ (File select) → ✕ on the save.
+  - SwanStation exposes memory card 1 as libretro save RAM (128 KB).
+- **The stage's layout spawner** is `g_api.o.UpdateRoomPosition` (offset 8). It only creates entities in a window from 64 px left of the camera to 320 px right of the camera's left edge as the camera scrolls.
+- **Entities and primitives are camera-relative.** The engine shifts `FLAG_POS_CAMERA_LOCKED` entities (and parallax ones by `unk68`) by the scroll delta every frame.
+- **Targeting helpers** `GetSideToPlayer` and `GetDistanceToPlayerX/Y` are in all 52 stage and boss overlays (addresses in their maps). `GetPlayerCollisionWith` is platform collision, not targeting.
+- **The castle entrance hall** (NO3 14,40) has zombies and a Warg idling just left of the entrance. The Warg wakes on player distance.
+
 ### Prior art lead (unverified)
 TalicZealot's **SotnRandoTools** (BizHawk external tool, now maintained as `SotnRandoTools_C4B`) is believed to have had an online co-op mode that shares relics, items and warps between separate games. A web search on 2026-10-18 didn't confirm it. If it's real, its RAM-address list and merge rules are worth reading before M2.
 

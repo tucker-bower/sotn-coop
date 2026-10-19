@@ -9,6 +9,7 @@
 #include "flag_gated.h"
 #include "link.h"
 #include "progress.h"
+#include "shared.h"
 
 void AddToInventory(u16 id, EquipKind kind);                 // DRA
 s32 func_800FE044(s32 amount, s32 type);                     // DRA: life/heart max up, relics, XP
@@ -58,6 +59,8 @@ static bool Emit(u8 type, u16 a, u32 b) {
     r->head++;
     return true;
 }
+
+bool ProgressEmit(u8 type, u16 a, u32 b) { return Emit(type, a, b); }
 
 static bool IsExcluded(s32 i) {
     return i == FLAG_NO1_WEATHER || i == FLAG_NO1_BIRD_CYCLE || i == FLAG_PROLOGUE_COMPLETE;
@@ -242,6 +245,10 @@ static void Apply(const CoopEvent* ev) {
         if (ev->a == GRANT_RELIC && ev->b >= RELIC_SWORD_CARD && ev->b < RELIC_FAERIE_CARD) {
             g_Status.relics[ev->b] ^= RELIC_FLAG_ACTIVE;
         }
+        break;
+    case EV_HIT:
+    case EV_HIT2:
+        SharedHit(ev->type, ev->a, ev->b);
         break;
     case EV_GOLD:
         delta = (s32)ev->b;
