@@ -6,6 +6,7 @@
 // func_800FE044). Applying an event updates the shadows, so nothing echoes back.
 #define COOP_MODULE
 #include <game.h>
+#include "flag_gated.h"
 #include "link.h"
 #include "progress.h"
 
@@ -36,6 +37,8 @@ static u8 s_Flags[LEN(g_CastleFlags)] __attribute__((aligned(4)));
 static u8 s_Map[LEN(g_CastleMap)] __attribute__((aligned(4)));
 static s32 s_Gold;
 static bool s_InPlay;  // last frame was in play: the shadows are valid
+static u16 s_Changed[16]; // castle flags the partner changed this frame
+static s32 s_NChanged;
 static bool s_Applying; // the wrappers ignore our own calls
 static void (*s_AddToInventory)(u16, EquipKind);
 static s32 (*s_Grant)(s32, s32);
@@ -217,8 +220,12 @@ static void Apply(const CoopEvent* ev) {
     switch (ev->type) {
     case EV_FLAG:
         if (ev->a < LEN(g_CastleFlags) && !IsExcluded(ev->a)) {
-            g_CastleFlags[ev->a] = MergeFlag(ev->a, g_CastleFlags[ev->a], ev->b);
-            s_Flags[ev->a] = g_CastleFlags[ev->a];
+            u8 merged = MergeFlag(ev->a, g_CastleFlags[ev->a], ev->b);
+            if (merged != g_CastleFlags[ev->a] && s_NChanged < LEN(s_Changed)) {
+                s_Changed[s_NChanged++] = ev->a;
+            }
+            g_CastleFlags[ev->a] = merged;
+            s_Flags[ev->a] = merged;
         }
         break;
     case EV_MAP:
@@ -248,6 +255,45 @@ static void Apply(const CoopEvent* ev) {
     s_Applying = false;
 }
 
+// The partner changed flags that objects in this room were built from (walls, doors,
+// switches): run their init again so they read the new state (design/M2, part 3).
+static bool ReadsChangedFlag(const FlagGated* g) {
+    s32 i, j;
+
+    for (i = 0; i < g->nFlags; i++) {
+        for (j = 0; j < s_NChanged; j++) {
+            if (g->flags[i] == FLAG_GATED_ANY || g->flags[i] == s_Changed[j]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void RefreshGated(void) {
+    const FlagGated* g;
+    Entity* e;
+
+    for (e = &g_Entities[STAGE_ENTITY_START]; e < &g_Entities[TOTAL_ENTITY_COUNT]; e++) {
+        // Empty, or not initialized yet. (No enemy filter: breakable walls use the enemy fields
+        // to be hittable. The table itself only holds flag-reading object types.)
+        if (!e->entityId || !e->step) {
+            continue;
+        }
+        for (g = g_FlagGated; g->stage >= 0; g++) {
+            if (g->stage == g_StageId && g->entityId == e->entityId && ReadsChangedFlag(g)) {
+                if (e->flags & FLAG_HAS_PRIMS) {
+                    g_api.FreePrimitives(e->primIndex);
+                    e->flags &= ~FLAG_HAS_PRIMS;
+                }
+                e->step = 0;
+                e->step_s = 0;
+                break;
+            }
+        }
+    }
+}
+
 static void ApplyInbox(void) {
     CoopRing* r = &g_CoopLink.in;
     bool any = false;
@@ -259,6 +305,10 @@ static void ApplyInbox(void) {
     }
     if (any) {
         DespawnTaken();
+    }
+    if (s_NChanged) {
+        RefreshGated();
+        s_NChanged = 0;
     }
 }
 

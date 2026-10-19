@@ -36,6 +36,7 @@ static RoomTeleport s_Saved;
 // Respawn and both-dead state
 static bool s_WaitingForHost; // dead, partner dead too: the host decides (reload or Game Over)
 static bool s_AllowGameOver;
+static bool s_SaveLoaded; // a save was applied: clear the load mode once back in play
 
 static bool InNormalPlay(void) {
     return g_GameState == Game_Play && g_GameStep == Play_Default;
@@ -173,7 +174,9 @@ static void TeleportInput(void) {
 static void Revive(void) {
     g_Status.hp = g_Status.hpMax;
     g_Status.mp = g_Status.mpMax;
-    g_Player.status &= ~PLAYER_STATUS_DEAD;
+    // DEAD while dying; UNK80000 when the death animation is over and the engine goes to
+    // Engine_10 (src/dra/5087C.c).
+    g_Player.status &= ~(PLAYER_STATUS_DEAD | PLAYER_STATUS_UNK80000);
     g_GameEngineStep = Engine_Normal; // Arrive's stage load re-initializes the player entity
     g_MenuStep = MENU_STEP_INIT;
 }
@@ -210,6 +213,7 @@ static void LoadSave(void) {
     SetGameState(Game_NowLoading);
     g_GameStep = 2;
     s_WaitingForHost = false;
+    s_SaveLoaded = true;
 }
 
 static void SaveNow(const CoopCommand* c) {
@@ -290,6 +294,12 @@ void ArrivePresence(CoopPresence* p) {
 
 // Once per frame, before UpdateGame. Returns false to skip this frame's game update.
 bool ArriveFrame(void) {
+    // Mode 1 (D_8003C730) places the player for a save load; only a save room's own code
+    // clears it, and left set every later door would place the player the same way.
+    if (s_SaveLoaded && InNormalPlay() && g_GameEngineStep == Engine_Normal) {
+        D_8003C730 = 0;
+        s_SaveLoaded = false;
+    }
     CommandUpdate();
     TeleportInput();
     ArriveUpdate();
