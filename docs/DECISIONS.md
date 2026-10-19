@@ -163,3 +163,31 @@ Tucker: duplicating consumables or giving them only to the finder are both fine,
 **D38: Gold is pooled** (owner, 2026-10-18; revises D21)
 Both players spend from one purse, so the late-game expensive item stays reachable. Each game's gold changes travel as deltas and are added on the other side, never below 0.
 
+---
+## M2 and M3 build (2026-10-19)
+
+**D39: The main-loop hook always runs the game update** (agent, 2026-10-19)
+In US, `DebugUpdate` is `jr ra` and sets no return value. DRA runs `UpdateGame` on the stale `v0` (in retail, `ClearOTag`'s non-zero result). `CoopUpdate` returned "DebugUpdate's result", which is really whatever our code left in `v0`, and froze the game for some code layouts. It now calls `DebugUpdate` and returns true, or false only for its own reasons (the pause freeze, waiting while both players are dead).
+
+**D40: Per-frame work in the module stays small** (agent, 2026-10-19)
+A byte-by-byte scan of the flags and map (about 30k cycles) dropped a frame in a busy scene. That changes how the game plays, and `no_effect_on_play` caught it. Scans compare words. Any new per-frame work should be checked against that test.
+
+**D41: `COOPPAD.` restores retail's 150 blank sectors after the XA stream** (agent, 2026-10-19)
+Upstream's mastering drops them, which puts `COOP.BIN` right behind the music stream. Now the disc ends like retail's data track, and `check_disc_layout.py` checks that the filler is blank.
+
+**D42: No on-screen co-op text yet; sounds instead** (agent-default, 2026-10-19)
+The designs had debug-font text for "Go to partner", "Partner busy", "PARTNER PAUSED" and "Partner found: …". The debug font needs VRAM and a flush that could fight the game's own drawing. The launcher (M6) can draw text outside the emulated screen instead.
+- ✕ on the map plays the confirm sound, or the error sound if the partner is busy.
+- The pause freeze and the partner's finds are silent for now.
+
+**D43: Joint saves in tests go through `JointSave.request`, not the save-room menu** (agent, 2026-10-19)
+The save room's memory-card dialog isn't driven in the harness. Its `StoreSaveData` call is hooked (5th size-neutral hook, verified in place), and `request` makes the same module call. Tucker's playtest (M6) covers the real dialog.
+
+**D44: Arrive borrows door-teleport entry 7** (agent, 2026-10-19)
+Arrive uses the game's door transition with a borrowed entry of `D_800A245C`, restored afterwards. Entry 7 is one of the few that make `Play_LoadStageChr` load the target stage's tiles, which a normal door would get from the CD room. With any other entry, cross-stage teleports drew the new room with the old stage's tiles.
+
+**D45: Pause freeze, respawn and teleport details** (agent-default, 2026-10-19)
+- The freeze applies only while I'm in normal play in the partner's room and the partner is in their menu, on the map or in a status pause.
+- A respawn gives full HP and MP.
+- Teleport and respawn land on the partner's last grounded spot.
+

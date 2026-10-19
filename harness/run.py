@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Runs harness scenarios.  python run.py [scenario ...]   (no args: all). Exit code 0 = all passed."""
+"""Runs harness scenarios.  python run.py [scenario ...]   (no args: all but the long *_NNmin soaks,
+which run by name). Exit code 0 = all passed."""
 
 import sys
 
 import scenarios  # noqa: F401  (registers scenarios)
 import session_scenarios  # noqa: F401
 import session_progress  # noqa: F401
+import session_travel  # noqa: F401
 from scenario import SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario
 
 if __name__ == "__main__":
-    names = sys.argv[1:] or list(SCENARIOS) + [n for n in SESSION_SCENARIOS if n != "soak_10min"]
+    names = sys.argv[1:] or list(SCENARIOS) + [n for n in SESSION_SCENARIOS if not n.endswith("min")]
     failed = 0
     for name in names:
         r = run_session_scenario(name) if name in SESSION_SCENARIOS else run_scenario(name)

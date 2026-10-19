@@ -1,6 +1,6 @@
 # M2 design: Shared progression (live)
 
-**Status:** approved 2026-10-18, with two changes: every find is shared, consumables included (D37), and gold is pooled (D38).
+**Status:** built, all criteria pass (results at the end). Approved 2026-10-18 with two changes: every find is shared, consumables included (D37), and gold is pooled (D38).
 **Budget:** 12% of the month (the joint save moves to M3, see "Scope change"). Target: 2026-10-26.
 **Context:** D21 (what's shared), D22 (live), `research.md` → "Independent exploration".
 
@@ -83,3 +83,23 @@ The harness walks A to real pickups near the test route, using savestate warps p
 - **Flags that aren't progress:** a byte used as live state could cause odd behaviour if merged. Mitigation: the audit script, and the exclusion list.
 - **Duplicate equipment:** both players finding the same collectible at once is handled, but an enemy rare drop isn't a collectible, so both get a copy. Accepted.
 - **Pickups granted inside DRA:** none to worry about. DRA calls `AddToInventory` directly only in `InitStatsAndGear` (starting loadouts and name codes), which shouldn't be shared. Every in-world grant (pickups, drops, shops, the Librarian, collision rewards) goes through `g_api` (checked in the source).
+
+## Results (2026-10-19)
+All tests are two-game harness tests with **real pickups**. Arrive (from M3) puts game A on the item, and the game's own pickup code runs.
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Relic | ✅ `relic_shared`: A picks up the Cube of Zoe in the castle entrance. B has it (found + active) within 3 frames. |
+| 2 | Items | ✅ `items_and_maxups_shared`: Holy Mail (armour) and Life Apple (consumable, shared too, D37). B gains exactly the items A found, and both pickups are marked taken in B's world. |
+| 3 | Max-ups | ✅ Same test: Life Vessel +5 max HP and Heart Vessel +5 max hearts, in both games. |
+| 4 | Map | ✅ `map_shared`: B's map equals A's, and both room counts equal the explored cells. |
+| 5 | Live refresh | ✅ `live_despawn`: B stands in the Cube of Zoe's room. A takes the orb and the Shield Potion in its own world. Both vanish from B's world, B stays in the room, and gets each once. ✅ `live_object_refresh`: the Alchemy Lab's secret wall opens in B's world within 5 frames of A opening it (a flag poke stands in for A breaking it), with the tiles rewritten as open and B still in the room. The generated table covers 145 entities on 33 stages. `docs/flag-gated-entities.md` lists them, plus the 51 scripted ones left to room entry. |
+| 6 | Separate stays separate | ✅ Level, XP, spells, subweapon and equipped items unchanged in B. Gold is pooled now (D38): ✅ `gold_pooled`, +400 in A shows in B, −150 in B shows in A. |
+| 7 | Exactly once, converges | ✅ `exactly_once_partition`: the network drops everything while A takes two pickups, and B gets each exactly once afterwards. ✅ `soak_30min`: 30 minutes of random play in both games, no event dropped, and flags, map and gold identical at the end. |
+| 8 | No regressions | ✅ Every M1 test, including frame-for-frame parity with retail (`no_effect_on_play`). |
+
+**Found while building (logged in D39–D41):**
+- **US `DebugUpdate` is an empty function**, and DRA runs `UpdateGame` only if its (unset) return value is nonzero. Our hook was returning whatever our own code left in `v0`. Depending on code layout, that froze the game at its first frame of play, on SwanStation and PCSX-Redux alike. The hook now always returns true (D39). M1 only worked by luck.
+- **CPU cost matters:** scanning 0xB00 bytes byte by byte every frame dropped a frame in a busy scene, so the scans now compare words (D40).
+- **Restored retail's 150 blank sectors after the XA music stream** (`COOPPAD.`), so `COOP.BIN` sits where retail's data track ends (D41). It didn't cause the freeze, but now the end of the disc matches retail.
+- **Not built:** the 2 s "Partner found: …" notice (D42).

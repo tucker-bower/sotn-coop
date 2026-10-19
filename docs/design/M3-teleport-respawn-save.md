@@ -1,6 +1,6 @@
 # M3 design: Teleport, respawn, pause rules, joint save
 
-**Status:** approved 2026-10-18. Save files may live in the launcher (D36), and save + resume must be in the test suite (criterion 7).
+**Status:** built, all criteria pass (results at the end). Approved 2026-10-18. Save files may live in the launcher (D36), and save + resume must be in the test suite (criterion 7).
 **Budget:** 11% of the month (now includes the joint save, moved from M2). Target: 2026-10-30.
 **Context:** D24 (death), D30 (teleport, pause), D31 (joint save), M1/M2 designs.
 
@@ -83,3 +83,21 @@ Pausing works as normal in each game. The new rule covers the shared room.
 - **Rooms with scripted entrances** (elevators, boss doors, cutscene triggers) may softlock a teleport. Mitigation: target the partner's last safe position, a list of rooms where you can't arrive (the partner counts as busy there), and the fuzz test.
 - **Entering play from the title for resume** follows the file-select overlay's steps, not yet traced. A spike comes first. Fallback: the player starts a new game, and the module applies the save on the first frame in play, through the in-play Arrive path that's already proven.
 - **A 5th DRA hook:** it must stay size-neutral like the other 4, which `build_disc.sh` checks.
+
+## Results (2026-10-19)
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Teleport across the test route | ✅ `teleport_map_matrix`: all 16 stage pairs (NO3, NZ0, NO0, NO1). B opens the map and presses ✕, then lands in A's room within 16 px of A's grounded spot, in normal play, with its status unchanged. The slowest took 211 frames (3.5 s, including the stage load). |
+| 2 | Teleport fuzz | ✅ `teleport_fuzz`: 196 teleports (4 skipped while A was busy), alternating ✕ and launcher commands, while A wanders at random. All are back in play within 5 s, with no softlock or crash. |
+| 3 | Map UI | ✅ ✕ on the map teleports (the matrix test). ✅ `teleport_partner_busy`: while A is loading, ✕ does nothing. Feedback is the game's confirm and error sounds, not on-screen text (D42). |
+| 4 | Respawn | ✅ `respawn_at_partner`: A dies to the entrance zombies at 1 HP. After the death animation it appears in B's room in the Alchemy Lab with full HP, never reaching Game Over. B is unaffected. |
+| 5 | Both dead | ✅ `joint_save_and_resume`: both die to identical zombies in the same frame, and both reload the joint save into the saved room with their saved status. |
+| 6 | Pause | ✅ `pause_freezes_shared_room`: B's menu in A's room freezes A's world (player, all entities and the RNG unchanged over 120 frames of A holding right). A moves again after B closes the menu. A pause in another room doesn't affect A. No on-screen text (D42). |
+| 7 | Joint save + resume | ✅ Same test: the session file holds both saves, and B's resumes in A's room. After a fresh boot of both games to the title, "Continue co-op" puts both in the saved room, each with its own status and the same map. The save is triggered through `JointSave.request`, the same path a save room uses after its prompt. The save room's own hook is verified in place (`no_effect_on_play` finds all 5 hook calls), but the memory-card menu isn't driven in a test (D43). |
+| 8 | No regressions | ✅ All 23 scenarios pass. ✅ `chaos_10min`: 10 minutes of random play with 56 teleports and 20 drops to 1 HP, no Game Over or crash, and the shared state converges. ✅ PCSX-Redux headless check (now also requires a loaded room and running engine). |
+
+**How it works, as built:**
+- **Arrive borrows door-teleport entry 7.** It's one of the few entries for which `Play_LoadStageChr` reloads the target stage's tiles. Normal doors get them in the CD room (D44).
+- **Respawn and the death check:** a respawn starts its load in the same frame as the revive. Otherwise the dying player entity re-arms the death sequence.
+- **After a save is applied**, the module clears `D_8003C730` (the load mode) on the first frame of play. Only a save room's own code clears it, and left set, every later door would place the player as if loading a save.

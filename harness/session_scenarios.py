@@ -68,16 +68,16 @@ def no_effect_on_play(run):
     """Criterion 3: with no partner, the co-op disc plays exactly like retail. The two entrance
     savestates come from separate boots (the co-op one also reads COOP.BIN), so their RNG and
     timers differ; game B therefore first takes game A's main RAM, keeping only its own hooked
-    DRA instructions. Then the walk_entrance_rooms route must match frame by frame."""
+    DRA instructions (the 5th, StoreSaveData, only runs at a save room). Then the walk_entrance_rooms route must match frame by frame."""
     a, b = run.s.a, run.s.b
     a.unlink(), b.unlink()
     ram_a, ram_b = bytearray(a.read_bytes(0x80000000, 2 << 20)), b.read_bytes(0x80000000, 2 << 20)
-    # The hooks: `jal`s to CoopBoot and the 3 jump-table entries (module/dra_hooks.ld).
-    targets = {0x801B9870, 0x80280000, 0x80280008, 0x80280010}
+    # The hooks: `jal`s to CoopBoot and the 4 jump-table entries (module/dra_hooks.ld).
+    targets = {0x801B9870, 0x80280000, 0x80280008, 0x80280010, 0x80280018}
     jals = {0x0C000000 | ((t & 0x3FFFFFF) >> 2) for t in targets}
     hooks = [i for i in range(0xA0000, 0x13B6A0, 4) if int.from_bytes(ram_b[i:i + 4], "little") in jals]
-    run.expect(len(hooks) == 4 and all(ram_a[i:i + 4] != ram_b[i:i + 4] for i in hooks),
-               "the co-op DRA has exactly 4 hook calls, where retail calls the originals",
+    run.expect(len(hooks) == 5 and all(ram_a[i:i + 4] != ram_b[i:i + 4] for i in hooks),
+               "the co-op DRA has exactly 5 hook calls (one is the save room's), where retail calls the originals",
                hooks=[hex(0x80000000 + i) for i in hooks])
     for i in hooks:
         ram_a[i:i + 4] = ram_b[i:i + 4]
@@ -245,3 +245,8 @@ def soak_short(run):
 @session_scenario()
 def soak_10min(run):
     soak(run, 10)
+
+
+@session_scenario()
+def soak_30min(run):
+    soak(run, 30)

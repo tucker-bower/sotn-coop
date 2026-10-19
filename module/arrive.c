@@ -198,6 +198,9 @@ static bool DeathUpdate(void) {
     if (!(p->flags & PRESENCE_DEAD) && PartnerReachable()) {
         Revive();
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+        // Start loading in this same frame: one more frame of the dying player entity would
+        // set the death bits (and Engine_10) again. The load replaces the entity.
+        ArriveUpdate();
         return true;
     }
     s_WaitingForHost = true; // both dead (or partner busy): hold until the host decides

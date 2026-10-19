@@ -104,6 +104,14 @@ Candidates to evaluate:
 - **`rand()` is a BIOS call** (A0 table 0x2F), so its seed lives in the kernel area. The BIOS thread context (`[0x80000110]`, the registers saved at each interrupt) shifts with any code change, so state comparisons must exclude it.
 - **The map screen opens on Select** whenever pausing is allowed. It's `g_GameEngineStep` 20 (`Engine_Map`), and the cursor is drawn only while `g_canRevealMap` is set.
 
+### Findings from building M2 and M3 (2026-10-19)
+- **US `DebugUpdate` returns nothing** (`jr ra`). The main loop branches on a stale `v0`. See D39.
+- **Pickups:** item drops (`E_PERSISTENT_ITEM_DROP`, `0x0C`) and relic orbs (`0x0B`) have the same IDs in every stage. A drop's collectible flag index is at entity offset `0xB4`. `g_ItemIconSlots` is per stage, so a despawned drop keeps its icon slot until the next stage load.
+- **Layouts:** `assets/st/<stage>/entity_layouts.json` has `entities` (lists) and `indices` (`objLayoutId` → list). A room's `objLayoutId` is in its `RoomHeader` (`g_api.o.rooms`, 8 bytes each, ending at `left == 0x40`). A standing player's y is about 18 px above an item resting on the same floor.
+- **Death:** HP 0 alone doesn't kill. A hit does. The engine goes to `Engine_10` when `g_Player.status` has `0x80000` (death animation over), and `Engine_10` at `MENU_STEP_INIT` is the last frame before Game Over.
+- **Loads:** `ApplySaveData` + `D_8003C730 = 1` + `Game_NowLoading`/step 2 is the card-load path, from the title or from play. `InitStatsAndGear` keeps the status when `D_8003C730` is set. Door transitions: `D_8006C374` indexes `D_800A245C` (131 entries, `{x, y, roomId, unk6, stageId}`), and `g_RoomBossTeleports` follows it (M5).
+- **Flag-gated objects** (secret walls etc.) apply their flag in their init step, so re-running init with `step = 0` updates them. Breakable walls use the enemy fields (`enemyId` ≠ 0) to be hittable.
+
 ### Prior art lead (unverified)
 TalicZealot's **SotnRandoTools** (BizHawk external tool, now maintained as `SotnRandoTools_C4B`) is believed to have had an online co-op mode that shares relics, items and warps between separate games. A web search on 2026-10-18 didn't confirm it. If it's real, its RAM-address list and merge rules are worth reading before M2.
 

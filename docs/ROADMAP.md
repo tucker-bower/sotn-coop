@@ -15,8 +15,8 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 |---|---|---|---|
 | M0 | Test harness + 8MB verification ✅ | 12% | 2026-10-22 (done 10-18) |
 | M1 | Link + presence ✅ | 15% | 2026-10-23 (done 10-18) |
-| M2 | Shared progression (live) | 12% | 2026-10-26 |
-| M3 | Teleport, respawn, pause rules, joint save | 11% | 2026-10-30 |
+| M2 | Shared progression (live) ✅ | 12% | 2026-10-26 (done 10-19) |
+| M3 | Teleport, respawn, pause rules, joint save ✅ | 11% | 2026-10-30 (done 10-19) |
 | M4 | Shared rooms: same enemies, fight together | 25% | 2026-11-08 |
 | M5 | Bosses and cutscenes together | 12% | 2026-11-13 |
 | M6 | Playable build + playtest | 10% | 2026-11-18 |

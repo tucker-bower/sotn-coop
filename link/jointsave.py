@@ -81,6 +81,12 @@ class JointSave:
                 for m in self.mb:
                     m.command(CMD_GAME_OVER)
 
+    def request(self, i):
+        """Has player i save where it stands, as if at a save room (tests; and a launcher menu
+        entry later). The partner then saves too, through tick()."""
+        p = self.mb[i].self_presence()
+        self.mb[i].command(CMD_SAVE_NOW, p.stage, 0, p.room_left, p.room_top)
+
     def resume(self):
         """Loads the session file into both games (from the title screen, or in play)."""
         for m, blob in zip(self.mb, read_session(self.path)):

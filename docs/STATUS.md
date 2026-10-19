@@ -13,21 +13,23 @@ _Last updated: 2026-10-18_
 - **Re-plan (2026-10-18):** the goal is now independent exploration, with one game per player and shared progression (D19–D31). `ROADMAP.md`, `README.md`, `AGENTS.md` and `research.md` are rewritten to match. The ghost-P2 M1 design is withdrawn (D29).
 
 ## In flight
-- M0 PR #1 open, awaiting review.
-- **M1 built, all criteria pass: PR #2** (branch `coop-m1-link-presence`, stacked on M0 #1 and the re-plan). Results are in `design/M1-link-presence.md`.
-  - The co-op module loads from boot on every new game (SwanStation and PCSX-Redux).
-  - Two linked games see each other. The partner is a blue-tinted Alucard in the same room, and a cursor on the map.
-  - The link adds ≤ 2 frames of latency, survives the partner vanishing, and never changes game state (10-minute two-game soak).
-  - The loader changed from the approved option B to the design's fallback C (`COOP.BIN` on the disc, D32), because DRA has no spare bytes and retail files can't move.
+- PRs: M0 #1 and M1 #2, awaiting review.
+- **M2 and M3 built, all criteria pass**, on branch `coop-m2-shared-progression`, stacked on M1 (PR #3). Results are in `design/M2-shared-progression.md` and `design/M3-teleport-respawn-save.md`.
+  - **Shared progression, live:** relics, items (consumables too), max-ups, pooled gold, map, and flags. Pickups vanish and secret walls open in the partner's room.
+  - **Teleport:** ✕ on the map, across stages. **Respawn:** at the partner. **Pause:** freezes a shared room. **Joint save + "Continue co-op":** both games, from the title.
+  - 23 scenarios pass, plus the 30-minute and 10-minute chaos soaks and the PCSX-Redux check.
+  - Two real bugs found and fixed on the way: a stale-`v0` freeze from the US `DebugUpdate` (M1 only worked by luck, D39), and a dropped frame from per-frame cost (D40).
 
 ## Next
-- M2 and M3 designs **approved** (with D37/D38 changes), now building: `design/M2-shared-progression.md`, `design/M3-teleport-respawn-save.md`. The joint save moves from M2 to M3, which builds the "put a player in a room" path that resuming needs.
+- M4 design: shared rooms (the same enemies, fighting together). That's the main risk of the month.
+- Then M5 (bosses and cutscenes together, including the boss-death rule) and M6 (the couch launcher: one window, two pads, on-screen co-op text D42, real save-room dialog playtest D43).
 
 ## Budget
-- Month started 2026-10-18. Day 1: setup, environment, M0 (12%), the re-plan, and M1 (budget 15%, target 2026-10-23). Well ahead of plan.
+- Day 2 of the month (2026-10-19): M0 through M3 done, against budgets that ran to 2026-10-30. Far ahead of plan.
 
 ## Decisions needed (Tucker)
-- Review the M1 PR. Optional: watch the side-by-side GIF (`.env/out/puppet_same_room_only/clip.gif`).
+- Review PRs #1–#3.
+- Veto any agent-defaults you dislike: D42 (sounds, not text, for now), D45 (freeze, respawn and landing details).
 - **Before M7:** what mixed characters mean for shared progression, e.g. Richter with relics, equipment or levels, and Richter mode's world changes (D27).
 - **Later (Maria):** obtain DXC **EU**, or let me write a `pspus` asset map (D15).
 
