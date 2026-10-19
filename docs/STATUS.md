@@ -17,13 +17,14 @@ _Last updated: 2026-10-18_
 - M0 PR open, awaiting review.
 
 ## Next
-- Write the new M1 design, `design/M1-link-presence.md`: the DRA-section loader, the mailbox, the host and emulator adapter, and the partner puppet. It will include a spike that runs two harness instances linked through a mailbox.
+- The M1 design is **awaiting approval**: `design/M1-link-presence.md` (DRA-section loader, RAM mailbox, Python host and adapter, module-drawn partner puppet, map marker). Two small spikes come first: free VRAM, and the two-game harness skeleton.
 
 ## Budget
 - Month started 2026-10-18. Day 1: setup, environment, all of M0 (12%), and the re-plan.
 - The new scope is larger than "P2 Lite". The month target (M1–M6) leaves only a 3% reserve, and M4 (shared rooms) is the main risk. Checkpoints are after M2 and after M4.
 
 ## Decisions needed (Tucker)
+- Approve the M1 design (`design/M1-link-presence.md`).
 - **R1: which emulator we ship for.** This gets its own research session and conversation. Requirements and candidates are in `research.md` → "Product emulator". It isn't blocking until M6.
 - **Before M7:** what mixed characters mean for shared progression, e.g. Richter with relics, equipment or levels, and Richter mode's world changes (D27).
 - **Later (Maria):** obtain DXC **EU**, or let me write a `pspus` asset map (D15).
