@@ -15,13 +15,13 @@ _Last updated: 2026-10-18_
 - M0 PR open, awaiting review.
 
 ## Next
-- M1 design doc (Ghost P2). It starts with **how co-op code gets loaded**: the familiar slot only loads with a familiar active, so M1 needs a DRA hook (feasible: only 2 hardcoded DRA addresses outside DRA).
+- M1 design doc **awaiting approval**: `design/M1-ghost-p2.md` (loader B + context swap A).
 
 ## Budget
 - Month started 2026-10-18. Day 1: setup, environment and all of M0 (M0 budget 12%, target 2026-10-22). On or ahead of plan.
 
 ## Decisions needed (Tucker)
-- (none blocking right now)
+- Approve the M1 design (`design/M1-ghost-p2.md`).
 - Later (M6, Maria): obtain DXC **EU**, or let me write a `pspus` asset map (D15).
 - Before M5: the 5-minute Thor check that SwanStation installs and runs.
 
