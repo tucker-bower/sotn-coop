@@ -5,9 +5,10 @@ _Last updated: 2026-10-18_
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
 - **Dev environment (D11–D13):** `bootstrap.sh` sets up a fresh Ubuntu 26.04/WSL2 machine, `doctor.py` verifies it in about 1 s, and `env.example.toml` says where everything lives. The us build matches retail 115/115 locally.
-- **M0 built, PR pending** (branch `coop-m0-harness`). All 6 acceptance criteria pass except the DuckStation manual check. Results are in `design/M0-harness.md`.
+- **M0 built, PR pending** (branch `coop-m0-harness`). All 6 acceptance criteria pass, including Tucker's DuckStation check. Results are in `design/M0-harness.md`.
   - Harness: 25× real time, savestates in 22 s, room-walk scenario, 10-min lockstep with rollback (0 desyncs), headless PCSX-Redux check.
   - The co-op module runs from the 8MB area on SwanStation and PCSX-Redux.
+- DuckStation is set up with a DualSense on port 1 (SDL bindings in its portable `settings.ini`).
 - Emulators installed in `Emulators\DuckStation` and `Emulators\PCSX-Redux` (portable, OpenBIOS, 8MB) (D10).
 
 ## In flight

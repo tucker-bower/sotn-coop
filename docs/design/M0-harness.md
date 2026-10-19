@@ -78,7 +78,7 @@ Copy the debug module's proven pattern into `mods/co-op/module/`:
 | 1 | Bootstrap + matching build | ✅ Built on a fresh Ubuntu 26.04 WSL2 install: `bootstrap.sh` then `doctor.py`. us is 115/115 matching. A full re-run takes 13 s, so it's idempotent. Not yet tested on a second clean machine. |
 | 2 | Scripted intro → savestates | ✅ `savestates.py`: entrance (after Death) plus Alchemy Lab, Marble Gallery and Outer Wall, in 22 s from a cold boot. |
 | 3 | Walk 3 entrance rooms | ✅ `walk_entrance_rooms`: rooms 20,39 → 14,40 → 11,40, 5/5 checks, 3,777 frames in 7.5 s. |
-| 4 | Heartbeat in 8MB | ✅ SwanStation `heartbeat_8mb` (6/6 checks, +594 beats per 600 frames). ✅ PCSX-Redux, headless and automated (`redux_check.sh`): +600 per 600 vsyncs. ⏳ DuckStation: a manual boot check for Tucker. |
+| 4 | Heartbeat in 8MB | ✅ SwanStation `heartbeat_8mb` (6/6 checks, +594 beats per 600 frames). ✅ PCSX-Redux, headless and automated (`redux_check.sh`): +600 per 600 vsyncs. ✅ DuckStation (Tucker, manual, 2026-10-18): the co-op disc with 8MB and OpenBIOS boots, and the prologue plays through to beating Dracula with no issues. The module stays dormant there without the Bat Card, so this proves the disc and 8MB mode, not the hook. |
 | 5 | Lockstep, 10 min | ✅ Two pads of random input, 600 RAM and 60 full-state comparisons, a rollback reload every 10 s: 0 desyncs, in 48 s. The negative control (`--inject-desync`) is caught at the next check. |
 | 6 | Disc builder script | ✅ `build_disc.sh` takes 4 s and restores git and the matching build afterwards. Docker is deferred to M5 (D14). |
 
