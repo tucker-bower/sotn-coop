@@ -110,10 +110,22 @@ class Game:
         return lambda *a, **kw: self._ask("call", ("emu", name, a, kw))
 
 
+class MailboxProxy:
+    """A worker game's Mailbox, for code that wants one (link.jointsave)."""
+
+    def __init__(self, game):
+        self.game = game
+
+    def __getattr__(self, name):
+        return lambda *a: self.game.mailbox(name, *a)
+
+
 class Session:
-    def __init__(self, disc, starts=("entrance", "entrance")):
-        """disc: one disc for both games, or (disc A, disc B)."""
-        self.disc, self.starts = disc, starts
+    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None):
+        """disc: one disc for both games, or (disc A, disc B). session_file: run the couch
+        launcher's joint saves (link.jointsave) into that file, every frame."""
+        self.disc, self.starts, self.session_file = disc, starts, session_file
+        self.joint = None
 
     def __enter__(self):
         ctx = mp.get_context("spawn")
@@ -133,6 +145,9 @@ class Session:
         self.a, self.b = self.games
         self.a._ask("connect", ports[1])
         self.b._ask("connect", ports[0])
+        if self.session_file:
+            from link.jointsave import JointSave
+            self.joint = JointSave([MailboxProxy(self.a), MailboxProxy(self.b)], self.session_file)
         return self
 
     def step(self, n=1, p1=("", ""), each=None):
@@ -144,6 +159,8 @@ class Session:
             pa, pb = p1(i, sa, sb) if callable(p1) else p1
             sa = self.a.step(1, pa)
             sb = self.b.step(1, pb)
+            if self.joint:
+                self.joint.tick()
             if each:
                 each(i, sa, sb)
         return sa, sb

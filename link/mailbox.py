@@ -4,15 +4,19 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 3
+LINK_VERSION = 4
 
-IN_PLAY, SPRITE = 1, 2  # CoopPresence.flags
+IN_PLAY, SPRITE, PAUSED, BUSY, DEAD = 1, 2, 4, 8, 16  # CoopPresence.flags
 
-_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHI")  # CoopPresence, 0x1C bytes
+_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhH")  # CoopPresence, 0x24 bytes
 _HEADER = struct.Struct("<III")                # magic, version, heartbeat
-SELF, PARTNER = 0x0C, 0x28                     # offsets in CoopLink
-PARTNER_AGE = 0x44
-OUT_RING, IN_RING, DROPPED = 0x48, 0x850, 0x1058
+SELF, PARTNER = 0x0C, 0x30                     # offsets in CoopLink
+PARTNER_AGE = 0x54
+OUT_RING, IN_RING, DROPPED = 0x58, 0x860, 0x1068
+CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x106C, 0x107C, 0x1080, 0x1084, 0x2250
+SAVE_DATA_SIZE = 0x11CC
+CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
+_COMMAND = struct.Struct("<IHHHhhH")
 RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
 EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 
@@ -34,6 +38,10 @@ class Presence:
     palette: int = 0
     draw_flags: int = 0
     frame: int = 0
+    room_id: int = 0
+    ground_x: int = 0
+    ground_y: int = 0
+    pad: int = 0
 
     SIZE = _PRESENCE.size
 
@@ -110,4 +118,25 @@ class Mailbox:
 
     def dropped(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + DROPPED, 4))[0]
+
+    # --- commands (host -> game) and saves (module/link.h, design/M3)
+
+    def command(self, type, stage=0, room_id=0, x=0, y=0):
+        """Issues a command; returns its seq. The game sets cmdDone = seq when it's done."""
+        seq = struct.unpack("<I", self.adapter.read_bytes(self.address + CMD, 4))[0] + 1
+        self.adapter.write_bytes(self.address + CMD, _COMMAND.pack(seq, type, stage, room_id, x, y, 0))
+        return seq
+
+    def command_done(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + CMD_DONE, 4))[0]
+
+    def save_seq(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + SAVE_SEQ, 4))[0]
+
+    def save_out(self):
+        return self.adapter.read_bytes(self.address + SAVE_OUT, SAVE_DATA_SIZE)
+
+    def put_save(self, blob):
+        assert len(blob) == SAVE_DATA_SIZE
+        self.adapter.write_bytes(self.address + SAVE_IN, blob)
 

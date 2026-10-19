@@ -6,3 +6,4 @@ CoopBoot = 0x801B9870;
 CoopUpdate = 0x80280000;
 CoopRenderEntities = 0x80280008;
 CoopDrawMapCursor = 0x80280010;
+CoopStoreSaveData = 0x80280018;

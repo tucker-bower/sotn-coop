@@ -160,8 +160,9 @@ def map_marker(run):
     """Criterion 6: on B's map screen, a second cursor marks A's room."""
     a, b = run.s.a, run.s.b
     run.step(300)                          # stage title card
-    run.step(1, p1=("", "select"))         # B opens the map
-    run.step(240, p1=("right", ""))        # A walks right while B looks at the map
+    run.step(240, p1=("right", ""))        # A walks off B's screen
+    run.step(1, p1=("", "select"))         # B opens the map (in a shared room, that freezes A)
+    run.step(40)
     run.expect(b.read("g_GameEngineStep") == 20, "B is on the map screen", step=b.read("g_GameEngineStep"))
     p = a.mailbox("self_presence")
     ex, ey = (p.room_left + (p.x >> 8)) * 4 - 14, (p.room_top + (p.y >> 8)) * 4 - 13
