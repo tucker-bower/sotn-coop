@@ -141,3 +141,25 @@ DRA's code and BSS end exactly at `0x8013B6A0`, where its fixed-address data blo
 - Drawn one depth step behind the partner's own priority.
 - The map cursor is the same as the player's, tinted blue and half a blink cycle out of phase.
 
+---
+## 2026-10-18 evening
+
+**D36: R1 decided: our own co-op launcher, PC first** (owner, 2026-10-18; supersedes D28's open question)
+Order of work:
+1. PC couch co-op that works.
+2. Online co-op for PC.
+3. Port everything to Android.
+
+**Why a dedicated launcher:**
+- The link reads and writes RAM exactly between frames, which our own libretro frontend does natively.
+- No stock emulator runs two games on two pads in one window.
+- The harness is already most of a frontend.
+
+The launcher may also own anything that's easier outside the game, such as save files (owner). SwanStation stays the core. Android means a launcher port later, not RetroArch.
+
+**D37: Every find is shared, consumables included** (owner, 2026-10-18; revises D21)
+Tucker: duplicating consumables or giving them only to the finder are both fine, "whatever is easy". Sharing every `AddToInventory` from the world is the simplest (no category check), so both players get a copy of any item found.
+
+**D38: Gold is pooled** (owner, 2026-10-18; revises D21)
+Both players spend from one purse, so the late-game expensive item stays reachable. Each game's gold changes travel as deltas and are added on the other side, never below 0.
+

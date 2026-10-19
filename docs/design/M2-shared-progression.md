@@ -1,6 +1,6 @@
 # M2 design: Shared progression (live)
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** approved 2026-10-18, with two changes: every find is shared, consumables included (D37), and gold is pooled (D38).
 **Budget:** 12% of the month (the joint save moves to M3, see "Scope change"). Target: 2026-10-26.
 **Context:** D21 (what's shared), D22 (live), `research.md` → "Independent exploration".
 
@@ -19,7 +19,8 @@ A change shows up even in the room the partner is standing in. Levels, XP, gold,
 |---|---|---|---|
 | Castle flags: walls, doors, switches, elevators, bosses, cutscenes, items taken (`0x100…`), bestiary (`0x190…`), rare drops (`0x1B0…`) | `g_CastleFlags[0x300]` | the module diffing a shadow copy each frame | merge per byte: **OR** for bit-field bytes, **max** for counter bytes (`NO4_WATER_BLOCKED++` and similar), **skip** for excluded bytes; then live refresh (part 3) |
 | Explored map | `g_CastleMap[0x800]`, 2 bits per cell | shadow diff | OR, then the game's own reveal steps: `g_RoomCount++` per new cell and `func_800F1B08` to draw the cell into the map image |
-| Equipment found | `equipHandCount`/`equipBodyCount` (+ order lists) | **wrapping `g_api.AddToInventory`** | DRA's `AddToInventory(id, kind)`, called directly (so it isn't echoed back), **unless the item is a consumable** (`ITEM_FOOD`, `ITEM_MEDICINE`, `ITEM_BOMB`, `ITEM_THROW_1/2`) |
+| Items found (equipment **and consumables**, D37) | `equipHandCount`/`equipBodyCount` (+ order lists) | **wrapping `g_api.AddToInventory`** | DRA's `AddToInventory(id, kind)`, called directly (so it isn't echoed back) |
+| **Gold, pooled (D38)** | `g_Status.gold` | shadow diff, sent as a delta | add the delta, never below 0 |
 | Relics | `g_Status.relics[]` | wrapping `g_api.func_800FE044`, type `0x2000` | the same function, so it sets found + active exactly like a pickup |
 | Life / Heart Max Up | `hpMax`, `heartsMax` | wrapping `func_800FE044`, types `0x8000` / `0x4000` | the same function (+5, with the pickup's refill) |
 

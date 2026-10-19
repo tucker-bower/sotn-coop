@@ -1,6 +1,6 @@
 # M3 design: Teleport, respawn, pause rules, joint save
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** approved 2026-10-18. Save files may live in the launcher (D36), and save + resume must be in the test suite (criterion 7).
 **Budget:** 11% of the month (now includes the joint save, moved from M2). Target: 2026-10-30.
 **Context:** D24 (death), D30 (teleport, pause), D31 (joint save), M1/M2 designs.
 

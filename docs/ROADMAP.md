@@ -6,7 +6,7 @@
 
 **Month target (by 2026-11-18, Claude Pro):** a playable "explore together" build, M1–M6. This scope is much bigger than the old "P2 Lite" plan.
 - **M4 (shared rooms) is the main risk.** The checkpoints are after M2 and after M4. At each one we decide on scope cuts, or a plan upgrade if needed.
-- **Post-month:** Richter and Maria (mixed-character rules), full inverted-castle coverage, speedrun features, and the decision on which emulator we ship for (R1).
+- **Post-month:** Richter and Maria (mixed-character rules), full inverted-castle coverage, speedrun features. Then online PC co-op and the Android port of the launcher (D36).
 
 ## Budget model
 Pro usage limits are measured in rolling 5-hour windows (plus possible weekly caps), not published token counts. So the budget is a **share of the month's usage**, tracked by elapsed days and by how often limits are hit.
@@ -21,10 +21,10 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M5 | Bosses and cutscenes together | 12% | 2026-11-13 |
 | M6 | Playable build + playtest | 10% | 2026-11-18 |
 | — | Reserve | 3% | — |
-| R1 | Product emulator decision (research, with Tucker) | outside the milestones | before M6 |
+| R1 | Product emulator: **decided**, our own launcher (D36) | — | — |
 | M7+ | Richter/Maria, inverted castle, speedrun features | post-month | — |
 
-**Dev platform until R1:** two SwanStation instances driven by our harness (each instance is its own process, since a libretro core can only be loaded once per process). PCSX-Redux is the cross-check. Code that talks to the emulator stays in one thin **emulator adapter** (read/write RAM, a per-frame callback, input), so the R1 choice only means replacing that adapter.
+**Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
 
 ## Acceptance criteria (draft, finalized in each milestone's design doc)
 Every criterion is a **multi-instance harness test**, unless it's marked manual. The harness runs two instances plus the host, with scripted inputs on both and assertions across instances.
@@ -67,7 +67,7 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - **Death during a boss fight:** the player who died stays dead until the boss is killed, then respawns next to the survivor. If both die, they reload the last joint save (D24). Scripted boss fights cover each case with no softlocks.
 
 ### M6: Playable build + playtest
-- A couch-co-op launcher: two instances, two pads, and both screens shown together.
+- **The couch co-op launcher (D36):** two games, two pads, both screens in one window, audio, and joint saves.
 - The bring-your-own-disc build script produces the patched image (D9).
 - Manual (Tucker): a human playtest from the start through the first few bosses.
-- Online play between two machines, if R1 has settled the emulator by then. Otherwise it moves to M7.
+- Online play between two PCs comes after couch co-op works (M7+), then Android.
