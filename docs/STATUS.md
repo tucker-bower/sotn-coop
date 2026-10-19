@@ -12,7 +12,7 @@ _Last updated: 2026-10-18_
 - Emulators installed in `Emulators\DuckStation` and `Emulators\PCSX-Redux` (portable, OpenBIOS, 8MB) (D10).
 
 ## In flight
-- M0 PR: needs `gh auth login` (see below).
+- M0 PR open, awaiting review.
 
 ## Next
 - M1 design doc (Ghost P2). It starts with **how co-op code gets loaded**: the familiar slot only loads with a familiar active, so M1 needs a DRA hook (feasible: only 2 hardcoded DRA addresses outside DRA).
@@ -21,8 +21,7 @@ _Last updated: 2026-10-18_
 - Month started 2026-10-18. Day 1: setup, environment and all of M0 (M0 budget 12%, target 2026-10-22). On or ahead of plan.
 
 ## Decisions needed (Tucker)
-- Run `! gh auth login` once so I can push and open PRs.
-- DuckStation check (2 min): double-click `Emulators\SOTN\check-duckstation.bat`. Pass means title screen → File select → New Game → name → the opening video plays.
+- (none blocking right now)
 - Later (M6, Maria): obtain DXC **EU**, or let me write a `pspus` asset map (D15).
 - Before M5: the 5-minute Thor check that SwanStation installs and runs.
 
