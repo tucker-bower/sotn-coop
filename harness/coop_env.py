@@ -30,3 +30,8 @@ REPO = path(ENV["paths"]["repo"])
 DISKS = path(ENV["paths"]["disks"])
 ENV_DIR = path(ENV["paths"]["env"])
 TOOLS = {k: path(v) for k, v in ENV["tools"].items()}
+
+
+def savestate(disc, name):
+    """Savestates only load on the disc image that made them, so the library is keyed by disc."""
+    return TOOLS["savestates"] / Path(disc).stem / f"{name}.state"

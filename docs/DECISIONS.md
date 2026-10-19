@@ -45,3 +45,12 @@ M0 builds the heartbeat disc with a plain script. M0 acceptance criterion 6 is c
 
 **D15: Dracula X Chronicles (USA) is kept, but the Maria mod can't use it as-is** (agent finding, 2026-10-18)
 Tucker owns ULUS-10277. Upstream's Maria assets are extracted from the EU release (ULES-00841) at fixed offsets. All 65 USA PSP overlays differ from the EU hashes, and `maria.bin` is 46KB smaller (the EU build has 5-language HUDs), so the offsets don't carry over. This is decided at M6 (Maria is post-month): obtain the EU copy (no maintenance), or write and maintain a `pspus` asset map (~0.5 day, and lets USA owners play Maria). The 14 "HD" PSX files on the USA disc do match upstream.
+
+**D16: Savestate library keyed by disc image** (agent-default, 2026-10-18)
+SwanStation rejects states from a different image. `.env/savestates/<disc-stem>/`, rebuilt in about 20 s per disc build.
+
+**D17: The co-op module flushes the instruction cache after patching code** (agent-default, 2026-10-18)
+Required for PCSX-Redux and real hardware, found by the cross-emulator check. Applies to any future code patch.
+
+**D18: Cross-emulator checks are automated where the emulator allows it** (agent-default, 2026-10-18)
+PCSX-Redux runs headless (`-cli` + Lua) from WSL, with no window. DuckStation has no scripting, so it stays a manual check. Options considered: computer use, DuckStation's GDB stub. Both cost more than a 2-minute manual check per milestone.

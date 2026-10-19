@@ -3,30 +3,27 @@
 _Last updated: 2026-10-18_
 
 ## Done
-- Forked sotn-decomp, `coop` branch.
-- Matching `us` build verified: 115/115 game files match retail checksums.
-- Findings: the player code (`src/dra`, `src/ric`) is fully decompiled, with no remaining asm. A native PC port exists in `src/pc`, including a replay system, which is a candidate harness backend.
-- Project docs: README, AGENTS.md, ROADMAP, DECISIONS.
-- Research: Discord, wiki and codebase → `research.md`. Key finding: about 85% of enemy targeting goes through shared helpers in `st_common.h`.
-- Scope change (D7): Richter as P2 is now a core goal, using 8MB RAM mode. The roadmap has been re-planned.
-
-- M0 spike: rebuilt a modded disc, booted it headless at 3.5× speed in 8MB mode on open-source BIOS, deterministic. See `design/M0-harness.md`.
-- Finding: PCSX ReARMed and Beetle PSX don't support 8MB. SwanStation (RetroArch) is the co-op/netplay target.
+- Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
+- **Dev environment (D11–D13):** `bootstrap.sh` sets up a fresh Ubuntu 26.04/WSL2 machine, `doctor.py` verifies it in about 1 s, and `env.example.toml` says where everything lives. The us build matches retail 115/115 locally.
+- **M0 built, PR pending** (branch `coop-m0-harness`). All 6 acceptance criteria pass except the DuckStation manual check. Results are in `design/M0-harness.md`.
+  - Harness: 25× real time, savestates in 22 s, room-walk scenario, 10-min lockstep with rollback (0 desyncs), headless PCSX-Redux check.
+  - The co-op module runs from the 8MB area on SwanStation and PCSX-Redux.
+- Emulators installed in `Emulators\DuckStation` and `Emulators\PCSX-Redux` (portable, OpenBIOS, 8MB) (D10).
 
 ## In flight
-- M0 design doc, **awaiting approval**: `design/M0-harness.md`.
+- M0 PR: needs `gh auth login` (see below).
 
 ## Next
-- M0 implementation after approval.
+- M1 design doc (Ghost P2). It starts with **how co-op code gets loaded**: the familiar slot only loads with a familiar active, so M1 needs a DRA hook (feasible: only 2 hardcoded DRA addresses outside DRA).
 
 ## Budget
-- Month started 2026-10-18. Spent so far: setup only (~1 day).
+- Month started 2026-10-18. Day 1: setup, environment and all of M0 (M0 budget 12%, target 2026-10-22). On or ahead of plan.
 
 ## Decisions needed (Tucker)
-- Approve the M0 design (incl. SwanStation as the primary core).
-- ~~Installs~~: approved (D10).
-- ~~Where agentic work happens~~: resolved. Claude Code on your PC (WSL2).
-- 5-minute check on a Thor: does RetroArch's SwanStation core install and run?
+- Run `! gh auth login` once so I can push and open PRs.
+- DuckStation check (2 min): double-click `Emulators\SOTN\check-duckstation.bat`. Pass means title screen → File select → New Game → name → the opening video plays.
+- Later (M6, Maria): obtain DXC **EU**, or let me write a `pspus` asset map (D15).
+- Before M5: the 5-minute Thor check that SwanStation installs and runs.
 
 ## Environment notes
-- The cloud build needs local Go module mirrors (the proxy blocks proxy.golang.org). Setup lives outside the repo, in `~/gomirrors/env.sh`. TODO: script this into the M0 bootstrap.
+- Setup lives in `SETUP.md` and `scripts/bootstrap.sh`. The old cloud Go-mirror note is obsolete, because this machine has direct internet.

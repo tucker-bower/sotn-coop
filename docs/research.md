@@ -89,3 +89,9 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
 - `maria.bin`: the USA file is 212,864 bytes, against roughly 259,840 for the EU one (from the splat segment end 0x3F700). The EU file has font_eu and HUD graphics in 5 languages, so every asset offset in `config/assets.pspeu.yaml` shifts.
 - `res/ps/hdbin/*`: all 14 match `config/check.hd.sha`.
 - Conclusion → D15.
+
+## Emulator automation (checked 2026-10-18)
+- **PCSX-Redux** (Windows, nightly 608 = the same commit as our OpenBIOS) runs headless with `-cli -8mb -fastboot -bios … -iso … -run -dofile x.lua`. The Lua API gives `PCSX.getMemPtr()` (RAM via ffi), `GPU::Vsync` events, `SIO0.slots[n].pads[1].setOverride(button)` and `PCSX.quit(code)`. Its stdout doesn't reach WSL, so results go to a file. A full route takes about 5 min (real time).
+- **DuckStation** has no scripting or headless mode. It's portable when `portable.txt` sits next to the exe, and `settings.ini` takes the same option names as SwanStation's (`Console/Enable8MBRAM`, `BIOS/PathNTSCU`).
+- **SwanStation** detects self-modifying code by itself. PCSX-Redux's dynarec doesn't: code written by the CPU only runs after `FlushCache()`. That's real-hardware behavior too.
+- Libretro: a core can only be loaded once per process, so the lockstep check uses two processes.
