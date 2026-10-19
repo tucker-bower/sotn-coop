@@ -17,13 +17,14 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M1 | Link + presence ✅ | 15% | 2026-10-23 (done 10-18) |
 | M2 | Shared progression (live) ✅ | 12% | 2026-10-26 (done 10-19) |
 | M3 | Teleport, respawn, pause rules, joint save ✅ | 11% | 2026-10-30 (done 10-19) |
-| M3b | The game's own save rooms, end to end (resume from the Load menu) | 4% | 2026-10-21 |
+| M3b | The game's own save rooms, end to end (resume from the Load menu) ✅ | 4% | 2026-10-21 (done 10-19) |
 | M4 | Shared rooms: same enemies, fight together | 25% | 2026-11-04 |
 | M5 | Bosses and cutscenes together | 12% | 2026-11-13 |
 | M6 | Playable build + playtest | 10% | 2026-11-18 |
 | — | Reserve | 3% (M3b came out of the M2/M3 savings) | — |
 | R1 | Product emulator: **decided**, our own launcher (D36) | — | — |
-| M7+ | Richter/Maria, inverted castle, speedrun features | post-month | — |
+| M7+ | Richter/Maria, inverted castle, speedrun features, online PC co-op, Android | post-month | — |
+| Last | **3–4 players** (D48) | post-month | — |
 
 **Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
 
@@ -63,7 +64,8 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - Players can enter and leave a room in any order without duplicated or lost enemies and without crashes, on the test route: entrance → Alchemy Lab → Marble Gallery → Outer Wall.
 
 ### M5: Bosses and cutscenes together
-- When either player enters a boss room, the partner is **teleported in automatically**. Bosses have **2× HP** (regular enemies don't change).
+- When either player enters a boss room, the partner is **teleported in automatically**. Bosses have **2× HP** (regular enemies don't change, D25).
+- **Boss aggro switches between players** (D47): after each boss attack there's a 50% chance it targets the other player next. That's a starting value, to tune by playtest. It's built on M4's targeting patch, plus per-boss handling of the bosses' own direct player reads.
 - When either player triggers a cutscene, the partner is brought in, both see it, and both get credit (flags).
 - **Death during a boss fight:** the player who died stays dead until the boss is killed, then respawns next to the survivor. If both die, they reload the last joint save (D24). Scripted boss fights cover each case with no softlocks.
 
@@ -72,3 +74,16 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - The bring-your-own-disc build script produces the patched image (D9).
 - Manual (Tucker): a human playtest from the start through the first few bosses.
 - Online play between two PCs comes after couch co-op works (M7+), then Android.
+
+### Last: 3–4 players (D48)
+Three or four players, each in their own game:
+- **Presence and the map** show every partner.
+- **Teleport** offers a choice of which partner to go to.
+- **Shared progression** merges across all games, using the same events and union rules.
+- **Shared rooms** have one authority and up to three guests.
+- **Respawn** is at the nearest living partner.
+- **Bosses** scale their HP and aggro to the player count.
+- **The launcher** splits the screen 3 or 4 ways.
+
+The link was built per-partner, so this mostly means turning "the partner" into "the partners".
+

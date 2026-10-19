@@ -19,6 +19,16 @@ void StoreSaveData(SaveData* save, s32 block, s32 cardIcon);
 void SetGameState(GameState gameState);
 void PlaySfx(s32 sfxId);
 
+// The save room's memory card state machine (src/dra/62DEC.c, static: called by address; the
+// size-neutral hooks keep DRA's addresses identical to retail's). State 6 = saved, 7-11 = errors.
+#define SaveCardReset ((void (*)(void))0x80103EAC)
+#define SaveCardStep ((void (*)(void))0x80103ED4)
+#define SAVE_CARD_OK 6
+extern s32 D_80137E4C;  // its state
+extern s32 D_80137E54;  // its mode (0: save to D_8006C378)
+extern s32 D_80097924;  // memory card port
+extern s32 D_8006C378;  // memory card block
+extern bool D_80137598; // the player is in a save room
 #define MENU_STEP_INIT 0 // src/dra/menu.h (first value of the menu step enum)
 // Entry 7: Play_LoadStageChr reloads the target stage's tile graphics only for a few entries
 // (src/dra/game_handlers.c), and 7 is one. A normal door gets them from the CD room on the way.
@@ -37,6 +47,12 @@ static RoomTeleport s_Saved;
 static bool s_WaitingForHost; // dead, partner dead too: the host decides (reload or Game Over)
 static bool s_AllowGameOver;
 static bool s_SaveLoaded; // a save was applied: clear the load mode once back in play
+
+// The partner saved at a save room: this game writes its own memory card save for the same
+// save room, through the game's own card code, frozen while it does (D46, D49).
+static bool s_CardSaving;
+static CoopCommand s_CardCmd;
+static s32 s_PrevPort, s_PrevBlock;
 
 static bool InNormalPlay(void) {
     return g_GameState == Game_Play && g_GameStep == Play_Default;
@@ -219,7 +235,8 @@ static void LoadSave(void) {
     s_SaveLoaded = true;
 }
 
-static void SaveNow(const CoopCommand* c) {
+// Without a card (or if it fails before the save is built), still post a save for session.coop.
+static void SaveToLinkOnly(const CoopCommand* c) {
     SaveData* save = (SaveData*)g_CoopLink.saveOut;
 
     StoreSaveData(save, 0, 0);
@@ -227,6 +244,34 @@ static void SaveNow(const CoopCommand* c) {
     save->info.roomX = c->x;
     save->info.roomY = c->y;
     g_CoopLink.saveSeq++;
+}
+
+static void CardSaveStart(void) {
+    s_PrevPort = D_80097924;
+    s_PrevBlock = D_8006C378;
+    D_80097924 = 0; // this game's own card, in slot 1
+    D_8006C378 = s_CardCmd.roomId;
+    D_80137E54 = 0;
+    SaveCardReset();
+    s_CardSaving = true;
+}
+
+// One step per frame, with the game frozen. Returns true when finished.
+static bool CardSaveStep(void) {
+    u32 seq = g_CoopLink.saveSeq;
+
+    SaveCardStep();
+    if (D_80137E4C < SAVE_CARD_OK) {
+        return false;
+    }
+    g_CoopLink.cardResult = D_80137E4C;
+    if (D_80137E4C != SAVE_CARD_OK && g_CoopLink.saveSeq == seq) {
+        SaveToLinkOnly(&s_CardCmd); // never got as far as building the save
+    }
+    D_80097924 = s_PrevPort;
+    D_8006C378 = s_PrevBlock;
+    s_CardSaving = false;
+    return true;
 }
 
 static void CommandUpdate(void) {
@@ -249,10 +294,12 @@ static void CommandUpdate(void) {
         LoadSave();
         break;
     case CMD_SAVE_NOW:
-        if (g_GameState != Game_Play) {
-            return;
+        if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || D_80137598 || s_CardSaving) {
+            return; // in a menu, on the map, or in a save room itself: wait
         }
-        SaveNow(c);
+        s_CardCmd = *c;
+        g_CoopLink.cardResult = 0;
+        CardSaveStart();
         break;
     case CMD_GAME_OVER:
         s_AllowGameOver = true;
@@ -265,7 +312,13 @@ static void CommandUpdate(void) {
 
 void CoopSaveRoomStore(SaveData* save, s32 block, s32 cardIcon) {
     StoreSaveData(save, block, cardIcon);
+    if (s_CardSaving) { // the partner's save: resume in the partner's save room
+        save->info.stage = s_CardCmd.stage;
+        save->info.roomX = s_CardCmd.x;
+        save->info.roomY = s_CardCmd.y;
+    }
     __builtin_memcpy(g_CoopLink.saveOut, save, SAVE_DATA_SIZE);
+    g_CoopLink.saveBlock = block;
     g_CoopLink.saveSeq++;
 }
 
@@ -302,6 +355,10 @@ bool ArriveFrame(void) {
     if (s_SaveLoaded && InNormalPlay() && g_GameEngineStep == Engine_Normal) {
         D_8003C730 = 0;
         s_SaveLoaded = false;
+    }
+    if (s_CardSaving) {
+        CardSaveStep();
+        return false; // frozen while this game's card is written (D49)
     }
     CommandUpdate();
     TeleportInput();

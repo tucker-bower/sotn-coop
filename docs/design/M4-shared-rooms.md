@@ -1,6 +1,6 @@
 # M4 design: Shared rooms (the same enemies, fighting together)
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** approved 2026-10-19 ("everything for shared rooms sounds good").
 **Budget:** 25% of the month (the main risk). Target: 2026-11-04. Checkpoint after the spikes.
 **Context:** D23 ("same room means the same enemies"), `research.md` → "Shared rooms", M1–M3.
 

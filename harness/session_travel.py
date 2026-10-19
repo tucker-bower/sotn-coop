@@ -193,7 +193,7 @@ def joint_save_and_resume(run):
         a, b = s.a, s.b
         sub.step(30)
         s.joint.request(0)
-        for _ in range(120):
+        for _ in range(600):  # both games write their memory cards (M3b), then the file
             sub.step(1)
             if path.exists():
                 break

@@ -195,6 +195,15 @@ class Emu:
             "hp": self.read(SYMBOLS["g_Status"] + 0x23C, "<i"),
         }
 
+    # --- memory card 1 (libretro save RAM: 128KB, the raw card image)
+    def card(self):
+        return bytes(self._session.core.get_memory(libretro.RETRO_MEMORY_SAVE_RAM))
+
+    def load_card(self, image):
+        mem = self._session.core.get_memory(libretro.RETRO_MEMORY_SAVE_RAM)
+        assert len(image) == len(mem), f"card image is {len(image)} bytes, expected {len(mem)}"
+        mem[:] = image
+
     def ram_hash(self):
         import hashlib
         return hashlib.sha1(bytes(self.ram)).hexdigest()

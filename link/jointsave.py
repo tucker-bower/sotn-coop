@@ -1,7 +1,9 @@
 """Joint saves for couch co-op (design/M3-teleport-respawn-save.md, D31, D36).
 
 The launcher holds both games' mailboxes. When either game saves at a save room, the other is
-asked to save too, resuming in the saver's save room; both saves go into one session file.
+asked to save too: its own game writes a normal memory card save in the same block, resuming in
+the saver's save room (M3b, D46), so each player can resume from the game's Load menu. Both saves
+also go into one session file, the backup (and what "both players dead" reloads).
 Resuming, or both players dying, loads that file back into both games.
 
 `mailboxes` are link.mailbox.Mailbox objects, or anything with the same methods (the harness
@@ -63,9 +65,10 @@ class JointSave:
                 self.saves += 1
             else:                                        # a player saved at a save room
                 stage, x, y = save_room(blob)
+                block = m.save_block()
                 for j, other in enumerate(self.mb):
                     if j != i:
-                        other.command(CMD_SAVE_NOW, stage, 0, x, y)
+                        other.command(CMD_SAVE_NOW, stage, block, x, y)
                 self.pending = (i, blob)
         self._both_dead()
 
@@ -81,11 +84,11 @@ class JointSave:
                 for m in self.mb:
                     m.command(CMD_GAME_OVER)
 
-    def request(self, i):
-        """Has player i save where it stands, as if at a save room (tests; and a launcher menu
-        entry later). The partner then saves too, through tick()."""
+    def request(self, i, block=0):
+        """Has player i save where it stands, to its card's `block`, as if at a save room (tests).
+        The partner then saves too, through tick()."""
         p = self.mb[i].self_presence()
-        self.mb[i].command(CMD_SAVE_NOW, p.stage, 0, p.room_left, p.room_top)
+        self.mb[i].command(CMD_SAVE_NOW, p.stage, block, p.room_left, p.room_top)
 
     def resume(self):
         """Loads the session file into both games (from the title screen, or in play)."""

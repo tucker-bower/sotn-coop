@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 4
+#define COOP_LINK_VERSION 5
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -59,7 +59,7 @@ typedef struct {
 // Commands from the host (design/M3-teleport-respawn-save.md).
 #define CMD_ARRIVE 1    // go to stage / roomId / x, y (tests, and the launcher)
 #define CMD_LOAD_SAVE 2 // apply saveIn and load it (resume, or both players dead)
-#define CMD_SAVE_NOW 3  // write my SaveData to saveOut, resuming in stage / x=roomX, y=roomY
+#define CMD_SAVE_NOW 3  // save to my memory card block roomId (and saveOut), resuming in stage / x=roomX, y=roomY
 #define CMD_GAME_OVER 4 // both dead and no joint save: let the Game Over happen
 
 typedef struct {
@@ -89,7 +89,9 @@ typedef struct {
     /* 0x1080 */ u32 saveSeq;      // game bumps it each time saveOut holds a new save
     /* 0x1084 */ u8 saveOut[SAVE_DATA_SIZE]; // game writes: this game's latest save
     /* 0x2250 */ u8 saveIn[SAVE_DATA_SIZE];  // host writes: the save CMD_LOAD_SAVE applies
-} CoopLink; // size = 0x341C
+    /* 0x341C */ u32 saveBlock;  // game writes: memory card block of its latest save
+    /* 0x3420 */ u32 cardResult; // game writes: last CMD_SAVE_NOW card write: 6 = ok, 7-11 = card error
+} CoopLink; // size = 0x3424
 
 extern CoopLink g_CoopLink;
 

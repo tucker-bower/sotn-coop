@@ -194,3 +194,12 @@ Arrive uses the game's door transition with a borrowed entry of `D_800A245C`, re
 **D46: Saving uses the game's own save rooms, and resuming uses the game's own Load menu** (owner, 2026-10-19)
 Tucker: the built-in save rooms are "very cool"; launcher saves are OK only as a backup. The partner's game writes a normal memory-card save for the same save room (M3b). `session.coop` stays as the backup, and for the both-dead reload. D42 and D45 defaults approved.
 
+**D47: Bosses switch aggro between players** (owner, 2026-10-19)
+After each boss attack, there's a 50% chance the boss targets the other player next. Expect to tune it. Bosses have 2× HP (D25, restated).
+
+**D48: Final milestone: 3–4 player support** (owner, 2026-10-19)
+Added at the very end of the roadmap.
+
+**D49: Saving may freeze the partner; a coffin heals only its user** (owner, 2026-10-19)
+While one player saves at a save room, the partner's game may freeze; it writes its own card save during that time (M3b). The coffin's HP restore affects only the player who used it. HP isn't shared, so that's the natural result.
+

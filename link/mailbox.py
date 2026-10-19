@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 4
+LINK_VERSION = 5
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD = 1, 2, 4, 8, 16  # CoopPresence.flags
 
@@ -14,6 +14,8 @@ SELF, PARTNER = 0x0C, 0x30                     # offsets in CoopLink
 PARTNER_AGE = 0x54
 OUT_RING, IN_RING, DROPPED = 0x58, 0x860, 0x1068
 CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x106C, 0x107C, 0x1080, 0x1084, 0x2250
+SAVE_BLOCK, CARD_RESULT = 0x341C, 0x3420
+CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 SAVE_DATA_SIZE = 0x11CC
 CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
 _COMMAND = struct.Struct("<IHHHhhH")
@@ -139,4 +141,10 @@ class Mailbox:
     def put_save(self, blob):
         assert len(blob) == SAVE_DATA_SIZE
         self.adapter.write_bytes(self.address + SAVE_IN, blob)
+
+    def save_block(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + SAVE_BLOCK, 4))[0]
+
+    def card_result(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + CARD_RESULT, 4))[0]
 
