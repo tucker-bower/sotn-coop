@@ -7,7 +7,7 @@ Run everything with the repo's venv: `../../../.venv/bin/python <script>`.
 |---|---|
 | `python savestates.py [disc.cue]` | Builds the savestate library for that disc (~20 s): `entrance` (after Death takes the gear), `nz0` Alchemy Lab, `no0` Marble Gallery, `no1` Outer Wall. |
 | `python run.py [scenario...]` | Runs scenarios from `scenarios.py`. Writes `.env/out/<name>/report.json` and `clip.gif`. |
-| `python lockstep.py --minutes 10` | Netplay stand-in: two processes, same inputs, rollback-style state reloads, RAM hashes compared every second. `--inject-desync N` proves it can fail. |
+| `python lockstep.py --minutes 10` | Determinism check from M0: two processes, same inputs, rollback-style state reloads, RAM hashes compared every second. `--inject-desync N` proves it can fail. It's no longer the netplay model (D20), but it's still useful as a check that each instance is deterministic, and for the M4 lockstep-merge option. |
 | `../scripts/build_disc.sh` | Builds `.env/out/disc/sotn_coop.us.cue` with the co-op module. |
 | `../scripts/redux_check.sh` | The same module check in the Windows PCSX-Redux, headless, via `redux_check.lua`. |
 

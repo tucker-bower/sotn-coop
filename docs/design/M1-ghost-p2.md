@@ -1,6 +1,6 @@
 # M1 design: Ghost P2 (Alucard) and a real module loader
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** ⛔ **withdrawn 2026-10-18** (D29). The goal changed to independent exploration with one game per player (D19, D20). Part 1, option B (the extra DRA section loader), carries over into the new M1. Part 2 (the context swap) is kept only as option B for shared rooms in M4. This document is kept for the record.
 **Budget:** 13% of the month. Target: 2026-10-26.
 
 ## Goal

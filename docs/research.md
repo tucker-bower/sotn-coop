@@ -1,5 +1,106 @@
 # Research notes
 
+> **2026-10-18 pivot.** The goal is now independent exploration with one game instance per player (D19, D20). The section right below is current. The older sections assume one shared instance, so read them as background.
+
+## Independent exploration (D19–D31)
+
+### Why each player gets their own instance
+SOTN keeps exactly one stage resident. Two players in different areas can't share one game:
+- **Stage code:** the stage overlay always loads at `0x80180000`.
+- **VRAM:** 1MB holds one stage's tiles, the sprites and the framebuffers. There's no room for a second stage or a second view.
+- **Sound:** SPU RAM holds per-stage sound banks.
+- **Disc loading:** stage loads stream from the CD and pause play.
+- **Single world:** the camera, the scrolling tilemap, room-layout entity spawning and the renderer all assume one world and one view.
+
+With one instance per player, all of that stays stock. The work moves to *syncing* the two worlds.
+
+### Pieces
+- **In-game module** (8MB area, loaded as an extra DRA section, D29):
+  - Reports events and state into an outbox.
+  - Applies the inbox at safe points in the frame.
+  - Draws the partner puppet.
+  - Runs teleports, respawns and pause rules.
+- **Mailbox:** fixed-address ring buffers in the 8MB area, one in each direction, with a sequence counter. The host reads and writes it once per frame through the emulator adapter.
+- **Host** (Python, one per instance):
+  - Merges shared state.
+  - Relays presence.
+  - Owns the session file (joint save).
+  - Talks to the partner's host: a local socket for couch play, the network for online.
+- **Emulator adapter:** needs RAM read/write, a per-frame callback and pad input. The harness already does all three for SwanStation (`harness/emu.py`).
+
+### Shared state: where it lives (codebase)
+
+| What | Where | Merge rule |
+|---|---|---|
+| Castle flags (walls, doors, switches, bosses, pickups, cutscenes) | `g_CastleFlags[0x300]` (`include/castle_flags.h`, `0x8003BDEC`) | Mostly set-only, so merge as a **union**. Any flag that gets cleared or counts has to be found and handled as an exception. |
+| Explored map | `g_CastleMap[0x800]` | Bitwise OR |
+| Relics | `g_Status.relics[NUM_RELICS]` (`0x80097964`) | "Owned" is shared. Each player's on/off toggle stays their own. |
+| Equipment | `g_Status` inventory counts | **Add-on-find events** ("+1 Alucard Sword"), not a state merge, so each player gets their own copy. |
+| Max HP/MP/Hearts upgrades | `g_Status` max fields | Events ("+5 max HP") |
+
+Events work better than diffing whole structures. A diff can't tell "P2 found a second potion" from "P1 used one". For flags, the union of both sides is simple and order-independent, so the two worlds always converge.
+
+### Live room refresh (D22)
+- Flags set elsewhere affect only entities spawned *after* the change, because entities read their flag when they spawn.
+- To make a change show up in the room the partner is already in, the module needs a per-entity-type refresh. Each flag-gated entity type is mapped to one of:
+  - despawn it (a pickup that's now taken)
+  - put it in its "already done" state (a wall that's now broken)
+  - rerun its init
+- The list of entity types that check `g_CastleFlags` comes from the codebase (grep the stage sources). This is the bulk of M2.
+
+### Shared rooms: the same enemies (D23), to be decided in the M4 design
+- **A. Room authority (leading candidate).**
+  - The first player in the room becomes the room's **authority**. That game runs the enemies as normal.
+  - The other game stops updating its own stage entities and **mirrors** the authority's entity slots 64–255 each frame. The rendering state those slots point to (primitives) has to be mirrored too.
+  - This works because both games run the same binary and the same stage overlay, so function pointers and data addresses are identical. Raw entity copying is plausible.
+  - Hits on mirrored enemies go to the authority as damage events.
+  - The authority's game has the partner as a puppet with a hurtbox. Enemy hits on it go back as damage events.
+  - Enemy targeting uses the `st_common.h` helpers (see "Enemy targeting" below), changed to pick the nearest player, which includes the puppet.
+  - It tolerates latency: the guest's enemies lag by one round trip, and that's acceptable online.
+  - Each player still runs only their own character, so mixed characters keep working.
+- **B. Lockstep merge.**
+  - When both players are in one room, both games simulate *both* players in lockstep. The second player runs through the context swap (withdrawn M1 design, D29).
+  - Needs exact state equality on room entry, and rollback or input delay online.
+  - Every game must be able to run every character's code, which brings Richter's relocation back.
+  - It's the most faithful option, and the most costly.
+- **The biggest risk either way:** hand-over when the authority player leaves the room or dies, and enemies that read the player directly (about 135 places).
+
+### Bosses and cutscenes (D25, D26)
+- **Boss-room entry:** the boss rooms are known from the stage room tables. On entry, the module sends a "join me" event, and the partner's host triggers a teleport.
+- **2× boss HP:** boss HP comes from the enemy definitions (`EnemyDef.hitPoints`). The module doubles it for boss IDs when the boss spawns while co-op is active. Bosses made of several parts need checking boss by boss.
+- **Cutscenes:**
+  - The trigger player's game sends "cutscene X in room R". The partner is teleported in, and the cutscene's own trigger then runs in both games.
+  - Credit comes from the flag union.
+  - Open question: cutscenes that move or lock "the player" while a second player is around. Lean: the puppet hides during cutscenes.
+
+### Teleport and respawn (D24, D30)
+- The game already loads a stage and room at a given position in two places: warp rooms, and loading a save. The harness uses the debug module's stage load (`savestates.warp`). Teleport reuses that path.
+- A safe landing spot near the partner = the partner's position. If that's mid-air or inside a wall, use the partner's last grounded position.
+- Inverted castle stages are separate stage IDs, so the teleport has to pick the right one.
+
+### Mixed characters (D27), open until M7
+Richter mode (`g_PlayableCharacter`) changes the world: candle drops, some cutscenes, and whether items and relics exist. The unanswered question is which mode the world runs in when Alucard and Richter share a save, and what shared relics or equipment mean to Richter. The puppet needs the partner's sprite sheet in the 8MB area: `ARC_F.BIN` is 208KB, and Richter's sprites live in `RIC.BIN`.
+
+### Product emulator (R1, decided with Tucker separately)
+Requirements:
+- 8MB mode.
+- RAM read/write from outside, every frame, with low latency.
+- Two instances at once.
+- Pad routing (pad 1 → instance 1, pad 2 → instance 2 on one PC).
+- Savestates.
+- Windows, ideally Linux. Android (Thor) is a nice-to-have.
+
+Candidates to evaluate:
+- **Our own libretro frontend** around SwanStation. The harness already is one. We get full control, and both screens in one window is possible.
+- **RetroArch** network commands (`READ_CORE_MEMORY`/`WRITE_CORE_MEMORY`): Android-capable, but polling over UDP may be too slow.
+- **PCSX-Redux** (Lua plus a web server).
+- **BizHawk** (Lua; the SOTN randomizer community uses it).
+- DuckStation has no scripting, so it's out unless that changes.
+
+### Prior art lead (unverified)
+TalicZealot's **SotnRandoTools** (BizHawk external tool, now maintained as `SotnRandoTools_C4B`) is believed to have had an online co-op mode that shares relics, items and warps between separate games. A web search on 2026-10-18 didn't confirm it. If it's real, its RAM-address list and merge rules are worth reading before M2.
+
+
 Sources: the sotn-decomp codebase, the project wiki, and the related repos below. Discord notes are pending until a login is available.
 
 ## Memory layout (wiki: Internals)
@@ -17,13 +118,13 @@ Alucard mode:
 
 Richter mode replaces `ARC_F` + servant + weapons (`8013C000–8017FFFF`) with `RIC.BIN`. That confirms D3: Alucard + Richter at the same time means relocating Richter.
 
-**Implication for P2 = Alucard:** a second Alucard can share all of the engine code and the spritesheet. The new memory cost is mostly *state* (one more `PlayerState` plus entity slots), not code or graphics. That's the cheapest possible case.
+**Implication for P2 = Alucard (from the old one-instance plan, before D20):** a second Alucard can share all of the engine code and the spritesheet. The new memory cost is mostly *state* (one more `PlayerState` plus entity slots), not code or graphics. That's the cheapest possible case.
 
 ## Player architecture (codebase)
 - `PLAYER` is a macro for `g_Entities[0]`. `g_Player` is a single global `PlayerState` (0x3D0 bytes, about 1 KB).
 - DRA references `PLAYER.` about 1,700 times and `g_Player.` about 900 times. Player logic is hard-wired to a single player. Parameterizing it would be a huge diff.
 - Entities: there are 256 slots in total. Slots 0–63 are reserved for the player and its effects, and stage entities start at 64. Alucard's weapons, subweapons and effects spawn in the player range.
-- **Candidate approach ("context swap"):** run the player update twice per frame. Before the second pass, swap in P2's saved `g_Player`, entity 0, the pad state, and P2's sub-entity range, then swap back afterwards. This touches very little upstream code. The unknowns are the globals that player code writes besides `g_Player` (camera, map position, room-transition triggers) and how enemies pick a target (they read `PLAYER` directly). This is the leading candidate for the M1 design doc.
+- **Candidate approach ("context swap"), withdrawn as the P2 plan by D29 and kept as an option for shared rooms:** run the player update twice per frame. Before the second pass, swap in P2's saved `g_Player`, entity 0, the pad state, and P2's sub-entity range, then swap back afterwards. This touches very little upstream code. The unknowns are the globals that player code writes besides `g_Player` (camera, map position, room-transition triggers) and how enemies pick a target (they read `PLAYER` directly). This is the leading candidate for the M1 design doc.
 - `g_pads[PAD_COUNT]` already reads both controller ports.
 - The PS1 build has an existing debug header that refers to pad 2: `src/st/pad2_anim_debug.h`. Worth checking for how the developers used port 2.
 

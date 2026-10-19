@@ -4,43 +4,47 @@ A two-player co-op mod for *Castlevania: Symphony of the Night* (PS1, US / SLUS-
 
 ## Goal
 
-Two people play through the castle together on the same screen: **Alucard + Richter**, and later **Alucard + Maria**.
+Two players explore Dracula's castle **independently**, each on their own screen, with **shared progression**. A relic, item, unlocked area or explored room found by one player counts for both, live. Players meet up to fight the same enemies, take on bosses together, and watch cutscenes together. They can also teleport to each other at any time. The aim is co-op that's still fun after tens of hours and repeat playthroughs, including co-op speedruns. See `docs/DECISIONS.md` D19–D31.
 
-The mod is a patched disc image for the popular PS1 emulators: DuckStation, RetroArch (Beetle PSX / SwanStation), and PCSX-Redux. It's playable over local wifi or the internet with standard tools:
+## How it works
+Each player runs their **own copy of the game** in an emulator. A **co-op link** connects them. Each game has an in-game module in the 8MB expansion RAM, and a host program per player that relays shared state between the two games.
 
-- **RetroArch netplay** (LAN, or internet via relay). Works on PC and on Android handhelds such as the AYN Thor.
-- **Streaming tools** (Parsec, Steam Remote Play Together, Moonlight), which work with any emulator because P2 is just a second local controller.
-
-The mod itself only adds local two-player support (controller port 2). It contains no networking code.
+```
+ Player 1: emulator + patched SOTN + co-op module      Player 2: emulator + patched SOTN + co-op module
+            |  mailbox (8MB RAM)                                    |
+         host 1 -------------- local socket / network ----------- host 2
+```
 
 ## Scope
 
-**Milestone target: "P2 Lite"**
-- P2 on pad 2, playing as Alucard first (stepping stone), then as Richter.
-- Shared progression and inventory. P2 warps to P1 on room transitions, cutscenes and boss intros.
-- Both players fight, and enemies target either player.
+**Month target: "explore together"** (Alucard + Alucard)
+- Each player sees their partner on the map, and as a tinted puppet when the two are in the same room.
+- **Shared, live:** relics, castle flags, the explored map, equipment (each player gets a copy), and max-HP/MP/Hearts upgrades.
+- **Separate:** level, XP, gold, consumables, and the equipped loadout.
+- Teleport to the partner from the pause menu. A player who dies respawns at the partner's location, except during a boss fight, where the survivor has to finish the boss alone first. Each player can pause on their own, unless both are in the same room.
+- **Same room means the same enemies:** both players fight them, and enemies can target either player.
+- **Bosses together:** the partner is teleported in automatically, and bosses get 2× HP. Cutscenes are seen together.
+- **Joint save:** saving in either game saves both.
 
 **Later**
-- Maria as P2. This requires the user to also own *Dracula X Chronicles (EU, PSP)*.
-- Independent P2 stats, equipment and inventory.
-- A shared-camera tether instead of warping.
-- Two-player boss balancing.
-- Inverted castle coverage.
+- Each player picks Alucard, Richter or Maria. Maria requires *Dracula X Chronicles (EU, PSP)*.
+- Full inverted castle coverage.
+- Speedrun features.
 
 ## Non-goals
-- Real PS1 hardware.
-- Networking code. Netplay and streaming tools handle that.
+- Real PS1 hardware. The mod is emulator-only.
+- Two players inside a single game instance (D20).
 - Distributing any copyrighted game data.
 
 ## Constraints
-- **8MB RAM mode required.** Enable the emulator's "8MB RAM / dev console" option. Richter's code is relinked into the expansion RAM so he can coexist with Alucard.
-- **Deterministic.** The same inputs must produce the same frames, or netplay desyncs.
-- **Bring your own disc.** Users build the patched image from their own legally obtained copy (following the Maria mod's precedent). We never publish game data or pre-patched images.
+- **8MB RAM mode required.** It holds the co-op module and the partner's sprite data.
+- **The emulator we ship for isn't decided yet** (R1, D28). It must allow RAM access from outside, every frame, and run two instances. Development uses SwanStation through our harness, with PCSX-Redux as a cross-check.
+- **Bring your own disc.** Users build the patched image from their own legally obtained copy, following the Maria mod's precedent. We never publish game data or pre-patched images.
 
 ## Testing approach
 - A frame-stepped headless harness with savestates, scripted and bot inputs, and RAM assertions.
-- Lockstep desync checks that run two instances and compare RAM every frame.
-- Human playtests on PC emulators, then on the Thors.
+- **Multi-instance session tests:** two games plus the host, with scripted inputs on both and assertions across both games (for example, "P1 picks up a relic, and P2 has it within N frames").
+- Human playtests on PC.
 
 ## Docs
 - [`AGENTS.md`](AGENTS.md): how AI agents work on this project

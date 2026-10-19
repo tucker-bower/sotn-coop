@@ -11,19 +11,21 @@ _Last updated: 2026-10-18_
 - DuckStation is set up with a DualSense on port 1 (SDL bindings in its portable `settings.ini`).
 - Emulators installed in `Emulators\DuckStation` and `Emulators\PCSX-Redux` (portable, OpenBIOS, 8MB) (D10).
 
+- **Re-plan (2026-10-18):** the goal is now independent exploration, with one game per player and shared progression (D19–D31). `ROADMAP.md`, `README.md`, `AGENTS.md` and `research.md` are rewritten to match. The ghost-P2 M1 design is withdrawn (D29).
+
 ## In flight
 - M0 PR open, awaiting review.
 
 ## Next
-- M1 design doc **awaiting approval**: `design/M1-ghost-p2.md` (loader B + context swap A).
+- Write the new M1 design, `design/M1-link-presence.md`: the DRA-section loader, the mailbox, the host and emulator adapter, and the partner puppet. It will include a spike that runs two harness instances linked through a mailbox.
 
 ## Budget
-- Month started 2026-10-18. Day 1: setup, environment and all of M0 (M0 budget 12%, target 2026-10-22). On or ahead of plan.
+- Month started 2026-10-18. Day 1: setup, environment, all of M0 (12%), and the re-plan.
+- The new scope is larger than "P2 Lite". The month target (M1–M6) leaves only a 3% reserve, and M4 (shared rooms) is the main risk. Checkpoints are after M2 and after M4.
 
 ## Decisions needed (Tucker)
-- Approve the M1 design (`design/M1-ghost-p2.md`).
-- Later (M6, Maria): obtain DXC **EU**, or let me write a `pspus` asset map (D15).
-- Before M5: the 5-minute Thor check that SwanStation installs and runs.
-
+- **R1: which emulator we ship for.** This gets its own research session and conversation. Requirements and candidates are in `research.md` → "Product emulator". It isn't blocking until M6.
+- **Before M7:** what mixed characters mean for shared progression, e.g. Richter with relics, equipment or levels, and Richter mode's world changes (D27).
+- **Later (Maria):** obtain DXC **EU**, or let me write a `pspus` asset map (D15).
 ## Environment notes
 - Setup lives in `SETUP.md` and `scripts/bootstrap.sh`. The old cloud Go-mirror note is obsolete, because this machine has direct internet.
