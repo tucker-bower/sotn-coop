@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 2
+LINK_VERSION = 3
 
 IN_PLAY, SPRITE = 1, 2  # CoopPresence.flags
 
@@ -12,6 +12,9 @@ _PRESENCE = struct.Struct("<BBBBHHhhhhhHHHI")  # CoopPresence, 0x1C bytes
 _HEADER = struct.Struct("<III")                # magic, version, heartbeat
 SELF, PARTNER = 0x0C, 0x28                     # offsets in CoopLink
 PARTNER_AGE = 0x44
+OUT_RING, IN_RING, DROPPED = 0x48, 0x850, 0x1058
+RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
+EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 
 
 @dataclass
@@ -74,3 +77,37 @@ class Mailbox:
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())
         self.adapter.write_bytes(self.address + PARTNER_AGE, struct.pack("<I", 0))
+
+    # --- event rings (module/link.h). Each event is its raw 8 bytes: the host only relays them.
+
+    def _ring(self, offset):
+        return struct.unpack("<II", self.adapter.read_bytes(self.address + offset, 8))
+
+    def take_events(self):
+        """Everything the game wrote to its out ring since last time, as raw 8-byte events."""
+        head, tail = self._ring(OUT_RING)
+        out = []
+        while tail != head:
+            slot = self.address + OUT_RING + 8 + (tail % RING_SIZE) * EVENT_SIZE
+            out.append(self.adapter.read_bytes(slot, EVENT_SIZE))
+            tail = (tail + 1) & 0xFFFFFFFF
+        self.adapter.write_bytes(self.address + OUT_RING + 4, struct.pack("<I", tail))
+        return out
+
+    def give_events(self, events):
+        """Writes as many events as fit into the game's in ring; returns how many."""
+        head, tail = self._ring(IN_RING)
+        n = 0
+        for ev in events:
+            if head - tail >= RING_SIZE:
+                break
+            slot = self.address + IN_RING + 8 + (head % RING_SIZE) * EVENT_SIZE
+            self.adapter.write_bytes(slot, ev)
+            head = (head + 1) & 0xFFFFFFFF
+            n += 1
+        self.adapter.write_bytes(self.address + IN_RING, struct.pack("<I", head))
+        return n
+
+    def dropped(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + DROPPED, 4))[0]
+

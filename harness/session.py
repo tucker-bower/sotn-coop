@@ -46,6 +46,9 @@ def _worker(conn, disc, start):
                 elif cmd == "connect":
                     transport.connect(args)
                     conn.send(("ok", None))
+                elif cmd == "partition":  # the network drops everything, both ways
+                    transport.partitioned = args
+                    conn.send(("ok", None))
                 elif cmd == "unlink":  # stop the host: as if the partner's side vanished
                     linked = False
                     conn.send(("ok", None))
@@ -91,6 +94,9 @@ class Game:
 
     def unlink(self):
         return self._ask("unlink")
+
+    def partition(self, on=True):
+        return self._ask("partition", on)
 
     def link(self):
         return self._ask("link")

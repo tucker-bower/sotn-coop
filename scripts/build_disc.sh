@@ -5,7 +5,9 @@
 # Mirrors upstream's `make disk`, with two changes (module/coop_api.h and boot.c explain why):
 #   - DRA is built with its co-op hooks (COOP=1), and the module's boot stub is appended to
 #     DRA.BIN, inside its last CD sector;
-#   - COOP.BIN (the module) is added after every retail file.
+#   - COOP.BIN (the module) is added after every retail file, behind COOPPAD.: the 150 blank
+#     sectors retail has after the XA music stream (upstream's mastering drops them). Music
+#     streaming reads past the stream's end; with module data right there, the game hung.
 # No retail file may move: scripts/check_disc_layout.py enforces it.
 set -euo pipefail
 
@@ -21,7 +23,7 @@ LIST=config/disk.us.lba
 
 restore() {  # leave upstream's tracked file list and build dir as we found them
     git checkout -q "$LIST"
-    rm -f build/us/COOP.BIN
+    rm -f build/us/COOP.BIN build/us/COOPPAD.
 }
 trap restore EXIT
 
@@ -38,8 +40,9 @@ make -s -C "$MOD/module"
 truncate -s "$DRA_END" build/us/DRA.BIN
 cat build/coop/boot.bin >> build/us/DRA.BIN
 cp build/coop/COOP.BIN build/us/COOP.BIN
+head -c $((150 * 2336)) /dev/zero > build/us/COOPPAD.  # 150 raw XA sectors: zero subheader, zero data
 # After the last data file (the CD-DA track stays last).
-sed -i 's|^SD/CD1.DA;1,A,|COOP.BIN;1,N,20261018-000000-36\n&|' "$LIST"
+sed -i 's|^SD/CD1.DA;1,A,|COOPPAD.;1,X,20261018-000000-36\nCOOP.BIN;1,N,20261018-000000-36\n&|' "$LIST"
 
 echo "== master the disc"
 COOP=1 SKIP_CHECK=1 ./sotn.sh disk >/dev/null

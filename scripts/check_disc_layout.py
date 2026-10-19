@@ -55,6 +55,16 @@ def files(image):
     return out
 
 
+def filler_ok(image, start, end):
+    """Sectors [start, end) carry a zero subheader and zero data, as on retail."""
+    with open(image, "rb") as f:
+        for n in range(start, end):
+            f.seek(n * SECTOR + 16)
+            if any(f.read(8 + 2048)):
+                return False
+    return True
+
+
 def main():
     retail, coop = ({p: v for p, v in files(bin_path(c)).items() if not p.endswith(".DA;1")}
                     for c in sys.argv[1:3])
@@ -63,10 +73,17 @@ def main():
     last = max(lba + (size + 2047) // 2048 for lba, size in retail.values())
     added = {p: v for p, v in coop.items() if p not in retail}
     early = [p for p, (lba, _) in added.items() if lba < last]
-    for line in moved + [f"{p}: added before the end of the retail files" for p in early]:
+    # Retail's data track ends with blank filler after the XA stream; the game reads into it.
+    # Everything the mod adds must come after that filler, and the filler must be blank.
+    track_end = bin_path(sys.argv[1]).stat().st_size // SECTOR  # retail track 1 length
+    early = [p for p, (lba, _) in added.items() if lba < track_end and not p.startswith("COOPPAD")]
+    filler = filler_ok(bin_path(sys.argv[2]), last, track_end)
+    for line in moved + [f"{p}: added before the end of retail's data track ({track_end})" for p in early]:
         print(line)
     print(f"{len(retail)} retail files, {len(moved)} moved; added: {', '.join(added) or 'none'}")
-    sys.exit(1 if moved or early else 0)
+    if not filler:
+        print(f"sectors {last}..{track_end - 1} after the retail files aren't blank like retail's")
+    sys.exit(1 if moved or early or not filler else 0)
 
 
 if __name__ == "__main__":

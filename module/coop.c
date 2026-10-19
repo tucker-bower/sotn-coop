@@ -3,6 +3,7 @@
 #include <game.h>
 #include "coop_api.h"
 #include "link.h"
+#include "progress.h"
 #include "puppet.h"
 
 bool DebugUpdate(void); // DRA
@@ -53,12 +54,19 @@ static void CapturePresence(CoopPresence* p) {
 }
 
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
+//
+// The main loop runs UpdateGame only if DebugUpdate() returns nonzero, but in the US build
+// DebugUpdate is empty (`jr ra`): it never sets a return value, and retail just happens to
+// leave a nonzero v0. Returning DebugUpdate()'s "result" would return whatever our own code
+// left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
     if (g_CoopLink.partnerAge < 0xFFFF) {
         g_CoopLink.partnerAge++;
     }
-    return DebugUpdate();
+    ProgressUpdate();
+    DebugUpdate();
+    return true;
 }
 
 // After RenderEntities, the frame's game state is final: publish it, and draw the partner

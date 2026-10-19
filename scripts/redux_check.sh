@@ -16,7 +16,7 @@ rm -f "$WORK"/memcard*.mcd "$WORK"/log.txt "$WORK"/redux.log  # fresh, empty mem
     "$PY" - <<EOF
 import sys; sys.path.insert(0, "$COOP/harness")
 from emu import SYMBOLS; from module import symbols
-for k in ("g_GameState", "g_GameStep", "g_StageId", "g_Timer"):
+for k in ("g_GameState", "g_GameStep", "g_StageId", "g_Timer", "g_Tilemap", "g_GameEngineStep"):
     print(f"  {k} = 0x{SYMBOLS[k]:08X},")
 print(f"  g_CoopLink = 0x{symbols()['g_CoopLink']:08X},")
 EOF

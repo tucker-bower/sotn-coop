@@ -2,6 +2,8 @@
 
 from bots import walker
 from module import COOP_DISC, COOP_MAGIC, coop_state
+from session import COOP  # noqa: F401  (puts `link` on the path)
+from link.mailbox import LINK_VERSION
 from scenario import scenario
 
 
@@ -32,7 +34,7 @@ def loader_from_boot(run):
     run.expect(len(e.ram) == 8 << 20, "emulator exposes 8MB of RAM", ram=len(e.ram))
     run.step(1800)  # boot to the title screen
     magic, version, beat = coop_state(e)
-    run.expect(magic == COOP_MAGIC and version == 2, "module resident at its 8MB address", magic=hex(magic))
+    run.expect(magic == COOP_MAGIC and version == LINK_VERSION, "module resident at its 8MB address", magic=hex(magic))
     run.expect(e.read("g_GameState") == 1, "the game reached the title screen", state=e.read("g_GameState"))
     run.expect(beat == e.read("g_Timer") > 0, "heartbeat has ticked every game frame since boot",
                heartbeat=beat, g_Timer=e.read("g_Timer"))

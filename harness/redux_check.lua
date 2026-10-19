@@ -51,7 +51,10 @@ local phases = {
             beat0, timer0 = u32(SYM.g_CoopLink + 8), u32(SYM.g_Timer)
         elseif n - t0 == 900 then
             local beats, frames = u32(SYM.g_CoopLink + 8) - beat0, u32(SYM.g_Timer) - timer0
-            finish(beats == frames and beats >= 290, string.format("heartbeat +%d over %d game frames", beats, frames))
+            local left, top = u32(SYM.g_Tilemap + 0x2C), u32(SYM.g_Tilemap + 0x30)
+            local engine = u32(SYM.g_GameEngineStep)
+            finish(beats == frames and beats >= 290 and engine == 1 and (left ~= 0 or top ~= 0),
+                string.format("heartbeat +%d over %d game frames, engine %d, room %d,%d", beats, frames, engine, left, top))
         end
     end,
 }
