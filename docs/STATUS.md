@@ -21,12 +21,13 @@ _Last updated: 2026-10-18_
   - The loader changed from the approved option B to the design's fallback C (`COOP.BIN` on the disc, D32), because DRA has no spare bytes and retail files can't move.
 
 ## Next
-- M2 design: shared progression (live) + joint save.
+- M2 and M3 designs **awaiting approval**: `design/M2-shared-progression.md`, `design/M3-teleport-respawn-save.md`. The joint save moves from M2 to M3, which builds the "put a player in a room" path that resuming needs.
 
 ## Budget
 - Month started 2026-10-18. Day 1: setup, environment, M0 (12%), the re-plan, and M1 (budget 15%, target 2026-10-23). Well ahead of plan.
 
 ## Decisions needed (Tucker)
+- Approve the M2 and M3 designs.
 - Review the M1 PR. Optional: watch the side-by-side GIF (`.env/out/puppet_same_room_only/clip.gif`).
 - **R1: which emulator we ship for.** This gets its own research session and conversation. Requirements and candidates are in `research.md` → "Product emulator". It isn't blocking until M6.
 - **Before M7:** what mixed characters mean for shared progression, e.g. Richter with relics, equipment or levels, and Richter mode's world changes (D27).

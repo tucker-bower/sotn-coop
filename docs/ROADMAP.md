@@ -14,9 +14,9 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | # | Milestone | Budget (share of month) | Target date |
 |---|---|---|---|
 | M0 | Test harness + 8MB verification ✅ | 12% | 2026-10-22 (done 10-18) |
-| M1 | Link + presence | 15% | 2026-10-23 |
-| M2 | Shared progression (live) + joint save | 15% | 2026-10-28 |
-| M3 | Teleport, respawn, pause rules | 8% | 2026-10-31 |
+| M1 | Link + presence ✅ | 15% | 2026-10-23 (done 10-18) |
+| M2 | Shared progression (live) | 12% | 2026-10-26 |
+| M3 | Teleport, respawn, pause rules, joint save | 11% | 2026-10-30 |
 | M4 | Shared rooms: same enemies, fight together | 25% | 2026-11-08 |
 | M5 | Bosses and cutscenes together | 12% | 2026-11-13 |
 | M6 | Playable build + playtest | 10% | 2026-11-18 |
@@ -40,18 +40,20 @@ Done. Results are in `design/M0-harness.md`.
 - **Latency:** with both instances on one machine, the delay from a partner's movement to the puppet updating is ≤ 2 frames.
 - With `COOP` off, the matching build is still 115/115.
 
-### M2: Shared progression (live) + joint save
+### M2: Shared progression (live)
+Full criteria: `design/M2-shared-progression.md`.
 - **Shared, live:** relics, castle flags (walls, doors, switches, item pickups, bosses), explored map, equipment (picking one up gives *each* player a copy), and max-HP/MP/Hearts upgrades. The partner's instance applies each change within a few frames.
 - **Separate:** level, XP, gold, consumables, the equipped loadout, and current HP/MP.
 - **Live room refresh:** a change that affects the room the partner is standing in shows immediately. For example, a wall breaks, a door opens, or a pickup disappears. The partner doesn't have to re-enter the room.
-- **Joint save:** saving in either game saves both, plus a session file. Resuming restores both games and the shared state.
 - Merges converge after random inputs, so a 30-minute soak with both players exploring ends with identical shared state in both games.
 
-### M3: Teleport, respawn, pause rules
-- **Teleport to partner** from a pause-menu entry, across stages and into the inverted castle. It lands at a safe position near the partner.
+### M3: Teleport, respawn, pause rules, joint save
+Full criteria: `design/M3-teleport-respawn-save.md`.
+- **Teleport to partner** with ✕ on the map screen, across stages and into the inverted castle. It lands at a safe position near the partner.
 - **Death:** the player respawns at the partner's location with full HP instead of getting Game Over. If both players die, they reload the last joint save (D24).
 - **Pause:** each player pauses and uses the menu independently. If both are in the same room, a pause by either one pauses both.
 - Zero softlocks in a teleport fuzz test (random teleports between harness savestates).
+- **Joint save:** saving in either game saves both (`session.coop`). Resuming restores both games and the shared state. Moved here from M2: resuming uses the same "put a player in a room" path as teleport.
 
 ### M4: Shared rooms (same enemies, fight together)
 - When both players are in the same room, they see and fight **the same enemies**. Damage from either player counts, and enemies can target and damage either player.

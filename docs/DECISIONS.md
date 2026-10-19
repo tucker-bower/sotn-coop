@@ -104,7 +104,7 @@ Tucker wants it researched and discussed on its own. Requirements are collected 
 The context swap was for P2 sharing P1's instance, which is now unnecessary. It may come back as one option for shared rooms (D23). Loading the module as an extra DRA section is still the plan for getting co-op code resident at boot.
 
 **D30: Teleport to the partner on demand; pausing is independent unless both are in the same room** (owner, 2026-10-18)
-- Teleport is a pause-menu entry (owner: "a menu entry or whatever is easiest").
+- Teleport is a pause-menu entry (owner: "a menu entry or whatever is easiest"). The M3 design proposes ✕ on the map screen as the easiest equivalent (the pause menu is DRA code, which can't grow, D33).
 - When both players are in one room, a pause by either one pauses both.
 
 **D31: The joint save covers both games** (owner, 2026-10-18)
