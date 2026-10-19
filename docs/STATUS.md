@@ -14,7 +14,7 @@ _Last updated: 2026-10-18_
 
 ## In flight
 - M0 PR #1 open, awaiting review.
-- **M1 built, all criteria pass**, on branch `coop-m1-link-presence` (stacked on M0 and the re-plan). Results are in `design/M1-link-presence.md`.
+- **M1 built, all criteria pass: PR #2** (branch `coop-m1-link-presence`, stacked on M0 #1 and the re-plan). Results are in `design/M1-link-presence.md`.
   - The co-op module loads from boot on every new game (SwanStation and PCSX-Redux).
   - Two linked games see each other. The partner is a blue-tinted Alucard in the same room, and a cursor on the map.
   - The link adds ≤ 2 frames of latency, survives the partner vanishing, and never changes game state (10-minute two-game soak).
