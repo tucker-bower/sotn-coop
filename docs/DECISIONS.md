@@ -191,3 +191,6 @@ Arrive uses the game's door transition with a borrowed entry of `D_800A245C`, re
 - A respawn gives full HP and MP.
 - Teleport and respawn land on the partner's last grounded spot.
 
+**D46: Saving uses the game's own save rooms, and resuming uses the game's own Load menu** (owner, 2026-10-19)
+Tucker: the built-in save rooms are "very cool"; launcher saves are OK only as a backup. The partner's game writes a normal memory-card save for the same save room (M3b). `session.coop` stays as the backup, and for the both-dead reload. D42 and D45 defaults approved.
+
