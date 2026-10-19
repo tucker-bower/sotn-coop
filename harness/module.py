@@ -15,5 +15,5 @@ def symbols():
 
 
 def coop_state(emu):
-    """g_Coop from module/coop.c: (magic, version, heartbeat)."""
-    return struct.unpack("<III", emu.read_bytes(symbols()["g_Coop"], 12))
+    """The g_CoopLink header (module/link.h): (magic, version, heartbeat)."""
+    return struct.unpack("<III", emu.read_bytes(symbols()["g_CoopLink"], 12))

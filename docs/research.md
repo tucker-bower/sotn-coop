@@ -97,6 +97,13 @@ Candidates to evaluate:
 - **BizHawk** (Lua; the SOTN randomizer community uses it).
 - DuckStation has no scripting, so it's out unless that changes.
 
+### Findings from building M1 (2026-10-18)
+- **DRA has zero spare bytes.** Its code and BSS end exactly at `0x8013B6A0`, where the fixed `dra_data` block (the `ARC_F` area) starts. Hooks must retarget existing calls (D33).
+- **Retail files must keep their sector positions.** One extra sector in `DRA.BIN` shifted every later file, and boot hung in the intro FMV, which is read from a fixed sector. `lba_us.h` was regenerated correctly, so the fixed position lives somewhere `lba.h` doesn't cover (not tracked down). New content goes in `COOP.BIN` after the retail files (D32, D34).
+- **Free VRAM:** the texture page at `(0x1C0, 0x100)`–`(0x1FF, 0x1FF)` is never written in NO3, NZ0, NO0 or NO1 (VRAM sampled every 30 frames while walking). It's at offset 8,920,275 in SwanStation's savestate, right after the BIOS copy.
+- **`rand()` is a BIOS call** (A0 table 0x2F), so its seed lives in the kernel area. The BIOS thread context (`[0x80000110]`, the registers saved at each interrupt) shifts with any code change, so state comparisons must exclude it.
+- **The map screen opens on Select** whenever pausing is allowed. It's `g_GameEngineStep` 20 (`Engine_Map`), and the cursor is drawn only while `g_canRevealMap` is set.
+
 ### Prior art lead (unverified)
 TalicZealot's **SotnRandoTools** (BizHawk external tool, now maintained as `SotnRandoTools_C4B`) is believed to have had an online co-op mode that shares relics, items and warps between separate games. A web search on 2026-10-18 didn't confirm it. If it's real, its RAM-address list and merge rules are worth reading before M2.
 

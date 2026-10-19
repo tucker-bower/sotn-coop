@@ -173,6 +173,10 @@ class Emu:
         a = (self.addr(where) + offset) & self._ram_mask
         self.ram[a:a + struct.calcsize(fmt)] = struct.pack(fmt, value)
 
+    def write_bytes(self, where, data, offset=0):
+        a = (self.addr(where) + offset) & self._ram_mask
+        self.ram[a:a + len(data)] = data
+
     def entity(self, slot):
         """Address of g_Entities[slot] (Entity is 0xBC bytes; slot 0 is the player)."""
         return SYMBOLS["g_Entities"] + slot * ENTITY_SIZE

@@ -1,8 +1,7 @@
 """Test scenarios. Each one starts from a savestate built by savestates.py."""
 
 from bots import walker
-from module import COOP_DISC, COOP_MAGIC, coop_state, symbols
-from savestates import warp
+from module import COOP_DISC, COOP_MAGIC, coop_state
 from scenario import scenario
 
 
@@ -25,26 +24,28 @@ def walk_entrance_rooms(run):
     run.expect(s["hp"] > 0 and s["game_state"] == 2, "is alive and in play", hp=s["hp"])
 
 
-RELIC_BAT_CARD = 18  # index into g_Status.relics
-RELIC_FOUND_ACTIVE = 3
+@scenario(start=None, disc=COOP_DISC)
+def loader_from_boot(run):
+    """M1 criterion 1: COOP.BIN is loaded by CoopBoot (module/boot.c) at the start of MainGame,
+    so the module runs from the very first game frame, with no familiar involved."""
+    e = run.emu
+    run.expect(len(e.ram) == 8 << 20, "emulator exposes 8MB of RAM", ram=len(e.ram))
+    run.step(1800)  # boot to the title screen
+    magic, version, beat = coop_state(e)
+    run.expect(magic == COOP_MAGIC and version == 2, "module resident at its 8MB address", magic=hex(magic))
+    run.expect(e.read("g_GameState") == 1, "the game reached the title screen", state=e.read("g_GameState"))
+    run.expect(beat == e.read("g_Timer") > 0, "heartbeat has ticked every game frame since boot",
+               heartbeat=beat, g_Timer=e.read("g_Timer"))
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def heartbeat_8mb(run):
-    """M0 module (TT_000 slot, see module/inject.c) installs itself in the 8MB area and runs every frame.
-    The familiar slot only loads when a familiar is active, so the harness turns the Bat Card on."""
+def loader_in_game(run):
+    """M1 criterion 1, in play: after boot, new game and the prologue (savestates.py on the co-op
+    disc), the module still ticks once per game frame."""
     e = run.emu
-    run.expect(len(e.ram) == 8 << 20, "emulator exposes 8MB of RAM", ram=len(e.ram))
-    run.expect(coop_state(e)[0] != COOP_MAGIC, "module not resident before the familiar loads")
-
-    e.write(e.addr("g_Status") + RELIC_BAT_CARD, RELIC_FOUND_ACTIVE, "<B")
-    warp(e, 0x0C)
-    magic, version, beat0 = coop_state(e)
-    run.expect(magic == COOP_MAGIC and version == 1, "module resident at its 8MB address", magic=hex(magic))
-    run.expect(e.read(0x800E3D00) == 0x0C000000 | ((symbols()["CoopMainLoop"] & 0x3FFFFFF) >> 2),
-               "main loop calls CoopMainLoop")
-
+    beat0, timer0 = coop_state(e)[2], e.read("g_Timer")
+    run.expect(beat0 == timer0, "heartbeat matches g_Timer at the castle entrance", heartbeat=beat0, g_Timer=timer0)
     s = run.play(walker("right", attack_every=16), 600)
-    beat = coop_state(e)[2]
-    run.expect(590 <= beat - beat0 <= 600, "heartbeat ticks once per game frame", beats=beat - beat0, frames=600)
+    beats, frames = coop_state(e)[2] - beat0, e.read("g_Timer") - timer0
+    run.expect(beats == frames == 600, "heartbeat ticks once per game frame", beats=beats, frames=frames)
     run.expect(s["game_state"] == 2 and s["hp"] > 0, "game keeps running normally", state=s["game_state"], hp=s["hp"])

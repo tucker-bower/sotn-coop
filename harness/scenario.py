@@ -76,7 +76,8 @@ def run_scenario(name):
     t0 = time.time()
     disc = disc or DISKS / "sotn.us.cue"
     with Emu(disc) as emu:
-        emu.load_state_file(savestate(disc, start))
+        if start:  # None: from power-on
+            emu.load_state_file(savestate(disc, start))
         frame0 = emu.frame
         run = Run(emu, name)
         error = None

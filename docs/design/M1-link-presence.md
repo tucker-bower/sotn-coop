@@ -1,6 +1,6 @@
 # M1 design: Link + presence
 
-**Status:** proposal, awaiting Tucker's approval.
+**Status:** approved 2026-10-18; built, all criteria pass (results at the end).
 **Budget:** 15% of the month. Target: 2026-10-23.
 **Context:** D19–D31, `ROADMAP.md`, and `research.md` → "Independent exploration".
 
@@ -101,3 +101,29 @@ New Python package `mods/co-op/link/`:
 
 ## Decision for Tucker
 Approve the loader, the mailbox (A), the module-drawn puppet (A) and the defaults above, or redirect.
+
+## Results (2026-10-18)
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Loader | ✅ SwanStation: `loader_from_boot` (module resident at the title, heartbeat = `g_Timer` = every frame since boot) and `loader_in_game` (600 beats per 600 frames at the castle entrance, after a full new game and prologue). ✅ PCSX-Redux, headless (`redux_check.sh`): resident at the title (heartbeat 312 = `g_Timer` 312), then +587 beats over 587 game frames at the entrance. No familiar involved. |
+| 2 | `COOP` off still matches | ✅ `build_disc.sh` ends by rebuilding the plain build: `✅ us`, and `doctor.py` is all green. |
+| 3 | No effect on play | ✅ `no_effect_on_play`: game B (co-op disc) first takes game A's (retail) main RAM, keeping only its 4 hook calls, then both walk the `walk_entrance_rooms` route. Identical stage, room, position and HP on all 3,800 frames, through 20,39 → 14,40 → 11,40. |
+| 4 | Presence, ≤ 2 frames | ✅ `presence_follows`: through walk, jump, crouch and turn (220 frames, 10+ poses, both facings), B's partner equals A's presence after every frame. A gets B's one frame later. The puppet is drawn on the next frame: 1 frame behind for B, 2 for A. |
+| 5 | Puppet visible, tinted, same room only | ✅ `puppet_same_room_only`: in each game, a with/without render shows the partner's pixels at the partner's real screen position, tinted blue. After A walks to another room, B draws nothing. Side-by-side GIF in `.env/out/puppet_same_room_only/clip.gif`. |
+| 6 | Map marker | ✅ `map_marker`: on B's map screen (Marble Gallery), a second cursor appears on A's map cell. |
+| 7 | Stale link | ✅ `stale_link`: B's process is killed. A keeps playing, its partner goes stale, and it stops drawing B within 1 s. |
+| 8 | Soak, and the link never changes game state | ✅ `soak_10min`: 36,000 frames per game of random input, sharing a room part of the time, in 90 s. Then A's inputs are replayed alone, with no link. All 60 checks of entities, player, status, castle flags, RNG and the BIOS kernel area match. |
+| 9 | Manual | Optional: watch the side-by-side GIF. |
+
+All 10 scenarios: `harness/run.py` (the 10-minute soak runs by name: `run.py soak_10min`).
+
+**What changed from the design (all logged in `DECISIONS.md`):**
+- **The loader is option C, not B (D32).**
+  - DRA has **no spare room**: its code and BSS end exactly where its fixed-address data block begins (`0x8013B6A0`). So the hooks can't add code. Each hook retargets an existing call instead, which is size-neutral (D33).
+  - Making `DRA.BIN` bigger than its last CD sector **shifts every later file on the disc**. The FMVs are then read from their old sector positions and boot hangs.
+  - So `DRA.BIN` only gains a 184-byte boot stub, inside its last sector. The stub loads `COOP.BIN`, a new file placed after every retail file. `check_disc_layout.py` now fails the build if any retail file moves (D34).
+- **Puppet VRAM:** a VRAM scan across 4 stages found a texture page that's never used, at `(0x1C0, 0x100)`, so the fallback wasn't needed. Other stages aren't scanned yet (risk below).
+
+**New risks:**
+- The puppet's VRAM page is only proven free on the 4 test stages. A stage that uses it would show a corrupted partner sprite (cosmetic only). Cheap fix: extend the scan to every stage when the route grows (M2/M3).
+- The module now has a size budget of 8MB minus the base, and the boot stub has about 1.7 KB left. Neither is a constraint in practice.

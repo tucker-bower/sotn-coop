@@ -109,3 +109,35 @@ The context swap was for P2 sharing P1's instance, which is now unnecessary. It 
 
 **D31: The joint save covers both games** (owner, 2026-10-18)
 Saving in either game saves both, plus a session file with the shared state. Resuming restores both.
+
+---
+## M1 build
+
+**D32: The module loads from its own disc file, `COOP.BIN`** (agent, 2026-10-18; changes the approved loader from option B to the design's fallback C)
+Option B (the whole module appended to `DRA.BIN`) failed for two reasons found while building:
+- DRA can't grow (D33).
+- A `DRA.BIN` longer than its last CD sector shifts every later file on the disc, and boot hangs in the intro FMV, which is read from a fixed sector.
+
+So `DRA.BIN` gains only `CoopBoot`, 184 bytes inside its last sector, which runs in place as the first call in `MainGame`. It reads `COOP.BIN` (added after every retail file) into 8MB RAM, the way `main.exe` reads `DRA.BIN`.
+- The module's size is now unlimited in practice.
+- Cost: one CD read at boot, a few frames.
+
+**D33: Every DRA hook is size-neutral: it retargets an existing call** (agent, 2026-10-18)
+DRA's code and BSS end exactly at `0x8013B6A0`, where its fixed-address data block starts. Adding even one call (0x90 bytes) pushed BSS into that block. Under `COOP`, each hook replaces a call with a same-signature module function that does its work and calls the original:
+- `InitializePads` → `CoopBoot`
+- `DebugUpdate` → `CoopUpdate`
+- `RenderEntities` → `CoopRenderEntities`
+- `DrawMapCursor` → `CoopDrawMapCursor`
+
+`build_disc.sh` fails if DRA's image no longer ends at `0x801B9870`.
+
+**D34: No retail file may move on the co-op disc** (agent, 2026-10-18)
+`scripts/check_disc_layout.py` compares every file's sector with retail after mastering. CD-DA entries are skipped, because upstream's own mastering already places them differently.
+
+**D35: Puppet defaults** (agent-default, 2026-10-18)
+- Blue-grey tint (RGB 0x60/0x70/0xA0 over 0x80).
+- The partner is hidden after 30 frames without an update.
+- Body only (no weapon or effects).
+- Drawn one depth step behind the partner's own priority.
+- The map cursor is the same as the player's, tinted blue and half a blink cycle out of phase.
+
