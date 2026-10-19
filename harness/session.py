@@ -17,7 +17,7 @@ from coop_env import COOP, TOOLS, savestate
 
 sys.path.insert(0, str(COOP))  # for `link`
 
-def _worker(conn, disc, start, rank):
+def _worker(conn, disc, start, rank, audio=False, shm_name=None):
     from emu import Emu
     from link.adapter import HarnessAdapter
     from link.host import Host
@@ -25,8 +25,12 @@ def _worker(conn, disc, start, rank):
     from link.transport import UdpTransport
     from module import symbols
 
+    shm = None
+    if shm_name:
+        from multiprocessing import shared_memory
+        shm = shared_memory.SharedMemory(name=shm_name)
     try:
-        with Emu(disc) as emu:
+        with Emu(disc, audio=audio) as emu:
             if start:
                 emu.load_state_file(savestate(disc, start))
             mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
@@ -59,6 +63,16 @@ def _worker(conn, disc, start, rank):
                     target, name, a, kw = args
                     obj = {"emu": emu, "mailbox": mailbox, "host": host}[target]
                     conn.send(("ok", getattr(obj, name)(*a, **kw)))
+                elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
+                    emu.step(1, args)
+                    if linked:
+                        host.after_frame()
+                    picture = emu.raw_frame()
+                    if picture and shm is not None:  # the pixels go through shared memory
+                        w, h, fmt, pitch, data = picture
+                        shm.buf[:len(data)] = data
+                        picture = (w, h, fmt, pitch, len(data))
+                    conn.send(("ok", (picture, emu.take_audio())))
                 elif cmd == "screenshot":
                     img = emu.screenshot()
                     conn.send(("ok", None if img is None else (img.size, img.tobytes())))
@@ -85,6 +99,21 @@ class Game:
 
     def step(self, n=1, p1=0):
         return self._ask("step", (n, p1))
+
+    def frame(self, pad=0):
+        """One frame with this pad: ((w, h, mode, pixels) or None, audio bytes). With shared
+        memory, pixels is the byte count in self.shm instead."""
+        return self._ask("frame", pad)
+
+    def frame_start(self, pad=0):
+        """frame(), split in two so both games can run their frame at the same time."""
+        self.conn.send(("frame", pad))
+
+    def frame_end(self):
+        status, value = self.conn.recv()
+        if status != "ok":
+            raise RuntimeError(f"game {self.name}: {value}")
+        return value
 
     def mailbox(self, name, *a, **kw):
         return self._ask("call", ("mailbox", name, a, kw))
@@ -121,21 +150,32 @@ class MailboxProxy:
 
 
 class Session:
-    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None):
+    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False):
         """disc: one disc for both games, or (disc A, disc B). session_file: run the couch
-        launcher's joint saves (link.jointsave) into that file, every frame."""
-        self.disc, self.starts, self.session_file = disc, starts, session_file
+        launcher's joint saves (link.jointsave) into that file, every frame. audio: keep sound
+        (the launcher)."""
+        self.disc, self.starts, self.session_file, self.audio = disc, starts, session_file, audio
         self.joint = None
 
     def __enter__(self):
         ctx = mp.get_context("spawn")
         self.games = []
         discs = self.disc if isinstance(self.disc, (tuple, list)) else (self.disc, self.disc)
+        self._shms = []
         for i, start in enumerate(self.starts):
+            shm_name = None
+            if self.audio:  # real-time play: frames through shared memory (640x480x4 at most)
+                from multiprocessing import shared_memory
+                shm = shared_memory.SharedMemory(create=True, size=640 * 480 * 4)
+                self._shms.append(shm)
+                shm_name = shm.name
             parent, child = ctx.Pipe()
-            proc = ctx.Process(target=_worker, daemon=True, args=(child, str(discs[i]), start, i))
+            proc = ctx.Process(target=_worker, daemon=True,
+                               args=(child, str(discs[i]), start, i, self.audio, shm_name))
             proc.start()
-            self.games.append(Game("AB"[i], parent, proc))
+            game = Game("AB"[i], parent, proc)
+            game.shm = self._shms[-1] if shm_name else None
+            self.games.append(game)
         ports = []
         for g in self.games:
             status, value = g.conn.recv()
@@ -175,6 +215,12 @@ class Session:
             g.proc.join(timeout=10)
             if g.proc.is_alive():
                 g.proc.kill()
+        for shm in getattr(self, "_shms", []):
+            try:
+                shm.close()
+                shm.unlink()
+            except BufferError:  # something still borrows it; the OS frees it at exit
+                pass
 
 
 # --- scenarios -------------------------------------------------------------------------------

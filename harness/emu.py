@@ -102,14 +102,16 @@ OPTIONS = {
 
 
 class Emu:
-    def __init__(self, disc, ram_8mb=True, options=None):
+    def __init__(self, disc, ram_8mb=True, options=None, audio=False):
+        """audio: keep the core's sound (take_audio() drains it), for real-time play."""
         opts = dict(OPTIONS, swanstation_Console_Enable8MBRAM="true" if ram_8mb else "false")
         opts.update(options or {})
         self._tmp = tempfile.TemporaryDirectory(prefix="coop-emu-")  # fresh, empty memory cards
         self._input = _PadDriver()
+        self._audio = ArrayAudioDriver() if audio else _NullAudioDriver()
         self._session = Session(
             str(TOOLS["swanstation_core"]), str(disc),
-            input=self._input, audio=_NullAudioDriver(),
+            input=self._input, audio=self._audio,
             options=DictOptionDriver(variables=opts),
             path=ExplicitPathDriver(system=str(TOOLS["bios_dir"]), save=self._tmp.name,
                                     assets=self._tmp.name, playlist=self._tmp.name),
@@ -208,7 +210,28 @@ class Emu:
         import hashlib
         return hashlib.sha1(bytes(self.ram)).hexdigest()
 
+    def take_audio(self):
+        """Sound since the last call: interleaved stereo int16 bytes (empty without audio=True)."""
+        buf = getattr(self._audio, "_buffer", None)
+        if not buf:
+            return b""
+        data = buf.tobytes()
+        del buf[:]
+        return data
+
     # --- video
+    def raw_frame(self):
+        """(width, height, pixel format, pitch, bytes) of the current frame, straight from the
+        video driver's buffer, or None. libretro.py's screenshot() converts pixel by pixel in
+        Python (about 18 ms a frame): far too slow for real-time play. Pixel format is the
+        libretro one: 0 = 0RGB1555, 1 = XRGB8888, 2 = RGB565 (SwanStation's)."""
+        drv = getattr(self._session.video, "_current", None)
+        frame, dims = getattr(drv, "_frame", None), getattr(drv, "_frame_dims", None)
+        if not frame or not dims or not dims.width:
+            return None
+        n = dims.pitch * dims.height
+        return dims.width, dims.height, int(drv.pixel_format), dims.pitch, memoryview(frame)[:n].tobytes()
+
     def screenshot(self, path=None):
         """Current frame as a PIL image (saved to path if given)."""
         from PIL import Image

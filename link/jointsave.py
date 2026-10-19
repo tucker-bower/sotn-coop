@@ -18,7 +18,7 @@ from .mailbox import CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, DEAD, SAVE_DATA
 MAGIC, VERSION = b"COOPSAVE", 1
 _INFO = 0x200                      # SaveData.info (include/game.h)
 _STAGE, _ROOM_X, _ROOM_Y = 0x28, 0x2C, 0x2E  # within SaveInfo
-BOTH_DEAD_FRAMES = 10              # both must be waiting this long before the launcher acts
+BOTH_DEAD_FRAMES = 4               # ticks both must be waiting before the launcher acts
 
 
 def save_room(blob):
