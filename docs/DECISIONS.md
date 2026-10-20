@@ -305,7 +305,7 @@ The layout spawner's cursors are in the copied stage BSS, so at hand-over they p
 This is a rule in `AGENTS.md`: at every natural checkpoint, and always before a likely cut-off, update the docs, then commit and push, marking unfinished work as such.
 
 **D68: Ship OpenBIOS by default** (agent proposal, pending owner approval in M6)
-- **Tested:** SOTN co-op runs on OpenBIOS (PCSX-Redux's open-source BIOS, MIT) in our SwanStation core. That covers boot, new game, the save rooms, memory cards, the Load menu, and the harness suite (`COOP_BIOS=…`).
+- **Tested:** SOTN co-op runs on OpenBIOS (PCSX-Redux's open-source BIOS, MIT) in our SwanStation core. That covers boot, new game, the save rooms, memory cards, the Load menu, and all 55 harness scenarios (`COOP_BIOS=…`).
 - **What it means:** no BIOS for players to find.
 - **The fallback:** a real-BIOS option in Settings, with a plain prompt naming the files that work.
 

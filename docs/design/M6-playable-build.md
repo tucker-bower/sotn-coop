@@ -67,7 +67,7 @@ The pieces are built so that online play (M7) and an Android version later reuse
 
 ## The BIOS: ship OpenBIOS, no BIOS hunt
 **Tested 2026-10-19:** our SwanStation core runs SOTN co-op on OpenBIOS, PCSX-Redux's open-source BIOS (MIT licence), so we can ship it.
-- **Covered:** boot, new game, the prologue, the game's own save rooms and memory cards, resume from the title's Load menu, and the full harness suite (`COOP_BIOS=…/openbios.bin`; see the M6 results when built).
+- **Covered:** boot, new game, the prologue, the game's own save rooms and memory cards, resume from the title's Load menu, and **the full harness suite: all 55 scenarios** (`COOP_BIOS=…/openbios.bin`). The only fixes needed were in two tests, which assumed the retail BIOS's boot time.
 
 So the launcher **ships OpenBIOS as the default**. A player can still choose their own BIOS in Settings ("Use my console's BIOS"), with a clear prompt:
 > *A PlayStation BIOS file, dumped from your own console: USA "SCPH-1001", "SCPH-5501" or "SCPH-7001" (a 512 KB file, usually named like `scph5501.bin`).*

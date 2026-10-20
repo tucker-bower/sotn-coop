@@ -32,7 +32,10 @@ def loader_from_boot(run):
     so the module runs from the very first game frame, with no familiar involved."""
     e = run.emu
     run.expect(len(e.ram) == 8 << 20, "emulator exposes 8MB of RAM", ram=len(e.ram))
-    run.step(1800)  # boot to the title screen
+    for _ in range(60):  # boot to the title screen (how long depends on the BIOS)
+        run.step(100)
+        if e.read("g_GameState") == 1:
+            break
     magic, version, beat = coop_state(e)
     run.expect(magic == COOP_MAGIC and version == LINK_VERSION, "module resident at its 8MB address", magic=hex(magic))
     run.expect(e.read("g_GameState") == 1, "the game reached the title screen", state=e.read("g_GameState"))

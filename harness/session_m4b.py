@@ -127,6 +127,12 @@ def hand_over_keeps_dead_dead(run):
 
 
 LCK_TOTAL = 0x80097BE4   # g_Status.statsTotal[STAT_LCK]
+LCK_BASE = 0x80097BC4    # g_Status.statsBase[STAT_LCK]: the game recomputes the total from it
+
+
+def lucky(g):
+    g.write(LCK_BASE, 4000, "<i")
+    g.write(LCK_TOTAL, 4000, "<i")
 E_PRIZE_DROP_NO3 = 0x03  # NO3's entity id for money/heart drops
 
 
@@ -147,7 +153,7 @@ def guest_kill_drops(run):
     from bots import walker
     a, b = run.s.a, run.s.b
     into_hall(run)
-    b.write(LCK_TOTAL, 4000, "<i")
+    lucky(b)
     warg = stage_entities(a)[WARG_SLOT][0]
     before = drops(a)
     bot = walker("left", attack_every=6)
@@ -158,12 +164,12 @@ def guest_kill_drops(run):
         if stage_entities(a).get(WARG_SLOT, (0,))[0] != warg:
             break
     run.expect(stage_entities(a).get(WARG_SLOT, (0,))[0] != warg, "B killed the Warg", frames=i)
-    new = set()
-    for _ in range(10):
-        run.step(1)
+    new = drops(a) - before
+    for _ in range(10):  # B steps back: touching the drop collects it (D66)
+        run.step(1, p1=("", "right"))
         new |= drops(a) - before
     run.expect(new, "a drop appeared in A's world", slots=sorted(new))
-    run.step(4)
+    run.step(4, p1=("", "right"))
     run.expect(drops(b) & drops(a), "and on B's screen", a=sorted(drops(a)), b=sorted(drops(b)))
 
 
