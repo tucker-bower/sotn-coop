@@ -21,7 +21,7 @@ _Last updated: 2026-10-20_
   - **M10:** AYN Thor curated dual-screen support (top screen = you, bottom screen = partner) + true expanded-FOV widescreen on the top screen.
 
 ## In flight
-- **M7b design (`docs/design/M7b-polish.md`), awaiting Tucker's review:** a real GitHub release, a mode-first launcher with couch/online lobbies, a native menu bar, a resizable window with layouts, a widescreen spike, and a "stranger" playtest from the README.
+- **M7b (`docs/design/M7b-polish.md`), approved 2026-10-20, being built on `coop-m7b-polish`:** a real GitHub release, a mode-first launcher with couch/online lobbies, a native menu bar, a resizable window with layouts, a widescreen spike, a networking review under simulated real-world networks, and a "stranger" playtest from the README.
 - Correction: no M7 PRs exist. M7 landed on `main` directly, and the repo has no GitHub release yet.
 
 ## Next
@@ -34,7 +34,6 @@ _Last updated: 2026-10-20_
 - Day 2 of the month (2026-10-19): M0 through M7 done, far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
-- **M7b:** how to handle unsigned-installer warnings (unsigned + README / SignPath / Azure Trusted Signing), and who publishes the release. See `docs/design/M7b-polish.md`.
 - **Before M8 implementation:** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
 
 ## Environment notes

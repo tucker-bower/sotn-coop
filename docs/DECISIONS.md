@@ -341,3 +341,17 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **M8 (Playable Richter & Maria + DXC dialogue/voices):** Either player can choose Alucard, Richter, or Maria from the start of a fresh playthrough. Character and audio/dialogue assets are extracted from Tucker's local *Dracula X Chronicles* USA ISO (`disks/sotn.pspus.iso`, solving D15 with a `pspus` asset map). Includes a launcher/mod option to use the alternate DXC dialogue and voice acting.
 - **M9 (Android port):** Port the launcher, session engine, and SwanStation Android core integration to Android.
 - **M10 (AYN Thor dual-screen & widescreen):** Curated dual-screen mode for the AYN Thor handheld: the top 6.0" 16:9 screen displays your game and the bottom 3.92" screen displays your partner's screen. Plus an expanded-FOV widescreen mode (not stretched) on the top screen.
+
+## M7b planning (2026-10-20)
+**D76: M7b polish before M8** (owner, 2026-10-20)
+- M8 is tabled while Tucker decides the mixed-character rules.
+- M7b scope:
+  - a real release
+  - mode-first launcher with lobbies
+  - native menu bar, resizable window, layouts
+  - widescreen spike
+  - networking review under simulated real-world networks
+  - stranger playtest
+- **No stretch scaling mode, ever:** the picture is only shown at its true shape.
+- **Ship unsigned:** the README explains the browser and SmartScreen warnings.
+- **Tucker publishes each release** after testing it. The agent only makes drafts.

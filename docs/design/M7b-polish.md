@@ -1,6 +1,6 @@
 # M7b design: Polish M7 into something a non-technical player can use
 
-**Status:** proposed 2026-10-20, awaiting Tucker's review. M8 is tabled until Tucker decides the mixed-character rules.
+**Status:** approved 2026-10-20 (Tucker: no stretch mode, ship unsigned, Tucker publishes the release after testing it, and add a networking review, part 6). M8 is tabled until Tucker decides the mixed-character rules.
 **Why:** M7 works in the harness, but a stranger can't actually get it. The README links to a release that doesn't exist, the launcher is a fixed-size window with a flat menu, and couch and online play are mixed together on one home screen.
 
 ## What I found
@@ -19,8 +19,8 @@
   - writes SHA-256 sums and runs `gh release create vX.Y.Z`
   - uploads the installer under a fixed name, `SOTN-Coop-setup.exe`, so the README can link straight to `releases/latest/download/SOTN-Coop-setup.exe`
 - Release notes cover what's new, the known gaps, and what you need (your own disc).
-- **Publishing is outward-facing,** so I build the release as a **draft** and you click Publish (or tell me to).
-- **Unsigned-installer warnings.** A non-technical user will hit two of them: the browser's "this file isn't commonly downloaded", then Windows SmartScreen's "Windows protected your PC". *Decision needed* (below). Meanwhile, the README shows exactly what to click, with screenshots.
+- **Publishing is outward-facing:** I build the release as a **draft**, and Tucker publishes it after testing it (D76).
+- **Unsigned-installer warnings (shipped unsigned, D76).** A non-technical user will hit two of them: the browser's "this file isn't commonly downloaded", then Windows SmartScreen's "Windows protected your PC". The README shows exactly what to click.
 
 ### 2. Launcher flow: pick a mode first, then a lobby
 ```
@@ -58,7 +58,7 @@ Online: Host or Join (code) ──► Lobby (you + partner's slot) ──► hos
 - Scaling modes:
   - *Sharp* (integer multiples, black borders), the default
   - *Fit, 4:3* (the correct shape, smooth)
-  - *Stretch*
+  - No stretch mode (owner, D76)
 - Drawing moves to pygame's SDL2 GPU renderer (`pygame._sdl2.video`), so scaling two games to 4K costs nothing on the CPU.
 
 **Layouts (View ▸ Layout):**
@@ -69,7 +69,7 @@ Online: Host or Join (code) ──► Lobby (you + partner's slot) ──► hos
 | Option | What it is | Verdict |
 |---|---|---|
 | A. SwanStation "widescreen hack" | Widens *3D (GTE) geometry* | ❌ SOTN is almost all 2D sprites and tiles, so expected result: no wider view, only stretched 3D bits. I'll check in the spike (about 30 min). |
-| B. Stretch to 16:9 | Distorts the picture | Offered under View ▸ Scaling for people who want it. Not widescreen. |
+| B. Stretch to 16:9 | Distorts the picture | ❌ Never offered (owner, D76). |
 | C. **True expanded FOV in the game** | Wider PS1 display mode (e.g. 384 px instead of 256), plus wider camera, tile-layer drawing, enemy spawn/despawn and culling windows, HUD anchoring and VRAM framebuffer layout | The real thing, and it's M10's job. The constraints: VRAM is tight; DRA changes must be size-neutral (D33); and shared rooms need both players on the **same** width, because spawn windows change gameplay. |
 
 **M7b deliverable for widescreen:** a one-session spike (A tested, plus a count of hard-coded 256-wide constants and culling sites in DRA and stage code, plus a VRAM layout check). It ends in a short go/no-go and cost estimate added to the M10 design. No widescreen code ships in M7b.
@@ -87,6 +87,27 @@ I play the part of a non-technical Windows user, starting from nothing:
 
 What I can't do is a real internet session between two homes. That stays your playtest, ideally with a friend who has never seen the project.
 
+### 6. Networking review: real-world ping, jitter and loss
+The M7 online code (`link/`) has only been tested on loopback, plus one MTU and loss scenario. Online feel matters as much as the visuals, so this part checks it under realistic network conditions:
+- **Review** the transport, snapshot, reliable-message and rendezvous code. That means checking framing, retransmit timing, sequence wrap, stale and out-of-order packets, what happens on bursty loss, and bandwidth per second.
+- **Network simulator** in the test harness, between the two hosts. It adds configurable one-way delay, jitter, loss (random and bursty), reordering, duplication and a bandwidth cap. It's seeded, so runs are reproducible. Profiles:
+  - *LAN* (1 ms)
+  - *same city* (20 ms ±5, 0.1% loss)
+  - *cross-country* (40 ms ±10, 0.5%)
+  - *transatlantic* (75 ms ±15, 1%)
+  - *bad Wi-Fi* (30 ms ±40, 3% loss in bursts)
+  - *cellular hotspot* (60 ms ±30, 2%, 1 Mbit/s cap)
+- **Measure what players feel:**
+  - how smooth the partner puppet looks (position error vs. truth, and how far it teleports when it catches up)
+  - shared-enemy correctness and how stale the guest's view of them is
+  - time to apply relic, item and flag grants
+  - joint save, Continue and both-dead reload completing
+  - boss pull-in time
+  - recovery after a 2–5 s connection drop
+  - the local game must **never** stall waiting for the network
+- **Optimize** where the numbers say so, for example puppet interpolation or extrapolation, snapshot rate and delta encoding, retransmit timeouts tuned to the measured round-trip time, and a ping and connection-quality readout in the status bar. Each change is checked against the simulator, before and after.
+- **Output:** `docs/design/M7b-netcode.md`, with findings, the before/after table per profile, and the changes made.
+
 ## Acceptance criteria
 1. **`release_draft`:** `scripts/release.py` makes a draft GitHub release with `SOTN-Coop-setup.exe` and SHA-256 sums. The game-data scan passes. The README's download link resolves once the release is published.
 2. **`ux_couch_lobby`:** uxdriver: from a fresh install, two pads join → Ready → New game → both games in play. Screenshots of every screen, under 10 inputs after the disc is picked. Back un-joins a player. Unplugging a pad mid-game pauses that player's game, and re-plugging resumes it.
@@ -95,7 +116,8 @@ What I can't do is a real internet session between two homes. That stays your pl
 5. **`menu_bar`:** every menu item works through the native menu and through the controller pause menu (uxdriver), and the bar is hidden in fullscreen.
 6. **`widescreen_spike`:** findings and an estimate are added to the M10 design.
 7. **`stranger_playtest`:** report committed. Every friction item is fixed or justified. README rewritten from it (plain words, warning-dialog screenshots, a disc-ripping pointer).
-8. **No regressions:** 61/61 harness scenarios, `launcher/smoke.py`, `patcher/test_patcher.py`.
+8. **`net_profiles`:** with every network profile, the online scenarios pass (connect, shared room, grants, joint save, Continue, both-dead reload, boss pull-in, 5 s drop and recover). The local game never misses a frame because of the network. The puppet error and grant times are in `M7b-netcode.md`, and *transatlantic* feels smooth (bounds set once the baseline numbers are in).
+9. **No regressions:** 61/61 harness scenarios, `launcher/smoke.py`, `patcher/test_patcher.py`.
 
 ## Defaults I'll take unless you object
 - Branch `coop-m7b-polish`, version **0.7.1**.
@@ -103,12 +125,8 @@ What I can't do is a real internet session between two homes. That stays your pl
 - Default layout: side by side, *Sharp* scaling.
 - Debug starts move out of the home screen and into Help ▸ Developer.
 
-## Decisions needed (Tucker)
-1. **Unsigned-installer warnings:**
-   - *(a)* ship unsigned and explain the warnings in the README (free, now; recommended for now)
-   - *(b)* apply to SignPath Foundation (free code signing for open-source projects; takes weeks to approve)
-   - *(c)* Azure Trusted Signing, about $10/month, needs identity verification
-2. **Who presses Publish** on the release: you, or me once the stranger playtest passes?
+## Decisions (resolved 2026-10-20, D76)
+- Ship unsigned. Tucker publishes the release after testing it. No stretch mode.
 
 ## Risks
 - **Native menu (A):** SDL's `SYSWMEVENT` might not pass `WM_COMMAND` through cleanly. The spike settles it on day 1, and option B is the fallback.
@@ -116,7 +134,8 @@ What I can't do is a real internet session between two homes. That stays your pl
 - **Moving drawing to the GPU renderer** touches the frame loop. Determinism is unaffected (drawing is host-side), but F9 report screenshots need re-checking.
 
 ## Budget
-About 3–4 usage windows:
+About 4–5 usage windows:
 - release, lobby and menus: about 2
 - layouts and scaling: about 1
 - widescreen spike plus stranger playtest and fixes: about 1
+- networking review and optimization: about 1
