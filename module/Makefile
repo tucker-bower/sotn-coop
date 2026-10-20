@@ -2,7 +2,7 @@
 # Output: build/coop/boot.bin (appended to DRA.BIN), build/coop/COOP.BIN (a disc file),
 # and build/coop/coop.map for harness symbol lookup.
 VERSION   ?= us
-ROOT      := ../../..
+ROOT      ?= $(shell if [ -f ../.env/src/sotn-decomp/sotn.sh ]; then echo ../.env/src/sotn-decomp; else echo ../../..; fi)
 BUILD     := $(ROOT)/build/coop
 CONFIG    := $(ROOT)/config
 CROSS     := mipsel-linux-gnu-

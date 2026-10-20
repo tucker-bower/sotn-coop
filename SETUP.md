@@ -4,11 +4,11 @@ This is for working **on** the mod. Players never need any of it: they get a pat
 
 ## One-time
 1. Use Ubuntu 26.04, natively or in WSL2. Passwordless sudo makes the bootstrap unattended.
-2. Put your own discs in `disks/` at the repo root (git-ignored):
+2. Put your own discs in `disks/` (git-ignored):
    - `sotn.us.cue` plus its `.bin` tracks: Symphony of the Night (USA). **Required.**
-   - `sotn.pspeu.iso`: Dracula X Chronicles (EU). Only needed for Maria.
-3. Run `mods/co-op/scripts/bootstrap.sh`. It takes about 15 min and is safe to re-run. Steps: `apt python swanstation openbios decomp`.
-4. Run `mods/co-op/scripts/doctor.py`. Every required check should be ✅.
+   - `sotn.pspus.iso`: Dracula X Chronicles (USA, ULUS-10277). Used in M8 for Maria and Richter.
+3. Run `scripts/bootstrap.sh`. It fetches pinned `sotn-decomp` into `.env/src/sotn-decomp`, applies `patches/sotn-decomp.patch`, builds the SwanStation core and OpenBIOS, and verifies the 115/115 matching US build. Safe to re-run. Steps: `apt python swanstation openbios decomp`.
+4. Run `scripts/doctor.py`. Every required check should be ✅.
 
 ## Where things are
 Everything is listed in `env.example.toml`. Override per machine in `env.toml` (git-ignored).

@@ -1,5 +1,14 @@
-# co-op: local machine state (never commit)
+# co-op: local machine state and game data (never commit)
 .env/
 env.toml
 patcher/*.bps
 dist/
+disks/
+bios/
+__pycache__/
+*.pyc
+*.bin
+*.cue
+*.iso
+*.state
+*.mcd

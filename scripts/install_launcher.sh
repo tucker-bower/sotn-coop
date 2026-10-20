@@ -6,7 +6,11 @@
 #   scripts/install_launcher.sh [path/to/swanstation_libretro.dll]
 set -euo pipefail
 MOD="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT="$(cd "$MOD/../.." && pwd)"
+if [ -f "$MOD/.env/src/sotn-decomp/sotn.sh" ]; then
+    ROOT="$MOD/.env/src/sotn-decomp"
+else
+    ROOT="$(cd "$MOD/../.." && pwd)"
+fi
 PY="$ROOT/.venv/bin/python"
 WIN_EMU="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_env import ENV, path; print(path(ENV['paths']['win_emulators']))")"
 DEST="$WIN_EMU/SOTN-Coop"

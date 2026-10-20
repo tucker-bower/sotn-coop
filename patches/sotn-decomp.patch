@@ -1,0 +1,137 @@
+diff --git a/src/dra/42398.c b/src/dra/42398.c
+index 3e7101345..1f59ff30f 100644
+--- a/src/dra/42398.c
++++ b/src/dra/42398.c
+@@ -2,6 +2,9 @@
+ #include "dra.h"
+ #include "dra_bss.h"
+ #include "lba.h"
++#ifdef COOP
++#include "../../mods/co-op/module/coop_api.h"
++#endif
+ 
+ #if defined(VERSION_US)
+ #define PAD_RESETCOMBO ((PAD_START) | (PAD_SELECT))
+@@ -776,7 +779,11 @@ void MainGame(void) {
+ #if defined(VERSION_US)
+     SetVideoMode(0);
+ #endif
++#ifdef COOP
++    CoopBoot(); // installs the co-op module, then InitializePads()
++#else
+     InitializePads();
++#endif
+     InitCARD(1);
+     StartCARD();
+     _bu_init();
+@@ -883,12 +890,20 @@ loop_5:
+         g_GpuUsage.sp16 = 0;
+         g_GpuUsage.tile = 0;
+         g_GpuUsage.sp = 0;
++#ifdef COOP
++        if (CoopUpdate() != 0) { // returns DebugUpdate()
++#else
+         if (DebugUpdate() != 0) {
++#endif
+             UpdateGame();
+         }
+         if (D_8003C0EC[3] == 0 && D_800973EC == 0) {
+             RenderTilemap();
++#ifdef COOP
++            CoopRenderEntities(); // RenderEntities(), then the partner
++#else
+             RenderEntities();
++#endif
+             if (g_GameState == Game_Play && g_DebugEnabled) {
+                 if (g_DebugHitboxViewMode != 0) {
+                     DrawEntitiesHitbox(g_DebugHitboxViewMode);
+diff --git a/src/dra/5087C.c b/src/dra/5087C.c
+index 073dbffd2..b44f7c9ff 100644
+--- a/src/dra/5087C.c
++++ b/src/dra/5087C.c
+@@ -4,6 +4,9 @@
+ #include "dra_bss.h"
+ #include "menu.h"
+ #include "servant.h" // for InitializeMode enum
++#ifdef COOP
++#include "../../mods/co-op/module/coop_api.h"
++#endif
+ 
+ // fake struct for D_801375BC
+ typedef struct {
+@@ -1696,7 +1699,11 @@ void RunMainEngine(void) {
+         break;
+     case Engine_Map:
+         if (g_canRevealMap) {
++#ifdef COOP
++            CoopDrawMapCursor(); // DrawMapCursor(), then the partner's
++#else
+             DrawMapCursor();
++#endif
+         }
+         if (g_pads[0].tapped & (PAD_START | PAD_SELECT)) {
+             SetFadeMode(FADE_HIDE_MAP);
+diff --git a/src/dra/62DEC.c b/src/dra/62DEC.c
+index 3bed4600e..24896f205 100644
+--- a/src/dra/62DEC.c
++++ b/src/dra/62DEC.c
+@@ -1,6 +1,9 @@
+ // SPDX-License-Identifier: AGPL-3.0-or-later
+ //! PSPO=4,p
+ #include "dra.h"
++#ifdef COOP
++#include "../../mods/co-op/module/coop_api.h"
++#endif
+ #include "dra_bss.h"
+ 
+ // BSS
+@@ -705,7 +708,11 @@ static void func_80103ED4(void) {
+         }
+         // I believe the rand() call here selects the icon on the save
+         // in the save-select screen.
++#ifdef COOP
++        CoopStoreSaveData(g_Pix, D_8006C378, rand() & 0xF); // + posts the save to the co-op link
++#else
+         StoreSaveData(g_Pix, D_8006C378, rand() & 0xF);
++#endif
+ #ifdef VERSION_PSP
+         func_psp_090DFC68();
+         if (MemcardWriteFile(D_80097924, 0, saveFile, g_Pix, 1, i, 1) != 0) {
+diff --git a/tools/builds/gen.py b/tools/builds/gen.py
+index 1857c555e..9661b9de0 100644
+--- a/tools/builds/gen.py
++++ b/tools/builds/gen.py
+@@ -623,6 +623,11 @@ def add_splat_config(nw: ninja_syntax.Writer, ver: str, file_name: str):
+         obj_subdir = f"weapon{hand_id}"
+         cpp_flags += f" -DW_{weapon_id} -DWEAPON{hand_id}"
+ 
++    # Co-op mod (mods/co-op): COOP=1 compiles DRA's co-op hooks. Off by default, so the
++    # matching build is unchanged.
++    if ovl_name == "dra" and os.environ.get("COOP"):
++        cpp_flags += " -DCOOP"
++
+     objs = []
+     if ovl_name == "main" and platform != "psp":
+         objs.append(add_s(nw, ver, f"{asm_path}/header.s", ld_path))
+@@ -755,6 +760,8 @@ def add_splat_config(nw: ninja_syntax.Writer, ver: str, file_name: str):
+         if ovl_name != "main":
+             symbols_lists.append(f"-T {undefined_funcs_auto_path}")
+         symbols_lists.append(f"-T {undefined_syms_auto_path}")
++        if ovl_name == "dra" and os.environ.get("COOP"):
++            symbols_lists.append("-T mods/co-op/module/dra_hooks.ld")
+     nw.build(
+         rule="psx-ld",
+         outputs=[output_elf],
+diff --git a/tools/sotn-assets/build.go b/tools/sotn-assets/build.go
+index d3a5a3df4..6af6ce2c2 100644
+--- a/tools/sotn-assets/build.go
++++ b/tools/sotn-assets/build.go
+@@ -55,7 +55,7 @@ func buildVersions(versions []string) error {
+ func ninjaStampValue(versionStr string) string {
+ 	stamp := versionStr
+ 	// These env vars change gen.py output, so include them in the stamp
+-	for _, key := range []string{"SKIP_CHECK", "SOTN_PROGRESS_REPORT", "FORCE_SYMBOLS"} {
++	for _, key := range []string{"SKIP_CHECK", "SOTN_PROGRESS_REPORT", "FORCE_SYMBOLS", "COOP"} {
+ 		if _, ok := os.LookupEnv(key); ok {
+ 			stamp += "," + key
+ 		}

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "coop-*"]
+  pull_request:
+
+jobs:
+  hygiene-and-build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify no copyrighted game data is tracked
+        run: |
+          tracked=$(git ls-files 'disks/*' '*.iso' '*.cue' '*.bin' '*.state' '*.mcd' '.env/*' | grep -v 'README' || true)
+          if [ -n "$tracked" ]; then
+            echo "Tracked game data found:" >&2
+            echo "$tracked" >&2
+            exit 1
+          fi
+
+      - name: Link runner environment cache
+        run: |
+          CACHE_ROOT="${SOTN_COOP_CACHE:-/home/tucker/sotn-decomp-coop}"
+          if [ ! -e .env ] && [ -d "$CACHE_ROOT/mods/co-op/.env" ]; then
+            ln -s "$CACHE_ROOT/mods/co-op/.env" .env
+          fi
+          if [ ! -e disks ] && [ -d "$CACHE_ROOT/disks" ]; then
+            ln -s "$CACHE_ROOT/disks" disks
+          fi
+          if [ ! -e .env/src/sotn-decomp ] && [ -f "$CACHE_ROOT/sotn.sh" ]; then
+            mkdir -p .env/src
+            ln -s "$CACHE_ROOT" .env/src/sotn-decomp
+          fi
+
+      - name: Doctor check
+        run: python3 scripts/doctor.py
+
+      - name: Build co-op disc and module
+        run: scripts/build_disc.sh
+
+      - name: Patcher tests
+        run: .env/src/sotn-decomp/.venv/bin/python patcher/test_patcher.py
+
+      - name: Multi-instance harness suite
+        run: .env/src/sotn-decomp/.venv/bin/python harness/run.py

@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
-from coop_env import ENV, REPO, TOOLS, path  # noqa: E402
+from coop_env import COOP, DISKS, ENV, REPO, TOOLS, path  # noqa: E402
 
-BOOTSTRAP = "mods/co-op/scripts/bootstrap.sh"
+BOOTSTRAP = "scripts/bootstrap.sh"
 failures = 0
 
 
@@ -50,7 +50,8 @@ check((TOOLS["bios_dir"] / "scph5501.bin").exists(), "OpenBIOS (as scph5501.bin)
 
 print("== discs")
 for name, disc in ENV["discs"].items():
-    image = path(disc.get("cue") or disc["iso"])
+    rel = disc.get("cue") or disc["iso"]
+    image = (DISKS / rel) if "/" not in rel and "\\" not in rel else path(rel)
     req = disc.get("required", False)
     if not image.exists():
         check(False, f"{name}: {image.name} missing", f"put it in {image.parent} (masters: {ENV['paths']['win_masters']})", req)
@@ -71,8 +72,9 @@ for key in ("win_emulators", "win_masters"):
     check(path(ENV["paths"][key]).exists(), f"{key}: {ENV['paths'][key]}", "edit env.toml", required=False)
 
 print("== hygiene")
-tracked = run("git", "ls-files", "disks", "*.iso", "*.cue", "*.bin", "mods/co-op/.env").stdout.split()
-tracked = [t for t in tracked if t.startswith(("disks/", "mods/co-op/")) and not t.endswith("README")]
+tracked = subprocess.run(["git", "ls-files", "disks", "*.iso", "*.cue", "*.bin", "*.state", "*.mcd", ".env"],
+                         cwd=COOP, capture_output=True, text=True).stdout.split()
+tracked = [t for t in tracked if not t.endswith("README")]
 check(not tracked, "no game data tracked by git", f"git rm --cached {' '.join(tracked)}")
 check(run("gh", "auth", "status").returncode == 0 if shutil.which("gh") else False,
       "gh logged in (needed for PRs)", "gh auth login", required=False)

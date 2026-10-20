@@ -16,10 +16,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "harness"))
+from coop_env import DISKS  # noqa: E402
 import patcher  # noqa: E402
 
-ROOT = HERE.parents[2]
-RETAIL_CUE = ROOT / "disks/sotn.us.cue"
+RETAIL_CUE = DISKS / "sotn.us.cue"
 BUILT = HERE.parent / ".env/out/disc/sotn_coop.us.bin"
 
 
@@ -45,6 +46,7 @@ def main():
         assert digest(made[0][0]) == digest(BUILT), "the patched disc isn't our build"
         assert digest(made[1][0]) == digest(track2), "the audio track changed"
         assert digest(track1) == before, "the player's disc was changed"
+        shutil.rmtree(tmp / "out")
         print(f"ok: patch {size} bytes; patched disc = build; audio track kept; original untouched")
 
         bad = tmp / "modified.bin"

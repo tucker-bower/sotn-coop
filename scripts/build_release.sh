@@ -9,8 +9,13 @@
 # co-op disc is made from the player's own disc on first launch.
 set -euo pipefail
 MOD="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT="$(cd "$MOD/../.." && pwd)"
+if [ -f "$MOD/.env/src/sotn-decomp/sotn.sh" ]; then
+    ROOT="$MOD/.env/src/sotn-decomp"
+else
+    ROOT="$(cd "$MOD/../.." && pwd)"
+fi
 PY="$ROOT/.venv/bin/python"
+DISKS="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_env import DISKS; print(DISKS)")"
 VERSION="${1:-$(grep -oP 'VERSION = "\K[^"]+' "$MOD/launcher/report.py")}"
 EMU="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_env import ENV, path; print(path(ENV['paths']['win_emulators']))")"
 OUT="$EMU/SOTN-Coop-release"
@@ -23,7 +28,7 @@ OPENBIOS="$EMU/PCSX-Redux/openbios.bin"
 W() { wslpath -w "$1"; }
 
 echo "== patch (from your disc and our build: our changes only)"
-"$PY" "$MOD/patcher/patcher.py" make "$ROOT/disks/Castlevania - Symphony of the Night (USA) (Track 1).bin" \
+"$PY" "$MOD/patcher/patcher.py" make "$DISKS/Castlevania - Symphony of the Night (USA) (Track 1).bin" \
     "$MOD/.env/out/disc/sotn_coop.us.bin" --out "$MOD/.env/release" --version "$VERSION"
 
 echo "== stage $STAGE"

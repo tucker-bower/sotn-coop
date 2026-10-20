@@ -4,13 +4,14 @@
 
 **Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two-player odyssey: each hunter roams the cursed corridors on their own screen, free to part ways in the moonlit Marble Gallery or descend together into the Catacombs. Every relic one claims, every door one breaks, every chamber one charts belongs to both — the moment it happens. When fate brings you to the same room, you face the same horde, blade beside blade. When a lord of the night stirs, your partner is summoned to your side and the beast rises with twice its strength, turning its fury from one of you to the other. Fall, and you are reborn beside your ally; fall before a boss, and you must trust your partner to carry the fight. Teleport across the castle in an instant, save at the coffins as one, and stand witness together as the tale unfolds. The night is long. Hunt it together.
 
-## Quick start (Windows)
-1. **You need:** your own copy of *Castlevania: Symphony of the Night* (USA, SLUS-00067) as a disc image (`.bin`/`.cue`; rip it from your disc), a Windows PC, and two controllers. No BIOS is needed: an open-source one comes with the launcher.
-2. **Download** `SOTN-Coop-setup.exe` from the [releases page](https://github.com/tucker-bower/sotn-decomp-coop/releases) and run it.
-3. **On first launch, pick your disc image.** The launcher checks it, makes the co-op version next to it (your original is never changed), and asks each player to press a button on their controller.
-4. **Press New game.** Player 1 is the left screen, player 2 the right. Press **F9** any time something looks wrong: it saves a bug report you can send us.
-
-> The installer arrives with milestone M6 (`docs/design/M6-playable-build.md`). Until then, developers build from source: see [SETUP.md](SETUP.md) and `scripts/install_launcher.sh`.
+## Quick start (Windows — couch or online co-op)
+1. **You need:** your own copy of *Castlevania: Symphony of the Night* (USA, SLUS-00067) as a disc image (`.bin`/`.cue`; rip it from your disc), a Windows PC, and a controller (two controllers for couch co-op). No BIOS is needed: an open-source one comes with the launcher.
+2. **Download** `SOTN-Coop-setup.exe` from the [releases page](https://github.com/tucker-bower/sotn-coop/releases) and run it.
+3. **On first launch, pick your disc image.** The launcher checks it, makes the co-op version next to it (your original is never changed), and asks you to press a button on your controller.
+4. **Play couch or online:**
+   - **Couch co-op:** press **New game** (or **Continue**). Player 1 is the left screen, player 2 the right.
+   - **Online co-op:** press **Play online**, then **Host online** (shares a 6-character room code and a 10-character endpoint code) or **Join online** (enter your partner's code or `ip:port`).
+   - Press **F9** any time something looks wrong: it saves a bug report you can send us.
 
 **Where your data goes:** `Documents\SOTN Co-op\` holds your saves, bug reports, and the savestates the launcher makes at big moments (a new area, a boss fight, quitting), so you can go back. It never deletes them. A whole playthrough takes roughly 200 MB. The launcher's home screen shows how much space they use, with buttons to open the folder or clean up a playthrough.
 

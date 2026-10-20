@@ -12,7 +12,11 @@
 set -euo pipefail
 
 MOD="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT="$(cd "$MOD/../.." && pwd)"
+if [ -f "$MOD/.env/src/sotn-decomp/sotn.sh" ]; then
+    ROOT="$MOD/.env/src/sotn-decomp"
+else
+    ROOT="$(cd "$MOD/../.." && pwd)"
+fi
 OUT="$MOD/.env/out/disc"
 cd "$ROOT"
 # shellcheck disable=SC1091
@@ -36,7 +40,7 @@ if [ "$dra_end" != "0x801b9870" ]; then
 fi
 
 echo "== compile co-op module"
-make -s -C "$MOD/module"
+make -s -C "$MOD/module" ROOT="$ROOT"
 truncate -s "$DRA_END" build/us/DRA.BIN
 cat build/coop/boot.bin >> build/us/DRA.BIN
 cp build/coop/COOP.BIN build/us/COOP.BIN

@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
 # Sets up a dev/agent machine for SOTN Co-op (Ubuntu or WSL2). Idempotent: re-run any time.
-# Usage: mods/co-op/scripts/bootstrap.sh [step...]   (default: all steps)
+# Usage: scripts/bootstrap.sh [step...]   (default: all steps)
 # Steps: apt python swanstation openbios decomp
-# Afterwards run: mods/co-op/scripts/doctor.py
+# Afterwards run: scripts/doctor.py
 set -euo pipefail
 
 COOP="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT="$(cd "$COOP/../.." && pwd)"
 ENV_DIR="$COOP/.env"          # git-ignored: everything built or downloaded lives here
 mkdir -p "$ENV_DIR/src" "$ENV_DIR/bin" "$ENV_DIR/sys"
 
-# Pinned so harness results are reproducible. Bump deliberately, then re-run the lockstep test.
+if [ -f "$COOP/../../sotn.sh" ] && [ ! -f "$ENV_DIR/src/sotn-decomp/sotn.sh" ]; then
+    ROOT="$(cd "$COOP/../.." && pwd)"
+else
+    ROOT="$ENV_DIR/src/sotn-decomp"
+fi
+
+# Pinned so builds and harness results are reproducible. Bump deliberately, then re-run lockstep.
+SOTN_DECOMP_REPO=https://github.com/Xeeynamo/sotn-decomp
+SOTN_DECOMP_REV=d12b397f3611e71906187214d499c005de951290
 SWANSTATION_REPO=https://github.com/libretro/swanstation
 SWANSTATION_REV=e436e9b85374def58d211df7f78880f0f4a917b4
 PCSXREDUX_REPO=https://github.com/grumpycoders/pcsx-redux
@@ -31,13 +38,29 @@ checkout() { # checkout <repo> <rev> <dir>
     fi
 }
 
+ensure_decomp_src() {
+    if [ "$ROOT" = "$ENV_DIR/src/sotn-decomp" ]; then
+        log "sotn-decomp @ ${SOTN_DECOMP_REV:0:10} (+ patches/sotn-decomp.patch)"
+        checkout "$SOTN_DECOMP_REPO" "$SOTN_DECOMP_REV" "$ROOT"
+        if git -C "$ROOT" apply --check "$COOP/patches/sotn-decomp.patch" 2>/dev/null; then
+            git -C "$ROOT" apply "$COOP/patches/sotn-decomp.patch"
+        fi
+        mkdir -p "$ROOT/mods"
+        ln -sfn "$COOP" "$ROOT/mods/co-op"
+        if [ -d "$COOP/disks" ] && [ ! -e "$ROOT/disks" ]; then
+            ln -sfn "$COOP/disks" "$ROOT/disks"
+        fi
+    fi
+}
+
 step_apt() {
+    ensure_decomp_src
     log "apt packages (upstream list + co-op extras)"
     # Ubuntu 26.04 dropped gcc-mipsel-linux-gnu. Take only that from 24.04 (what upstream's Docker
     # image uses), via a low-priority pin so nothing else is ever pulled from noble.
     if ! apt-cache show gcc-mipsel-linux-gnu 2>/dev/null | grep -q '^Version'; then
         sudo tee /etc/apt/sources.list.d/noble-cross.sources >/dev/null <<'EOF'
-# co-op: MIPS cross toolchain only (see mods/co-op/scripts/bootstrap.sh)
+# co-op: MIPS cross toolchain only (see scripts/bootstrap.sh)
 Types: deb
 URIs: http://archive.ubuntu.com/ubuntu
 Suites: noble noble-updates
@@ -56,8 +79,9 @@ EOF
 }
 
 step_python() {
+    ensure_decomp_src
     log "python venv (decomp tools + harness)"
-    # The decomp's Makefile expects .venv at the repo root.
+    # The decomp's Makefile expects .venv at the decomp root.
     [ -d "$ROOT/.venv" ] || python3 -m venv "$ROOT/.venv"
     "$ROOT/.venv/bin/pip" install -q -r "$ROOT/tools/requirements-python.txt" -r "$COOP/harness/requirements.txt"
 }
@@ -82,6 +106,7 @@ step_openbios() {
 }
 
 step_decomp() {
+    ensure_decomp_src
     log "decomp tools + matching US build (needs disks/sotn.us.cue)"
     # sotn_str is otherwise only built by `make update-dependencies`, which also git-cleans bin/.
     cargo build -q --release --manifest-path "$ROOT/tools/sotn_str/Cargo.toml"

@@ -3,7 +3,11 @@
 # Usage: scripts/redux_check.sh [disc.cue]   (default: the last scripts/build_disc.sh output)
 set -euo pipefail
 COOP="$(cd "$(dirname "$0")/.." && pwd)"
-PY="$COOP/../../.venv/bin/python"
+if [ -f "$COOP/.env/src/sotn-decomp/.venv/bin/python" ]; then
+    PY="$COOP/.env/src/sotn-decomp/.venv/bin/python"
+else
+    PY="$COOP/../../.venv/bin/python"
+fi
 REDUX="$("$PY" -c "import sys; sys.path.insert(0, '$COOP/harness'); from coop_env import ENV, path; print(path(ENV['paths']['win_emulators']) / 'PCSX-Redux')")"
 DISC="${1:-$COOP/.env/out/disc/sotn_coop.us.cue}"
 WORK="$COOP/.env/out/redux"

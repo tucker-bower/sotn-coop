@@ -1,7 +1,7 @@
 """Loads the co-op environment manifest: env.example.toml defaults, overridden by env.toml."""
 
-import tomllib
 import os
+import tomllib
 from pathlib import Path
 
 COOP = Path(__file__).resolve().parent.parent
@@ -22,13 +22,27 @@ def load():
 
 
 def path(p):
-    """Resolves a manifest path (relative to mods/co-op/) to an absolute Path."""
+    """Resolves a manifest path (relative to the co-op root) to an absolute Path."""
     return (COOP / p).resolve()
 
 
+def _resolve_repo(env):
+    p = path(env["paths"]["repo"])
+    if not (p / "sotn.sh").exists() and not (p / "config").exists() and (COOP.parent.parent / "sotn.sh").exists():
+        return COOP.parent.parent.resolve()
+    return p
+
+
+def _resolve_disks(env, repo):
+    p = path(env["paths"]["disks"])
+    if not p.exists() and (repo / "disks").exists():
+        return (repo / "disks").resolve()
+    return p
+
+
 ENV = load()
-REPO = path(ENV["paths"]["repo"])
-DISKS = path(ENV["paths"]["disks"])
+REPO = _resolve_repo(ENV)
+DISKS = _resolve_disks(ENV, REPO)
 ENV_DIR = path(ENV["paths"]["env"])
 TOOLS = {k: path(v) for k, v in ENV["tools"].items()}
 

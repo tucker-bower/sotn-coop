@@ -15,11 +15,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
+from coop_env import COOP, REPO as ROOT  # noqa: E402
 from gen_flag_gated import stage_ids  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build/us"
-OUT = ROOT / "mods/co-op/module/overlay_table.c"
+OUT = COOP / "module/overlay_table.c"
 HELPERS = ("GetSideToPlayer", "GetDistanceToPlayerX", "GetDistanceToPlayerY")
 # Scenery a shared-room guest runs itself instead of copying (playtest 1): it draws from the
 # camera (3D projection, parallax), so the authority's primitives are wrong for the guest's

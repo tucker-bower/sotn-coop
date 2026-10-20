@@ -11,12 +11,15 @@ item drops) are left out: the module despawns those instead.
 """
 
 import re
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
+from coop_env import COOP, REPO as ROOT  # noqa: E402
+
 ST = ROOT / "src/st"
-OUT_C = ROOT / "mods/co-op/module/flag_gated.c"
-OUT_MD = ROOT / "mods/co-op/docs/flag-gated-entities.md"
+OUT_C = COOP / "module/flag_gated.c"
+OUT_MD = COOP / "docs/flag-gated-entities.md"
 PICKUPS = {"EntityRelicOrb", "EntityPersistentItemDrop", "EntityEquipItemDrop", "EntityPrizeDrop"}
 # Scripted sequences: re-initializing one mid-way could replay or cut a scene. Left to room entry.
 SCRIPTED = re.compile(r"Cutscene|StageName|Push|Transition|Spawner|Controller|Manager|BossFight")
