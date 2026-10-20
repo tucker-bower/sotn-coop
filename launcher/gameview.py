@@ -143,12 +143,13 @@ class GameView:
     def __init__(self, session, screen, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
                  save_cards=None, frames=0, profile=False):
         self.s, self.screen, self.pads, self.audio = session, screen, pads, audio
-        self.games = (session.a, session.b)
+        self.games = tuple(session.games)
+        self.online = len(self.games) == 1
         self.playthrough, self.goal = playthrough, goal
         self.music_mode, self.music = music, None
         chance = max(0, min(255, round(aggro * 256 / 100)))
         self.aggro = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
-        self.save_cards = save_cards  # (path A, path B): the memory cards on disk
+        self.save_cards = save_cards  # (path A, path B) or (path local,)
         self.frames, self.profile = frames, profile
         self.font = pygame.font.SysFont("consolas", 14)
         self.big = pygame.font.SysFont("georgia", 28)
@@ -156,6 +157,7 @@ class GameView:
         self.inputs = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.frame_times = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.notice, self.notice_until = "", 0
+        self.mismatch = None
         self.moments = None
         if playthrough:
             from archive import Moments
@@ -299,14 +301,16 @@ class GameView:
                 break
             keys = pygame.key.get_pressed()
             t0 = time.perf_counter()
-            pads = [self.pads.mask(i, keys) for i in range(2)]
+            pads = [self.pads.mask(i, keys) for i in range(len(self.games))]
             self.inputs.append((self.frame, *pads))
             if self.frame % ROLLING_EVERY == 0:
-                self.rolling.append((self.frame, self.games[0].save_state(), self.games[1].save_state()))
+                self.rolling.append((self.frame, *(g.save_state() for g in self.games)))
             for g, pad in zip(self.games, pads):  # both games run their frame at the same time
                 g.frame_start(pad)
             replies = [g.frame_end() for g in self.games]
             t1 = time.perf_counter()
+            if self.online:
+                self.screen.fill((12, 8, 14), (0, 0, self.screen.get_width(), H * SCALE))
             for i, (g, (picture, sound)) in enumerate(zip(self.games, replies)):
                 if picture:
                     w, h, fmt, pitch, n = picture
@@ -315,29 +319,47 @@ class GameView:
                     if scaled[i] is None or scaled[i].get_bitsize() != raw[i].get_bitsize():
                         scaled[i] = pygame.Surface((W * SCALE, H * SCALE), 0, raw[i])
                     pygame.transform.scale(raw[i].subsurface((0, 0, w, h)), (W * SCALE, H * SCALE), scaled[i])
-                    self.screen.blit(scaled[i], (i * (W * SCALE + 8), 0))
+                    x = (self.screen.get_width() - W * SCALE) // 2 if self.online else i * (W * SCALE + 8)
+                    self.screen.blit(scaled[i], (x, 0))
             if self.audio:
                 self.audio.push(mix([sound for _, sound in replies]))
             self.frame += 1
-            if s.joint and self.frame % 15 == 0:  # saves are rare: four checks a second is plenty
+            if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
             if self.frame % 15 == 0:
-                pa, pb = s.a.mailbox("self_presence"), s.b.mailbox("self_presence")
-                want = {"left": 0, "right": 1}.get(self.music_mode, 1 if not pa.flags & IN_PLAY and pb.flags & IN_PLAY else 0)
-                if want != self.music:  # only that game plays music (the other's is muted in-game)
-                    self.music = want
-                    for i, g in enumerate(self.games):
-                        g.mailbox("set_control", (0 if i == self.music else CONTROL_MUTE_MUSIC) | self.aggro)
-                if self.moments:
-                    for event, where in self.moments.check((pa, pb)):
-                        self.moment(event, where)
-                        self.say(f"Savestate: {event} {where}".strip(), 180)
-                together = {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
-                status = (f"{'Together' if together else 'Apart'}   music: {'left' if self.music == 0 else 'right'} "
-                          f"({self.music_mode}, F1)   F9: report a problem   Esc: pause   {clock.get_fps():.0f} fps")
+                if self.online:
+                    g = self.games[0]
+                    pa, pb = g.mailbox("self_presence"), g.mailbox("partner_presence")
+                    age = g.mailbox("partner_age")
+                    hst = g.host("status")
+                    self.mismatch = hst.get("mismatch")
+                    g.mailbox("set_control", self.aggro)  # online: never mute local music (D55)
+                    pres_list = (pa, pb) if age <= 30 else (pa,)
+                    if self.moments:
+                        for event, where in self.moments.check(pres_list):
+                            self.moment(event, where)
+                            self.say(f"Savestate: {event} {where}".strip(), 180)
+                    together = age <= 30 and {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
+                    link_txt = self.mismatch or ("Partner connected" if age <= 180 else "Waiting for partner…")
+                    status = (f"Online ({link_txt})   {'Together' if together else 'Apart'}   "
+                              f"F9: report a problem   Esc: pause   {clock.get_fps():.0f} fps")
+                else:
+                    pa, pb = s.a.mailbox("self_presence"), s.b.mailbox("self_presence")
+                    want = {"left": 0, "right": 1}.get(self.music_mode, 1 if not pa.flags & IN_PLAY and pb.flags & IN_PLAY else 0)
+                    if want != self.music:  # only that game plays music (the other's is muted in-game)
+                        self.music = want
+                        for i, g in enumerate(self.games):
+                            g.mailbox("set_control", (0 if i == self.music else CONTROL_MUTE_MUSIC) | self.aggro)
+                    if self.moments:
+                        for event, where in self.moments.check((pa, pb)):
+                            self.moment(event, where)
+                            self.say(f"Savestate: {event} {where}".strip(), 180)
+                    together = {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
+                    status = (f"{'Together' if together else 'Apart'}   music: {'left' if self.music == 0 else 'right'} "
+                              f"({self.music_mode}, F1)   F9: report a problem   Esc: pause   {clock.get_fps():.0f} fps")
                 text = [self.goal[:150]] if self.goal else []
                 text.append(self.notice if self.frame < self.notice_until else status)
-                lines = [self.font.render(t, True, (230, 230, 230)) for t in text]
+                lines = [self.font.render(t, True, (255, 160, 160) if self.mismatch else (230, 230, 230)) for t in text]
             self.screen.fill((16, 16, 24), (0, H * SCALE, self.screen.get_width(), BAR))
             for row, line in enumerate(lines):
                 self.screen.blit(line, (6, H * SCALE + 4 + row * 18))

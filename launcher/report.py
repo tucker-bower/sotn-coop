@@ -59,9 +59,10 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             z.write(playthrough.joint_save, "now/session.coop")
         if window is not None:
             z.writestr("now/window.png", _png(window))
-        for frame, a, b in rolling:
-            z.writestr(f"before/{frame}_A.state", a)
-            z.writestr(f"before/{frame}_B.state", b)
+        for entry in rolling:
+            frame, states = entry[0], entry[1:]
+            for who, st in zip("AB", states):
+                z.writestr(f"before/{frame}_{who}.state", st)
         z.writestr("inputs.json", json.dumps(list(inputs)))
         z.writestr("frames.json", json.dumps(list(frame_times)))
         patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
@@ -71,7 +72,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             "settings": load_settings(), "os": platform.platform(), "python": sys.version,
             "controllers": controllers, "playthrough": playthrough.name if playthrough else None,
             "presences": [str(g.mailbox("self_presence")) for g in games],
-            "rolling_frames": [f for f, _, _ in rolling], "note": note, "time": time.time(),
+            "rolling_frames": [entry[0] for entry in rolling], "note": note, "time": time.time(),
         }
         about.update(extra or {})
         z.writestr("about.json", json.dumps(about, indent=1, default=str))

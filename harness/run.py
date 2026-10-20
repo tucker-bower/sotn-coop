@@ -12,6 +12,7 @@ import session_saverooms  # noqa: F401
 import session_shared  # noqa: F401
 import session_m4b  # noqa: F401
 import session_m5  # noqa: F401
+import session_online  # noqa: F401
 import spec_test  # noqa: F401
 from scenario import SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario

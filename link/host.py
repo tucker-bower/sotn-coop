@@ -1,13 +1,13 @@
 """One host per game. Call after_frame() once per emulated frame, while the emulator is paused."""
 
 import collections
+import json
 import struct
 import time
 
-import json
-
 from .mailbox import EVENT_SIZE, LINK_VERSION, Presence
-from .transport import TAG_ACK, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP, ReliableChannel
+from .transport import (TAG_ACK, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+                        ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
 
@@ -20,7 +20,9 @@ class Host:
         self._snap_sent = 0
         self._snap_seq = 0
         self.events = ReliableChannel(transport, EVENT_SIZE)
-        self._inbox = []  # partner events the game's in ring had no room for yet
+        self.ctrl = ReliableMessages(transport)
+        self._ctrl_inbox = []  # decoded JSON control messages (online joint saves)
+        self._inbox = []       # partner events the game's in ring had no room for yet
         self._latest_seq = 0
         self.sent = self.received = 0
         self.events_sent = self.events_received = 0
@@ -41,6 +43,37 @@ class Host:
         now = time.monotonic()
         return [(round(now - t, 3), way, what) for t, way, what in self.log if now - t <= seconds]
 
+    def set_hello(self, patch_crc=None, link_version=None):
+        if patch_crc is not None:
+            self.hello["patch"] = patch_crc
+        if link_version is not None:
+            self.hello["link"] = link_version
+        return self.hello
+
+    def status(self):
+        """Connection and handshake status for the launcher UI and tests."""
+        age = None if self.transport.last_rx_time is None else round(time.monotonic() - self.transport.last_rx_time, 2)
+        return {
+            "rank": self.rank,
+            "peer": self.transport.peer,
+            "partner_hello": self.partner_hello,
+            "mismatch": self.mismatch,
+            "rx_age": age,
+            "sent": self.sent,
+            "received": self.received,
+        }
+
+    def send_control(self, msg):
+        """Sends a reliable control/save JSON dict to the partner host (online joint saves)."""
+        self.ctrl.send(json.dumps(msg).encode())
+        self._note("out", f"ctrl {msg.get('op')}")
+
+    def take_control(self):
+        """Returns and clears received control/save JSON dicts."""
+        out = list(self._ctrl_inbox)
+        self._ctrl_inbox.clear()
+        return out
+
     def _check_hello(self, payload):
         try:
             theirs = json.loads(payload)
@@ -54,6 +87,16 @@ class Host:
             self.mismatch = "Your partner's co-op disc is a different version: both need the same."
         else:
             self.mismatch = None
+
+    def handshake_tick(self):
+        """Exchanges HELO before emulation starts (online connection lobby)."""
+        if self._frames % 15 == 0:
+            self.transport.send(TAG_HELLO, json.dumps(self.hello).encode())
+        self._frames += 1
+        for tag, _, payload in self.transport.receive():
+            if tag == TAG_HELLO:
+                self._check_hello(payload)
+        return self.status()
 
     def after_frame(self):
         if not self.mailbox.ready():  # module not loaded yet (boot), or a different module
@@ -80,7 +123,7 @@ class Host:
         for ev in mine:
             self._note("out", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
 
-        latest, reliable, snap = None, [], None
+        latest, reliable, ctrl_dgrams, snap = None, [], [], None
         for tag, seq, payload in self.transport.receive():
             if tag == TAG_PRESENCE and seq > self._latest_seq:  # UDP may reorder: keep the newest
                 self._latest_seq, latest = seq, payload
@@ -88,8 +131,12 @@ class Host:
                 self._snap_seq, snap = seq, payload
             elif tag in (TAG_EVENTS, TAG_ACK):
                 reliable.append((tag, seq, payload))
+            elif tag in (TAG_CTRL, TAG_CACK):
+                ctrl_dgrams.append((tag, seq, payload))
             elif tag == TAG_HELLO:
                 self._check_hello(payload)
+                if self.mismatch:
+                    return
         if latest is not None:
             self.mailbox.write_partner(Presence.unpack(latest))
             self.received += 1
@@ -104,3 +151,11 @@ class Host:
         if self._inbox:
             n = self.mailbox.give_events(self._inbox)
             self._inbox = self._inbox[n:]
+        if ctrl_dgrams or self.ctrl.unacked:
+            for raw_msg in self.ctrl.tick(ctrl_dgrams):
+                try:
+                    msg = json.loads(raw_msg)
+                    self._ctrl_inbox.append(msg)
+                    self._note("in", f"ctrl {msg.get('op')}")
+                except ValueError:
+                    pass

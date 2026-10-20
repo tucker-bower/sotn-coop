@@ -76,7 +76,32 @@ def main():
     after = sorted(f.name for f in p.states.iterdir())
     check(set(before) <= set(after) and len(after) == len(before) + 2, "a new savestate never replaces one")
     check_continue(launcher, starts)
+    check_online(launcher, starts)
     print("data folder:", os.environ["COOP_DATA"])
+
+
+def check_online(launcher, starts):
+    """M7: single-game OnlineSession in GameView (1 screen, local music unmuted, savestates, F9)."""
+    from gameview import GameView
+    p = archive.Playthrough.new("Online smoke test")
+    file = str(launcher.starts_dir() / starts["Entrance hall"]["file"])
+    with launcher.online_session(file, p, rank=0) as s0, \
+         launcher.online_session(file, None, rank=1) as s1:
+        s0.connect(("127.0.0.1", s1.port))
+        s1.connect(("127.0.0.1", s0.port))
+        for _ in range(30):
+            s0.step(1)
+            s1.step(1)
+        view = GameView(s0, launcher.screen, launcher.pads, None, p, frames=120,
+                        save_cards=(p.card("A"),))
+        view.run()
+        rep = view.report("online smoke note")
+        check(s0.local.mailbox("control") & 1 == 0, "online mode never mutes local music (D55)")
+    pairs = p.savestate_pairs()
+    check(any("Quit" in label for label, _, _ in pairs), "online session wrote event savestates", n=len(pairs))
+    names = zipfile.ZipFile(rep).namelist()
+    check("now/A.state" in names and "link-A.json" in names and "about.json" in names,
+          "online F9 report has single-instance state and link log")
 
 
 def check_continue(launcher, starts):

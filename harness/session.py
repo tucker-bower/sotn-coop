@@ -1,4 +1,5 @@
-"""Two-game sessions: two emulator processes, each with its own host, linked over localhost UDP.
+"""Two-game couch sessions and single-game online sessions: each game is a worker process with its
+own SwanStation core and Host, linked over UDP.
 
     with Session(COOP_DISC, starts=("entrance", "entrance")) as s:
         a, b = s.step(60, p1=("right", ""))   # both games one frame at a time; returns snapshots
@@ -17,7 +18,9 @@ from coop_env import COOP, TOOLS, savestate
 
 sys.path.insert(0, str(COOP))  # for `link`
 
-def _worker(conn, disc, start, rank, audio=False, shm_name=None):
+
+def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
+            port=0, patch_crc=None, learn_peer=False):
     from emu import Emu
     from link.adapter import HarnessAdapter
     from link.host import Host
@@ -34,8 +37,9 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None):
             if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
                 emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
             mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
-            transport = UdpTransport()  # any free port, so sessions can run in parallel
-            host = Host(mailbox, transport, rank)
+            transport = UdpTransport(port=port, host="127.0.0.1", bind_host=bind_host)
+            transport.learn_peer = learn_peer
+            host = Host(mailbox, transport, rank, patch_crc=patch_crc)
             linked = True
             conn.send(("ok", transport.port))
             while True:
@@ -59,9 +63,9 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None):
                 elif cmd == "link":
                     linked = True
                     conn.send(("ok", None))
-                elif cmd == "call":  # any Emu method or mailbox method
+                elif cmd == "call":  # any Emu, Mailbox, Host, or UdpTransport method
                     target, name, a, kw = args
-                    obj = {"emu": emu, "mailbox": mailbox, "host": host}[target]
+                    obj = {"emu": emu, "mailbox": mailbox, "host": host, "transport": transport}[target]
                     conn.send(("ok", getattr(obj, name)(*a, **kw)))
                 elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
                     emu.step(1, args)
@@ -85,7 +89,7 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None):
 
 
 class Game:
-    """Proxy to one worker: any Emu method by name, plus link/mailbox helpers."""
+    """Proxy to one worker: any Emu method by name, plus link/mailbox/transport helpers."""
 
     def __init__(self, name, conn, proc):
         self.name, self.conn, self.proc = name, conn, proc
@@ -121,6 +125,9 @@ class Game:
     def host(self, name, *a, **kw):
         return self._ask("call", ("host", name, a, kw))
 
+    def transport(self, name, *a, **kw):
+        return self._ask("call", ("transport", name, a, kw))
+
     def unlink(self):
         return self._ask("unlink")
 
@@ -147,6 +154,16 @@ class MailboxProxy:
 
     def __getattr__(self, name):
         return lambda *a: self.game.mailbox(name, *a)
+
+
+class HostProxy:
+    """A worker game's Host, for online JointSave control messages."""
+
+    def __init__(self, game):
+        self.game = game
+
+    def __getattr__(self, name):
+        return lambda *a, **kw: self.game.host(name, *a, **kw)
 
 
 class Session:
@@ -221,6 +238,70 @@ class Session:
                 shm.unlink()
             except BufferError:  # something still borrows it; the OS frees it at exit
                 pass
+
+
+class OnlineSession:
+    """One local game instance per player (design/M7, D74), connected to a remote partner over UDP."""
+
+    def __init__(self, disc, start=None, rank=0, peer=None, session_file=None, audio=False,
+                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True):
+        self.disc, self.start, self.rank = disc, start, rank
+        self.peer, self.session_file, self.audio = peer, session_file, audio
+        self.bind_host, self.req_port = bind_host, port
+        self.patch_crc, self.learn_peer = patch_crc, learn_peer
+        self.joint = None
+        self.port = None
+
+    def __enter__(self):
+        ctx = mp.get_context("spawn")
+        self._shms = []
+        shm_name = None
+        if self.audio:
+            from multiprocessing import shared_memory
+            shm = shared_memory.SharedMemory(create=True, size=640 * 480 * 4)
+            self._shms.append(shm)
+            shm_name = shm.name
+        parent, child = ctx.Pipe()
+        proc = ctx.Process(
+            target=_worker, daemon=True,
+            args=(child, str(self.disc), self.start, self.rank, self.audio, shm_name,
+                  self.bind_host, self.req_port, self.patch_crc, self.learn_peer),
+        )
+        proc.start()
+        game = Game("AB"[self.rank], parent, proc)
+        game.shm = self._shms[-1] if shm_name else None
+        status, value = game.conn.recv()
+        if status != "ok":
+            raise RuntimeError(f"online game failed to start: {value}")
+        self.port = value
+        self.games = [game]
+        self.local = self.a = game
+        self.b = None
+        if self.peer is not None:
+            self.connect(self.peer)
+        if self.session_file:
+            from link.jointsave import JointSave
+            self.joint = JointSave([MailboxProxy(game)], self.session_file,
+                                   host=HostProxy(game), rank=self.rank)
+        return self
+
+    def connect(self, peer):
+        self.peer = peer
+        self.local._ask("connect", peer)
+
+    def step(self, n=1, pad="", each=None):
+        s = None
+        for i in range(n):
+            p = pad(i, s) if callable(pad) else pad
+            s = self.local.step(1, p)
+            if self.joint:
+                self.joint.tick()
+            if each:
+                each(i, s)
+        return s
+
+    def __exit__(self, *exc):
+        Session.__exit__(self, *exc)
 
 
 # --- scenarios -------------------------------------------------------------------------------

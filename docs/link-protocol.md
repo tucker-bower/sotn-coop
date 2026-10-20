@@ -36,9 +36,12 @@ Every datagram starts with an 8-byte header, `tag` (4 ASCII bytes) and `seq` (u3
 | tag | payload | delivery |
 |---|---|---|
 | `PRES` | the sender's presence, 0x2C bytes (below) | Every frame. Best effort: use the highest `seq`, drop older ones. |
-| `SNAP` | a shared-room snapshot, up to 0xF000 bytes; opaque to hosts | When it changes. Best effort: the newest wins. |
+| `SNAP` | a shared-room snapshot, up to 0xF000 bytes; opaque to hosts | Localhost / small payloads. Best effort: the newest wins. |
+| `SNPC` | `snap_id` (u32), `chunk_idx` (u8), `chunk_cnt` (u8), then a ≤ 1150-byte chunk of `zlib.compress(snap, 1)` | Online MTU-safe snapshot chunks (`≤ 1200` bytes per UDP datagram). Reassembled when all `chunk_cnt` chunks of the newest `snap_id` arrive. |
 | `EVTS` | `first` (u32, the first record's number), then N × 8-byte events | Reliable (below). At most 128 events per datagram. |
 | `ACK ` | `delivered` (u32): the highest event number received in order | Reliable (below). |
+| `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control/save messages (`save_req`, `save_done`, `load_save`, `game_over`). |
+| `CACK` | `delivered` (u32): the highest `CTRL` chunk number received in order | Reliable ack for `CTRL`. |
 | `HELO` | UTF-8 JSON: `{"link": 8, "patch": <the co-op disc's CRC32 as an integer, or null>}` | Once a second. |
 
 **Reliable events:** exactly once, in order.

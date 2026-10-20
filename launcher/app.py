@@ -258,6 +258,16 @@ class Launcher:
     def starts_dir(self):
         return paths.debug_starts_dir() / f"{self.disc().stem}@{self.bios().stem}"
 
+    def patch_crc(self):
+        import json
+        manifest = APP / "patcher" / "manifest.json"
+        if manifest.exists():
+            try:
+                return int(json.loads(manifest.read_text())["target_crc32"], 16)
+            except Exception:  # noqa: BLE001
+                return None
+        return None
+
     # --- first run
 
     def wizard(self):
@@ -356,7 +366,8 @@ class Launcher:
                 actions.append(("continue", pts[0]))
             items.append(("New game", "Both players start a new game (each picks a name)"))
             actions.append(("new", None))
-            for label, hint, act in (("Savestates", "Go back to a moment of a playthrough; see the space they use", "states"),
+            for label, hint, act in (("Play online", "Play with a friend on another PC using a connect code or IP", "online"),
+                                     ("Savestates", "Go back to a moment of a playthrough; see the space they use", "states"),
                                      ("Debug starts", "Start both games anywhere on the route (testing)", "debug"),
                                      ("Settings", "Controllers, music, boss aggro, BIOS, folders", "settings"),
                                      ("Quit", "", "quit")):
@@ -372,6 +383,8 @@ class Launcher:
                 self.play(Playthrough.new(), fresh=True)
             elif act == "continue":
                 self.play(arg)
+            elif act == "online":
+                self.online_menu()
             elif act == "states":
                 self.savestates()
             elif act == "debug":
@@ -389,27 +402,37 @@ class Launcher:
 
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
-        cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
+        if len(s.games) == 1:
+            who = "A" if getattr(s, "rank", 0) == 0 else "B"
+            cards = (playthrough.card(who),) if playthrough else None
+        else:
+            cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.screen, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards)
         if view.run() == "quit":
             raise SystemExit
 
     def load_cards(self, s, playthrough):
+        if len(s.games) == 1:
+            who = "A" if getattr(s, "rank", 0) == 0 else "B"
+            card = playthrough.card(who)
+            if card.exists():
+                s.local.load_card(card.read_bytes())
+            return
         for who, g in zip("AB", (s.a, s.b)):
             card = playthrough.card(who)
             if card.exists():
                 g.load_card(card.read_bytes())
 
     def boot_to_title(self, s, heading):
-        """Steps both games (unseen) to the title screen, with a progress bar."""
+        """Steps the game(s) (unseen) to the title screen, with a progress bar."""
         for k in range(120):
-            if all(g.read("g_GameState") == 1 for g in (s.a, s.b)):
+            if all(g.read("g_GameState") == 1 for g in s.games):
                 return True
             s.step(60)
             if "quit" in self.ui.events():
                 raise SystemExit
-            self.ui.frame(heading, "Starting both games")
+            self.ui.frame(heading, "Starting the game" if len(s.games) == 1 else "Starting both games")
             self.ui.bar(k, 60)
             pygame.display.flip()
         return False
@@ -422,6 +445,237 @@ class Launcher:
                 s.joint.resume()
             playthrough.save_info()
             self.run_view(s, playthrough)
+
+    # --- online co-op (design/M7, D74)
+
+    def _clip_put(self, text):
+        try:
+            pygame.scrap.put_text(str(text))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _clip_get(self):
+        try:
+            return (pygame.scrap.get_text() or "").strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def ask_code(self, heading, subtitle, initial=""):
+        """Prompts for a connect code or IP:port. Supports typing, Ctrl+V, or controller paste."""
+        text = initial
+        pygame.key.start_text_input()
+        try:
+            while True:
+                for ev in pygame.event.get():
+                    if ev.type == pygame.QUIT:
+                        raise SystemExit
+                    if ev.type == pygame.KEYDOWN:
+                        if ev.key == pygame.K_RETURN:
+                            return text.strip()
+                        if ev.key == pygame.K_ESCAPE:
+                            return None
+                        if ev.key == pygame.K_BACKSPACE:
+                            text = text[:-1]
+                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL):
+                            text = self._clip_get()[:64]
+                    elif ev.type == pygame.TEXTINPUT and len(text) < 64:
+                        if not (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                            text += ev.text
+                    elif ev.type == pygame.CONTROLLERBUTTONDOWN:
+                        if ev.button == pygame.CONTROLLER_BUTTON_B:
+                            return None
+                        if ev.button == pygame.CONTROLLER_BUTTON_X:
+                            text = self._clip_get()[:64]
+                        elif ev.button in (pygame.CONTROLLER_BUTTON_A, pygame.CONTROLLER_BUTTON_START):
+                            if not text:
+                                text = self._clip_get()[:64]
+                            else:
+                                return text.strip()
+                self.ui.frame(heading, subtitle)
+                box = pygame.Rect(SIZE[0] // 2 - 260, 230, 520, 52)
+                pygame.draw.rect(self.screen, (30, 18, 26), box, border_radius=6)
+                pygame.draw.rect(self.screen, GOLD, box, 2, border_radius=6)
+                shown = text + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
+                t = self.ui.big.render(shown, True, INK)
+                self.screen.blit(t, (box.x + 16, box.y + 10))
+                self.ui.footer("Type code or press Ctrl+V (or Square / X on pad) to paste · Enter: Connect · Esc: Back")
+                pygame.display.flip()
+                pygame.time.wait(16)
+        finally:
+            pygame.key.stop_text_input()
+
+    def online_menu(self):
+        from archive import Playthrough
+        while True:
+            pts = Playthrough.all()
+            items, actions = [], []
+            if pts:
+                items.append((f"Host online: Continue {pts[0].name}", "Host and resume your last joint save with your partner"))
+                actions.append(("host_continue", pts[0]))
+            items.append(("Host online: New game", "Create a room code and invite a partner on another PC"))
+            actions.append(("host_new", None))
+            items.append(("Join a partner's game", "Enter your partner's 6-character room code, 10-character connect code, or IP:port"))
+            actions.append(("join", None))
+            items.append(("Back", ""))
+            actions.append(("back", None))
+            choice = self.ui.menu("Play online", items,
+                                  "Each player runs one game on their own PC. Both must have the same co-op version.")
+            if choice is None or actions[choice][0] == "back":
+                return
+            act, arg = actions[choice]
+            if act == "host_new":
+                self.host_online(Playthrough.new(), fresh=True)
+            elif act == "host_continue":
+                self.host_online(arg, fresh=False)
+            elif act == "join":
+                self.join_online()
+
+    def online_session(self, start, playthrough, rank=0, peer=None):
+        from session import OnlineSession
+        self.apply_bios()
+        return OnlineSession(
+            self.disc(), start=start, rank=rank, peer=peer, audio=True,
+            session_file=playthrough.joint_save if playthrough else None,
+            patch_crc=self.patch_crc(),
+        )
+
+    def host_online(self, playthrough, fresh=False):
+        from link.rendezvous import (ConnectError, RoomResponder, encode_endpoint, local_ip,
+                                     make_room_code, parse_connect_input, stun_public_endpoint)
+        with self.online_session(None, playthrough, rank=0) as s:
+            lan = (local_ip(), s.port)
+            wan = stun_public_endpoint(0, timeout=1.0)
+            shown_ep = (wan[0], s.port) if wan else lan
+            room_code = make_room_code()
+            ep_code = encode_endpoint(*shown_ep)
+            self._clip_put(room_code)
+            responder = RoomResponder(room_code, lan, shown_ep)
+            try:
+                sel = 0
+                menu_items = [
+                    (f"Copy room code ({room_code})", "Copied to clipboard"),
+                    (f"Copy direct connect code ({ep_code})", f"Direct endpoint: {shown_ep[0]}:{shown_ep[1]} (LAN {lan[0]}:{lan[1]})"),
+                    ("Enter partner's code (if behind strict NAT)", "Simultaneous hole-punch toward your partner's code"),
+                    ("Start game now (partner can join in-game)", ""),
+                    ("Cancel", ""),
+                ]
+                while True:
+                    for a in self.ui.events():
+                        if a == "quit":
+                            raise SystemExit
+                        if a == "back":
+                            return
+                        if a == "up":
+                            sel = (sel - 1) % len(menu_items)
+                        elif a == "down":
+                            sel = (sel + 1) % len(menu_items)
+                        elif a == "ok":
+                            if sel == 0:
+                                self._clip_put(room_code)
+                            elif sel == 1:
+                                self._clip_put(ep_code)
+                            elif sel == 2:
+                                peer_txt = self.ask_code("Partner's code", "Enter your partner's 10-character connect code or IP:port:")
+                                if peer_txt:
+                                    try:
+                                        kind, val = parse_connect_input(peer_txt)
+                                        if kind in ("direct", "endpoint"):
+                                            s.connect(val)
+                                    except ConnectError as e:
+                                        self.ui.message("Check that code", str(e))
+                            elif sel == 3:
+                                break
+                            elif sel == 4:
+                                return
+                    else:
+                        if responder.joiner_endpoint and s.peer is None:
+                            s.connect(responder.joiner_endpoint)
+                        st = s.local.host("handshake_tick")
+                        if st.get("mismatch"):
+                            self.ui.message("Version mismatch — connection refused", st["mismatch"])
+                            return
+                        if st.get("partner_hello"):
+                            break
+                        self.ui.frame(
+                            f"Room code:  {room_code}",
+                            f"Give your partner room code  {room_code}  (or connect code  {ep_code}).\n"
+                            "Waiting for partner to connect…",
+                        )
+                        self.ui.items(menu_items, sel, top=210)
+                        pygame.display.flip()
+                        pygame.time.wait(16)
+                        continue
+                    break
+            finally:
+                responder.close()
+            if not fresh:
+                self.load_cards(s, playthrough)
+            if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
+                s.joint.resume()
+            playthrough.save_info()
+            self.run_view(s, playthrough)
+
+    def join_online(self):
+        from archive import Playthrough
+        from link.rendezvous import ConnectError, local_ip, parse_connect_input, resolve_room_code
+        code = ""
+        while True:
+            code = self.ask_code(
+                "Join a partner's game",
+                "Enter your partner's 6-character room code (e.g. BAT-429),\n"
+                "10-character connect code (e.g. K7M2-9P4Q-W3), or IP:port:",
+                initial=code or self._clip_get()[:24],
+            )
+            if code is None:
+                return
+            try:
+                kind, target = parse_connect_input(code)
+            except ConnectError as e:
+                self.ui.message("Check that code", str(e))
+                continue
+            pts = Playthrough.all()
+            playthrough = pts[0] if pts else Playthrough.new("Online co-op")
+            with self.online_session(None, playthrough, rank=1) as s:
+                if kind == "room":
+                    try:
+                        peer = self.ui.wait_for(
+                            f"Looking up room {target}",
+                            "Finding your partner's game…",
+                            lambda progress: resolve_room_code(target, (local_ip(), s.port), timeout=3.5),
+                        )
+                    except ConnectError as e:
+                        self.ui.message("Couldn't find that room", str(e))
+                        continue
+                else:
+                    peer = target
+                s.connect(peer)
+                connected = False
+                for k in range(180):  # up to ~3 seconds for HELO handshake
+                    if "quit" in self.ui.events():
+                        raise SystemExit
+                    st = s.local.host("handshake_tick")
+                    if st.get("mismatch"):
+                        self.ui.message("Version mismatch — connection refused", st["mismatch"])
+                        return
+                    if st.get("partner_hello"):
+                        connected = True
+                        break
+                    self.ui.frame("Connecting to partner…", f"Peer: {peer[0]}:{peer[1]}")
+                    self.ui.bar(k, 180)
+                    pygame.display.flip()
+                    pygame.time.wait(16)
+                if not connected:
+                    if not self.ui.confirm(
+                        "No reply from partner yet",
+                        f"Sent packets to {peer[0]}:{peer[1]}, but haven't heard back yet.\n"
+                        "Start the game anyway (it will link as soon as packets arrive)?",
+                        yes="Start anyway", no="Try another code",
+                    ):
+                        continue
+                self.load_cards(s, playthrough)
+                playthrough.save_info()
+                self.run_view(s, playthrough)
+                return
 
     def savestates(self):
         from archive import Playthrough, load_pair

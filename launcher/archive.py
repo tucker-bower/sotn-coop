@@ -49,9 +49,11 @@ def decompress(blob, like=None):
     return blob  # an uncompressed state
 
 
-def load_pair(a_file, b_file):
-    """(A state, B state) from a savestate pair's files."""
+def load_pair(a_file, b_file=None):
+    """(A state, B state) from a savestate pair's files (or (A state, None) for a single-game online state)."""
     a = decompress(Path(a_file).read_bytes())
+    if b_file is None or not Path(b_file).exists():
+        return a, None
     return a, decompress(Path(b_file).read_bytes(), like=a)
 
 
@@ -104,7 +106,7 @@ class Playthrough:
         return self.dir / "session.coop"
 
     def savestate(self, event, games, where=""):
-        """Both games' states, now. Returns the files written (new names, never overwritten)."""
+        """Both games' states (or one game's state online), now. Returns the files written."""
         stamp = time.strftime("%Y%m%d-%H%M%S")
         label = "".join(c if c.isalnum() or c in " -" else "_" for c in f"{event} {where}".strip())
         base = f"{stamp} {label}"
@@ -112,9 +114,13 @@ class Playthrough:
         while (self.states / f"{base} A.state.zst").exists():
             base = f"{stamp} {label} ({k})"
             k += 1
-        a, b = (g.save_state() for g in games)
+        states = [g.save_state() for g in games]
+        a = states[0]
+        pairs = [("A", compress(a))]
+        if len(states) > 1:
+            pairs.append(("B", compress(states[1], like=a)))
         written = []
-        for who, blob in (("A", compress(a)), ("B", compress(b, like=a))):
+        for who, blob in pairs:
             path = self.states / f"{base} {who}.state.zst"
             with open(path, "xb") as f:  # "x": fails rather than overwrite
                 f.write(blob)
@@ -122,13 +128,12 @@ class Playthrough:
         return written
 
     def savestate_pairs(self):
-        """[(label, A file, B file)], newest first."""
+        """[(label, A file, B file or None)], newest first."""
         files = sorted(self.states.glob("* A.state.zst"), reverse=True)
         out = []
         for a in files:
             b = a.with_name(a.name[:-len(" A.state.zst")] + " B.state.zst")
-            if b.exists():
-                out.append((a.name[:-len(" A.state.zst")], a, b))
+            out.append((a.name[:-len(" A.state.zst")], a, b if b.exists() else None))
         return out
 
     def savestates_size(self):
