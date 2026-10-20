@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-20_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -21,16 +21,20 @@ _Last updated: 2026-10-19_
   - **M10:** AYN Thor curated dual-screen support (top screen = you, bottom screen = partner) + true expanded-FOV widescreen on the top screen.
 
 ## In flight
-- PRs for M7 on `tucker-bower/sotn-coop` and `tucker-bower/sotn-decomp-coop`.
+- **M7b design (`docs/design/M7b-polish.md`), awaiting Tucker's review:** a real GitHub release, a mode-first launcher with couch/online lobbies, a native menu bar, a resizable window with layouts, a widescreen spike, and a "stranger" playtest from the README.
+- Correction: no M7 PRs exist. M7 landed on `main` directly, and the repo has no GitHub release yet.
 
 ## Next
-- **M8 design (`docs/design/M8-maria-and-richter.md`):** inspect `disks/sotn.pspus.iso` (`ULUS-10277`) to map Maria, Richter, and alternate DXC dialogue/voice assets, and design character selection + cross-character shared progression rules (D27).
+- **M7b** once approved.
+- **M8 tabled (2026-10-20)** while Tucker decides the mixed-character rules. Offered: a bot spike that checks Richter/Maria can reach every area in a normal playthrough, plus a count of the character checks in the game code.
+- M8 design (`docs/design/M8-maria-and-richter.md`):** inspect `disks/sotn.pspus.iso` (`ULUS-10277`) to map Maria, Richter, and alternate DXC dialogue/voice assets, and design character selection + cross-character shared progression rules (D27).
 - **Playtest:** `SOTN-Coop-setup-0.7.0.exe` (couch + online play).
 
 ## Budget
 - Day 2 of the month (2026-10-19): M0 through M7 done, far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
+- **M7b:** how to handle unsigned-installer warnings (unsigned + README / SignPath / Azure Trusted Signing), and who publishes the release. See `docs/design/M7b-polish.md`.
 - **Before M8 implementation:** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
 
 ## Environment notes
