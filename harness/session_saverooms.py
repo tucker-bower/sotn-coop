@@ -135,3 +135,20 @@ def save_room_partner_no_card(run):
         t = b.read("g_Timer")
         sub.step(60)
         run.expect(b.read("g_Timer") > t and b.snapshot()["game_state"] == 2, "B isn't frozen")
+
+
+@session_scenario(starts=("nz0", "nz0"))
+def save_room_both_inside(run):
+    """Both players are in the same save room; A saves in the coffin. B, standing there too,
+    writes its own card save (it used to wait until it left the save room)."""
+    path = Path(tempfile.mkdtemp(prefix="coop-saveroom-")) / "session.coop"
+    with Session(COOP_DISC, starts=("nz0", "nz0"), session_file=path) as s:
+        sub = SessionRun(s, run.name)
+        a, b = s.a, s.b
+        arrive(sub, b, NZ0, SAVE_ROOM, 48, COFFIN[1])  # B by the coffin, not in it
+        sub.step(30)
+        frames, frozen = save_in_coffin(sub, s, a, b, path)
+        run.expect(a.mailbox("save_seq") >= 1, "A saved")
+        run.expect(b.mailbox("card_result") == CARD_OK, "B, in the same save room, wrote its own card save",
+                   result=b.mailbox("card_result"), frames=frames)
+        run.expect(path.exists(), "the joint save was written")

@@ -75,7 +75,35 @@ def main():
     p.savestate("Extra", _Fake(), "")
     after = sorted(f.name for f in p.states.iterdir())
     check(set(before) <= set(after) and len(after) == len(before) + 2, "a new savestate never replaces one")
+    check_continue(launcher, starts)
     print("data folder:", os.environ["COOP_DATA"])
+
+
+def check_continue(launcher, starts):
+    """M6 criterion 3: save in a real coffin, quit; Continue resumes both games in the save room."""
+    from session import SessionRun
+    from session_saverooms import save_in_coffin
+    from link.mailbox import BUSY, IN_PLAY
+    p = archive.Playthrough.new("Continue test")
+    file = str(launcher.starts_dir() / starts["Alchemy Lab: save room"]["file"])
+    with launcher.session((file, file), p) as s:
+        res = save_in_coffin(SessionRun(s, "continue"), s, s.a, s.b, p.joint_save)
+        print("  save:", res, "seq", s.a.mailbox("save_seq"), s.b.mailbox("save_seq"), "card", s.b.mailbox("card_result"),
+              "rooms", s.a.mailbox("self_presence").room, s.b.mailbox("self_presence").room, "joint", s.joint and s.joint.saves)
+        for who, g in zip("AB", (s.a, s.b)):
+            p.card(who).write_bytes(g.card())
+    check(p.joint_save.exists(), "the joint save was written")
+    with launcher.session((None, None), p) as s:  # what Continue does (Launcher.play)
+        launcher.load_cards(s, p)
+        check(launcher.boot_to_title(s, "Continuing"), "both games reached the title screen")
+        s.joint.resume()
+        for _ in range(1500):
+            s.step(1)
+            pa, pb = s.a.mailbox("self_presence"), s.b.mailbox("self_presence")
+            if all(q.flags & IN_PLAY and not q.flags & BUSY for q in (pa, pb)):
+                break
+        check(pa.stage == pb.stage == 0x0C and pa.room_id == pb.room_id == 200,
+              "Continue: both games are in play in the save room", a=str(pa.room), b=str(pb.room))
 
 
 class _Fake:

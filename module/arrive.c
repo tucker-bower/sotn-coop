@@ -34,6 +34,7 @@ extern s32 D_80137E54;  // its mode (0: save to D_8006C378)
 extern s32 D_80097924;  // memory card port
 extern s32 D_8006C378;  // memory card block
 extern bool D_80137598; // the player is in a save room
+extern s32 D_801379BC;  // the save room's own sequence: 0 = idle (by the coffin, not saving)
 #define MENU_STEP_INIT 0 // src/dra/menu.h (first value of the menu step enum)
 // Entry 7: Play_LoadStageChr reloads the target stage's tile graphics only for a few entries
 // (src/dra/game_handlers.c), and 7 is one. A normal door gets them from the CD room on the way.
@@ -394,8 +395,12 @@ static void CommandUpdate(void) {
         LoadSave();
         break;
     case CMD_SAVE_NOW:
-        if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || D_80137598 || s_CardSaving) {
-            return; // in a menu, on the map, or in a save room itself: wait
+        // In a menu or on the map, or this game is saving at a coffin itself: wait. Just standing
+        // in a save room is fine (both players often are: the partner saving there used to wait
+        // until this one left).
+        if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || (D_80137598 && D_801379BC != 0) ||
+            s_CardSaving) {
+            return;
         }
         s_CardCmd = *c;
         g_CoopLink.cardResult = 0;

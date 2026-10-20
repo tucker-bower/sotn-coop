@@ -1,15 +1,17 @@
-"""Replays a launcher bookmark (F9 in the playtest launcher) in the harness.
+"""Replays an F9 bug report (a zip from the launcher's reports folder) in the harness.
 
-    python replay.py <bookmark dir> [--from N]
+    python replay.py <report.zip> [--from N]
 
-Loads both games' states from the oldest checkpoint (or the one at frame N), replays both pads'
-recorded inputs up to the moment F9 was pressed, and saves both screens every 10 frames in
-<bookmark dir>/replay/ (and a contact sheet). The link between the games isn't deterministic
-in the launcher (two processes, UDP), so a replay can differ a little from what was seen; the
-"*_now.state" files are the exact moment, for inspecting RAM."""
+Loads both games' states from the oldest in-memory checkpoint in before/ (or the one at frame
+N), replays both pads' recorded inputs up to the moment F9 was pressed, and saves both screens
+every 10 frames next to the zip (<report>-replay/). The link between the games isn't
+deterministic in the launcher (two processes, UDP), so a replay can differ a little from what
+was seen; now/*.state are the exact moment, for inspecting RAM."""
 
 import argparse
 import json
+import tempfile
+import zipfile
 from pathlib import Path
 
 from session import Session  # first: puts `link` on the path
@@ -19,33 +21,40 @@ from module import COOP_DISC
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("bookmark", type=Path)
+    ap.add_argument("report", type=Path)
     ap.add_argument("--from", dest="start", type=int)
+    ap.add_argument("--disc", default=str(COOP_DISC), help="the co-op disc the report was made on")
     args = ap.parse_args()
-    info = json.loads((args.bookmark / "info.json").read_text())
-    start = args.start if args.start is not None else min(info["states"], default=None)
+    z = zipfile.ZipFile(args.report)
+    names = z.namelist()
+    frames = sorted({int(n.split("/")[1].split("_")[0]) for n in names if n.startswith("before/")})
+    inputs = json.loads(z.read("inputs.json"))
+    start = args.start if args.start is not None else (frames[0] if frames else None)
+    tmp = Path(tempfile.mkdtemp(prefix="coop-replay-"))
     if start is None:
-        starts = (args.bookmark / "A_now.state", args.bookmark / "B_now.state")
-        inputs = []
+        files = ("now/A.state", "now/B.state")
+        todo = []
     else:
-        starts = (args.bookmark / f"A_{start}.state", args.bookmark / f"B_{start}.state")
-        inputs = [(pa, pb) for f, pa, pb in info["inputs"] if start <= f < info["frame"]]
-    out = args.bookmark / "replay"
+        files = (f"before/{start}_A.state", f"before/{start}_B.state")
+        last = max((f for f, _, _ in inputs), default=start)
+        todo = [(pa, pb) for f, pa, pb in inputs if start <= f <= last]
+    starts = []
+    for f in files:
+        (tmp / Path(f).name).write_bytes(z.read(f))
+        starts.append(str(tmp / Path(f).name))
+    out = args.report.with_name(args.report.stem + "-replay")
     out.mkdir(exist_ok=True)
-    with Session(COOP_DISC, starts=tuple(str(x) for x in starts)) as s:
-        shots = []
-        for k, pads in enumerate(inputs):
+    with Session(args.disc, starts=tuple(starts)) as s:
+        for k, pads in enumerate(todo):
             s.step(1, p1=pads)
             if k % 10 == 0:
+                from PIL import Image
                 a, b = s.a.screenshot(), s.b.screenshot()
-                shots.append((k, a, b))
-        from PIL import Image
-        for k, a, b in shots:
-            img = Image.new("RGB", (a.width + b.width + 4, a.height))
-            img.paste(a, (0, 0))
-            img.paste(b, (a.width + 4, 0))
-            img.save(out / f"{k:05d}.png")
-        print(f"replayed {len(inputs)} frames from {start}: {len(shots)} shots in {out}")
+                img = Image.new("RGB", (a.width + b.width + 4, a.height))
+                img.paste(a, (0, 0))
+                img.paste(b, (a.width + 4, 0))
+                img.save(out / f"{k:05d}.png")
+    print(f"replayed {len(todo)} frames from {start}: {out}")
 
 
 if __name__ == "__main__":
