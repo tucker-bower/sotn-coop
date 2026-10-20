@@ -48,13 +48,12 @@ _Last updated: 2026-10-20_
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
-- **Publish v0.7.1:** after you've tested the draft. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
+- **Publish v0.7.1:** Tucker is testing couch and online on 2026-10-20. PR #1 is merged and the draft now targets `main`. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
 - **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **M10 widescreen:** I recommend dropping true expanded FOV (VRAM-blocked, 3–6 weeks of risk) and using the 16:9 bars for co-op info on the AYN Thor.
-- **Before M8 implementation:** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
+- **Before M8 implementation (tabled; Tucker undecided, 2026-10-20):** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
 
 ## Environment notes
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).
