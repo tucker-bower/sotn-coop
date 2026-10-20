@@ -80,8 +80,8 @@ The file is recognized by hash, and the launcher says which BIOS it found. If an
   - **The list:** the castle entrance, the hall, the Alchemy Lab and its elevator shaft, Marble Gallery, Outer Wall, next to the Doppleganger, next to Maria, a save room, plus each later stage as the route grows. Making them takes about a minute, with a progress bar.
 - **During a playthrough, the launcher keeps every savestate it makes, forever, but it makes few:**
   - **No timed autosaves** (Tucker: that wastes space).
-  - **Only on moments worth going back to:** the first time either player enters a stage, a boss fight starting, a joint save, and quitting. Deaths are covered by the boss and save states.
-  - **Storage:** compressed (most of a state is the empty 8 MB expansion RAM). That's a few MB per moment for both games, roughly 100–200 MB for a whole playthrough.
+  - **Only on moments worth going back to:** the first time either player enters a stage, a boss fight starting, and quitting. A joint save is a restore point already (the memory cards); deaths are covered by the boss states.
+  - **Storage:** zstd-compressed, with B's state compressed against A's. That's about 2 MB per moment for both games (measured: 1.4 MB for A, under 0.9 MB for B), roughly 200 MB for a whole playthrough.
   - **Naming:** each file is named `<playthrough>/<time>_<event>_<A|B>.state.zst`, and every write goes to a new name, so nothing is ever overwritten or deleted by the launcher.
 - **The space used is always clear:**
   - The home screen's Savestates entry shows the total ("Savestates: 142 MB").
@@ -126,7 +126,7 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
    - The original image is untouched.
 3. **New game:** New game → the prologue → Alucard → the first save room. Quit, then Continue: both games resume in the save room. On OpenBIOS.
 4. **Savestates are never deleted, and their space is visible:**
-   - A session writes event savestates (a new stage, a boss, a joint save, quitting) for both games, and none on a timer.
+   - A session writes event savestates (a new stage, a boss, quitting) for both games, and none on a timer.
    - The home screen and the Savestates screen show the right total, and deleting a playthrough's savestates asks first.
    - No file in the archive is ever overwritten or removed (a harness check over a session).
    - Any of them loads from the browser.
@@ -142,5 +142,5 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
   - OpenBIOS is MIT: fine to bundle with its notice.
   - Our launcher stays AGPL like the decomp.
 - **OpenBIOS gaps** may exist outside what the suite covers. The real-BIOS option is the fallback, and playtest 3 uses OpenBIOS on purpose.
-- **Archive growth:** about 100–200 MB per playthrough, always shown, and deleted only by the player.
+- **Archive growth:** about 200 MB per playthrough, always shown, and deleted only by the player.
 - **Antivirus false positives** on PyInstaller executables; signing comes later.

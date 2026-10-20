@@ -12,7 +12,7 @@
 
 > The installer arrives with milestone M6 (`docs/design/M6-playable-build.md`). Until then, developers build from source: see [SETUP.md](SETUP.md) and `scripts/install_launcher.sh`.
 
-**Where your data goes:** `Documents\SOTN Co-op\` holds your saves, bug reports, and the savestates the launcher makes at big moments (a new area, a boss, a save), so you can go back. It never deletes them. A whole playthrough takes roughly 100–200 MB. The launcher's home screen shows how much space they use, with buttons to open the folder or clean up a playthrough.
+**Where your data goes:** `Documents\SOTN Co-op\` holds your saves, bug reports, and the savestates the launcher makes at big moments (a new area, a boss fight, quitting), so you can go back. It never deletes them. A whole playthrough takes roughly 200 MB. The launcher's home screen shows how much space they use, with buttons to open the folder or clean up a playthrough.
 
 We never distribute game data: the launcher builds everything from your own disc.
 

@@ -310,7 +310,7 @@ This is a rule in `AGENTS.md`: at every natural checkpoint, and always before a 
 - **The fallback:** a real-BIOS option in Settings, with a plain prompt naming the files that work.
 
 **D69: The launcher never deletes or overwrites a savestate** (owner, 2026-10-19)
-- **The rule:** playthroughs keep every savestate the launcher makes, compressed and uniquely named. The launcher makes them only on events (a new stage, a boss, a joint save, quitting), never on a timer: about 100–200 MB per playthrough. The space used is shown on the home screen and in Settings, with the folder and a confirmed "delete this playthrough's savestates". Players may delete them; the launcher never does on its own.
+- **The rule:** playthroughs keep every savestate the launcher makes, compressed and uniquely named. The launcher makes them only on events (a new stage, a boss, quitting), never on a timer: about 2 MB a moment, some 200 MB per playthrough. The space used is shown on the home screen and in Settings, with the folder and a confirmed "delete this playthrough's savestates". Players may delete them; the launcher never does on its own.
 - **Debugging:** predefined debug starts, made on the player's PC because they hold game RAM, and F9 as a full environment snapshot.
 
 **D70: Plan for online and Android now** (owner, 2026-10-19)
