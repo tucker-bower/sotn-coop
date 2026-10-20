@@ -244,3 +244,14 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
 - **True widescreen (expanded FOV, not stretched) on the top 16:9 screen:**
   - Retail PS1 SOTN sets a 256×240 display/draw environment (`DISPENV`/`DRAWENV`), clamps camera horizontal scrolling to 256 px per room unit, and spawns layout entities in a `[-64, +320]` px window around the camera left edge (`g_api.o.UpdateRoomPosition`).
   - Expanding FOV to 16:9 (~426×240, or 384×216 / 320×240 + SwanStation widescreen viewport) requires widening the GPU clip/draw width, adjusting room scroll clamping and HUD centering in `DRA`, and widening the stage layout spawner window so enemies and backgrounds appear at the wider screen edges rather than popping in at x=256.
+
+## Dracula X Chronicles USA (`sotn.pspus.iso`, `ULUS-10277`) asset map for M8 (checked 2026-10-19)
+- **Why `assets.pspeu.yaml` failed on `sotn.pspus.iso` (resolving D15):**
+  - `PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin` in `sotn.pspus.iso` (`ULUS-10277`) is `0x33F80` bytes (`MWo3` header: `base=0x09228A00, text=0x1220C, data=0x21D34, bss=0x1D00`), whereas `pspeu` (`ULES-00841`) is `0x3F700` bytes.
+  - Because `pspus` is English-only, it omits the 5 localized European HUD textures (`font_eu`, `hud_sp`, `hud_it`, `hud_ge`, `hud_fr`) between `pl_main.data` and `subweapons`.
+  - Every single Maria asset from `subweapons` (`0x1EFE0` in `pspeu`) through `crash_cardinal_pal` (`0x3F338` in `pspeu`) is present in `sotn.pspus.iso`'s `maria.bin` at an **exact constant `-0xB780` byte offset** (`0x13860` through `0x33BB8`), and `.rodata` (`0x280` bytes) follows immediately at `0x33D00..0x33F80`.
+- **Maria SFX & Voice in `sotn.pspus.iso`:**
+  - Both `PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk` (74,560 bytes, English voice/SFX) and `PSP_GAME/USRDIR/res/ps/sound/SE/sd_mar2.spk` (74,560 bytes, Japanese voice/SFX) are present on `sotn.pspus.iso` and build directly into `SD_MAR.VH` + `SD_MAR.VB` via `tools/maria-sfx`.
+- **DXC 2007 English dialogue & voice acting in `sotn.pspus.iso`:**
+  - Cutscene scripts (`cutscene_script_en`) live in `PSP_GAME/USRDIR/res/ps/PSPBIN/{st0,cen,dai,dre,lib,no3,no4,sel}.bin`.
+  - Voice streams (`.at3`) live in `PSP_GAME/USRDIR/res/ps/snd_e/XA/*.at3` (English) and `sound/XA/*.at3` (Japanese).

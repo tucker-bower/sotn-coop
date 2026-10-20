@@ -1,7 +1,18 @@
 # M7 design: Standalone repository (`sotn-coop`) + Online PC Co-op
 
-**Status:** approved 2026-10-19; building on `coop-m7-repo-online`.
+**Status:** built and verified 2026-10-19 (`coop-m7-repo-online`, pushed to `tucker-bower/sotn-coop`).
 **Context:** D70 (architecture ready for online), D72 (`mods/co-op/` moves to its own repo), D73 (`tucker-bower/sotn-coop`, self-hosted CI), D74 (zero-infra connect codes, compressed MTU-safe snapshots).
+
+## Progress & Evidence
+| # | Criterion | Status & Evidence |
+|---|---|---|
+| 1 | Standalone repository (`tucker-bower/sotn-coop`) with full commit history and pinned `sotn-decomp` dependency | **Done:** `git subtree split --prefix=mods/co-op` preserved all 48 commits, pushed to `https://github.com/tucker-bower/sotn-coop`. `patches/sotn-decomp.patch` holds the 5-file upstream hook diff against `Xeeynamo/sotn-decomp @ d12b397f36`. Clean clone in `/home/tucker/sotn-coop` passes `doctor.py`, `make -C module`, `test_patcher.py`, and `harness/run.py`. |
+| 2 | Self-hosted CI (`.github/workflows/ci.yml`) | **Done:** `.github/workflows/ci.yml` verifies zero tracked game data, links the runner environment cache, and runs `doctor.py`, `build_disc.sh`, `test_patcher.py`, and `harness/run.py`. |
+| 3 | MTU-safe compressed snapshots (`online_mtu_and_loss`) | **Done:** `TAG_SNPC` (`zlib` level-1 compression + `<= 1150`-byte chunks). Passes `online_mtu_and_loss` (5.4s): shared room + guest enemy kill under 1200-byte MTU cap, 20 ms RTT latency, and 3% random packet loss with `mtu_drops == 0` and full convergence. |
+| 4 | Connect codes & direct-IP (`online_connect_codes`) | **Done:** 10-char base32 endpoint codes (with 2-bit CRC), 6-char room codes (`link/rendezvous.py`: LAN UDP broadcast + `ntfy.sh` relay + RFC 5389 STUN), and `ip:port` direct fallback. Passes `online_connect_codes` (1.4s, 19 assertions). |
+| 5 | Version mismatch refusal (`online_version_mismatch`) | **Done:** `Host` + launcher check `link` version and disc `patch` CRC32, refuse mismatched partners with a clear message, relay zero packets while refused, and lift refusal on matching `HELO`. Passes `online_version_mismatch` (1.6s, 7 assertions). |
+| 6 | Online joint save, Continue, and both-dead reload (`online_joint_save`) | **Done:** `JointSave` relays `save_req`, `save_done`, `load_save`, and `game_over` over `ReliableMessages` (`TAG_CTRL`/`TAG_CACK`). Passes `online_joint_save` (5.2s, 6 assertions). |
+| 7 | Full regression suite + Windows installer (`SOTN-Coop-setup-0.7.0.exe`) | **Done:** all 61 harness scenarios (57 existing + 4 M7 online) and `launcher/smoke.py` (`check_online`) pass. |
 
 ## Goal
 1. **Standalone repository (`tucker-bower/sotn-coop`):** move `mods/co-op/` into its own repository with its full commit history preserved, building against a pinned `sotn-decomp` commit as a dependency rather than a fork, with CI that builds the module and tests from a clean checkout (never distributing or storing copyrighted disc images in git or releases).

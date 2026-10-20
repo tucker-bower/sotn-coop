@@ -52,9 +52,9 @@ W() { wslpath -w "$1"; }
 echo "== Python environment"
 if [ ! -f "$DEST/venv/Scripts/python.exe" ]; then
     "$WINPY" -m venv "$(W "$DEST/venv")"
+    "$DEST/venv/Scripts/python.exe" -m pip install -q --upgrade pip >/dev/null
+    "$DEST/venv/Scripts/python.exe" -m pip install -q "libretro.py==0.12.0" pygame-ce pillow
 fi
-"$DEST/venv/Scripts/python.exe" -m pip install -q --upgrade pip >/dev/null
-"$DEST/venv/Scripts/python.exe" -m pip install -q "libretro.py==0.12.0" pygame-ce pillow
 INDEX="$APP/.env/savestates/sotn_coop.us/index.json"
 if [ ! -f "$INDEX" ] || [ "$APP/.env/out/disc/sotn_coop.us.bin" -nt "$INDEX" ]; then
     echo "== savestates (Windows core; about 30 s)"
