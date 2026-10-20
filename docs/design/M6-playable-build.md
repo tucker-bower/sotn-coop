@@ -144,3 +144,21 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
 - **OpenBIOS gaps** may exist outside what the suite covers. The real-BIOS option is the fallback, and playtest 3 uses OpenBIOS on purpose.
 - **Archive growth:** about 200 MB per playthrough, always shown, and deleted only by the player.
 - **Antivirus false positives** on PyInstaller executables; signing comes later.
+
+## Progress (2026-10-19, in progress on `coop-m6-playable`)
+| # | Criterion | State |
+|---|---|---|
+| 1 | Installer → home screen in under 5 min, no BIOS needed | **Built:** `scripts/build_release.sh` → `SOTN-Coop-setup-<v>.exe`, 25 MB. It installs per user with no admin rights, and holds embedded Python, our source, SwanStation, OpenBIOS and the patch, but no game data (the script checks). Installed silently to a test folder, the launcher smoke test passes there. **Waiting on:** Tucker's install from scratch (playtest 3). |
+| 2 | The patcher refuses wrong discs; output = `build_disc.sh`'s; original untouched | **Done:** `patcher/test_patcher.py`. The patch is 222 KB and applies in under a second. The CD-audio track is kept: the patcher writes a two-track disc. |
+| 3 | New game → … → save room → Continue resumes both | **Done:** `launcher/smoke.py`, the Continue check. It found a bug: a partner standing in a save room never saved. Fixed; test `save_room_both_inside`. |
+| 4 | Savestates never deleted, and their space visible | **Done:** `launcher/smoke.py`. Moments are a new area, a boss and quitting; 2.1 MB each (B compressed against A). Nothing is overwritten. The home screen and Savestates screen show sizes, and delete asks first. |
+| 5 | The F9 report is complete, and `replay.py` replays it | **Done:** `launcher/smoke.py`, plus `replay.py` on a smoke-test report. |
+| 6 | Debug starts load | **Done:** 9 starts, made in about 26 s on the player's PC. The smoke test plays from one, and the Continue check from another. |
+| 7 | Suite on the patcher's disc, on OpenBIOS and a real BIOS | **Running.** OpenBIOS with the build's disc: all 55 pass. |
+| 8 | `docs/link-protocol.md`, plus a test from the spec alone | **Done:** `link_spec_conformance`. It also added a version handshake (`HELO`) for online play. |
+| 9 | Manual: Tucker's playtest 3 | **To come.** |
+
+**Still to do:**
+- Finish 7.
+- Tucker's look at the menus: the home screen, the wizard, savestates and settings.
+- Playtest 3 delivery.

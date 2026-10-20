@@ -18,9 +18,9 @@ WINPY="$(wslpath -u "$WINPY")"
 
 echo "== app files"
 mkdir -p "$APP"/{harness,link,launcher,config,build/coop,bin,bios,.env/out/disc,.env/savestates} "$DEST/cards"
-cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots,replay}.py "$APP/harness/"
+cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$APP/harness/"
 cp "$MOD"/link/*.py "$APP/link/"
-cp "$MOD"/launcher/play.py "$APP/launcher/"
+cp "$MOD"/launcher/{play,app,gameview,paths,archive,report,debugstarts}.py "$APP/launcher/"
 cp "$MOD/env.example.toml" "$APP/env.example.toml"
 cat > "$APP/env.toml" <<'TOML'
 # The launcher's own layout (scripts/install_launcher.sh): everything relative to app/.
