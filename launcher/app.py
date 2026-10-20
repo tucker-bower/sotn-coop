@@ -109,6 +109,7 @@ class UI:
         self.small = pygame.font.SysFont("georgia", 17)
         self.mono = pygame.font.SysFont("consolas", 14)
         self._rects = []
+        self.pads = None  # gameview.Pads, once the launcher has made it
 
     def events(self, raw=False):
         """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit",
@@ -137,8 +138,12 @@ class UI:
                 out.append(("pad", ev.instance_id))
                 if a:
                     out.append(a)
-            elif ev.type == pygame.CONTROLLERDEVICEADDED:
-                pygame._sdl2.controller.Controller(ev.device_index)
+            elif ev.type in (pygame.CONTROLLERDEVICEADDED, pygame.CONTROLLERDEVICEREMOVED):
+                # Pads keeps every plugged-in controller open: one opened here and dropped closes
+                # again, and sends no buttons. (A DualSense on Windows drops out about 0.5 s after
+                # start and comes back as a new device about 7 s later.)
+                if self.pads:
+                    self.pads.refresh()
             elif ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
                 pos = self.display.to_canvas(ev.pos)
                 hit = next((k for k, r in self._rects if pos and r.collidepoint(pos)), None)
@@ -364,6 +369,7 @@ class Launcher:
         self.screen = self.display.canvas
         from gameview import Pads
         self.pads = Pads((None, None))
+        self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
         try:
