@@ -24,7 +24,8 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M6 | Playable build + playtest | 10% | 2026-11-18 |
 | — | Reserve | 3% (M3b came out of the M2/M3 savings) | — |
 | R1 | Product emulator: **decided**, our own launcher (D36) | — | — |
-| M7+ | Richter/Maria, inverted castle, speedrun features, online PC co-op, Android | post-month | — |
+| M7 | Its own repository (D72), online PC co-op | post-month | — |
+| M8+ | Richter/Maria, inverted castle, speedrun features, Android | post-month | — |
 | Last | **3–4 players** (D48) | post-month | — |
 
 **Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
@@ -73,12 +74,16 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 ### M6: Playable build + playtest (design: `design/M6-playable-build.md`)
 - **A Windows installer:** the launcher, the SwanStation core, OpenBIOS (no BIOS hunt) and a disc patcher that builds the co-op disc from the player's own image (D9). There's a first-run wizard, then one big Continue / New game button (the Slippi and BBLauncher model).
 - **Nothing is ever deleted:**
-  - every savestate the launcher makes (rolling, and on events) is kept;
+  - every savestate the launcher makes (on events only, never on a timer) is kept, and the space it uses is always shown, with where to clean it up;
   - predefined debug starts are made on the player's PC;
   - F9 makes a full environment snapshot.
 - **Built for what's next:** a headless session engine and a written link protocol, so online (M7) and Android reuse them.
 - Manual (Tucker): install from scratch, then play from a new game through the first few bosses.
 - Online play between two PCs comes next (M7+), then Android (with the disc patched on a PC).
+
+### M7: Its own repository, then online PC co-op
+- **Its own repository (D72):** the co-op mod moves out of the sotn-decomp fork into a repository of its own, which builds against sotn-decomp as a dependency (a pinned version), not as a fork. History for `mods/co-op/` comes along. CI builds and tests from a clean checkout, given a disc and BIOS on the runner.
+- **Online PC co-op:** each player runs one game, connecting with short connect codes and a direct-IP fallback. Mismatched versions are refused with a clear message.
 
 ### Last: 3–4 players (D48)
 Three or four players, each in their own game:

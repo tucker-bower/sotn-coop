@@ -1,6 +1,6 @@
 # M6 design: A playable build
 
-**Status:** proposal v2, revised after Tucker's comments of 2026-10-19. Awaiting approval.
+**Status:** approved 2026-10-19 (v2, with Tucker's changes: no timed autosaves, storage made visible; the patch-file patcher approved; nothing moves to M7).
 **Context:**
 - D8: ship as a patched disc image.
 - D9: build it from the user's own disc.
@@ -78,11 +78,16 @@ The file is recognized by hash, and the launcher says which BIOS it found. If an
 - **Predefined debug savestates** ship as a "Debug starts" menu: every harness checkpoint and every playtest preset, one per stage, boss room and save room on the route.
   - **How they're made:** on the player's PC, by the launcher on first run, from their own disc. Savestates hold game RAM, so we never ship them (D9).
   - **The list:** the castle entrance, the hall, the Alchemy Lab and its elevator shaft, Marble Gallery, Outer Wall, next to the Doppleganger, next to Maria, a save room, plus each later stage as the route grows. Making them takes about a minute, with a progress bar.
-- **During a playthrough, the launcher keeps every savestate it makes, forever:**
-  - **Rolling:** every 5 minutes of play, for both games.
-  - **On events:** entering a new stage, a boss fight starting, a death, a joint save, quitting.
-  - **Storage:** zstd-compressed, about 1 MB a state instead of 4.5. That's roughly 25 MB per hour of co-op (both games), or about 1 GB per 40 hours.
-  - **Naming:** each file is named `<playthrough>/<time>_<event>_<A|B>.state.zst`, and every write goes to a new name, so nothing is ever overwritten or deleted by the launcher. The Settings page shows the space used and opens the folder; deleting is up to the player.
+- **During a playthrough, the launcher keeps every savestate it makes, forever, but it makes few:**
+  - **No timed autosaves** (Tucker: that wastes space).
+  - **Only on moments worth going back to:** the first time either player enters a stage, a boss fight starting, a joint save, and quitting. Deaths are covered by the boss and save states.
+  - **Storage:** compressed (most of a state is the empty 8 MB expansion RAM). That's a few MB per moment for both games, roughly 100–200 MB for a whole playthrough.
+  - **Naming:** each file is named `<playthrough>/<time>_<event>_<A|B>.state.zst`, and every write goes to a new name, so nothing is ever overwritten or deleted by the launcher.
+- **The space used is always clear:**
+  - The home screen's Savestates entry shows the total ("Savestates: 142 MB").
+  - The Savestates screen lists each playthrough with its size and date. It has an "Open folder" button and a "Delete this playthrough's savestates" button, which asks the player to confirm and is the only way anything is deleted.
+  - Settings shows where everything lives, with sizes: saves, savestates, reports and debug starts.
+  - The README and the first-run wizard say where savestates go and that the player can clean them up.
 - **A savestate browser in the launcher** loads any of them into both games: "go back to before the boss". It's handy for players, and essential for debugging.
 
 ## F9: a full environment snapshot
@@ -120,8 +125,9 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
    - Its output is byte-identical to `build_disc.sh`'s (harness check).
    - The original image is untouched.
 3. **New game:** New game → the prologue → Alucard → the first save room. Quit, then Continue: both games resume in the save room. On OpenBIOS.
-4. **Savestates are never deleted:**
-   - A 30-minute session writes rolling and event savestates for both games.
+4. **Savestates are never deleted, and their space is visible:**
+   - A session writes event savestates (a new stage, a boss, a joint save, quitting) for both games, and none on a timer.
+   - The home screen and the Savestates screen show the right total, and deleting a playthrough's savestates asks first.
    - No file in the archive is ever overwritten or removed (a harness check over a session).
    - Any of them loads from the browser.
 5. **F9:** the zip has every item listed above, and `replay.py` replays it in the harness.
@@ -136,6 +142,5 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
   - OpenBIOS is MIT: fine to bundle with its notice.
   - Our launcher stays AGPL like the decomp.
 - **OpenBIOS gaps** may exist outside what the suite covers. The real-BIOS option is the fallback, and playtest 3 uses OpenBIOS on purpose.
-- **Archive growth:** about 1 GB per 40 hours. It's visible in Settings, and never deleted by us.
+- **Archive growth:** about 100–200 MB per playthrough, always shown, and deleted only by the player.
 - **Antivirus false positives** on PyInstaller executables; signing comes later.
-- **Scope:** this is bigger than v1. If needed, the savestate browser and the online-readiness spec can slip to early M7, with Tucker's OK.

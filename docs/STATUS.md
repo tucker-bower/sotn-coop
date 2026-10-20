@@ -22,7 +22,8 @@ _Last updated: 2026-10-19_
 
 ## Next
 - Tucker's playtest 2 (`README-playtest.md`), plus more autonomous playtest tours meanwhile.
-- **M6:** a playable build, played from the start through the first few bosses.
+- **M6 (approved 2026-10-19, in progress):** the Windows installer, disc patcher, OpenBIOS, event savestates with visible storage, F9 snapshots, the session engine and the link protocol spec.
+- **M7:** move the mod to its own repository (D72), then online PC co-op.
 - **Known gaps:**
   - moving platforms don't carry the guest (D52);
   - bosses other than the Doppleganger are untested (M5 risks);

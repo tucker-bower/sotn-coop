@@ -304,16 +304,22 @@ The layout spawner's cursors are in the copied stage BSS, so at hand-over they p
 **D67: Agents document, commit and push before they can run out of tokens** (owner, 2026-10-19)
 This is a rule in `AGENTS.md`: at every natural checkpoint, and always before a likely cut-off, update the docs, then commit and push, marking unfinished work as such.
 
-**D68: Ship OpenBIOS by default** (agent proposal, pending owner approval in M6)
+**D68: Ship OpenBIOS by default** (owner approved, 2026-10-19)
 - **Tested:** SOTN co-op runs on OpenBIOS (PCSX-Redux's open-source BIOS, MIT) in our SwanStation core. That covers boot, new game, the save rooms, memory cards, the Load menu, and all 55 harness scenarios (`COOP_BIOS=…`).
 - **What it means:** no BIOS for players to find.
 - **The fallback:** a real-BIOS option in Settings, with a plain prompt naming the files that work.
 
 **D69: The launcher never deletes or overwrites a savestate** (owner, 2026-10-19)
-- **The rule:** playthroughs keep every savestate the launcher makes, compressed and uniquely named, both rolling and on events. Players may delete them; the launcher never does.
+- **The rule:** playthroughs keep every savestate the launcher makes, compressed and uniquely named. The launcher makes them only on events (a new stage, a boss, a joint save, quitting), never on a timer: about 100–200 MB per playthrough. The space used is shown on the home screen and in Settings, with the folder and a confirmed "delete this playthrough's savestates". Players may delete them; the launcher never does on its own.
 - **Debugging:** predefined debug starts, made on the player's PC because they hold game RAM, and F9 as a full environment snapshot.
 
 **D70: Plan for online and Android now** (owner, 2026-10-19)
 - **Structure:** a headless session engine under the launcher UI, and the link protocol written down (`docs/link-protocol.md`).
 - **The patcher:** separate from the launcher, so the disc can be patched on a PC for an Android player.
 - **The model:** ease of use after Slippi and BBLauncher.
+
+**D71: The disc patcher ships as a patch file (resolves D9's open question)** (owner, 2026-10-19)
+We publish an xdelta of `DRA.BIN`, `COOP.BIN` and a manifest; never game data. The patcher checks the user's disc and writes the co-op disc next to it.
+
+**D72: Move the mod to its own repository** (owner, 2026-10-19)
+The co-op mod moves out of the sotn-decomp fork into its own repository, to make it easier to share. Planned for M7. The mod still builds against sotn-decomp, as a dependency rather than a fork.
