@@ -19,8 +19,8 @@ from pygame._sdl2.video import Renderer, Texture, Window
 CANVAS = (1032, 532)
 BAR = 26               # the status bar under the games (window pixels)
 GAP = 8
-LAYOUTS = ("side", "stacked", "p1", "p2", "windows")
-LAYOUT_NAMES = {"side": "Side by side", "stacked": "Stacked (vertical monitor)", "p1": "Player 1 only",
+LAYOUTS = ("auto", "side", "stacked", "p1", "p2", "windows")
+LAYOUT_NAMES = {"auto": "Automatic", "side": "Side by side", "stacked": "Stacked (vertical monitor)", "p1": "Player 1 only",
                 "p2": "Player 2 only", "windows": "Player 2 in its own window"}
 SCALINGS = ("sharp", "smooth")
 SCALING_NAMES = {"sharp": "Sharp", "smooth": "Smooth"}
@@ -42,6 +42,10 @@ def cells(layout, size, players):
     """Where each game goes in the main window: [rect or None per game]."""
     w, h = size
     h -= BAR
+    if layout == "auto":  # whichever gives each game the bigger picture
+        side = min((w - GAP) / 2 * 3 / 4, h)
+        stacked = min(w * 3 / 4, (h - GAP) / 2)
+        layout = "side" if side >= stacked else "stacked"
     if players == 1:
         return [fit((0, 0, w, h))]
     if layout == "stacked":
@@ -139,7 +143,7 @@ class Display:
 
     @property
     def layout(self):
-        return self.settings.get("layout", "side")
+        return self.settings.get("layout", "auto")
 
     @property
     def scaling(self):
@@ -182,7 +186,7 @@ class Display:
             for f in self.on_resize:
                 f()
         elif ev.type == pygame.WINDOWCLOSE and self.second and getattr(ev, "window", None) is self.second[0]:
-            self.settings["layout"] = "side"  # closing player 2's window brings it back
+            self.settings["layout"] = "auto"  # closing player 2's window brings it back
             self.close_second()
             return True
         return False

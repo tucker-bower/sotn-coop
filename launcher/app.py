@@ -149,10 +149,26 @@ class UI:
             h = self.big.render(heading, True, INK)
             s.blit(h, ((SIZE[0] - h.get_width()) // 2, 92))
         if subtitle:
-            for k, line in enumerate(subtitle.split("\n")):
+            for k, line in enumerate(self.wrap(subtitle, self.small, SIZE[0] - 120)):
                 t = self.small.render(line, True, DIM)
                 s.blit(t, ((SIZE[0] - t.get_width()) // 2, 128 + k * 22))
         self._rects = []
+
+    @staticmethod
+    def wrap(text, font, width):
+        """text's lines, each broken at spaces to fit width."""
+        out = []
+        for para in text.split("\n"):
+            line = ""
+            for word in para.split(" "):
+                trial = f"{line} {word}" if line else word
+                if line and font.size(trial)[0] > width:
+                    out.append(line)
+                    line = word
+                else:
+                    line = trial
+            out.append(line)
+        return out
 
     def items(self, items, sel, top=200, hero=False):
         """hero: the first item is the big button (Couch co-op / Continue)."""
@@ -212,7 +228,8 @@ class UI:
                 elif isinstance(a, tuple) and a[0] == "click":
                     return a[1]
             self.frame(heading, subtitle)
-            self.items(items, sel, top=(130 if hero else 200) + 22 * subtitle.count("\n"), hero=hero)
+            lines = len(self.wrap(subtitle, self.small, SIZE[0] - 120)) if subtitle else 0
+            self.items(items, sel, top=(130 if hero else 200) + 22 * max(0, lines - 1), hero=hero)
             if footer:
                 self.footer(footer)
             self.flip()
@@ -491,8 +508,7 @@ class Launcher:
                     continue
                 if dev != "kb" and dev not in names:
                     self.pads.refresh()
-                    names.update({c.as_joystick().get_instance_id(): c.name for c in self.pads.controllers})
-                    names.update({k: v["name"] for k, v in self.pads.virtual.items()})
+                    names[dev] = self.pads.name(dev)
                 mine = [i for i, d in enumerate(joined) if d == dev]
                 # A new device joins the first free slot. So does the keyboard again, once its
                 # first player is ready (two people, one keyboard: KEYS has two layouts).
@@ -935,7 +951,7 @@ class Launcher:
         while True:
             st = self.settings
             bios = "OpenBIOS (included)" if self.bios() == BUNDLED_BIOS else f"Your BIOS: {self.bios().name}"
-            items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'side')]}", "Couch: how the two games share the window"),
+            items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Pixels: {'Sharp' if st.get('scaling', 'sharp') == 'sharp' else 'Smooth'}",
                       "Sharp keeps every pixel crisp; Smooth softens them. Always the true 4:3 picture."),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
@@ -949,7 +965,7 @@ class Launcher:
             sel = k
             if k == 0:
                 order = list(LAYOUT_NAMES)
-                st["layout"] = order[(order.index(st.get("layout", "side")) + 1) % len(order)]
+                st["layout"] = order[(order.index(st.get("layout", "auto")) + 1) % len(order)]
             elif k == 1:
                 st["scaling"] = "smooth" if st.get("scaling", "sharp") == "sharp" else "sharp"
             elif k == 2:

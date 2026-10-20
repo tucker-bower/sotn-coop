@@ -50,7 +50,7 @@ fi
 
 A="$STAGE/app"
 cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$A/harness/"
-cp "$MOD"/launcher/{app,gameview,paths,archive,report,debugstarts,play}.py "$A/launcher/"
+cp "$MOD"/launcher/*.py "$A/launcher/"
 cp "$MOD"/link/*.py "$A/link/"
 cp "$MOD"/patcher/{bps,patcher}.py "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"
@@ -79,7 +79,7 @@ Symphony of the Night are trademarks of Konami; this project is not affiliated w
 
 What's included, and under which licence:
 - SOTN Co-op (the launcher, the co-op module, the patch): AGPL-3.0, like sotn-decomp, which it
-  is built on. Source: https://github.com/tucker-bower/sotn-decomp-coop
+  is built on. Source: https://github.com/tucker-bower/sotn-coop
 - SwanStation (bin/swanstation_libretro.dll), the PlayStation emulator core: GPL-3.0.
   Source: https://github.com/libretro/swanstation
 - OpenBIOS (bios/openbios.bin), an open-source PlayStation BIOS from PCSX-Redux: MIT, see

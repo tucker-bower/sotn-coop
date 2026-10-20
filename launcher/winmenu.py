@@ -22,7 +22,7 @@ MENUS = [
                ("Open the &data folder", "data_folder"), None, ("E&xit", "quit")]),
     ("&Game", [("&Pause\tEsc", "pause"), ("&Report a problem\tF9", "report"), None,
                ("Leave to the &menu", "leave")]),
-    ("&View", [("Side by side", "layout:side"), ("Stacked (vertical monitor)", "layout:stacked"),
+    ("&View", [("Automatic", "layout:auto"), ("Side by side", "layout:side"), ("Stacked (vertical monitor)", "layout:stacked"),
                ("Player 1 only", "layout:p1"), ("Player 2 only", "layout:p2"),
                ("Player 2 in its own window", "layout:windows"), None,
                ("Sharp pixels", "scaling:sharp"), ("Smooth", "scaling:smooth"), None,
@@ -110,7 +110,7 @@ class WinMenu:
         """Ticks the current layout, scaling and network simulation."""
         if not self.ok:
             return
-        want = {f"layout:{settings.get('layout', 'side')}", f"scaling:{settings.get('scaling', 'sharp')}",
+        want = {f"layout:{settings.get('layout', 'auto')}", f"scaling:{settings.get('scaling', 'sharp')}",
                 f"netsim:{settings.get('netsim') or 'off'}"}
         for action, cid in self.ids.items():
             if ":" in action:

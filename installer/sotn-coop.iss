@@ -10,7 +10,7 @@
 AppName=SOTN Co-op
 AppVersion={#Version}
 AppPublisher=SOTN Co-op contributors
-AppPublisherURL=https://github.com/tucker-bower/sotn-decomp-coop
+AppPublisherURL=https://github.com/tucker-bower/sotn-coop
 DefaultDirName={localappdata}\Programs\SOTN Co-op
 DefaultGroupName=SOTN Co-op
 PrivilegesRequired=lowest

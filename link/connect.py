@@ -181,7 +181,11 @@ class Connector:
             if done or now - self._t0 > STUN_WAIT_S * 2:
                 public = sorted(set(got.values()))
                 self.nat = "none" if not public else ("symmetric" if len({p for _, p in public}) > 1 else "cone")
-                lan = (self.lan_ip or self.t.sock.getsockname()[0], self.t.port)
+                ip = self.lan_ip or self.t.sock.getsockname()[0]
+                if ip in ("0.0.0.0", ""):  # listening everywhere: the address the LAN knows us by
+                    from .rendezvous import local_ip
+                    ip = local_ip()
+                lan = (ip, self.t.port)
                 self.mine = [list(lan)] + [list(p) for p in public if p != lan]
                 self.state = "waiting"
         # 2. rendezvous

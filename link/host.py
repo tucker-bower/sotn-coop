@@ -63,8 +63,7 @@ class Host:
         from .connect import Connector, default_relay, room_token
         self.hello["room"] = room_token(room)
         self.transport.learn_peer = True
-        self.connector = Connector(self.transport, room, role, relay or default_relay(),
-                                   lambda: json.dumps(self.hello).encode(), **kw)
+        self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes, **kw)
         return True
 
     def connect_status(self):
@@ -122,6 +121,11 @@ class Host:
             return
         if self.hello.get("room") and theirs.get("room") != self.hello["room"]:
             return  # someone without our room code: not our partner
+        if theirs.get("sid") == self.hello["sid"]:
+            return  # our own HELO, come back to us (a candidate that was this PC)
+        clock = theirs.pop("clock", None)
+        if isinstance(clock, list) and len(clock) == 3:
+            self.transport.clock_heard(*clock)
         if addr is not None and self.transport.learn_peer:
             self.transport.accept_peer(addr)
         if self.partner_hello and theirs.get("sid") != self.partner_hello.get("sid"):
@@ -135,10 +139,14 @@ class Host:
         else:
             self.mismatch = None
 
+    def _hello_bytes(self):
+        """HELO, with the clock stamps that measure the round trip before the games run."""
+        return json.dumps(dict(self.hello, clock=list(self.transport.clock_stamp()))).encode()
+
     def handshake_tick(self):
         """Exchanges HELO before emulation starts (online connection lobby)."""
         if self._frames % 15 == 0:
-            self.transport.send(TAG_HELLO, json.dumps(self.hello).encode())
+            self.transport.send(TAG_HELLO, self._hello_bytes())
         self._frames += 1
         if self.connector:
             self.connector.tick()
@@ -151,11 +159,14 @@ class Host:
         self.transport.frame += 1
         if self.connector and self.connector.state not in ("connected", "failed"):
             self.connector.tick()
-        if not self.mailbox.ready():  # module not loaded yet (boot), or a different module
-            return
         if self._frames % HELLO_EVERY == 0:
-            self.transport.send(TAG_HELLO, json.dumps(self.hello).encode())
+            self.transport.send(TAG_HELLO, self._hello_bytes())
         self._frames += 1
+        if not self.mailbox.ready():  # the game is booting: only the handshake (and the ping)
+            for tag, _, _, payload, addr in self.transport.receive():
+                if tag == TAG_HELLO:
+                    self._check_hello(payload, addr)
+            return
         if self.mismatch:  # refused: still say hello (the partner may update), relay nothing
             for tag, _, _, payload, addr in self.transport.receive():
                 if tag == TAG_HELLO:

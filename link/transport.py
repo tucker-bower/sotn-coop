@@ -251,10 +251,7 @@ class UdpTransport:
         if tag == TAG_SNAP:
             self._send_snapshot(payload)
         elif tag == TAG_PRESENCE:
-            hold = 0
-            if self._heard_at is not None:
-                hold = min(0xFFFF, int((self.clock() - self._heard_at) * 1000))
-            tail = _PRES_TAIL.pack(self._snap_done, self._ms(), self._heard_ms, hold)
+            tail = _PRES_TAIL.pack(self._snap_done, *self.clock_stamp())
             self._send_datagram(tag, payload[:PRESENCE_SIZE] + tail)
         else:
             self._send_datagram(tag, payload)
@@ -300,16 +297,27 @@ class UdpTransport:
                 out.append((tag, seq, frame, body, addr))
         return out
 
-    def _presence_tail(self, frame, tail):
-        acked, their_ms, echo_ms, hold_ms = _PRES_TAIL.unpack(tail)
-        if acked in self._sent_snaps and acked > self._snap_acked:
-            self._snap_acked = acked
+    def clock_stamp(self):
+        """(our clock, the partner's newest clock we heard, how long ago): in ms, for the
+        round-trip measurement (presence tail, and HELO before the games run)."""
+        hold = 0
+        if self._heard_at is not None:
+            hold = min(0xFFFF, int((self.clock() - self._heard_at) * 1000))
+        return self._ms(), self._heard_ms, hold
+
+    def clock_heard(self, their_ms, echo_ms, hold_ms):
         if their_ms >= self._heard_ms or self._heard_ms - their_ms > 0x80000000:  # newest (wraps)
             self._heard_ms, self._heard_at = their_ms, self.clock()
         if echo_ms:
             rtt = ((self._ms() - echo_ms) & 0xFFFFFFFF) - hold_ms
             if 0 <= rtt < 5000:
                 self.rtt.sample(rtt / 1000)
+
+    def _presence_tail(self, frame, tail):
+        acked, their_ms, echo_ms, hold_ms = _PRES_TAIL.unpack(tail)
+        if acked in self._sent_snaps and acked > self._snap_acked:
+            self._snap_acked = acked
+        self.clock_heard(their_ms, echo_ms, hold_ms)
         f = self._pres_frames
         if not f or frame > f[-1]:
             f.append(frame)

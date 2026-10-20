@@ -33,6 +33,36 @@ class Failed(Exception):
     pass
 
 
+def window_image(hwnd):
+    """One window as Windows draws it, frame and menu bar included (PrintWindow): never brought
+    to the front, and nothing else on the screen is captured."""
+    import ctypes
+    from ctypes import wintypes
+    from PIL import Image
+    u, g = ctypes.windll.user32, ctypes.windll.gdi32
+    r = wintypes.RECT()
+    u.GetWindowRect(hwnd, ctypes.byref(r))
+    w, h = r.right - r.left, r.bottom - r.top
+    hdc = u.GetWindowDC(hwnd)
+    mem = g.CreateCompatibleDC(hdc)
+    bmp = g.CreateCompatibleBitmap(hdc, w, h)
+    g.SelectObject(mem, bmp)
+    u.PrintWindow(hwnd, mem, 2)  # PW_RENDERFULLCONTENT
+
+    class BMI(ctypes.Structure):
+        _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
+                    ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                    ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                    ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD)]
+    bmi = BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+    buf = ctypes.create_string_buffer(w * h * 4)
+    g.GetDIBits(mem, bmp, 0, h, buf, ctypes.byref(bmi), 0)
+    g.DeleteObject(bmp)
+    g.DeleteDC(mem)
+    u.ReleaseDC(hwnd, hdc)
+    return Image.frombuffer("RGB", (w, h), buf.raw, "raw", "BGRX", 0, 1)
+
+
 class Driver:
     """Hooks pygame.event.get: each call, the next step runs once its condition holds."""
 
@@ -71,6 +101,7 @@ class Driver:
         self.intervals = []
         self._last_present = None
         self.fps = {}  # screenshot -> frames per second just before it
+        self.perf = {}  # perf script: size -> steady frames per second
 
     def _hook_ui(self, ui):
         orig = ui.frame
@@ -206,6 +237,14 @@ class Driver:
             args[0](self)
         elif kind == "shot":
             self._maybe_shot(args[0])
+        elif kind == "winshot":  # Windows: the whole window, title and menu bar too
+            if sys.platform == "win32":
+                mb = self.launcher.menubar
+                img = window_image(mb.hwnd) if mb.ok else None
+                if img:
+                    img.save(self.out / f"win-{args[0]}.png")
+                    self.shots.append(f"win-{args[0]}.png")
+                self.check(mb.ok, "the native menu bar is installed")
         elif kind == "expect":
             self.check(args[0](self), args[1])
         elif kind == "count_inputs":
@@ -217,7 +256,7 @@ class Driver:
     def report(self, error=None):
         rep = {"passed": error is None and not self.steps and all(c["ok"] for c in self.checks),
                "error": error, "left": [repr(s)[:100] for s in self.steps], "checks": self.checks,
-               "inputs": self.inputs, "shots": self.shots, "fps": self.fps, "log": self.log,
+               "inputs": self.inputs, "shots": self.shots, "fps": self.fps, "perf": self.perf, "log": self.log,
                "seconds": round(time.time() - self.t0, 1)}
         (self.out / "report.json").write_text(json.dumps(rep, indent=1, default=str))
         return rep
@@ -267,6 +306,8 @@ def run(script, out, retail_cue=None):
     finally:
         pygame.event.get = drv._real_get
     rep = drv.report(error)
+    if rep["perf"]:
+        print("  frames per second:", rep["perf"])
     print(f"{'PASSED' if rep['passed'] else 'FAILED'} {script}: {len(rep['shots'])} screens, "
           f"{rep['inputs']} inputs after the disc, {rep['seconds']} s  ->  {out}")
     if rep["left"]:
@@ -319,7 +360,7 @@ def _window(pg):
     i = next(k for k, s in enumerate(steps) if s[0] == "unplug")
     steps = steps[:i]  # into the game, both playing
 
-    for layout in ("side", "stacked", "p1", "p2", "windows", "side"):
+    for layout in ("side", "stacked", "p1", "p2", "windows", "auto"):
         for scaling in ("sharp", "smooth"):
             steps += [("menu", f"layout:{layout}"), ("menu", f"scaling:{scaling}"), ("wait", 20),
                       ("shot", f"{layout}-{scaling}")]
@@ -330,18 +371,18 @@ def _window(pg):
               ("call", lambda d: d.launcher.display.window.maximize()), ("wait", 30), ("shot", "maximized"),
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
               ("screen", "Home"),
-              ("expect", lambda d: d.launcher.settings.get("layout") == "side", "the layout is remembered"),
+              ("expect", lambda d: d.launcher.settings.get("layout") == "auto", "the layout is remembered"),
               ("key", pg.K_UP), ("key", pg.K_RETURN)]
     return steps
 
 
 def _menus(pg):
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
-             ("screen", "Home")]
+             ("screen", "Home"), ("wait", 30), ("winshot", "home")]
     for action, screen in (("help_play", "How to play"), ("help_online", "Online troubleshooting"),
                            ("keys", "Keyboard keys"), ("about", "About")):
         steps += [("menu", action), ("screen", screen), ("shot", action), ("key", pg.K_RETURN), ("screen", "Home")]
-    for action in ("layout:stacked", "scaling:smooth", "netsim:wifi", "netsim:off", "layout:side", "scaling:sharp"):
+    for action in ("layout:stacked", "scaling:smooth", "netsim:wifi", "netsim:off", "layout:auto", "scaling:sharp"):
         steps += [("menu", action), ("wait", 5)]
     steps += [("expect", lambda d: d.launcher.settings.get("scaling") == "sharp" and not d.launcher.settings.get("netsim"),
                "View and Developer menu items change the settings")]
@@ -391,21 +432,53 @@ def _online_join(pg, code_file):
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
-SCRIPTS = {"couch": _couch, "window": _window, "menus": _menus,
+def _perf(pg):
+    """Steady frame rate at the sizes people play at: 5 s each, after 1 s to settle."""
+    steps = _couch(pg, quit_at_end=False)
+    steps = steps[:next(k for k, s in enumerate(steps) if s[0] == "unplug")]
+
+    def size(w, h):
+        return ("call", lambda d: setattr(d.launcher.display.window, "size", (w, h)))
+
+    def measure(name):
+        return [("wait", 60), ("call", lambda d: d.intervals.clear()), ("wait", 300),
+                ("call", lambda d, name=name: d.perf.__setitem__(name, round(len(d.intervals) / max(1e-6, sum(d.intervals)), 1)))]
+    for layout in ("auto", "windows"):
+        steps += [("menu", f"layout:{layout}")]
+        for name, how in (("1032x592", size(1032, 592)), ("1920x1080", size(1920, 1080)),
+                          ("maximized", ("call", lambda d: d.launcher.display.window.maximize())),
+                          ("fullscreen", ("menu", "fullscreen"))):
+            steps += [how] + measure(f"{layout} {name}")
+            if name == "fullscreen":
+                steps += [("menu", "fullscreen"), ("call", lambda d: d.launcher.display.window.restore())]
+    steps += [("menu", "layout:auto"),
+              ("expect", lambda d: min(d.perf.values()) >= 55, "60 fps (55+) at every size and layout"),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+    return steps
+
+
+SCRIPTS = {"couch": _couch, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
 
-def online(out, retail_cue, python=sys.executable):
-    """Two launchers, two data folders, one relay folder: one hosts, the other joins."""
+def online(out, retail_cue, python=sys.executable, real_relay=False):
+    """Two launchers, two data folders, one relay folder (or the real ntfy.sh): one hosts, the
+    other joins."""
     tmp = Path(tempfile.mkdtemp(prefix="coop-ux-online-"))
-    env = dict(os.environ, COOP_RELAY_DIR=str(tmp / "relay"), COOP_UX_CODE=str(tmp / "code.txt"))
+    env = dict(os.environ, COOP_UX_CODE=str(tmp / "code.txt"))
+    if not real_relay:
+        env["COOP_RELAY_DIR"] = str(tmp / "relay")
     procs = []
     for role in ("host", "join"):
         e = dict(env, COOP_DATA=str(tmp / role))
         procs.append(subprocess.Popen([python, __file__, f"online_{role}", "--out", str(out / role),
                                        "--disc", str(retail_cue)], env=e))
-        time.sleep(3)
+        for _ in range(600):  # the joiner starts once the host waits in its lobby (one disc folder)
+            if role == "join" or Path(env["COOP_UX_CODE"]).exists() or procs[0].poll() is not None:
+                break
+            time.sleep(0.2)
     codes = [p.wait(timeout=600) for p in procs]
     ok = codes == [0, 0]
     print(f"{'PASSED' if ok else 'FAILED'} online: host {codes[0]}, join {codes[1]}")
@@ -418,11 +491,12 @@ def main():
     ap.add_argument("script", choices=sorted(SCRIPTS) + ["online"])
     ap.add_argument("--out")
     ap.add_argument("--disc", help="the retail .cue (default: disks/sotn.us.cue)")
+    ap.add_argument("--real-relay", action="store_true", help="online: meet on ntfy.sh, as players do")
     args = ap.parse_args()
     disc = Path(args.disc) if args.disc else ROOT / "disks" / "sotn.us.cue"
     out = Path(args.out) if args.out else DEFAULT_OUT / args.script
     if args.script == "online":
-        sys.exit(0 if online(out, disc) else 1)
+        sys.exit(0 if online(out, disc, real_relay=args.real_relay) else 1)
     rep = run(args.script, out, disc)
     sys.exit(0 if rep["passed"] else 1)
 

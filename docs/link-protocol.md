@@ -16,8 +16,8 @@ This is everything a **host** needs, so another one can be written without readi
 
 ## The host's job, once per frame
 0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
-1. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, do nothing (the game is still booting).
-2. **Hello:** every 60 frames, send `HELO`.
+1. **Hello:** every 60 frames, send `HELO`.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
 4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below).
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
@@ -42,7 +42,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `ACK ` | `delivered` (u32): the highest event number received in order | Reliable (below). |
 | `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control/save messages (`save_req`, `save_done`, `load_save`, `game_over`). |
 | `CACK` | `delivered` (u32): the highest `CTRL` chunk number received in order | Reliable ack for `CTRL`. |
-| `HELO` | UTF-8 JSON: `{"link": 9, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>}` | Once a second. |
+| `HELO` | UTF-8 JSON: `{"link": 9, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs]}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …

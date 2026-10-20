@@ -106,7 +106,23 @@ class Pads:
         self.refresh()
 
     def refresh(self):
-        self.controllers = [self.sdl.Controller(i) for i in range(self.sdl.get_count()) if self.sdl.is_controller(i)]
+        """The plugged-in controllers, as {instance id: Controller}. (Controller.as_joystick()
+        fails on some Windows setups, so ids come from the joystick of the same device index.)"""
+        self.by_id = {}
+        pygame.joystick.init()
+        for i in range(self.sdl.get_count()):
+            try:
+                if self.sdl.is_controller(i):
+                    self.by_id[pygame.joystick.Joystick(i).get_instance_id()] = self.sdl.Controller(i)
+            except pygame.error:
+                continue
+        self.controllers = list(self.by_id.values())
+
+    def name(self, iid):
+        if iid in self.virtual:
+            return self.virtual[iid]["name"]
+        c = self.by_id.get(iid)
+        return c.name if c else "Controller"
 
     def names(self):
         return [c.name for c in self.controllers] + [v["name"] for v in self.virtual.values()]
@@ -116,10 +132,7 @@ class Pads:
         if want == "kb":
             return None
         if want is not None:
-            for c in self.controllers:
-                if c.as_joystick().get_instance_id() == want:
-                    return c
-            return None
+            return self.by_id.get(want)
         return self.controllers[player] if player < len(self.controllers) else None
 
     def missing(self, player):
