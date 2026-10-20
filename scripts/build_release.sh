@@ -51,6 +51,7 @@ fi
 A="$STAGE/app"
 cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$A/harness/"
 cp "$MOD"/launcher/*.py "$A/launcher/"
+cp -r "$MOD/launcher/assets" "$A/launcher/"
 cp "$MOD"/link/*.py "$A/link/"
 cp "$MOD"/patcher/{bps,patcher}.py "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"

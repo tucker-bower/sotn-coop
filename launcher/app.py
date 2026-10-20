@@ -24,9 +24,24 @@ APP = Path(__file__).resolve().parent.parent
 for sub in ("launcher", "harness", "patcher", ""):
     sys.path.insert(0, str(APP / sub) if sub else str(APP))
 
+import paths  # noqa: E402
+
+if sys.platform == "win32":
+    # pygame's DLLs (libpng: the icon) are loaded by name, later. Windows looks through PATH,
+    # and a process started by the installer refuses to walk past reparse points there
+    # (RedirectionGuard: "untrusted mount point"). pygame's folder first finds them at once.
+    import importlib.util
+    spec = importlib.util.find_spec("pygame")
+    if spec and spec.origin:
+        os.environ["PATH"] = os.path.dirname(spec.origin) + os.pathsep + os.environ.get("PATH", "")
+
+if sys.stderr is None:  # pythonw (the Start menu shortcut): no console. Errors go to a file.
+    sys.stderr = open(paths.data_dir() / "launcher-errors.log", "a", buffering=1, encoding="utf-8")
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+
 import pygame  # noqa: E402
 
-import paths  # noqa: E402
 from display import CANVAS, LAYOUT_NAMES, Display  # noqa: E402
 from paths import human, load_settings, save_settings  # noqa: E402
 from winmenu import MENU_EVENT, WinMenu  # noqa: E402
@@ -1005,8 +1020,9 @@ def main():
     logging.basicConfig(filename=paths.data_dir() / "launcher.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     log.info("start")
-    app = Launcher()
+    app = None
     try:
+        app = Launcher()
         app.wizard()
         app.home()
     except SystemExit:
@@ -1015,8 +1031,9 @@ def main():
         log.exception("crash")
         raise
     finally:
-        app.display.remember()
-        save_settings(app.settings)
+        if app:
+            app.display.remember()
+            save_settings(app.settings)
         pygame.quit()
 
 

@@ -44,5 +44,8 @@ jobs:
       - name: Patcher tests
         run: .env/src/sotn-decomp/.venv/bin/python patcher/test_patcher.py
 
+      - name: Router (NAT) tests
+        run: python3 link/test_connect.py
+
       - name: Multi-instance harness suite
         run: .env/src/sotn-decomp/.venv/bin/python harness/run.py

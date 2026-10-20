@@ -21,6 +21,8 @@ SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
 UninstallDisplayName=SOTN Co-op
+UninstallDisplayIcon={app}\app\launcher\assets\icon.ico
+SetupIconFile={#Stage}\app\launcher\assets\icon.ico
 InfoBeforeFile={#Stage}\app\LICENSES\README.txt
 ; As few pages as possible (design/M7b-polish.md): what this is, a desktop shortcut, done.
 DisableDirPage=yes
@@ -30,11 +32,16 @@ DisableReadyPage=yes
 Source: "{#Stage}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\SOTN Co-op"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"
-Name: "{userdesktop}\SOTN Co-op"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\SOTN Co-op"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; IconFilename: "{app}\app\launcher\assets\icon.ico"
+Name: "{userdesktop}\SOTN Co-op"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; IconFilename: "{app}\app\launcher\assets\icon.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: desktopicon; Description: "A desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Run]
 Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; Description: "Start SOTN Co-op"; Flags: postinstall nowait skipifsilent
+
+[UninstallDelete]
+; What running it made inside the program folder (Python's caches). Your saves are in Documents.
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\python"

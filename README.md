@@ -20,7 +20,7 @@ Your browser and Windows will probably warn you. The installer isn't code-signed
 - **When you run it:** "Windows protected your PC". Click **More info**, then **Run anyway**.
 
 ### 2. Install
-Click **Next**, **Install**, then **Finish**. It doesn't need administrator rights, and it starts SOTN Co-op at the end. Later, start it from the Start menu (or the desktop shortcut, if you ticked it).
+Click **Next**, **Next**, then **Finish**. It doesn't need administrator rights, and it starts SOTN Co-op at the end. Later, start it from the Start menu (or the desktop shortcut, if you ticked it).
 
 ### 3. First start: your disc
 Click **Choose my disc image** and pick your game's `.cue` file. In a few seconds SOTN Co-op makes its co-op version of the disc next to yours (your files are never changed). It only asks once.

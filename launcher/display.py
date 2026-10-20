@@ -120,6 +120,10 @@ class Display:
         w, h = settings.get("window_size") or (CANVAS[0], CANVAS[1] + 60)
         pygame.display.init()
         self.window = Window(title, size=(max(640, w), max(360, h)), resizable=True)
+        icon = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
+        self.icon = pygame.image.load(icon) if os.path.exists(icon) else None
+        if self.icon:
+            self.window.set_icon(self.icon)
         if settings.get("window_pos"):
             try:
                 self.window.position = tuple(settings["window_pos"])
@@ -235,6 +239,8 @@ class Display:
             self.games.append(GameTexture(self.renderer))
         if n == 2 and self.layout == "windows" and not self.second:
             win = Window("SOTN Co-op: player 2", size=(800, 600), resizable=True)
+            if self.icon:
+                win.set_icon(self.icon)
             ren = Renderer(win, accelerated=-1, vsync=False)
             self.second = (win, ren, GameTexture(ren))
         elif self.second and (n != 2 or self.layout != "windows"):
