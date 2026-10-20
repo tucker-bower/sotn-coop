@@ -85,11 +85,26 @@ class UI:
                 t = self.small.render(line, True, DIM)
                 s.blit(t, ((SIZE[0] - t.get_width()) // 2, 128 + k * 22))
 
-    def items(self, items, sel, top=200):
+    def items(self, items, sel, top=200, hero=False):
+        """hero: the first item is the big button (home: Continue / New game)."""
+        y = top
         for k, (label, hint) in enumerate(items):
             color = GOLD if k == sel else INK
+            if hero and k == 0:
+                t = self.title.render(label, True, color)
+                box = pygame.Rect(0, 0, max(t.get_width() + 60, 420), t.get_height() + 24)
+                box.center = (SIZE[0] // 2, y + box.height // 2)
+                pygame.draw.rect(self.screen, (60, 10, 18) if k == sel else (30, 14, 20), box, border_radius=8)
+                pygame.draw.rect(self.screen, GOLD if k == sel else DIM, box, 2, border_radius=8)
+                self.screen.blit(t, t.get_rect(center=box.center))
+                y += box.height + 22
+                if k == sel and hint:
+                    h = self.small.render(hint, True, DIM)
+                    self.screen.blit(h, ((SIZE[0] - h.get_width()) // 2, SIZE[1] - 64))
+                continue
             t = self.big.render(("›  " if k == sel else "   ") + label, True, color)
-            self.screen.blit(t, (SIZE[0] // 2 - 260, top + k * 40))
+            self.screen.blit(t, (SIZE[0] // 2 - 140, y))
+            y += 38
             if k == sel and hint:
                 h = self.small.render(hint, True, DIM)
                 self.screen.blit(h, ((SIZE[0] - h.get_width()) // 2, SIZE[1] - 64))
@@ -103,7 +118,7 @@ class UI:
         pygame.draw.rect(self.screen, DIM, (150, y, w, 18), 1)
         pygame.draw.rect(self.screen, BLOOD, (152, y + 2, int((w - 4) * done / max(total, 1)), 14))
 
-    def menu(self, heading, items, subtitle="", footer=""):
+    def menu(self, heading, items, subtitle="", footer="", hero=False):
         """Returns the chosen index, or None (back)."""
         sel = 0
         while True:
@@ -119,7 +134,7 @@ class UI:
                 elif a == "back":
                     return None
             self.frame(heading, subtitle)
-            self.items(items, sel, top=200 if not subtitle else 200 + 22 * subtitle.count("\n"))
+            self.items(items, sel, top=(130 if hero else 200) + 22 * subtitle.count("\n"), hero=hero)
             if footer:
                 self.footer(footer)
             pygame.display.flip()
@@ -158,8 +173,42 @@ class UI:
         return state["result"]
 
 
+def _pick_file_windows(title, types):
+    """Windows' own Open dialog (comdlg32), through ctypes: the bundled Python has no tkinter."""
+    import ctypes
+    from ctypes import wintypes
+
+    class OFN(ctypes.Structure):
+        _fields_ = [("lStructSize", wintypes.DWORD), ("hwndOwner", wintypes.HWND), ("hInstance", wintypes.HINSTANCE),
+                    ("lpstrFilter", wintypes.LPCWSTR), ("lpstrCustomFilter", wintypes.LPWSTR),
+                    ("nMaxCustFilter", wintypes.DWORD), ("nFilterIndex", wintypes.DWORD), ("lpstrFile", wintypes.LPWSTR),
+                    ("nMaxFile", wintypes.DWORD), ("lpstrFileTitle", wintypes.LPWSTR), ("nMaxFileTitle", wintypes.DWORD),
+                    ("lpstrInitialDir", wintypes.LPCWSTR), ("lpstrTitle", wintypes.LPCWSTR), ("Flags", wintypes.DWORD),
+                    ("nFileOffset", wintypes.WORD), ("nFileExtension", wintypes.WORD), ("lpstrDefExt", wintypes.LPCWSTR),
+                    ("lCustData", wintypes.LPARAM), ("lpfnHook", ctypes.c_void_p), ("lpTemplateName", wintypes.LPCWSTR),
+                    ("pvReserved", ctypes.c_void_p), ("dwReserved", wintypes.DWORD), ("FlagsEx", wintypes.DWORD)]
+
+    filt = "".join(f"{name} ({pattern})\0{pattern.replace(' ', ';')}\0" for name, pattern in types) + "\0"
+    buf = ctypes.create_unicode_buffer(1024)
+    ofn = OFN()
+    ofn.lStructSize = ctypes.sizeof(OFN)
+    ofn.lpstrFilter = filt
+    ofn.lpstrFile = ctypes.cast(buf, wintypes.LPWSTR)
+    ofn.nMaxFile = 1024
+    ofn.lpstrTitle = title
+    ofn.Flags = 0x00001000 | 0x00000800 | 0x00080000  # file must exist, path must exist, explorer
+    if ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn)):
+        return Path(buf.value)
+    return None
+
+
 def pick_file(title, types):
-    """The system's file picker (tkinter: part of Python on Windows)."""
+    """The system's file picker: Windows' own dialog, or tkinter elsewhere."""
+    if sys.platform == "win32":
+        try:
+            return _pick_file_windows(title, types)
+        except Exception:  # noqa: BLE001
+            log.exception("file picker")
     try:
         import tkinter
         from tkinter import filedialog
@@ -310,7 +359,7 @@ class Launcher:
                                      ("Quit", "", "quit")):
                 items.append((label, hint))
                 actions.append((act, None))
-            choice = self.ui.menu("", items, footer=self.storage_line())
+            choice = self.ui.menu("", items, footer=self.storage_line(), hero=True)
             if choice is None:
                 continue
             act, arg = actions[choice]
