@@ -169,8 +169,52 @@ class GameView:
             self.playthrough.savestate(event, self.games, where)
             self.playthrough.save_info()
 
-    def report(self, note=""):
+    def ask_note(self):
+        """"What happened?" Typed text, or "" (Enter on nothing, or Esc). The games wait."""
+        snapshot = self.screen.copy()
+        text = ""
+        pygame.key.start_text_input()
+        try:
+            while True:
+                for ev in pygame.event.get():
+                    if ev.type == pygame.QUIT:
+                        return text
+                    if ev.type == pygame.TEXTINPUT and len(text) < 300:
+                        text += ev.text
+                    elif ev.type == pygame.KEYDOWN:
+                        if ev.key == pygame.K_RETURN:
+                            return text
+                        if ev.key == pygame.K_ESCAPE:
+                            return ""
+                        if ev.key == pygame.K_BACKSPACE:
+                            text = text[:-1]
+                    elif ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button in (pygame.CONTROLLER_BUTTON_A,
+                                                                                    pygame.CONTROLLER_BUTTON_START):
+                        return text
+                self.screen.blit(snapshot, (0, 0))
+                shade = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+                shade.fill((0, 0, 0, 190))
+                self.screen.blit(shade, (0, 0))
+                cx = self.screen.get_width() // 2
+                for k, line in enumerate(("Report a problem: what happened? (optional)",
+                                          "Type, then Enter to save the report (or press A / cross: no note). Esc: no note.")):
+                    t = (self.big if k == 0 else self.font).render(line, True, (220, 200, 160))
+                    self.screen.blit(t, (cx - t.get_width() // 2, 140 + k * 44))
+                box = pygame.Rect(80, 230, self.screen.get_width() - 160, 40)
+                pygame.draw.rect(self.screen, (30, 30, 40), box)
+                pygame.draw.rect(self.screen, (220, 200, 160), box, 1)
+                shown = text[-80:] + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
+                self.screen.blit(self.font.render(shown, True, (240, 240, 240)), (box.x + 8, box.y + 12))
+                pygame.display.flip()
+                pygame.time.wait(16)
+        finally:
+            pygame.key.stop_text_input()
+            self.screen.blit(snapshot, (0, 0))  # the report's window shot: the game, not this box
+
+    def report(self, note=None):
         import report
+        if note is None:
+            note = self.ask_note()
         path = report.write(self.games, self.playthrough, self.screen, self.rolling, self.inputs,
                             self.frame_times, self.pads.names(), note)
         self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
