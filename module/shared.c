@@ -93,7 +93,7 @@ static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while t
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
-#define TAKEN_FRAMES 30
+#define TAKEN_FRAMES 120 // online: longer than a slow round trip plus the playout delay (M7b)
 #define E_PRIZE_DROP 3 // hearts, gold, subweapons: the same entity id in every stage
 static u32 s_AppliedSeq;
 

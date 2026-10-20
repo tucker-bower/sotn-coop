@@ -341,3 +341,42 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **M8 (Playable Richter & Maria + DXC dialogue/voices):** Either player can choose Alucard, Richter, or Maria from the start of a fresh playthrough. Character and audio/dialogue assets are extracted from Tucker's local *Dracula X Chronicles* USA ISO (`disks/sotn.pspus.iso`, solving D15 with a `pspus` asset map). Includes a launcher/mod option to use the alternate DXC dialogue and voice acting.
 - **M9 (Android port):** Port the launcher, session engine, and SwanStation Android core integration to Android.
 - **M10 (AYN Thor dual-screen & widescreen):** Curated dual-screen mode for the AYN Thor handheld: the top 6.0" 16:9 screen displays your game and the bottom 3.92" screen displays your partner's screen. Plus an expanded-FOV widescreen mode (not stretched) on the top screen.
+
+## M7b planning (2026-10-20)
+**D76: M7b polish before M8** (owner, 2026-10-20)
+- M8 is tabled while Tucker decides the mixed-character rules.
+- M7b scope:
+  - a real release
+  - mode-first launcher with lobbies
+  - native menu bar, resizable window, layouts
+  - widescreen spike
+  - networking review under simulated real-world networks
+  - stranger playtest
+- **No stretch scaling mode, ever:** the picture is only shown at its true shape.
+- **Ship unsigned:** the README explains the browser and SmartScreen warnings.
+- **Tucker publishes each release** after testing it. The agent only makes drafts.
+
+## M7b build (2026-10-20)
+**D77: Wire protocol 9: playout online, delta snapshots, measured round trips** (agent-default, 2026-10-20; design/M7b-netcode.md)
+- Online, the partner's presences and snapshots are played back through an adaptive jitter buffer: the 95th percentile of jitter, at least a frame while packets are lost, at most 250 ms.
+- **Why:** shared enemies must move smoothly, because the guest's hit detection runs against the copies it sees.
+- **Cost:** latency on jittery links (Wi-Fi 33 → 133 ms on the partner). The guest's own actions stay instant.
+- **Not online:** couch play (one PC) doesn't use it.
+- Reversible: `link/playout.py` constants.
+
+**D78: Room codes meet on ntfy.sh, both ways, with a token** (agent-default, 2026-10-20)
+- Codes look like `BAT-7K2Q` (12.6 M of them).
+- Both sides post their candidates (LAN, and STUN from the game socket) to the room's hashed topic, over one streaming request each, then hole-punch.
+- HELO carries a token from the room code. Only a matching HELO becomes the partner, and nothing else from other addresses is heard.
+- Options considered: our own rendezvous server (infrastructure, against D74), and a manual code exchange (worse UX).
+
+**D79: Window: Automatic layout and sharp-bilinear pixels by default** (agent-default, 2026-10-20)
+- **Automatic** picks side by side or stacked, whichever gives the bigger picture.
+- **Sharp** enlarges by whole pixels, then smooths the last fraction, at the true 4:3 shape (no stretch: D76). **Smooth** is plain filtering.
+
+**D80: The Game menu has no Reset and no "Joint save now"** (agent-default, 2026-10-20)
+- Coffins are the save points by design.
+- Resetting one game of a co-op pair has no clear meaning.
+
+**D81: The pause menu carries the View settings** (agent-default, 2026-10-20)
+- Layout, Pixels and How to play, so couch players on a TV with only controllers can reach what the menu bar has.

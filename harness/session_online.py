@@ -1,7 +1,7 @@
 """M7 acceptance tests: online PC co-op (design/M7-repo-and-online.md, D74).
 
 Covers:
-- zero-infra connect codes (10-char stateless endpoint codes, 6-char room codes, direct IP:port);
+- zero-infra connect codes (10-char stateless endpoint codes, room codes, direct IP:port);
 - version mismatch refusal (link version and patch CRC32) between OnlineSession instances;
 - MTU-safe compressed snapshots (strict 1200-byte UDP packet cap + 2% packet loss);
 - online joint saves and both-dead reload across two separate OnlineSession instances."""
@@ -13,9 +13,9 @@ from session import OnlineSession, session_scenario  # first: puts `link` on the
 
 from bots import walker
 from link.jointsave import read_session, save_room
-from link.mailbox import BUSY, CARD_OK, DEAD, IN_PLAY, LINK_VERSION, ROLE_AUTHORITY, ROLE_GUEST
-from link.rendezvous import (ConnectError, RoomResponder, decode_endpoint, encode_endpoint,
-                             make_room_code, parse_connect_input, resolve_room_code)
+from link.mailbox import BUSY, CARD_OK, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
+from link.transport import WIRE_VERSION
+from link.rendezvous import ConnectError, decode_endpoint, encode_endpoint, make_room_code, parse_connect_input
 from module import COOP_DISC
 from session_progress import arrive, status
 from session_scenarios import assert_converged
@@ -34,8 +34,8 @@ def step_pair(s0, s1, n=1, p0="", p1=""):
 
 @session_scenario()
 def online_connect_codes(run):
-    """M7 criterion 4: 10-char stateless endpoint codes round-trip (ip, port) and reject typos;
-    6-char room codes and direct IP:port pair two separate OnlineSession instances."""
+    """M7 criterion 4 (M7b): 10-char endpoint codes round-trip (ip, port) and reject typos; two
+    separate OnlineSession instances find each other by room code (link/connect.py)."""
     for ip, port in (("127.0.0.1", 54321), ("192.168.1.42", 12345), ("203.0.113.9", 65535), ("10.0.0.1", 1)):
         code = encode_endpoint(ip, port)
         run.expect(len(code) == 12 and decode_endpoint(code) == (ip, port),
@@ -54,22 +54,24 @@ def online_connect_codes(run):
         except ConnectError as exc:
             run.expect(len(str(exc)) > 10, f"plain error for {bad!r}", msg=str(exc))
 
-    # Room-code discovery + direct IP pairing between two single-game OnlineSession instances.
+    # Room codes: two single-game OnlineSessions find each other through the relay (a folder
+    # here: link/connect.FileRelay) and hole-punch, as they would across the internet.
+    from link.connect import FileRelay
+    relay = FileRelay(tempfile.mkdtemp(prefix="coop-relay-"))
     with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1") as s0, \
          OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1") as s1:
         room = make_room_code()
         kind, norm_room = parse_connect_input(room.lower().replace("-", ""))
-        run.expect(kind == "room" and norm_room == room, "6-char room code parsed", room=room)
-        resp = RoomResponder(room, ("127.0.0.1", s0.port), relay=False)
-        try:
-            found = resolve_room_code(room, ("127.0.0.1", s1.port), timeout=2.0, relay=False)
-            run.expect(found == ("127.0.0.1", s0.port), "joiner resolved host endpoint from room code", found=found)
-            run.expect(resp.joiner_endpoint == ("127.0.0.1", s1.port),
-                       "host responder learned joiner endpoint", joiner=resp.joiner_endpoint)
-            s0.connect(resp.joiner_endpoint)
-            s1.connect(found)
-        finally:
-            resp.close()
+        run.expect(kind == "room" and norm_room == room, "room code parsed", room=room)
+        s0.local.host("start_connect", room, "host", relay=relay, stun_servers=(), resolve=False)
+        s1.local.host("start_connect", room, "join", relay=relay, stun_servers=(), resolve=False)
+        for i in range(600):
+            step_pair(s0, s1, 1)
+            c0, c1 = s0.local.host("connect_status"), s1.local.host("connect_status")
+            if c0["state"] == c1["state"] == "connected":
+                break
+        run.expect(c0["state"] == c1["state"] == "connected", "both found each other by room code",
+                   frames=i, host=c0["state"], join=c1["state"])
         step_pair(s0, s1, 65)
         st0, st1 = s0.local.host("status"), s1.local.host("status")
         run.expect(st0["partner_hello"] is not None and st1["partner_hello"] is not None,
@@ -102,14 +104,14 @@ def online_version_mismatch(run):
                    age=s1.local.mailbox("partner_age"))
 
         # Different link protocol version:
-        s1.local.host("set_hello", patch_crc=0x11111111, link_version=LINK_VERSION - 1)
+        s1.local.host("set_hello", patch_crc=0x11111111, link_version=WIRE_VERSION - 1)
         step_pair(s0, s1, 70)
         st0 = s0.local.host("status")
         run.expect(st0["mismatch"] and "version" in st0["mismatch"],
                    "refuses partner with different link protocol version", why=st0["mismatch"])
 
         # Matching versions lift the refusal and sync resumes:
-        s1.local.host("set_hello", patch_crc=0x11111111, link_version=LINK_VERSION)
+        s1.local.host("set_hello", patch_crc=0x11111111, link_version=WIRE_VERSION)
         step_pair(s0, s1, 70)
         st0, st1 = s0.local.host("status"), s1.local.host("status")
         run.expect(st0["mismatch"] is None and st1["mismatch"] is None, "matching HELO lifts the refusal")

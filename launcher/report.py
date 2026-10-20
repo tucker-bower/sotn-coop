@@ -22,7 +22,7 @@ from pathlib import Path
 
 from paths import data_dir, load_settings, reports_dir
 
-VERSION = "0.7.0"  # the launcher's
+VERSION = "0.7.1"  # the launcher's
 
 
 def _png(surface_or_image):
@@ -38,6 +38,7 @@ def _png(surface_or_image):
 def write(games, playthrough, window, rolling, inputs, frame_times, controllers, note="", extra=None):
     """Writes the report; returns its path. games: the session's two games."""
     from link.mailbox import LINK_VERSION
+    from link.transport import WIRE_VERSION
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = reports_dir() / f"{stamp}.zip"
     k = 2
@@ -67,7 +68,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
         z.writestr("frames.json", json.dumps(list(frame_times)))
         patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
         about = {
-            "launcher": VERSION, "link": LINK_VERSION,
+            "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
             "patch": json.loads(patch.read_text()) if patch.exists() else None,
             "settings": load_settings(), "os": platform.platform(), "python": sys.version,
             "controllers": controllers, "playthrough": playthrough.name if playthrough else None,

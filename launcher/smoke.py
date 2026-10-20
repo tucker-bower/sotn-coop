@@ -49,7 +49,7 @@ def main():
     file = str(launcher.starts_dir() / starts["Entrance hall"]["file"])
     from gameview import GameView
     with launcher.session((file, file), p) as s:
-        view = GameView(s, launcher.screen, launcher.pads, None, p, frames=240,
+        view = GameView(s, launcher.display, launcher.pads, None, p, frames=240,
                         save_cards=(p.card("A"), p.card("B")))
         view.run()
         report = view.report("smoke test note")
@@ -92,7 +92,7 @@ def check_online(launcher, starts):
         for _ in range(30):
             s0.step(1)
             s1.step(1)
-        view = GameView(s0, launcher.screen, launcher.pads, None, p, frames=120,
+        view = GameView(s0, launcher.display, launcher.pads, None, p, frames=120,
                         save_cards=(p.card("A"),))
         view.run()
         rep = view.report("online smoke note")

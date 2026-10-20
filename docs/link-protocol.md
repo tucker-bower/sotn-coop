@@ -1,4 +1,4 @@
-# The co-op link protocol (version 8)
+# The co-op link protocol (wire version 9, mailbox version 8)
 
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
@@ -15,15 +15,16 @@ This is everything a **host** needs, so another one can be written without readi
 - **Numbers** are little-endian everywhere.
 
 ## The host's job, once per frame
-1. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, do nothing (the game is still booting).
-2. **Hello:** every 60 frames, send `HELO`.
+0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
+1. **Hello:** every 60 frames, send `HELO`.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
-4. **Presence:** send `PRES` with the `self` presence (0x2C bytes).
-5. **Snapshot:** if `snapOutSeq` changed since last frame, send `SNAP` with `snapOut[0:snapOutSize]`.
+4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below).
+5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
 6. **Events out:** move the game's new events out of the `out` ring, then send them reliably (`EVTS`).
 7. **Receive** every datagram waiting:
-   - the **newest** `PRES` (by datagram sequence number): write it to `partner`, and zero `partnerAge`;
-   - the newest `SNAP`: write its payload to `snapIn`, then `snapInSize`, then `snapInSeq + 1`, in that order;
+   - `PRES`: the partner's presence. Write it to `partner` and zero `partnerAge`. Simplest: write the newest (by datagram sequence number). Better online: play presences back at an even pace (below);
+   - complete snapshots (`SNPC`): write the payload to `snapIn`, then `snapInSize`, then `snapInSeq + 1`, in that order. Simplest: the newest, as it completes. Better online: on the same schedule as the presences;
    - `EVTS` and `ACK`: the reliable channel (below);
    - `HELO`: the handshake (below).
 8. **Events in:** write the partner's events that were delivered in order into the `in` ring, as many as fit. Keep the rest for next frame.
@@ -31,23 +32,37 @@ This is everything a **host** needs, so another one can be written without readi
 Commands (`cmd`) and saves (`saveOut`/`saveIn`) are written by the **launcher**, not by the link: joint saves, loading a save, and arriving somewhere.
 
 ## Datagrams
-Every datagram starts with an 8-byte header, `tag` (4 ASCII bytes) and `seq` (u32), a per-sender counter that goes up by one with each datagram. The payload follows.
+Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, a per-sender counter that goes up by one with each datagram) and `frame` (u32, the sender host's frame counter, step 0). The payload follows. No datagram is bigger than 1200 bytes.
 
 | tag | payload | delivery |
 |---|---|---|
-| `PRES` | the sender's presence, 0x2C bytes (below) | Every frame. Best effort: use the highest `seq`, drop older ones. |
-| `SNAP` | a shared-room snapshot, up to 0xF000 bytes; opaque to hosts | Localhost / small payloads. Best effort: the newest wins. |
-| `SNPC` | `snap_id` (u32), `chunk_idx` (u8), `chunk_cnt` (u8), then a ≤ 1150-byte chunk of `zlib.compress(snap, 1)` | Online MTU-safe snapshot chunks (`≤ 1200` bytes per UDP datagram). Reassembled when all `chunk_cnt` chunks of the newest `snap_id` arrive. |
+| `PRES` | the sender's presence, 0x2C bytes (below), then the 16-byte presence tail | Every frame. Best effort. |
+| `SNPC` | `snap_id` (u32, 1, 2, 3…), `base_id` (u32, 0 = none), `chunk_idx` (u8), `chunk_cnt` (u8), then a ≤ 1150-byte chunk of the compressed snapshot | A shared-room snapshot (up to 0xF000 bytes, opaque to hosts) in chunks. Best effort: a snapshot is complete when all `chunk_cnt` chunks of one `snap_id` are in; ignore ids at or below the newest complete one. |
 | `EVTS` | `first` (u32, the first record's number), then N × 8-byte events | Reliable (below). At most 128 events per datagram. |
 | `ACK ` | `delivered` (u32): the highest event number received in order | Reliable (below). |
 | `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control/save messages (`save_req`, `save_done`, `load_save`, `game_over`). |
 | `CACK` | `delivered` (u32): the highest `CTRL` chunk number received in order | Reliable ack for `CTRL`. |
-| `HELO` | UTF-8 JSON: `{"link": 8, "patch": <the co-op disc's CRC32 as an integer, or null>}` | Once a second. |
+| `HELO` | UTF-8 JSON: `{"link": 9, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs]}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …
-- **Sending:** the sender keeps every event until it's acked. It sends new ones right away, and resends all unacked ones every 15 frames.
+- **Sending:** the sender keeps every event until it's acked. It sends new ones right away, and resends all unacked ones after the retransmission timeout (below).
 - **Receiving:** the receiver keeps events that arrive ahead of a gap, delivers in number order, drops what it already delivered, and answers every `EVTS` with an `ACK` carrying its in-order high-water mark.
+
+**Presence tail (16 bytes after the presence):** `snapAck` (u32: the newest `snap_id` this host has decoded, 0 if none), `clockMs` (u32: the sender's clock in ms, wrapping), `echoMs` (u32: the newest `clockMs` heard from the partner, 0 if none), `holdMs` (u16: how long ago, in ms, that was heard), 2 bytes of padding.
+- **Round trip:** on receiving a tail with `echoMs` set, `rtt = now - echoMs - holdMs` (ms, wrapping). Smooth it as TCP does (RFC 6298).
+- **Snapshot acks:** the newest `snapAck` the partner has sent is the base for the next delta.
+
+**Snapshot compression:** with `base_id` 0, the chunks join to `zlib(snapshot)`. Otherwise to `zlib(snapshot XOR base)`, where `base` is snapshot `base_id` (cut or zero-padded to this snapshot's length). The sender uses the newest snapshot the partner acked, if it still has it (it keeps the last 64), else none. The receiver keeps the last 64 snapshots it decoded, and drops a snapshot whose base it doesn't have.
+
+**Playback (recommended online, `link/playout.py`):** the partner's presences and snapshots arrive bunched up. Hold them and hand the game one sender frame per frame:
+- `offset = arrival time - frame / 60`. Its minimum over the last 3 s is the fastest path; restart that minimum when every offset of the last 0.3 s is more than 2 frames above it.
+- Play sender frame `(now - minimum - delay) * 60`, where `delay` covers the 95th percentile of `offset - minimum` (at least a frame while presences go missing; at most 250 ms; falling back by at most 20 ms per second).
+- Between two presences less than 6 frames apart in the same room, interpolate x, y and the camera.
+
+**Retransmission:** reliable channels (`EVTS`, `CTRL`) resend what's unacked after `srtt + max(4 × rttvar, 1 frame) + 2 frames` (between 50 ms and 1 s; 250 ms before any round trip is measured).
+
+**Restarts:** when the partner's `sid` changes, it started again: reset everything numbered (reliable channels both ways, snapshot ids and bases, playback).
 
 **Handshake:** if the partner's `link` differs, or both `patch` values are set and differ, the host refuses the partner.
 - It relays nothing more (the games play on alone), keeps sending `HELO`, and reports why ("Your partner's co-op version is different…").

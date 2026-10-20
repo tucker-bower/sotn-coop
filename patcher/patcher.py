@@ -128,12 +128,14 @@ def apply(disc, patch_path=DEFAULT_PATCH, out_dir=None, progress=None):
     patch = Path(patch_path).read_bytes()
     track1, others = find_track1(disc)
     combined = check_disc(track1, patch)
-    src_size, _, meta, _, _ = bps.info(patch)
+    src_size, dst_size, meta, _, dst_crc = bps.info(patch)
     out_dir = Path(out_dir) if out_dir else track1.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(disc).stem.replace(" (Track 1)", "")
     out_bin = out_dir / f"{stem} (Co-op) (Track 1).bin"
-    if combined:  # a single .bin with both tracks: patch from a copy of track 1
+    if _same(out_bin, dst_size, dst_crc):
+        pass  # made before, and right: keep it (it may be in use by a running game)
+    elif combined:  # a single .bin with both tracks: patch from a copy of track 1
         tmp = out_dir / f"{stem} (Co-op) track1.tmp"
         with open(track1, "rb") as f, open(tmp, "wb") as t:
             left = src_size
@@ -156,12 +158,24 @@ def apply(disc, patch_path=DEFAULT_PATCH, out_dir=None, progress=None):
     for k, f in enumerate(audio, 2):
         if f.parent != out_dir or not f.name.startswith(stem + " (Co-op)"):
             target = out_dir / f"{stem} (Co-op) (Track {k}).bin"
-            shutil.copyfile(f, target)
+            if not (target.exists() and target.stat().st_size == f.stat().st_size):
+                shutil.copyfile(f, target)
             f = target
         lines += [f'FILE "{f.name}" BINARY', f"  TRACK {k:02d} AUDIO", "    INDEX 00 00:00:00", "    INDEX 01 00:02:00"]
     cue = out_dir / f"{stem} (Co-op).cue"
     cue.write_text("\n".join(lines) + "\n")
     return cue
+
+
+def _same(path, size, crc):
+    """path already holds exactly the patch's target (size and CRC-32)."""
+    if not path.exists() or path.stat().st_size != size:
+        return False
+    c = 0
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 22), b""):
+            c = zlib.crc32(chunk, c)
+    return c == crc
 
 
 def make(retail_track1, coop_bin, out_dir, version):

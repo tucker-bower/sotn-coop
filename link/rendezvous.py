@@ -1,34 +1,23 @@
-"""Zero-infrastructure connect codes, STUN/UPnP discovery, and direct-IP parsing (design/M7, D74).
+"""Connect codes, STUN parsing, and direct-IP parsing (design/M7, D74; finding the partner: link/connect.py).
 
 Three ways to connect, all using the same Join box:
-1. A 6-character room code (e.g. BAT-429): exchanged over local LAN UDP broadcast and a public
-   zero-account HTTPS relay (ntfy.sh), so both players learn each other's endpoints and hole-punch.
+1. A room code (e.g. BAT-7K2Q): both players meet on a public, account-free relay (ntfy.sh)
+   and hole-punch (link/connect.py).
 2. A 10-character stateless endpoint code (e.g. K7M2-9P4Q-W3): encodes (ip, port) + a 2-bit
    checksum in base32. Needs zero servers of any kind once STUN/LAN knows the address.
 3. Direct IP and port (e.g. 192.168.1.42:54321 or :54321 for localhost).
 """
 
-import hashlib
-import json
 import os
 import random
 import re
 import socket
 import struct
-import threading
-import time
-import urllib.request
 import zlib
 
 ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"  # 32 chars, no 0/O/1/I
 _DECODE = {c: i for i, c in enumerate(ALPHABET)}
 ROOM_WORDS = ("BAT", "FOG", "ORB", "OWL", "AXE", "KEY", "CAT", "SUN", "GEM", "ROD", "URN", "IMP")
-STUN_SERVERS = (
-    ("stun.l.google.com", 19302),
-    ("stun.cloudflare.com", 3478),
-    ("stun.nextcloud.com", 443),
-)
-LAN_PORTS = (45671, 45672, 45673)
 MAGIC_COOKIE = 0x2112A442
 
 
@@ -59,7 +48,7 @@ def decode_endpoint(code):
     """Decodes a 10-char base32 connect code back into (ip, port). Raises ConnectError on typos."""
     clean = re.sub(r"[\s\-_]", "", code.upper())
     if len(clean) != 10:
-        raise ConnectError("A connect code is 10 characters (like K7M2-9P4Q-W3), or 6 for a room code (like BAT-429).")
+        raise ConnectError("A connect code is 10 characters (like K7M2-9P4Q-W3); a room code looks like BAT-7K2Q.")
     val = 0
     for ch in clean:
         if ch not in _DECODE:
@@ -77,11 +66,10 @@ def decode_endpoint(code):
 
 
 def make_room_code(rng=None):
-    """Generates a short 6-character room code like BAT-429."""
+    """A room code like BAT-7K2Q: a word and four characters (12.6 million codes), easy to read
+    out loud, and never 0/O or 1/I."""
     r = rng or random
-    word = r.choice(ROOM_WORDS)
-    num = r.randint(100, 999)
-    return f"{word}-{num}"
+    return f"{r.choice(ROOM_WORDS)}-{''.join(r.choice(ALPHABET) for _ in range(4))}"
 
 
 def parse_connect_input(text):
@@ -104,12 +92,15 @@ def parse_connect_input(text):
             raise ConnectError(f"'{host}' isn't a valid IPv4 address.") from e
         return "direct", (host, port)
     clean = re.sub(r"[\s\-_]", "", s.upper())
-    if len(clean) == 6 and clean[:3].isalpha() and clean[3:].isdigit():
+    if len(clean) == 7 and clean[:3] in ROOM_WORDS:
+        bad = [c for c in clean[3:] if c not in _DECODE]
+        if bad:
+            raise ConnectError(f"'{bad[0]}' isn't used in room codes (0, O, 1 and I never are). Check for a typo.")
         return "room", f"{clean[:3]}-{clean[3:]}"
     if len(clean) == 10:
         return "endpoint", decode_endpoint(clean)
     raise ConnectError(
-        "Didn't recognize that code. Enter a 6-character room code (BAT-429), "
+        "Didn't recognize that code. Enter a room code (like BAT-7K2Q), "
         "a 10-character connect code (K7M2-9P4Q-W3), or IP:port (192.168.1.10:54321)."
     )
 
@@ -122,30 +113,6 @@ def local_ip():
             return s.getsockname()[0]
     except OSError:
         return "127.0.0.1"
-
-
-def stun_public_endpoint(local_port=0, timeout=1.2):
-    """Queries public STUN servers (RFC 5389) from a fresh UDP socket or bound port.
-    Returns (public_ip, public_port) or None if offline/blocked."""
-    tx_id = os.urandom(12)
-    req = struct.pack(">HHI12s", 0x0001, 0, MAGIC_COOKIE, tx_id)
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(timeout / max(1, len(STUN_SERVERS)))
-        if local_port:
-            try:
-                sock.bind(("0.0.0.0", local_port))
-            except OSError:
-                pass
-        for host, port in STUN_SERVERS:
-            try:
-                sock.sendto(req, (host, port))
-                data, _ = sock.recvfrom(2048)
-            except OSError:
-                continue
-            parsed = _parse_stun_response(data, tx_id)
-            if parsed:
-                return parsed
-    return None
 
 
 def _parse_stun_response(data, tx_id):
@@ -168,138 +135,4 @@ def _parse_stun_response(data, tx_id):
             port = struct.unpack_from(">H", val, 2)[0]
             ip = socket.inet_ntoa(val[4:8])
             return ip, port
-    return None
-
-
-def _room_topic(code):
-    clean = re.sub(r"[\s\-_]", "", code.upper())
-    digest = hashlib.sha256(f"sotn-coop-v1:{clean}".encode()).hexdigest()[:20]
-    return f"sotn-coop-{digest}"
-
-
-class RoomResponder:
-    """Runs in the background while the Host Online screen is waiting for a partner.
-    Answers 6-character room-code lookups over local/LAN UDP and public HTTPS relay."""
-
-    def __init__(self, room_code, endpoint, wan_endpoint=None, relay=True):
-        self.room_code = re.sub(r"[\s\-_]", "", room_code.upper())
-        self.endpoint = (str(endpoint[0]), int(endpoint[1]))
-        self.wan_endpoint = (str(wan_endpoint[0]), int(wan_endpoint[1])) if wan_endpoint else None
-        self.relay = relay
-        self.joiner_endpoint = None
-        self._stop = threading.Event()
-        self._socks = []
-        for p in LAN_PORTS:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(("0.0.0.0", p))
-                s.setblocking(False)
-                self._socks.append(s)
-            except OSError:
-                pass
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def _payload(self):
-        return json.dumps({
-            "role": "host",
-            "room": self.room_code,
-            "lan": list(self.endpoint),
-            "wan": list(self.wan_endpoint or self.endpoint),
-        }).encode()
-
-    def _run(self):
-        topic = _room_topic(self.room_code)
-        if self.relay:
-            threading.Thread(target=self._publish_relay, args=(topic,), daemon=True).start()
-        while not self._stop.is_set():
-            for s in self._socks:
-                while True:
-                    try:
-                        data, addr = s.recvfrom(2048)
-                    except OSError:
-                        break
-                    try:
-                        msg = json.loads(data.decode())
-                    except ValueError:
-                        continue
-                    if msg.get("room") == self.room_code and msg.get("role") == "join":
-                        join_ep = msg.get("lan") or [addr[0], addr[1]]
-                        self.joiner_endpoint = (str(join_ep[0]), int(join_ep[1]))
-                        try:
-                            s.sendto(self._payload(), addr)
-                        except OSError:
-                            pass
-            time.sleep(0.03)
-
-    def _publish_relay(self, topic):
-        try:
-            req = urllib.request.Request(f"https://ntfy.sh/{topic}", data=self._payload(), method="POST")
-            urllib.request.urlopen(req, timeout=2.5).read()
-        except Exception:  # noqa: BLE001 - offline or blocked: LAN and endpoint code still work
-            pass
-
-    def close(self):
-        self._stop.set()
-        for s in self._socks:
-            try:
-                s.close()
-            except OSError:
-                pass
-
-
-def resolve_room_code(room_code, my_endpoint=("127.0.0.1", 0), timeout=3.0, relay=True):
-    """Finds the host's (ip, port) for a 6-character room code via local/LAN UDP or public relay."""
-    clean = re.sub(r"[\s\-_]", "", room_code.upper())
-    probe = json.dumps({"role": "join", "room": clean, "lan": [str(my_endpoint[0]), int(my_endpoint[1])]}).encode()
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.setblocking(False)
-        deadline = time.monotonic() + timeout
-        relay_checked = not relay
-        while time.monotonic() < deadline:
-            for p in LAN_PORTS:
-                for target in ("127.0.0.1", "255.255.255.255"):
-                    try:
-                        s.sendto(probe, (target, p))
-                    except OSError:
-                        pass
-            time.sleep(0.05)
-            while True:
-                try:
-                    data, _ = s.recvfrom(2048)
-                except OSError:
-                    break
-                try:
-                    msg = json.loads(data.decode())
-                except ValueError:
-                    continue
-                if msg.get("room") == clean and msg.get("role") == "host":
-                    ep = msg.get("lan") or msg.get("wan")
-                    if ep and len(ep) == 2:
-                        return str(ep[0]), int(ep[1])
-            if not relay_checked:
-                relay_checked = True
-                ep = _poll_relay(_room_topic(clean))
-                if ep:
-                    return ep
-    raise ConnectError(f"Couldn't find an active game for room code {room_code}. Check the code or use the 10-character connect code.")
-
-
-def _poll_relay(topic):
-    try:
-        url = f"https://ntfy.sh/{topic}/json?poll=1&since=10m"
-        with urllib.request.urlopen(url, timeout=2.0) as resp:
-            lines = resp.read().decode("utf-8", errors="replace").splitlines()
-        for line in reversed(lines):
-            outer = json.loads(line)
-            if outer.get("event") == "message" and outer.get("message"):
-                msg = json.loads(outer["message"])
-                if msg.get("role") == "host":
-                    ep = msg.get("wan") or msg.get("lan")
-                    if ep and len(ep) == 2:
-                        return str(ep[0]), int(ep[1])
-    except Exception:  # noqa: BLE001
-        pass
     return None
