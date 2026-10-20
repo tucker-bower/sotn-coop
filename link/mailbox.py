@@ -4,9 +4,9 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 6
+LINK_VERSION = 8
 
-IN_PLAY, SPRITE, PAUSED, BUSY, DEAD = 1, 2, 4, 8, 16  # CoopPresence.flags
+IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE = 1, 2, 4, 8, 16, 32, 64  # CoopPresence.flags
 
 _PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhHH")  # CoopPresence, 0x2C bytes
 ROLE_NONE, ROLE_AUTHORITY, ROLE_GUEST = 0, 1, 2
@@ -16,19 +16,19 @@ PARTNER_AGE = 0x64
 OUT_RING, IN_RING, DROPPED = 0x68, 0x870, 0x1078
 RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
 EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
+EV_HIT, EV_HIT2, EV_SPAWN, EV_SPAWN2, EV_SPAWN3, EV_RECORD, EV_TAKEN = 6, 7, 8, 9, 10, 11, 12
 CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x107C, 0x108C, 0x1090, 0x1094, 0x2260
 SAVE_DATA_SIZE = 0x11CC
 CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
 _COMMAND = struct.Struct("<IHHHhhH")
 SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
 SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
+CONTROL = 0x21448
+CONTROL_MUTE_MUSIC = 1
+CONTROL_NO_AGGRO = 2
+CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
-SAVE_DATA_SIZE = 0x11CC
-CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
-_COMMAND = struct.Struct("<IHHHhhH")
-RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
-EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 
 
 @dataclass
@@ -55,7 +55,7 @@ class Presence:
     scroll_x: int = 0
     scroll_y: int = 0
     role: int = 0
-    pad: int = 0
+    aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
 
     SIZE = _PRESENCE.size
 
@@ -161,6 +161,12 @@ class Mailbox:
         return struct.unpack("<I", self.adapter.read_bytes(self.address + CARD_RESULT, 4))[0]
 
     # --- shared rooms (design/M4)
+
+    def set_control(self, bits):
+        self.adapter.write_bytes(self.address + CONTROL, struct.pack("<I", bits))
+
+    def control(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + CONTROL, 4))[0]
 
     def set_rank(self, rank):
         self.adapter.write_bytes(self.address + RANK, struct.pack("<I", rank))

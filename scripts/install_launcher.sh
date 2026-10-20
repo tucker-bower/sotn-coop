@@ -18,7 +18,7 @@ WINPY="$(wslpath -u "$WINPY")"
 
 echo "== app files"
 mkdir -p "$APP"/{harness,link,launcher,config,build/coop,bin,bios,.env/out/disc,.env/savestates} "$DEST/cards"
-cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$APP/harness/"
+cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots,replay}.py "$APP/harness/"
 cp "$MOD"/link/*.py "$APP/link/"
 cp "$MOD"/launcher/play.py "$APP/launcher/"
 cp "$MOD/env.example.toml" "$APP/env.example.toml"
@@ -58,6 +58,7 @@ if [ ! -f "$INDEX" ] || [ "$APP/.env/out/disc/sotn_coop.us.bin" -nt "$INDEX" ]; 
 fi
 
 echo "== presets"
+rm -f "$DEST"/[0-9]\ *.bat  # the numbering changes between playtests
 mk() {  # mk "file name" preset [extra args]
     printf '@echo off\r\ncd /d "%%~dp0"\r\nvenv\\Scripts\\python.exe app\\launcher\\play.py --preset %s %s\r\nif errorlevel 1 pause\r\n' "$2" "${3:-}" > "$DEST/$1.bat"
 }
@@ -65,7 +66,9 @@ mk "1 Shared room fight" hall
 mk "2 Teleport and respawn" teleport
 mk "3 Save room (then run 4)" saveroom
 mk "4 Resume from Load menu" resume
-mk "5 Explore apart (pickups, map)" explore
-mk "6 New game from scratch" newgame --fresh-cards
+mk "5 Boss fight together" boss
+mk "6 Cutscene together" cutscene
+mk "7 Explore apart (pickups, map)" explore
+mk "8 New game from scratch" newgame --fresh-cards
 cp "$MOD/launcher/PLAYTEST.md" "$DEST/README-playtest.md" 2>/dev/null || true
 echo "== installed in $DEST"

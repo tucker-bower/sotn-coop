@@ -5,13 +5,15 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 6
+#define COOP_LINK_VERSION 8
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
 #define PRESENCE_PAUSED 4  // in the menu or on the map (design/M3: freezes a shared room)
 #define PRESENCE_BUSY 8    // loading, in a cutscene, or arriving: can't be teleported to
 #define PRESENCE_DEAD 16   // dying, or waiting for a respawn or a joint-save reload
+#define PRESENCE_BOSS 32   // a living boss is in this room (design/M5)
+#define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
 
 typedef struct {
     /* 0x00 */ u8 flags;     // PRESENCE_*
@@ -36,7 +38,7 @@ typedef struct {
     /* 0x24 */ s16 scrollX;    // camera position in the room (shared rooms need cameras close)
     /* 0x26 */ s16 scrollY;
     /* 0x28 */ u16 role;       // ROLE_* (design/M4)
-    /* 0x2A */ u16 pad;
+    /* 0x2A */ u16 aggroSwitches; // bosses switching to/from the partner so far (tests)
 } CoopPresence; // size = 0x2C
 
 #define ROLE_NONE 0      // my own world
@@ -50,7 +52,14 @@ typedef struct {
 #define EV_GRANT 4 // a: func_800FE044 type (0x8000/0x4000/0x2000), b: amount / relic id
 #define EV_GOLD 5  // b: gold delta (s32)
 #define EV_HIT 6   // a: slot | entityId << 8, b: damage (s16) | hitFlags << 16 | dead << 24
-#define EV_HIT2 7  // a: slot, b: nFramesInvincibility | stunFrames << 8 | hitEffect << 16
+#define EV_HIT2 7  // a: slot | hitParams << 8, b: nFramesInvincibility | stunFrames << 8 | hitEffect << 16
+// An entity the guest's hit detection created (a drop, blood, a damage number), for the
+// authority to create in its world; three events, in this order:
+#define EV_SPAWN 8  // a: entityId, b: pfnUpdate
+#define EV_SPAWN2 9 // a: params, b: world x | world y << 16
+#define EV_RECORD 11 // a: time attack event (0xFFFF: b is D_8003CB00's bits), b: record
+#define EV_TAKEN 12  // a: slot | entityId << 8: the guest collected that drop; remove it, no reward
+#define EV_SPAWN3 10 // a: slot range (0: 160-191, 1: 224-255) | velocityY >> 14 << 8, b: castleFlag
 
 typedef struct {
     u8 type;
@@ -109,7 +118,13 @@ typedef struct {
     /* 0x12440 */ u32 snapInSeq; // host writes (guest): the authority's latest snapshot
     /* 0x12444 */ u32 snapInSize;
     /* 0x12448 */ u8 snapIn[SNAP_MAX];
-} CoopLink; // size = 0x21448
+    /* 0x21448 */ u32 control; // host writes: CONTROL_* bits (launcher settings)
+} CoopLink; // size = 0x2144C
+
+// Couch play: all games' sound goes to one speaker, and only one game may play music.
+#define CONTROL_MUTE_MUSIC 1
+#define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
+#define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 
 extern CoopLink g_CoopLink;
 

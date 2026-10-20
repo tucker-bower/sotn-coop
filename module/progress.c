@@ -37,6 +37,11 @@ void DestroyEntity(Entity* entity);                          // DRA
 static u8 s_Flags[LEN(g_CastleFlags)] __attribute__((aligned(4)));
 static u8 s_Map[LEN(g_CastleMap)] __attribute__((aligned(4)));
 static s32 s_Gold;
+// Boss kills (design/M5): a boss room's teleport checks the time attack record, so a boss
+// beaten in one world must be recorded in the other too, or it'd be fought again there.
+static s32 s_Records[TIMEATTACK_EVENT_END];
+static s32 s_Visited;
+#define RECORD_VISITED 0xFFFF // EV_RECORD a: the visited bits (D_8003CB00), not a record
 static bool s_InPlay;  // last frame was in play: the shadows are valid
 static u16 s_Changed[16]; // castle flags the partner changed this frame
 static s32 s_NChanged;
@@ -157,6 +162,22 @@ static void DetectMap(void) {
     }
 }
 
+static void DetectRecords(void) {
+    s32 i;
+
+    for (i = 0; i < TIMEATTACK_EVENT_END; i++) {
+        if (g_Settings.timeAttackRecords[i] != s_Records[i]) {
+            if (g_Settings.timeAttackRecords[i] && !Emit(EV_RECORD, i, g_Settings.timeAttackRecords[i])) {
+                return;
+            }
+            s_Records[i] = g_Settings.timeAttackRecords[i];
+        }
+    }
+    if (g_Settings.D_8003CB00 != s_Visited && Emit(EV_RECORD, RECORD_VISITED, g_Settings.D_8003CB00)) {
+        s_Visited = g_Settings.D_8003CB00;
+    }
+}
+
 static void DetectGold(void) {
     if (g_Status.gold != s_Gold && Emit(EV_GOLD, 0, g_Status.gold - s_Gold)) {
         s_Gold = g_Status.gold;
@@ -248,7 +269,20 @@ static void Apply(const CoopEvent* ev) {
         break;
     case EV_HIT:
     case EV_HIT2:
+    case EV_SPAWN:
+    case EV_SPAWN2:
+    case EV_SPAWN3:
+    case EV_TAKEN:
         SharedHit(ev->type, ev->a, ev->b);
+        break;
+    case EV_RECORD: // the first record stands (it's when the boss was first beaten)
+        if (ev->a == RECORD_VISITED) {
+            g_Settings.D_8003CB00 |= ev->b;
+            s_Visited = g_Settings.D_8003CB00;
+        } else if (ev->a < TIMEATTACK_EVENT_END && !g_Settings.timeAttackRecords[ev->a]) {
+            g_Settings.timeAttackRecords[ev->a] = ev->b;
+            s_Records[ev->a] = ev->b;
+        }
         break;
     case EV_GOLD:
         delta = (s32)ev->b;
@@ -329,6 +363,10 @@ static void Resync(void) {
         s_Map[i] = 0;
     }
     s_Gold = g_Status.gold; // gold is a delta: start counting from here
+    for (i = 0; i < TIMEATTACK_EVENT_END; i++) {
+        s_Records[i] = 0;
+    }
+    s_Visited = 0;
 }
 
 void ProgressUpdate(void) {
@@ -346,5 +384,6 @@ void ProgressUpdate(void) {
     DetectFlags();
     DetectMap();
     DetectGold();
+    DetectRecords();
     ApplyInbox();
 }

@@ -226,3 +226,74 @@ All are listed in `design/M4-shared-rooms.md`.
 **D53: Per-frame copying uses word copies and reuses primitive chains** (agent, 2026-10-19)
 A first version dropped the guest to about 50 fps (D40). `COOP.BIN` is now 160 KB because the snapshot buffers are part of the image. Boot reads it in about half a second; moving the buffers out of the image is a possible trim later.
 
+
+---
+## M4b: playtest 1 fixes (2026-10-19)
+
+**D54: The rainbow flash on hit enemies is the game's own** (agent, 2026-10-19)
+The unmodified disc shows the same rainbow palette flash when a Warg is hit (checked side by side in the harness). The real bug was the opposite: an enemy the guest hit didn't flash at all. The authority now starts the flash for relayed hits, as the game's own hit detection does.
+
+**D55: Couch audio mixes both games; one game plays music** (agent-default, 2026-10-19)
+- **Mixing:** the launcher mixes both games' sound into one stream.
+- **Music:** muting is done in the game itself (the module holds the CD/XA volume at 0, `CONTROL_MUTE_MUSIC`), so sound effects stay audible.
+- **Which game:** music comes from the left game while it's in play, otherwise from the right one. F1 switches between auto, left and right.
+- **Online play** (later) won't mute anything: each player hears all of their own game.
+
+**D56: Scenery is run by the guest, not copied** (agent, 2026-10-19)
+- **Problem:** decorations that draw from the camera with a 3D projection or parallax can't be shifted into place for another camera. That was the playtest-1 bug with the bouncing trees and the missing bushes.
+- **Fix:** each overlay's scenery update functions are listed in `overlay_table.c`, generated from names. The guest copies these entities once, then runs them itself.
+- **Scope:** only pure decoration is listed. Spawners stay copied, while their children are run locally.
+
+**D57: Kills, drops and effects from guest hits happen in the authority's world** (agent, 2026-10-19)
+- **The kill bit:** the authority sets `PreventEntityFromRespawning`'s bit for a relayed kill, and the guest ORs in the snapshot's bits.
+- **Created entities:** whatever the guest's hit detection creates (a drop, blood, a Soul Steal orb, a damage number) is sent as `EV_SPAWN`×3. The authority creates it, and it reaches the guest in the next snapshot. Before this, drops from guest kills were lost.
+- **XP:** stays with whoever landed the kill.
+- **Candles:** `hitParams` goes along with a relayed hit, so a guest's hit breaks candles.
+
+**D58: The spawner's cursors are re-seated at hand-over** (agent, 2026-10-19)
+The layout spawner's cursors are in the copied stage BSS, so at hand-over they point where the authority's camera was. The new owner re-seats them for its own camera, as `InitRoomEntities` would, without spawning anything. Without this, killed enemies came back.
+
+**D59: Co-op messages use the item-pickup text box** (agent-default, 2026-10-19)
+- **The text box:** the stage's `BottomCornerText`, on the right and in green, so a message isn't mistaken for a pickup.
+- **The messages:** "Partner is saving" / "Game saved", "Joined partner", "Partner out of reach", "Revived by partner", "Partner is fighting a boss!", "Can't leave a boss fight", "Partner fights on alone".
+- **Effects:** death fades to black slowly (`FADE_TO_BLACK_SLOW`) before the respawn. Arrival from a teleport or respawn uses the screen flash of Richter's Cross Crash (`FADE_NONE`).
+- This also answers D42 (on-screen co-op text).
+
+**D60: A death only counts in normal Alucard play; a stale joint save is never loaded** (agent, 2026-10-19)
+- **What went wrong:** in playtest 1, the end of the prologue counted as "both dead", and the launcher loaded `session.coop` left over from the save-room test.
+- **Deaths:** now count only outside ST0 and in `Play_Default`.
+- **Reloads:** the launcher reloads only a joint save written or resumed in the same run. The New Game preset deletes `session.coop`.
+- **Busy partner:** a dying player waits up to 30 s for a busy partner instead of forever.
+
+---
+## M5: bosses and cutscenes (2026-10-19)
+
+**D61: A boss is identified by its enemy definition** (agent-default, 2026-10-19)
+- **The list:** 31 bosses by `enemyId`. Slogra and Gaibon are fought in an ordinary stage, so the stage can't be the test.
+- **2× HP:** the module doubles those entries in the in-RAM enemy table while a partner is linked, never mid-fight.
+- **Presence:** `PRESENCE_BOSS` means a living boss is in the room.
+
+**D62: Aggro re-rolls every 3 s, with the partner swapped in** (agent-default, 2026-10-19)
+- **When it switches:** "After each attack" is approximated by time: a 50% re-roll every 3 s. A first try re-rolled on a change of the boss's `step`, but the Doppleganger's step rarely changes, so it switched only 2–3 times a minute. The switch chance can be changed from the launcher through the control word (bits 8–15), and `CONTROL_NO_AGGRO` turns aggro off for the control test.
+- **How:** while the target is the partner, the boss's update runs with `PLAYER`'s position and facing (and `g_PlayerX/Y`) set to the partner's. Afterwards they're restored, and a grab carries over. This works for every boss, also those that read `PLAYER` directly.
+- **Tuning:** per-boss attack hooks can come later if playtests say it feels wrong.
+
+**D63: The room's foreground tiles are mirrored** (agent, 2026-10-19)
+- **The gap:** doors, breakable walls and the clock room's stone doors change `g_Tilemap.fg`, and with it what's solid. A guest never ran those changes, so it walked out of a closed boss room.
+- **The fix:** the authority checksums the layer every frame. It sends the whole layer, up to 8K tiles, when it changes, and again every second. This closes part of D52 (walls); moving platforms are still open.
+
+**D64: A mirrored `PRIM_ENV` gets its own `DR_ENV`** (agent, 2026-10-19)
+- **The problem:** render-to-texture effects, such as the Warg burning away, use `PRIM_ENV` primitives that point into DRA's 16-entry `DR_ENV` pool. The guest copied the authority's pointer, which in the guest's RAM is one of its own entries, maybe in use, for example by Alucard's afterimages. Its screen showed leftover VRAM, a piece of the HUD; this was the playtest-1 "glitch when a monster we both hit died".
+- **The fix:** snapshots now carry each env's contents, and the guest allocates and keeps its own pool entry per mirrored env.
+- **Safety:** mirror chains are never allocated as `PRIM_ENV`, because freeing one without an env writes through a null pointer.
+
+**D65: Stage VRAM uploads are mirrored** (agent, 2026-10-19)
+- **The gap:** some entities write into VRAM as they run, for example the text of a relic's "Obtained ..." box and palette fades. The guest showed an empty box.
+- **The fix:** the module patches `LoadImage`, `LoadTPage` and `LoadClut` in `main.exe`, each with a first-instruction jump to a module copy.
+- **What's sent:** uploads whose caller is stage code are recorded on the authority and sent with the snapshot, at most 8 KB a frame. DRA's own uploads, such as each player's sprite frames, are never sent.
+- **UI placement:** the guest also stops shifting UI primitives (priority 0x1E0 and up, or `DRAW_ABSPOS`) by the camera difference, so the box stays where it belongs.
+
+**D66: A prize drop the guest touches is the guest's (replaces D51)** (agent, 2026-10-19)
+- **What changed:** hearts, gold and subweapons are prize drops, the same entity in every stage. When the guest's hit detection marks a mirrored drop as touched, the guest runs that drop's update once. It collects into the guest's own status, with the sound and the text.
+- **The authority:** `EV_TAKEN` tells it to remove its drop without a reward.
+- **Edge cases:** the guest doesn't copy that slot's drop again for half a second, until the authority has removed it. The old subweapon, dropped when you take a new one, reaches the authority through the spawn relay (D57).

@@ -29,7 +29,29 @@ def my_test(run):
 ```
 `run.s.a` / `run.s.b` proxy every `Emu` call, plus `mailbox(...)`, `unlink()` / `link()` (stop or resume a game's host), and `proc` (its worker process). The driver steps the games alternately, one frame each, so B gets A's presence for frame N before B's frame N+1. `session_scenarios.partner_pixels(game)` renders a game's next frames with and without its partner, to find the puppet on screen. `session_progress.arrive(run, game, stage, roomId, x, y)` sends a game anywhere (CMD_ARRIVE), and `take()` stands it on a pickup. `Session(..., session_file=path)` runs the couch launcher's joint saves (`link/jointsave.py`).
 
+## Autonomous playtests
+`python playtest.py [tour ...] [--minutes N] [--seed S]` plays both games with bots for minutes at a time. The tours are `entrance`, `nz0`, `no0`, `no1`, and `castle`, which hops between stages through the game's own stage doors. The bots cycle through phases: together, apart, regroup by map teleport, room hops, and no healing.
+
+**Flagged automatically:**
+- a game stuck out of play;
+- a frozen screen;
+- dropped events;
+- shared-room roles flapping;
+- a guest whose enemies differ from the authority's;
+- diverged progress.
+
+**Output:** `.env/out/playtest/<tour>/` holds `report.json` and a screenshot of each anomaly. It also holds contact sheets, plus `suspect_*.png`: the six moments when the two screens differed most while sharing a camera, so look at those first.
+
+## Launcher bookmarks
+F9 in the playtest launcher saves `bookmarks/<time>/` next to the `.bat` files:
+- both games' states now (`*_now.state`) and from 5–10 s before;
+- the last 20 s of both pads;
+- the window.
+
+`python replay.py <bookmark dir>` replays it in the harness, saving both screens every 10 frames. The link isn't deterministic in the launcher, so a replay can differ a little; the `_now` states are exact.
+
 ## Things to know
+- **The harness reads module addresses from `build/coop/coop.map`.** Don't rebuild the module (`make`) while tests run against the current disc: a moved `g_CoopLink` makes every mailbox read garbage. Rebuilding also needs `savestates.py` again, because savestates hold the module's code.
 - **Savestates are per disc image.** SwanStation refuses a state made on a different image, so rebuild the library after every `build_disc.sh` (it takes about 20 s).
 - **Harness-only shortcuts** (never in the mod): `savestates.skip_prologue` (the game's own Richter-game-over path), `savestates.warp` (the debug module's stage load, keeping the player's status), the RAM transplant in `no_effect_on_play`, and `heal()` in the soak.
 - Savestates, discs and GIFs contain game data. They live in git-ignored `.env/` and are never committed.

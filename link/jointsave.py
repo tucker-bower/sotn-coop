@@ -48,6 +48,7 @@ class JointSave:
         self.pending = None   # (saver index, saver's blob) while the partner saves
         self.dead_frames = 0
         self.saves = 0        # joint saves written
+        self.resumed = False  # the session file was loaded in this run
 
     def tick(self):
         """Once per frame, after both games' hosts."""
@@ -78,7 +79,9 @@ class JointSave:
         else:
             self.dead_frames = 0
         if self.dead_frames == BOTH_DEAD_FRAMES:
-            if self.path.exists():
+            # Only a joint save made during this run: an older file may be from another
+            # playthrough (playtest 1: the end of the prologue loaded a save-room test's save).
+            if (self.saves or self.resumed) and self.path.exists():
                 self.resume()
             else:
                 for m in self.mb:
@@ -92,6 +95,7 @@ class JointSave:
 
     def resume(self):
         """Loads the session file into both games (from the title screen, or in play)."""
+        self.resumed = True
         for m, blob in zip(self.mb, read_session(self.path)):
             m.put_save(blob)
             m.command(CMD_LOAD_SAVE)

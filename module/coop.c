@@ -3,7 +3,9 @@
 #include <game.h>
 #include "coop_api.h"
 #include "link.h"
+#include "message.h"
 #include "arrive.h"
+#include "boss.h"
 #include "progress.h"
 #include "puppet.h"
 #include "shared.h"
@@ -56,8 +58,34 @@ static void CapturePresence(CoopPresence* p) {
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }
+    if (BossHere()) {
+        p->flags |= PRESENCE_BOSS;
+    }
+    p->aggroSwitches = BossSwitches();
+    if (g_CutsceneHasControl) {
+        p->flags |= PRESENCE_CUTSCENE;
+    }
     ArrivePresence(p);
     SharedPresence(p);
+}
+
+void SetCdVolume(s8 s_num, s16 arg1, s16 arg2); // DRA
+extern s16 g_CdVolume;
+void SsSetSerialVol(s16 s_num, s16 voll, s16 volr);
+
+// CONTROL_MUTE_MUSIC: silence the CD (XA) music, and keep it silent through the game's own
+// volume changes (fades, stage changes) by setting it every frame. Unmuted, the game's own
+// volume comes back.
+static void MusicUpdate(void) {
+    static bool muted;
+
+    if (g_CoopLink.control & CONTROL_MUTE_MUSIC) {
+        SsSetSerialVol(0, 0, 0);
+        muted = true;
+    } else if (muted) {
+        SetCdVolume(0, g_CdVolume, g_CdVolume);
+        muted = false;
+    }
 }
 
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
@@ -68,11 +96,14 @@ static void CapturePresence(CoopPresence* p) {
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    MusicUpdate();
+    MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
         g_CoopLink.partnerAge++;
     }
     ProgressUpdate();
     SharedUpdate();
+    BossUpdate();
     DebugUpdate();
     return ArriveFrame();
 }

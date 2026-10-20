@@ -9,6 +9,8 @@
 #include <game.h>
 #include <sfx.h>
 #include "arrive.h"
+#include "boss.h"
+#include "message.h"
 #include "link.h"
 
 extern RoomTeleport D_800A245C[]; // DRA: stage teleports (doors between stages)
@@ -18,6 +20,9 @@ s32 ApplySaveData(SaveData* save);
 void StoreSaveData(SaveData* save, s32 block, s32 cardIcon);
 void SetGameState(GameState gameState);
 void PlaySfx(s32 sfxId);
+void SetFadeMode(FadeModes fadeMode);
+void UpdateFade(bool skipFollowup);
+s32 func_801025F4(void); // the fade's progress: nonzero once a fade to black is complete
 
 // The save room's memory card state machine (src/dra/62DEC.c, static: called by address; the
 // size-neutral hooks keep DRA's addresses identical to retail's). State 6 = saved, 7-11 = errors.
@@ -45,8 +50,16 @@ static RoomTeleport s_Saved;
 
 // Respawn and both-dead state
 static bool s_WaitingForHost; // dead, partner dead too: the host decides (reload or Game Over)
+static s32 s_DeathFade;       // frames into the fade to black before a respawn
+#define DEATH_FADE_MAX 180    // the slow fade takes 128 frames
 static bool s_AllowGameOver;
 static bool s_SaveLoaded; // a save was applied: clear the load mode once back in play
+static s32 s_BusyWait;    // dead, waiting for a busy partner to become reachable
+#define PARTNER_BUSY_WAIT 1800 // then the game's own Game Over (the partner seems stuck)
+static bool s_DownForBoss; // dead while the partner fights a boss: respawn once it's over (D24)
+
+// Pulled into the partner's boss fight / cutscene (design/M5): once per fight or cutscene
+static bool s_BossPulled, s_CutscenePulled;
 
 // The partner saved at a save room: this game writes its own memory card save for the same
 // save room, through the game's own card code, frozen while it does (D46, D49).
@@ -77,6 +90,11 @@ static bool SameRoomAsPartner(void) {
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
+static bool PartnerInBossFight(void) {
+    return PartnerFresh() && (g_CoopLink.partner.flags & PRESENCE_BOSS) &&
+           !(g_CoopLink.partner.flags & PRESENCE_DEAD);
+}
+
 u16 CurrentRoomId(void) {
     if (!D_801375BC || !g_api.o.rooms) {
         return 0;
@@ -86,7 +104,10 @@ u16 CurrentRoomId(void) {
 
 bool ArriveBusy(void) { return s_State != ARRIVE_IDLE; }
 
+static const char* s_ArriveText; // shown once arrived (with a flash: Richter's Cross Crash fade)
+
 void Arrive(u16 stage, u16 roomId, s16 x, s16 y) {
+    s_ArriveText = NULL;
     s_Stage = stage;
     s_RoomId = roomId;
     s_X = x;
@@ -143,6 +164,10 @@ static void ArriveFinish(void) {
         PLAYER.posY.i.hi += dy;
     }
     s_State = ARRIVE_IDLE;
+    if (s_ArriveText) {
+        CoopMessage(s_ArriveText);
+        SetFadeMode(FADE_NONE); // the screen flashes as the player appears
+    }
 }
 
 static void ArriveUpdate(void) {
@@ -177,12 +202,19 @@ static void TeleportInput(void) {
         ArriveBusy()) {
         return;
     }
+    if (BossHere()) { // no running from a boss fight (design/M5)
+        PlaySfx(SFX_UI_ERROR);
+        CoopMessage("Can't leave a boss fight");
+        return;
+    }
     if (!PartnerReachable()) {
         PlaySfx(SFX_UI_ERROR);
+        CoopMessage("Partner out of reach");
         return;
     }
     PlaySfx(SFX_UI_CONFIRM);
     Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+    s_ArriveText = "Joined partner";
 }
 
 // --- death: respawn at the partner instead of Game Over (D24)
@@ -205,22 +237,89 @@ static bool DeathUpdate(void) {
         g_MenuStep != MENU_STEP_INIT) {
         s_WaitingForHost = false;
         s_AllowGameOver = false;
+        s_BusyWait = 0;
+        s_DeathFade = 0;
+        s_DownForBoss = false;
         return true;
     }
     // Engine_10 at MENU_STEP_INIT: this frame's update would start the Game Over.
-    if (s_AllowGameOver || !PartnerFresh()) {
-        return true; // playing alone (or the host said so): the game's own Game Over
+    if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
+        return true; // playing alone, the prologue, or the host said so: the game's own Game Over
+    }
+    if (!(p->flags & PRESENCE_DEAD)) {
+        // First the screen fades to black (playtest 1: it used to cut straight to the load,
+        // which looked like a freeze). The game is held meanwhile, so run the fade here.
+        if (s_DeathFade < DEATH_FADE_MAX) {
+            if (!s_DeathFade++) {
+                SetFadeMode(FADE_TO_BLACK_SLOW);
+            }
+            UpdateFade(true);
+            if (!func_801025F4()) {
+                return false;
+            }
+            s_DeathFade = DEATH_FADE_MAX;
+        }
+        // The partner is fighting a boss: stay down until it's over (D24).
+        if (PartnerInBossFight()) {
+            if (!s_DownForBoss) {
+                s_DownForBoss = true;
+                CoopMessageNow("Partner fights on alone");
+            }
+            return false;
+        }
     }
     if (!(p->flags & PRESENCE_DEAD) && PartnerReachable()) {
+        s_DeathFade = 0;
+        s_DownForBoss = false;
         Revive();
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+        s_ArriveText = "Revived by partner";
         // Start loading in this same frame: one more frame of the dying player entity would
         // set the death bits (and Engine_10) again. The load replaces the entity.
         ArriveUpdate();
         return true;
     }
-    s_WaitingForHost = true; // both dead (or partner busy): hold until the host decides
+    if (!(p->flags & PRESENCE_DEAD)) {
+        // The partner is alive but busy (loading, a cutscene): wait for them a little, then
+        // give up. Holding forever froze the game (playtest 1).
+        if (++s_BusyWait > PARTNER_BUSY_WAIT) {
+            s_BusyWait = 0;
+            return true;
+        }
+        return false;
+    }
+    s_WaitingForHost = true; // both dead: hold until the host decides (reload, or Game Over)
     return false;
+}
+
+// --- boss fights and cutscenes: the partner is pulled in (design/M5)
+
+static bool CanBePulled(void) {
+    return InNormalPlay() && g_GameEngineStep == Engine_Normal && !ArriveBusy() &&
+           !(g_Player.status & PLAYER_STATUS_DEAD) && !g_CutsceneHasControl && !SameRoomAsPartner() &&
+           !s_CardSaving && !D_80137598;
+}
+
+static void PullIn(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    if (!PartnerInBossFight()) {
+        s_BossPulled = false;
+    } else if (!s_BossPulled && CanBePulled() && !(p->flags & PRESENCE_BUSY)) { // not mid-intro
+        s_BossPulled = true;
+        Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+        s_ArriveText = "Partner is fighting a boss!";
+        return;
+    }
+    if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || (p->flags & PRESENCE_DEAD) ||
+        p->stage == STAGE_ST0) {
+        s_CutscenePulled = false;
+    } else if (!s_CutscenePulled && CanBePulled()) {
+        // The partner is busy (the cutscene has control): arrive anyway. This game runs its
+        // own copy of the scene; the flags it sets are shared, so it plays out the same.
+        s_CutscenePulled = true;
+        Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+    }
 }
 
 // --- commands from the host
@@ -265,6 +364,7 @@ static bool CardSaveStep(void) {
         return false;
     }
     g_CoopLink.cardResult = D_80137E4C;
+    CoopMessage(D_80137E4C == SAVE_CARD_OK ? "Game saved" : "Saved; memory card error");
     if (D_80137E4C != SAVE_CARD_OK && g_CoopLink.saveSeq == seq) {
         SaveToLinkOnly(&s_CardCmd); // never got as far as building the save
     }
@@ -300,6 +400,7 @@ static void CommandUpdate(void) {
         s_CardCmd = *c;
         g_CoopLink.cardResult = 0;
         CardSaveStart();
+        CoopMessage("Partner is saving"); // this game freezes while its card is written
         break;
     case CMD_GAME_OVER:
         s_AllowGameOver = true;
@@ -338,7 +439,9 @@ void ArrivePresence(CoopPresence* p) {
     if (IsPausedEngine(g_GameEngineStep)) {
         p->flags |= PRESENCE_PAUSED;
     }
-    if (g_GameEngineStep == Engine_10 || (g_Player.status & PLAYER_STATUS_DEAD) || s_WaitingForHost) {
+    // Only a death in normal play counts: not the prologue (it plays out solo), not a load.
+    if (g_StageId != STAGE_ST0 && g_GameStep == Play_Default &&
+        (g_GameEngineStep == Engine_10 || (g_Player.status & PLAYER_STATUS_DEAD) || s_WaitingForHost)) {
         p->flags |= PRESENCE_DEAD;
     }
     if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl ||
@@ -362,6 +465,7 @@ bool ArriveFrame(void) {
     }
     CommandUpdate();
     TeleportInput();
+    PullIn();
     ArriveUpdate();
     if (!DeathUpdate()) {
         return false;

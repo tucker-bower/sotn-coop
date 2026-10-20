@@ -31,8 +31,8 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None):
         shm = shared_memory.SharedMemory(name=shm_name)
     try:
         with Emu(disc, audio=audio) as emu:
-            if start:
-                emu.load_state_file(savestate(disc, start))
+            if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
+                emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
             mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
             transport = UdpTransport()  # any free port, so sessions can run in parallel
             host = Host(mailbox, transport, rank)
