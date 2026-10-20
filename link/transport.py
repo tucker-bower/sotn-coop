@@ -12,6 +12,7 @@ TAG_PRESENCE = b"PRES"
 TAG_EVENTS = b"EVTS"  # payload: first seq (u32), then events
 TAG_ACK = b"ACK "     # payload: highest seq delivered in order (u32)
 TAG_SNAP = b"SNAP"    # payload: a shared-room snapshot (state: only the newest matters)
+TAG_HELLO = b"HELO"   # payload: JSON {"link": version, "patch": target CRC32 or null}, once a second
 
 
 class UdpTransport:

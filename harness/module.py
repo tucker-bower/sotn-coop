@@ -1,11 +1,14 @@
 """Reads the co-op module's symbols (build/coop/coop.map) and its state block in RAM."""
 
+import os
 import re
 import struct
+from pathlib import Path
 
 from coop_env import REPO, TOOLS
 
-COOP_DISC = TOOLS["out"] / "disc/sotn_coop.us.cue"  # scripts/build_disc.sh
+# scripts/build_disc.sh's, or COOP_DISC=<.cue> (e.g. the disc the patcher made: M6 criterion 7)
+COOP_DISC = Path(os.environ["COOP_DISC"]) if os.environ.get("COOP_DISC") else TOOLS["out"] / "disc/sotn_coop.us.cue"
 COOP_MAGIC = 0x504F4F43  # 'COOP'
 
 
