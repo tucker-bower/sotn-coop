@@ -16,7 +16,7 @@ WIN_EMU="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_e
 DEST="$WIN_EMU/SOTN-Coop"
 APP="$DEST/app"
 DLL="${1:-$DEST/app/bin/swanstation_libretro.dll}"
-WINPY="$(cmd.exe /c "where python" 2>/dev/null | tr -d '\r' | grep -v WindowsApps | head -1)"
+WINPY="$(cd /mnt/c && cmd.exe /c "where python" </dev/null 2>/dev/null | tr -d '\r' | grep -v WindowsApps | head -1)"
 [ -n "$WINPY" ] || { echo "Windows Python not found (install python.org's Python 3.12+)"; exit 1; }
 WINPY="$(wslpath -u "$WINPY")"
 
@@ -58,7 +58,7 @@ fi
 INDEX="$APP/.env/savestates/sotn_coop.us/index.json"
 if [ ! -f "$INDEX" ] || [ "$APP/.env/out/disc/sotn_coop.us.bin" -nt "$INDEX" ]; then
     echo "== savestates (Windows core; about 30 s)"
-    "$DEST/venv/Scripts/python.exe" "$(W "$APP/harness/savestates.py")" "$(W "$APP/.env/out/disc/sotn_coop.us.cue")" | grep -v '^\[' | tail -4
+    (cd "$DEST" && "$DEST/venv/Scripts/python.exe" "$(W "$APP/harness/savestates.py")" "$(W "$APP/.env/out/disc/sotn_coop.us.cue")" </dev/null | grep -v '^\[' | tail -4)
 fi
 
 echo "== presets"

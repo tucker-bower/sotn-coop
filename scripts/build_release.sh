@@ -19,7 +19,7 @@ DISKS="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_env
 VERSION="${1:-$(grep -oP 'VERSION = "\K[^"]+' "$MOD/launcher/report.py")}"
 EMU="$("$PY" -c "import sys; sys.path.insert(0, '$MOD/harness'); from coop_env import ENV, path; print(path(ENV['paths']['win_emulators']))")"
 OUT="$EMU/SOTN-Coop-release"
-STAGE="$MOD/.env/release/stage"
+STAGE="$OUT/stage"
 CACHE="$MOD/.env/cache"
 PYZIP="$CACHE/python-3.14.2-embed-amd64.zip"
 WINPY="$EMU/SOTN-Coop/venv/Scripts/python.exe"
@@ -117,5 +117,7 @@ if find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname
 fi
 
 echo "== installer"
-"$EMU/InnoSetup/ISCC.exe" /Q "/DVersion=$VERSION" "/DStage=$(W "$STAGE")" "/DOut=$(W "$OUT")" "$(W "$MOD/installer/sotn-coop.iss")"
+cp "$MOD/installer/sotn-coop.iss" "$OUT/sotn-coop.iss"
+(cd "$OUT" && "$EMU/InnoSetup/ISCC.exe" /Q "/DVersion=$VERSION" "/DStage=$(W "$STAGE")" "/DOut=$(W "$OUT")" "sotn-coop.iss" </dev/null)
+rm -f "$OUT/sotn-coop.iss"
 ls -l "$OUT"/SOTN-Coop-setup-*.exe
