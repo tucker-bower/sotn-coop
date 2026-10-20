@@ -21,7 +21,10 @@ SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
 UninstallDisplayName=SOTN Co-op
-LicenseFile={#Stage}\app\LICENSES\README.txt
+InfoBeforeFile={#Stage}\app\LICENSES\README.txt
+; As few pages as possible (design/M7b-polish.md): what this is, a desktop shortcut, done.
+DisableDirPage=yes
+DisableReadyPage=yes
 
 [Files]
 Source: "{#Stage}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
