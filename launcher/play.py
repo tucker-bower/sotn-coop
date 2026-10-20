@@ -17,7 +17,8 @@ for sub in ("launcher", "harness", ""):
 
 import pygame  # noqa: E402
 
-from gameview import SCALE, BAR, H, W, Audio, GameView, Pads  # noqa: E402
+from display import Display  # noqa: E402
+from gameview import Audio, GameView, Pads  # noqa: E402
 from link.mailbox import CMD_ARRIVE  # noqa: E402
 from module import COOP_DISC  # noqa: E402
 from session import Session  # noqa: E402
@@ -83,8 +84,7 @@ def main():
         for f in list(CARDS.glob("*.mcd")) + [CARDS / "session.coop"]:
             f.unlink(missing_ok=True)
     pygame.init()
-    pygame.display.set_caption(f"SOTN Co-op playtest: {args.preset}")
-    screen = pygame.display.set_mode((W * SCALE * 2 + 8, H * SCALE + BAR))
+    display = Display({"window_size": (1040, 540)}, f"SOTN Co-op playtest: {args.preset}")
     try:
         audio = Audio()
     except Exception as exc:  # no sound device: play silent
@@ -97,11 +97,11 @@ def main():
                 g.load_card(card.read_bytes())
         if setup_name:
             setup(setup_name, s)
-        view = GameView(s, screen, Pads(), audio, goal=goal, aggro=args.aggro,
+        view = GameView(s, display, Pads(), audio, goal=goal, aggro=args.aggro,
                         save_cards=(CARDS / "A.mcd", CARDS / "B.mcd"), frames=args.frames, profile=args.profile)
         view.run()
         if args.shot:
-            pygame.image.save(screen, args.shot)
+            pygame.image.save(display.screenshot(), args.shot)
     pygame.quit()
 
 

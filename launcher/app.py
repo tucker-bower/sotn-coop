@@ -1,11 +1,15 @@
-"""SOTN Co-op: the player's launcher (design/M6-playable-build.md).
+"""SOTN Co-op: the player's launcher (design/M6-playable-build.md, design/M7b-polish.md).
 
     python launcher/app.py
 
-First run: a short wizard (your disc image, then each player's controller, then the debug
-starts). After that: one big button, Continue or New game. Everything else is one level down:
-savestates, debug starts, settings. Menus work with a controller (d-pad, cross/A = OK,
-circle/B = back) or the keyboard (arrows, Enter, Esc).
+First run: your disc image, once. Then: Couch co-op or Online co-op.
+- Couch: one lobby screen where each player presses a button on their controller to join and
+  picks a character, then Continue or New game.
+- Online: Host (you get a room code to give your partner) or Join (you type theirs).
+Menus work with a controller (d-pad, cross/A = OK, circle/B = back), the keyboard (arrows,
+Enter, Esc) or the mouse. On Windows the window also has a menu bar (launcher/winmenu.py), and
+it can be resized, maximized and made fullscreen (F11), with the games laid out side by side,
+stacked, or in two windows (launcher/display.py).
 """
 
 import logging
@@ -14,7 +18,6 @@ import os
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
@@ -24,33 +27,88 @@ for sub in ("launcher", "harness", "patcher", ""):
 import pygame  # noqa: E402
 
 import paths  # noqa: E402
+from display import CANVAS, LAYOUT_NAMES, Display  # noqa: E402
 from paths import human, load_settings, save_settings  # noqa: E402
+from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
-SIZE = (1032, 532)
+WINDOW_TITLE = "SOTN Co-op"
+SIZE = CANVAS
 INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (150, 20, 30), (12, 8, 14)
+OK_GREEN = (140, 200, 120)
 BUNDLED_BIOS = APP / "bios" / "openbios.bin"
-PATCH = APP / "patcher" / "sotn-coop.bps"
+PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
+CHARACTERS = (("Alucard", True), ("Richter", False), ("Maria", False))  # (name, playable yet)
 
 log = logging.getLogger("launcher")
 
+HELP_PLAY = """Each of you plays your own game, on your own half of the window.
+Whatever one of you finds (relics, items, gold, the map) the other gets too, at once.
+Meet in the same room to fight the same enemies. Bosses pull you both in.
+
+Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
+Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
+Save at a coffin: it saves both games. Continue loads both.
+
+Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
+
+HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Read it to your partner, or paste it to them.
+Joining: type your partner's room code. Both of you need the same version of SOTN Co-op.
+
+If it can't connect:
+·  Windows may ask whether to allow SOTN Co-op through its firewall: choose Allow.
+·  A phone hotspot, or some internet providers, can't connect directly. Try another network.
+·  Still stuck? On the host's router, forward a UDP port to the host's PC; the joiner then types
+   the host's address as ip:port instead of the room code (Help › About shows the port while hosting).
+The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
+
+KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
+               Enter Start,  Right Shift Select.
+Player 2:  I J K L to move.  F Cross,  G Square,  H Circle,  T Triangle,  Q L1,  E R1,
+               Space Start,  Tab Select.
+
+Esc: pause.   F9: report a problem.   F11: fullscreen.   F1 (couch): which game plays the music."""
+
+
+class Navigate(Exception):
+    """A menu-bar item that goes somewhere (New game, Savestates, ...): back to the top, there."""
+
+    def __init__(self, action):
+        super().__init__(action)
+        self.action = action
+
+
+class ConnectFailed(Exception):
+    pass
+
 
 class UI:
-    """Drawing and input for the menus."""
+    """Drawing (on the display's canvas) and input for the menus."""
 
-    def __init__(self, screen):
-        self.screen = screen
+    def __init__(self, display, on_action):
+        self.display = display
+        self.screen = display.canvas
+        self.on_action = on_action  # menu-bar items that don't go anywhere (View, Help...)
         self.title = pygame.font.SysFont("georgia", 34, bold=True)
         self.big = pygame.font.SysFont("georgia", 26)
         self.small = pygame.font.SysFont("georgia", 17)
         self.mono = pygame.font.SysFont("consolas", 14)
+        self._rects = []
 
-    def events(self):
-        """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit", or ("pad", id)."""
+    def events(self, raw=False):
+        """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit",
+        ("pad", id), ("click", index) and ("hover", index). raw: also ("event", ev) for each."""
         out = []
         for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
+            if raw:
+                out.append(("event", ev))
+            if self.display.handle(ev):
+                continue
+            if ev.type in (pygame.QUIT, pygame.WINDOWCLOSE):
                 out.append("quit")
+            elif ev.type == MENU_EVENT:
+                if self.on_action(ev.action) is False:
+                    raise Navigate(ev.action)
             elif ev.type == pygame.KEYDOWN:
                 a = {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
                      pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back"}.get(ev.key)
@@ -66,7 +124,17 @@ class UI:
                     out.append(a)
             elif ev.type == pygame.CONTROLLERDEVICEADDED:
                 pygame._sdl2.controller.Controller(ev.device_index)
+            elif ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
+                pos = self.display.to_canvas(ev.pos)
+                hit = next((k for k, r in self._rects if pos and r.collidepoint(pos)), None)
+                if hit is not None:
+                    out.append(("click" if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 else "hover", hit))
+                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
+                    out.append("back")
         return out
+
+    def flip(self, over_games=False):
+        self.display.present(over_games)
 
     def frame(self, heading, subtitle=""):
         s = self.screen
@@ -84,10 +152,12 @@ class UI:
             for k, line in enumerate(subtitle.split("\n")):
                 t = self.small.render(line, True, DIM)
                 s.blit(t, ((SIZE[0] - t.get_width()) // 2, 128 + k * 22))
+        self._rects = []
 
     def items(self, items, sel, top=200, hero=False):
-        """hero: the first item is the big button (home: Continue / New game)."""
+        """hero: the first item is the big button (Couch co-op / Continue)."""
         y = top
+        self._rects = []
         rest = [label for k, (label, _) in enumerate(items) if not (hero and k == 0)]
         widest = max((self.big.size("›  " + label)[0] for label in rest), default=0)
         left = max(20, (SIZE[0] - widest) // 2)
@@ -100,6 +170,7 @@ class UI:
                 pygame.draw.rect(self.screen, (60, 10, 18) if k == sel else (30, 14, 20), box, border_radius=8)
                 pygame.draw.rect(self.screen, GOLD if k == sel else DIM, box, 2, border_radius=8)
                 self.screen.blit(t, t.get_rect(center=box.center))
+                self._rects.append((k, box))
                 y += box.height + 22
                 if k == sel and hint:
                     h = self.small.render(hint, True, DIM)
@@ -107,6 +178,7 @@ class UI:
                 continue
             t = self.big.render(("›  " if k == sel else "   ") + label, True, color)
             self.screen.blit(t, (left, y))
+            self._rects.append((k, pygame.Rect(left, y, max(widest, t.get_width()), 34)))
             y += 38
             if k == sel and hint:
                 h = self.small.render(hint, True, DIM)
@@ -121,9 +193,8 @@ class UI:
         pygame.draw.rect(self.screen, DIM, (150, y, w, 18), 1)
         pygame.draw.rect(self.screen, BLOOD, (152, y + 2, int((w - 4) * done / max(total, 1)), 14))
 
-    def menu(self, heading, items, subtitle="", footer="", hero=False):
+    def menu(self, heading, items, subtitle="", footer="", hero=False, sel=0):
         """Returns the chosen index, or None (back)."""
-        sel = 0
         while True:
             for a in self.events():
                 if a == "quit":
@@ -136,15 +207,36 @@ class UI:
                     return sel
                 elif a == "back":
                     return None
+                elif isinstance(a, tuple) and a[0] == "hover":
+                    sel = a[1]
+                elif isinstance(a, tuple) and a[0] == "click":
+                    return a[1]
             self.frame(heading, subtitle)
             self.items(items, sel, top=(130 if hero else 200) + 22 * subtitle.count("\n"), hero=hero)
             if footer:
                 self.footer(footer)
-            pygame.display.flip()
+            self.flip()
             pygame.time.wait(16)
 
     def message(self, heading, text, button="OK"):
         self.menu(heading, [(button, "")], text)
+
+    def page(self, heading, text):
+        """A page of text (help), then OK."""
+        lines = text.split("\n")
+        while True:
+            for a in self.events():
+                if a == "quit":
+                    raise SystemExit
+                if a in ("ok", "back") or (isinstance(a, tuple) and a[0] == "click"):
+                    return
+            self.frame(heading)
+            for k, line in enumerate(lines):
+                t = self.small.render(line, True, INK)
+                self.screen.blit(t, (90, 140 + k * 24))
+            self.items([("OK", "")], 0, top=SIZE[1] - 80)
+            self.flip()
+            pygame.time.wait(16)
 
     def confirm(self, heading, text, yes="Yes", no="No"):
         return self.menu(heading, [(no, ""), (yes, "")], text) == 1
@@ -169,7 +261,7 @@ class UI:
                 raise SystemExit
             self.frame(heading, text)
             self.bar(state["done"], state["total"])
-            pygame.display.flip()
+            self.flip()
             pygame.time.wait(30)
         if state["error"]:
             raise state["error"]
@@ -207,6 +299,8 @@ def _pick_file_windows(title, types):
 
 def pick_file(title, types):
     """The system's file picker: Windows' own dialog, or tkinter elsewhere."""
+    if os.environ.get("COOP_PICK_FILE"):  # tests (launcher/uxdriver.py)
+        return Path(os.environ["COOP_PICK_FILE"])
     if sys.platform == "win32":
         try:
             return _pick_file_windows(title, types)
@@ -229,23 +323,66 @@ def pick_file(title, types):
 class Launcher:
     def __init__(self):
         pygame.init()
-        pygame.display.set_caption("SOTN Co-op")
-        self.screen = pygame.display.set_mode(SIZE)
-        self.ui = UI(self.screen)
-        from gameview import Pads
         self.settings = load_settings()
-        self.pads = Pads(self.settings.get("pads") or (None, None))
+        self.display = Display(self.settings, WINDOW_TITLE)
+        self.menubar = WinMenu(WINDOW_TITLE)
+        self.menubar.update(self.settings)
+        self.ui = UI(self.display, self.action)
+        self.screen = self.display.canvas
+        from gameview import Pads
+        self.pads = Pads((None, None))
         self.audio = None
+        self.room_info = ""  # while hosting: the port, for Help › About
         try:
             from gameview import Audio
             self.audio = Audio()
         except Exception:  # noqa: BLE001 - no sound device: play silent
             log.exception("audio")
 
+    # --- the menu bar's items that don't go anywhere (the rest raise Navigate)
+
+    def action(self, action):
+        """Handles a menu-bar item where it stands. False: it goes somewhere (Navigate)."""
+        st = self.settings
+        if action.startswith("layout:"):
+            st["layout"] = action.split(":", 1)[1]
+        elif action.startswith("scaling:"):
+            st["scaling"] = action.split(":", 1)[1]
+        elif action.startswith("netsim:"):
+            st["netsim"] = None if action.endswith("off") else action.split(":", 1)[1]
+        elif action == "fullscreen":
+            self.display.toggle_fullscreen()
+            self.menubar.show(not self.display.fullscreen)
+        elif action == "data_folder":
+            paths.open_folder(paths.data_dir())
+        elif action == "open_log":
+            paths.open_folder(paths.data_dir() / "launcher.log")
+        elif action == "help_play":
+            self.ui.page("How to play", HELP_PLAY)
+        elif action == "help_online":
+            self.ui.page("Online troubleshooting", HELP_ONLINE)
+        elif action == "keys":
+            self.ui.page("Keyboard keys", KEYS_HELP)
+        elif action == "about":
+            from report import VERSION
+            from link.transport import WIRE_VERSION
+            self.ui.page("About SOTN Co-op",
+                         f"Version {VERSION} (link protocol {WIRE_VERSION}).\n"
+                         "A co-op mod of Castlevania: Symphony of the Night, built on sotn-decomp.\n"
+                         "No game data is included: the co-op disc is made from your own.\n"
+                         f"Your saves and bug reports: {paths.data_dir()}\n{self.room_info}")
+        elif action in ("pause", "report", "leave"):
+            pass  # these only mean something in a game (gameview.py)
+        else:
+            return False
+        save_settings(st)
+        self.menubar.update(st)
+        return True
+
     # --- the environment the games run in
 
     def bios(self):
-        b = self.settings.get("bios")
+        b = self.settings.get("bios") or (None if BUNDLED_BIOS.exists() else os.environ.get("COOP_DEV_BIOS"))
         return Path(b) if b and Path(b).exists() else BUNDLED_BIOS
 
     def apply_bios(self):
@@ -293,37 +430,6 @@ class Launcher:
             self.settings["disc"] = str(cue)
             save_settings(self.settings)
             ui.message("Co-op disc ready", f"Made {cue.name}\nnext to your disc image.")
-        if not self.settings.get("pads_set"):
-            self.assign_pads()
-        if not (self.starts_dir() / "index.json").exists():
-            self.make_debug_starts()
-
-    def assign_pads(self):
-        ui = self.ui
-        assign = [None, None]
-        for player in range(2):
-            got = None
-            while got is None:
-                acts = ui.events()
-                if "quit" in acts:
-                    raise SystemExit
-                pressed = [a[1] for a in acts if isinstance(a, tuple) and a[0] == "pad" and a[1] not in assign]
-                if pressed:
-                    got = pressed[0]
-                elif "ok" in acts:  # Enter on the keyboard (a pad's button came with a "pad" above)
-                    got = "keyboard"
-                ui.frame(f"Player {player + 1}: press a button on your controller",
-                         ("Player 1 plays the left screen, player 2 the right one.\n"
-                          "No controller? Press Enter to use the keyboard for this player."))
-                pygame.display.flip()
-                pygame.time.wait(16)
-            assign[player] = None if got == "keyboard" else got
-            pygame.time.wait(300)
-            pygame.event.clear()
-        self.settings["pads"] = assign
-        self.settings["pads_set"] = True
-        save_settings(self.settings)
-        self.pads.assign = list(assign)
 
     def make_debug_starts(self):
         import debugstarts
@@ -347,8 +453,127 @@ class Launcher:
                           "Savestates to start anywhere on the route, for testing and bug reports.\n"
                           f"Made from your disc, once. {text}...")
             self.ui.bar(done, total)
-            pygame.display.flip()
+            self.ui.flip()
             pygame.time.wait(30)
+
+    # --- the lobby: who plays with which controller, and as whom
+
+    def lobby(self, slots=2, online=None, subtitle=""):
+        """Players join by pressing a button on their controller (or Enter on the keyboard), pick
+        a character, and press ✕ / A when ready. Returns each player's controller (instance id,
+        or "kb"), or None (back). online: () -> (text, connected) for the partner's card."""
+        ui = self.ui
+        joined = [None] * slots   # each player's device
+        ready = [False] * slots
+        char = [0] * slots
+        names = {}
+        while True:
+            for a in ui.events(raw=True):
+                if a == "quit":
+                    raise SystemExit
+                if not (isinstance(a, tuple) and a[0] == "event"):
+                    continue
+                ev = a[1]
+                if ev.type == pygame.CONTROLLERBUTTONDOWN:
+                    dev = ev.instance_id
+                    key = {pygame.CONTROLLER_BUTTON_A: "ok", pygame.CONTROLLER_BUTTON_START: "ok",
+                           pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left",
+                           pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right"}.get(ev.button, "any")
+                elif ev.type == pygame.KEYDOWN and not ev.mod & pygame.KMOD_ALT:
+                    dev = "kb"
+                    key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back",
+                           pygame.K_LEFT: "left", pygame.K_RIGHT: "right"}.get(ev.key)
+                    if key is None:
+                        continue
+                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and not any(joined):
+                    return None  # right click: back
+                else:
+                    continue
+                if dev != "kb" and dev not in names:
+                    self.pads.refresh()
+                    names.update({c.as_joystick().get_instance_id(): c.name for c in self.pads.controllers})
+                    names.update({k: v["name"] for k, v in self.pads.virtual.items()})
+                mine = [i for i, d in enumerate(joined) if d == dev]
+                # A new device joins the first free slot. So does the keyboard again, once its
+                # first player is ready (two people, one keyboard: KEYS has two layouts).
+                if not mine or (dev == "kb" and key == "ok" and ready[mine[-1]] and None in joined):
+                    if key == "back":
+                        if not any(joined):
+                            return None
+                    elif None in joined:
+                        joined[joined.index(None)] = dev
+                    continue
+                i = mine[-1]
+                if key == "ok":
+                    if CHARACTERS[char[i]][1]:
+                        ready[i] = True
+                elif key == "back":
+                    if ready[i]:
+                        ready[i] = False
+                    else:
+                        joined[i] = None
+                elif key in ("left", "right") and not ready[i]:
+                    char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
+            partner = online() if online else None
+            if all(joined) and all(ready) and (partner is None or partner[1]):
+                self.pads.assign = list(joined) + [None] * (2 - slots)
+                return list(joined)
+            ui.frame("Press a button on your controller to join", subtitle)
+            n = slots + (1 if online else 0)
+            w = 300
+            x0 = (SIZE[0] - n * w - (n - 1) * 30) // 2
+            for k in range(n):
+                box = pygame.Rect(x0 + k * (w + 30), 180, w, 240)
+                if k < slots:
+                    self._card(box, "You" if online else f"Player {k + 1}", joined[k], ready[k], char[k], names)
+                else:
+                    self._partner_card(box, *partner)
+            ui.footer("Joined? Left / right picks a character. Cross / A / Enter: ready. Circle / B / Esc: leave."
+                      if any(joined) else "No controller? Press Enter to play with the keyboard.   Esc: back")
+            ui.flip()
+            pygame.time.wait(16)
+
+    def _card(self, box, title, dev, ready, char, names):
+        s, ui = self.screen, self.ui
+        pygame.draw.rect(s, (40, 16, 24) if dev else (24, 14, 20), box, border_radius=10)
+        pygame.draw.rect(s, OK_GREEN if ready else (GOLD if dev else DIM), box, 2, border_radius=10)
+        t = ui.big.render(title, True, GOLD if dev else DIM)
+        s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
+        if not dev:
+            for k, line in enumerate(("Press any button", "on a controller", "", "(or Enter: keyboard)")):
+                t = ui.small.render(line, True, DIM)
+                s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 80 + k * 24)))
+            return
+        name = "Keyboard" if dev == "kb" else names.get(dev, "Controller")
+        t = ui.small.render(name[:32], True, INK)
+        s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 56)))
+        cname, playable = CHARACTERS[char]
+        t = ui.big.render(cname, True, INK if playable else DIM)
+        r = t.get_rect(midtop=(box.centerx, box.y + 104))
+        s.blit(t, r)
+        if not ready:  # arrows: the character can be changed
+            for sign, x in ((-1, r.left - 22), (1, r.right + 22)):
+                cy = r.centery
+                pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
+        if not playable:
+            t = ui.small.render("Coming in a later version", True, DIM)
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 142)))
+        if ready:
+            t = ui.big.render("Ready!", True, OK_GREEN)
+        else:
+            t = ui.small.render("Cross / A when ready", True, DIM)
+        s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 188)))
+
+    def _partner_card(self, box, text, connected):
+        s, ui = self.screen, self.ui
+        pygame.draw.rect(s, (24, 20, 30), box, border_radius=10)
+        pygame.draw.rect(s, OK_GREEN if connected else DIM, box, 2, border_radius=10)
+        t = ui.big.render("Your partner", True, GOLD)
+        s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
+        for k, part in enumerate(text.split("\n")):
+            big = k == 1 and not connected and "-" in part and len(part) <= 9  # the room code
+            t = (ui.title if big else ui.small).render(part, True, GOLD if big else (OK_GREEN if connected and k == 0 else INK))
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 64 + k * 30 + (8 if k > 1 and not connected else 0))))
 
     # --- home
 
@@ -357,40 +582,63 @@ class Launcher:
         return f"Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
 
     def home(self):
-        from archive import Playthrough
+        pending = None
         while True:
-            pts = Playthrough.all()
-            items, actions = [], []
-            if pts:
-                items.append((f"Continue: {pts[0].name}", "Both games load your last joint save"))
-                actions.append(("continue", pts[0]))
-            items.append(("New game", "Both players start a new game (each picks a name)"))
-            actions.append(("new", None))
-            for label, hint, act in (("Play online", "Play with a friend on another PC using a connect code or IP", "online"),
-                                     ("Savestates", "Go back to a moment of a playthrough; see the space they use", "states"),
-                                     ("Debug starts", "Start both games anywhere on the route (testing)", "debug"),
-                                     ("Settings", "Controllers, music, boss aggro, BIOS, folders", "settings"),
-                                     ("Quit", "", "quit")):
-                items.append((label, hint))
-                actions.append((act, None))
-            choice = self.ui.menu("", items, footer=self.storage_line(), hero=True)
-            if choice is None:
-                continue
-            act, arg = actions[choice]
-            if act == "quit":
+            try:
+                if pending:
+                    act, pending = pending, None
+                    self.go(act)
+                    continue
+                choice = self.ui.menu("", [("Couch co-op", "Two players on this PC, each with a controller"),
+                                           ("Online co-op", "Play with a friend on their own PC"),
+                                           ("Settings", "Layout, pixels, music, boss aggro, BIOS, disc"),
+                                           ("Quit", "")], footer=self.storage_line(), hero=True)
+                if choice == 3:
+                    return
+                if choice is not None:
+                    self.go(("couch", "online", "settings")[choice])
+            except Navigate as n:
+                pending = n.action
+
+    def go(self, act):
+        """Where a home choice or a menu-bar item leads."""
+        if act in ("couch", "new", "continue"):
+            self.couch(act)
+        elif act == "online":
+            self.online_menu()
+        elif act == "settings":
+            self.settings_menu()
+        elif act == "savestates":
+            self.savestates()
+        elif act == "debug_starts":
+            self.debug_starts()
+        elif act == "controllers":
+            self.lobby()
+        elif act == "quit":
+            raise SystemExit
+
+    def couch(self, act="couch"):
+        from archive import Playthrough
+        if self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is None:
+            return
+        pts = Playthrough.all()
+        if act == "new" or not pts:
+            choice = "new"
+        elif act == "continue":
+            choice = "continue"
+        else:
+            k = self.ui.menu("", [(f"Continue: {pts[0].name}", "Both games load your last joint save"),
+                                  ("New game", "Both players start a new game (each picks a name)"),
+                                  ("Savestates", "Go back to a moment of a playthrough")], hero=True)
+            if k is None:
                 return
-            if act == "new":
-                self.play(Playthrough.new(), fresh=True)
-            elif act == "continue":
-                self.play(arg)
-            elif act == "online":
-                self.online_menu()
-            elif act == "states":
-                self.savestates()
-            elif act == "debug":
-                self.debug_starts()
-            elif act == "settings":
-                self.settings_menu()
+            choice = ("continue", "new", "savestates")[k]
+        if choice == "new":
+            self.play(Playthrough.new(), fresh=True)
+        elif choice == "continue":
+            self.play(pts[0])
+        else:
+            self.savestates()
 
     # --- playing
 
@@ -407,10 +655,14 @@ class Launcher:
             cards = (playthrough.card(who),) if playthrough else None
         else:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
-        view = GameView(s, self.screen, self.pads, self.audio, playthrough, goal,
-                        self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards)
-        if view.run() == "quit":
+        view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
+                        self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
+                        launcher=self)
+        result = view.run()
+        if result == "quit":
             raise SystemExit
+        if isinstance(result, tuple) and result[0] == "navigate":
+            raise Navigate(result[1])
 
     def load_cards(self, s, playthrough):
         if len(s.games) == 1:
@@ -434,7 +686,7 @@ class Launcher:
                 raise SystemExit
             self.ui.frame(heading, "Starting the game" if len(s.games) == 1 else "Starting both games")
             self.ui.bar(k, 60)
-            pygame.display.flip()
+            self.ui.flip()
         return False
 
     def play(self, playthrough, fresh=False):
@@ -446,7 +698,7 @@ class Launcher:
             playthrough.save_info()
             self.run_view(s, playthrough)
 
-    # --- online co-op (design/M7, D74)
+    # --- online co-op (design/M7, design/M7b-netcode.md)
 
     def _clip_put(self, text):
         try:
@@ -461,14 +713,18 @@ class Launcher:
             return ""
 
     def ask_code(self, heading, subtitle, initial=""):
-        """Prompts for a connect code or IP:port. Supports typing, Ctrl+V, or controller paste."""
+        """Prompts for a room code or IP:port. Typing, Ctrl+V, or paste from a controller (□ / X)."""
         text = initial
         pygame.key.start_text_input()
         try:
             while True:
                 for ev in pygame.event.get():
-                    if ev.type == pygame.QUIT:
+                    if self.display.handle(ev):
+                        continue
+                    if ev.type in (pygame.QUIT, pygame.WINDOWCLOSE):
                         raise SystemExit
+                    if ev.type == MENU_EVENT and self.action(ev.action) is False:
+                        raise Navigate(ev.action)
                     if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
                             return text.strip()
@@ -498,8 +754,8 @@ class Launcher:
                 shown = text + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
                 t = self.ui.big.render(shown, True, INK)
                 self.screen.blit(t, (box.x + 16, box.y + 10))
-                self.ui.footer("Type code or press Ctrl+V (or Square / X on pad) to paste · Enter: Connect · Esc: Back")
-                pygame.display.flip()
+                self.ui.footer("Type the code, or Ctrl+V to paste (Square / X on a controller)  ·  Enter: join  ·  Esc: back")
+                self.ui.flip()
                 pygame.time.wait(16)
         finally:
             pygame.key.stop_text_input()
@@ -510,16 +766,16 @@ class Launcher:
             pts = Playthrough.all()
             items, actions = [], []
             if pts:
-                items.append((f"Host online: Continue {pts[0].name}", "Host and resume your last joint save with your partner"))
+                items.append((f"Host: continue {pts[0].name}", "Resume your last joint save, with your partner"))
                 actions.append(("host_continue", pts[0]))
-            items.append(("Host online: New game", "Create a room code and invite a partner on another PC"))
+            items.append(("Host: new game", "You get a room code to give your partner"))
             actions.append(("host_new", None))
-            items.append(("Join a partner's game", "Enter your partner's 6-character room code, 10-character connect code, or IP:port"))
+            items.append(("Join your partner", "Type the room code your partner gives you"))
             actions.append(("join", None))
             items.append(("Back", ""))
             actions.append(("back", None))
-            choice = self.ui.menu("Play online", items,
-                                  "Each player runs one game on their own PC. Both must have the same co-op version.")
+            choice = self.ui.menu("Online co-op", items,
+                                  "Each of you plays on your own PC, with the same version of SOTN Co-op.")
             if choice is None or actions[choice][0] == "back":
                 return
             act, arg = actions[choice]
@@ -539,75 +795,35 @@ class Launcher:
             patch_crc=self.patch_crc(),
         )
 
+    def partner_line(self, s, waiting):
+        """For the lobby's partner card: (text, connected). Raises ConnectFailed."""
+        st = s.local.host("handshake_tick")
+        c = s.local.host("connect_status") or {}
+        if st.get("mismatch"):
+            raise ConnectFailed(st["mismatch"])
+        if st.get("partner_hello") and c.get("state", "connected") == "connected":
+            ping = f"ping {st['rtt_ms']} ms" if st.get("rtt_ms") is not None else "measuring the ping…"
+            return f"Connected!\n{ping}", True
+        if c.get("state") == "failed":
+            raise ConnectFailed(c.get("reason") or "")
+        return waiting, False
+
     def host_online(self, playthrough, fresh=False):
-        from link.rendezvous import (ConnectError, RoomResponder, encode_endpoint, local_ip,
-                                     make_room_code, parse_connect_input, stun_public_endpoint)
+        from link.rendezvous import make_room_code
         with self.online_session(None, playthrough, rank=0) as s:
-            lan = (local_ip(), s.port)
-            wan = stun_public_endpoint(0, timeout=1.0)
-            shown_ep = (wan[0], s.port) if wan else lan
-            room_code = make_room_code()
-            ep_code = encode_endpoint(*shown_ep)
-            self._clip_put(room_code)
-            responder = RoomResponder(room_code, lan, shown_ep)
+            room = make_room_code()
+            self._clip_put(room)
+            s.local.host("start_connect", room, "host")
+            self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
-                sel = 0
-                menu_items = [
-                    (f"Copy room code ({room_code})", "Copied to clipboard"),
-                    (f"Copy direct connect code ({ep_code})", f"Direct endpoint: {shown_ep[0]}:{shown_ep[1]} (LAN {lan[0]}:{lan[1]})"),
-                    ("Enter partner's code (if behind strict NAT)", "Simultaneous hole-punch toward your partner's code"),
-                    ("Start game now (partner can join in-game)", ""),
-                    ("Cancel", ""),
-                ]
-                while True:
-                    for a in self.ui.events():
-                        if a == "quit":
-                            raise SystemExit
-                        if a == "back":
-                            return
-                        if a == "up":
-                            sel = (sel - 1) % len(menu_items)
-                        elif a == "down":
-                            sel = (sel + 1) % len(menu_items)
-                        elif a == "ok":
-                            if sel == 0:
-                                self._clip_put(room_code)
-                            elif sel == 1:
-                                self._clip_put(ep_code)
-                            elif sel == 2:
-                                peer_txt = self.ask_code("Partner's code", "Enter your partner's 10-character connect code or IP:port:")
-                                if peer_txt:
-                                    try:
-                                        kind, val = parse_connect_input(peer_txt)
-                                        if kind in ("direct", "endpoint"):
-                                            s.connect(val)
-                                    except ConnectError as e:
-                                        self.ui.message("Check that code", str(e))
-                            elif sel == 3:
-                                break
-                            elif sel == 4:
-                                return
-                    else:
-                        if responder.joiner_endpoint and s.peer is None:
-                            s.connect(responder.joiner_endpoint)
-                        st = s.local.host("handshake_tick")
-                        if st.get("mismatch"):
-                            self.ui.message("Version mismatch — connection refused", st["mismatch"])
-                            return
-                        if st.get("partner_hello"):
-                            break
-                        self.ui.frame(
-                            f"Room code:  {room_code}",
-                            f"Give your partner room code  {room_code}  (or connect code  {ep_code}).\n"
-                            "Waiting for partner to connect…",
-                        )
-                        self.ui.items(menu_items, sel, top=210)
-                        pygame.display.flip()
-                        pygame.time.wait(16)
-                        continue
-                    break
+                if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them."),
+                              f"Give your partner the room code {room}: it's on your clipboard.") is None:
+                    return
+            except ConnectFailed as e:
+                self.ui.message("Couldn't reach your partner", str(e))
+                return
             finally:
-                responder.close()
+                self.room_info = ""
             if not fresh:
                 self.load_cards(s, playthrough)
             if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
@@ -617,15 +833,12 @@ class Launcher:
 
     def join_online(self):
         from archive import Playthrough
-        from link.rendezvous import ConnectError, local_ip, parse_connect_input, resolve_room_code
+        from link.rendezvous import ConnectError, parse_connect_input
         code = ""
         while True:
-            code = self.ask_code(
-                "Join a partner's game",
-                "Enter your partner's 6-character room code (e.g. BAT-429),\n"
-                "10-character connect code (e.g. K7M2-9P4Q-W3), or IP:port:",
-                initial=code or self._clip_get()[:24],
-            )
+            code = self.ask_code("Join your partner",
+                                 "Type the room code your partner gives you (like BAT-7K2Q).",
+                                 initial=code or self._clip_get()[:24])
             if code is None:
                 return
             try:
@@ -637,45 +850,23 @@ class Launcher:
             playthrough = pts[0] if pts else Playthrough.new("Online co-op")
             with self.online_session(None, playthrough, rank=1) as s:
                 if kind == "room":
-                    try:
-                        peer = self.ui.wait_for(
-                            f"Looking up room {target}",
-                            "Finding your partner's game…",
-                            lambda progress: resolve_room_code(target, (local_ip(), s.port), timeout=3.5),
-                        )
-                    except ConnectError as e:
-                        self.ui.message("Couldn't find that room", str(e))
-                        continue
+                    s.local.host("start_connect", target, "join")
+                    waiting = f"Room\n{target}\nlooking for your partner…"
                 else:
-                    peer = target
-                s.connect(peer)
-                connected = False
-                for k in range(180):  # up to ~3 seconds for HELO handshake
-                    if "quit" in self.ui.events():
-                        raise SystemExit
-                    st = s.local.host("handshake_tick")
-                    if st.get("mismatch"):
-                        self.ui.message("Version mismatch — connection refused", st["mismatch"])
-                        return
-                    if st.get("partner_hello"):
-                        connected = True
-                        break
-                    self.ui.frame("Connecting to partner…", f"Peer: {peer[0]}:{peer[1]}")
-                    self.ui.bar(k, 180)
-                    pygame.display.flip()
-                    pygame.time.wait(16)
-                if not connected:
-                    if not self.ui.confirm(
-                        "No reply from partner yet",
-                        f"Sent packets to {peer[0]}:{peer[1]}, but haven't heard back yet.\n"
-                        "Start the game anyway (it will link as soon as packets arrive)?",
-                        yes="Start anyway", no="Try another code",
-                    ):
+                    s.connect(target)
+                    waiting = f"{target[0]}:{target[1]}\nconnecting…"
+                try:
+                    if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner's game.") is None:
                         continue
+                except ConnectFailed as e:
+                    self.ui.message("Couldn't reach your partner", str(e))
+                    continue
                 self.load_cards(s, playthrough)
                 playthrough.save_info()
                 self.run_view(s, playthrough)
                 return
+
+    # --- the rest
 
     def savestates(self):
         from archive import Playthrough, load_pair
@@ -701,7 +892,7 @@ class Launcher:
                     ui.message(p.name, "No savestates yet.")
                     continue
                 k = ui.menu("Go back to…", [(label, "") for label, _, _ in pairs[:9]])
-                if k is None:
+                if k is None or (not all(self.pads.assign) and self.lobby() is None):
                     continue
                 label, fa, fb = pairs[k]
                 a, b = load_pair(fa, fb)
@@ -732,7 +923,7 @@ class Launcher:
         names = list(starts)
         k = self.ui.menu("Debug starts", [(n, starts[n]["about"]) for n in names],
                          "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
-        if k is None:
+        if k is None or (not all(self.pads.assign) and self.lobby() is None):
             return
         file = str(self.starts_dir() / starts[names[k]]["file"])
         with self.session((file, file), None) as s:
@@ -740,33 +931,41 @@ class Launcher:
 
     def settings_menu(self):
         ui = self.ui
+        sel = 0
         while True:
             st = self.settings
             bios = "OpenBIOS (included)" if self.bios() == BUNDLED_BIOS else f"Your BIOS: {self.bios().name}"
-            items = [(f"Music: {st.get('music', 'auto')}", "Which game plays the music (auto: the left one while it's in play)"),
+            items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'side')]}", "Couch: how the two games share the window"),
+                     (f"Pixels: {'Sharp' if st.get('scaling', 'sharp') == 'sharp' else 'Smooth'}",
+                      "Sharp keeps every pixel crisp; Smooth softens them. Always the true 4:3 picture."),
+                     (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
-                     ("Controllers: assign again", "Press a button on each player's controller"),
                      (bios, "Change the BIOS"),
                      ("Disc: choose again", self.settings.get("disc") or ""),
                      ("Open the data folder", str(paths.data_dir()))]
-            k = ui.menu("Settings", items, footer=self.storage_line())
+            k = ui.menu("Settings", items, footer=self.storage_line(), sel=sel)
             if k is None:
                 return
+            sel = k
             if k == 0:
-                st["music"] = {"auto": "left", "left": "right", "right": "auto"}[st.get("music", "auto")]
+                order = list(LAYOUT_NAMES)
+                st["layout"] = order[(order.index(st.get("layout", "side")) + 1) % len(order)]
             elif k == 1:
-                st["aggro"] = (st.get("aggro", 50) + 10) % 110
+                st["scaling"] = "smooth" if st.get("scaling", "sharp") == "sharp" else "sharp"
             elif k == 2:
-                self.assign_pads()
+                st["music"] = {"auto": "left", "left": "right", "right": "auto"}[st.get("music", "auto")]
             elif k == 3:
-                self.choose_bios()
+                st["aggro"] = (st.get("aggro", 50) + 10) % 110
             elif k == 4:
+                self.choose_bios()
+            elif k == 5:
                 st["disc"] = None
                 save_settings(st)
                 self.wizard()
-            elif k == 5:
+            elif k == 6:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
+            self.menubar.update(st)
 
     def choose_bios(self):
         ui = self.ui
@@ -800,6 +999,8 @@ def main():
         log.exception("crash")
         raise
     finally:
+        app.display.remember()
+        save_settings(app.settings)
         pygame.quit()
 
 

@@ -42,10 +42,10 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.
             # Virtual time for the simulated internet (link/netsim.py): this game's frames / 60,
             # with the second game half a frame behind (the driver steps them alternately).
             # Real-time play (audio) keeps the wall clock.
-            clock = {"t": rank / 120}
+            clock = {"t": rank / 120, "dt": 1 / 60}
             if not audio:
                 transport.clock = lambda: clock["t"]
-            host = Host(mailbox, transport, rank, patch_crc=patch_crc)
+            host = Host(mailbox, transport, rank, patch_crc=patch_crc, playout=learn_peer)
             linked = True
             import collections
             import time
@@ -57,7 +57,7 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.
                     n, p1 = args
                     for _ in range(n):
                         emu.step(1, p1)
-                        clock["t"] += 1 / 60
+                        clock["t"] += clock["dt"]
                         if linked:
                             t0 = time.perf_counter()
                             host.after_frame()
@@ -66,6 +66,9 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.
                 elif cmd == "host_ms":
                     conn.send(("ok", list(host_ms)))
                     host_ms.clear()
+                elif cmd == "rate":  # this PC's frame rate (its clock drifts against the other's)
+                    clock["dt"] = 1 / args
+                    conn.send(("ok", None))
                 elif cmd == "stall":  # this PC hitches: time passes, the game doesn't run
                     clock["t"] += args / 60
                     conn.send(("ok", None))
@@ -159,6 +162,9 @@ class Game:
         """The host's milliseconds per frame since last asked."""
         return self._ask("host_ms")
 
+    def set_rate(self, fps):
+        return self._ask("rate", fps)
+
     def stall(self, frames):
         return self._ask("stall", frames)
 
@@ -236,6 +242,7 @@ class Session:
         """Both directions through a simulated internet (link/netsim.py), seeded per direction."""
         for i, g in enumerate(self.games):
             g.transport("set_netsim", profile, seed * 2 + i, **overrides)
+            g.host("set_playout", bool(profile))
 
     def step(self, n=1, p1=("", ""), each=None):
         """Steps both games n frames, alternating one frame each. p1 is (pad A, pad B), or a

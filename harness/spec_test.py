@@ -13,8 +13,9 @@ from scenario import scenario  # first: puts `link` on the path
 from emu import Emu  # noqa: F401
 from module import COOP_DISC
 
-HEADER = struct.Struct("<4sI")
+HEADER = struct.Struct("<4sII")  # tag, seq, the sender's frame
 PRESENCE = 0x2C
+PRES_TAIL = 16  # snapshot ack, clock, echoed clock, hold (docs/link-protocol.md)
 GOLD = 0x80097964 + 0x28C  # g_Status.gold (the test reads the game; the partner doesn't)
 
 
@@ -28,11 +29,12 @@ class SpecPartner:
         self.port = self.sock.getsockname()[1]
         self.peer = None
         self.seq = 0
+        self.frame = 0
         self.next_event = 1
 
     def send(self, tag, payload):
         self.seq += 1
-        self.sock.sendto(HEADER.pack(tag, self.seq) + payload, self.peer)
+        self.sock.sendto(HEADER.pack(tag, self.seq, self.frame) + payload, self.peer)
 
     def receive(self):
         out = []
@@ -41,7 +43,7 @@ class SpecPartner:
                 data = self.sock.recv(65536)
             except BlockingIOError:
                 return out
-            tag, seq = HEADER.unpack_from(data)
+            tag, seq, _ = HEADER.unpack_from(data)
             out.append((tag, seq, data[HEADER.size:]))
 
     def presence(self, flags, stage, room, x, y):
@@ -50,7 +52,7 @@ class SpecPartner:
         struct.pack_into("<H", p, 0x04, stage)
         struct.pack_into("<hh", p, 0x08, *room)
         struct.pack_into("<hh", p, 0x0C, x, y)
-        return bytes(p)
+        return bytes(p) + bytes(PRES_TAIL)  # no snapshots decoded, no clock: all zero
 
     def events(self, *events):
         """Sends events (type, a, b), numbered from 1."""
@@ -71,6 +73,8 @@ def link_spec_conformance(run):
     e = run.emu
     mailbox = Mailbox(HarnessAdapter(e), symbols()["g_CoopLink"])
     transport = UdpTransport()
+    clock = {"t": 0.0}
+    transport.clock = lambda: clock["t"]  # the game's time, however fast the harness runs
     host = Host(mailbox, transport, rank=0)
     partner = SpecPartner()
     transport.connect(partner.port)
@@ -81,17 +85,19 @@ def link_spec_conformance(run):
         for _ in range(n):
             if partner_presence:
                 partner.send(b"PRES", partner.presence(1, 0x41, (20, 39), 90, 136))
+            partner.frame += 1
             run.step(1)
+            clock["t"] += 1 / 60
             host.after_frame()
             for tag, _, payload in partner.receive():
                 got.setdefault(tag, []).append(payload)
 
     frame(70)
     hello = [json.loads(p) for p in got.get(b"HELO", [])]
-    run.expect(hello and hello[0]["link"] == 8, "the host says HELO with link version 8", hello=hello[:1])
-    partner.send(b"HELO", json.dumps({"link": 8, "patch": None}).encode())
+    run.expect(hello and hello[0]["link"] == 9, "the host says HELO with link version 9", hello=hello[:1])
+    partner.send(b"HELO", json.dumps({"link": 9, "patch": None, "sid": "spec"}).encode())
     pres = got.get(b"PRES", [])
-    run.expect(pres and len(pres[-1]) == PRESENCE, "PRES every frame, 0x2C bytes", count=len(pres))
+    run.expect(pres and len(pres[-1]) == PRESENCE + PRES_TAIL, "PRES every frame, 0x2C + 16 bytes", count=len(pres))
     me = pres[-1]
     run.expect(me[0] & 1 and struct.unpack_from("<H", me, 4)[0] == 0x41, "its presence: in play, castle entrance",
                flags=me[0], stage=hex(struct.unpack_from("<H", me, 4)[0]))
@@ -123,7 +129,7 @@ def link_spec_conformance(run):
     run.expect(gold_events, "GOLD +50 among them, numbered", events=sorted(records.items())[:6])
     first = max(records)
     got.clear()
-    frame(40)  # no ack yet: it's resent every 15 frames
+    frame(40)  # no ack yet: it's resent after a timeout (0.25 s before any round trip is measured)
     run.expect(len(got.get(b"EVTS", [])) >= 2, "unacked events are resent", resends=len(got.get(b"EVTS", [])))
     partner.send(b"ACK ", struct.pack("<I", first))
     frame(2)
@@ -131,14 +137,14 @@ def link_spec_conformance(run):
     frame(40)
     run.expect(not got.get(b"EVTS"), "and not after the ack")
 
-    partner.send(b"HELO", json.dumps({"link": 7, "patch": None}).encode())
+    partner.send(b"HELO", json.dumps({"link": 8, "patch": None, "sid": "spec"}).encode())
     frame(3)
-    run.expect(host.mismatch and "version" in host.mismatch, "a partner with link 7 is refused", why=host.mismatch)
+    run.expect(host.mismatch and "version" in host.mismatch, "a partner with link 8 is refused", why=host.mismatch)
     got.clear()
     frame(70)
     run.expect(not got.get(b"PRES") and got.get(b"HELO"), "then only HELO is sent (nothing relayed)",
                sent={k.decode(): len(v) for k, v in got.items()})
-    partner.send(b"HELO", json.dumps({"link": 8, "patch": None}).encode())
+    partner.send(b"HELO", json.dumps({"link": 9, "patch": None, "sid": "spec"}).encode())
     frame(3)
     run.expect(host.mismatch is None, "a matching HELO lifts the refusal")
     transport.close()
