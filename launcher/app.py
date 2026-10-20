@@ -523,7 +523,7 @@ class Launcher:
                            pygame.K_LEFT: "left", pygame.K_RIGHT: "right"}.get(ev.key)
                     if key is None:
                         continue
-                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and not any(joined):
+                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and joined.count(None) == slots:
                     return None  # right click: back
                 else:
                     continue
@@ -535,7 +535,7 @@ class Launcher:
                 # first player is ready (two people, one keyboard: KEYS has two layouts).
                 if not mine or (dev == "kb" and key == "ok" and ready[mine[-1]] and None in joined):
                     if key == "back":
-                        if not any(joined):
+                        if joined.count(None) == slots:
                             return None
                     elif None in joined:
                         joined[joined.index(None)] = dev
@@ -552,7 +552,7 @@ class Launcher:
                 elif key in ("left", "right") and not ready[i]:
                     char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
             partner = online() if online else None
-            if all(joined) and all(ready) and (partner is None or partner[1]):
+            if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
                 return list(joined)
             ui.frame("Press a button on your controller to join", subtitle)
@@ -566,17 +566,18 @@ class Launcher:
                 else:
                     self._partner_card(box, *partner)
             ui.footer("Joined? Left / right picks a character. Cross / A / Enter: ready. Circle / B / Esc: leave."
-                      if any(joined) else "No controller? Press Enter to play with the keyboard.   Esc: back")
+                      if joined.count(None) < slots else "No controller? Press Enter to play with the keyboard.   Esc: back")
             ui.flip()
             pygame.time.wait(16)
 
     def _card(self, box, title, dev, ready, char, names):
         s, ui = self.screen, self.ui
-        pygame.draw.rect(s, (40, 16, 24) if dev else (24, 14, 20), box, border_radius=10)
-        pygame.draw.rect(s, OK_GREEN if ready else (GOLD if dev else DIM), box, 2, border_radius=10)
-        t = ui.big.render(title, True, GOLD if dev else DIM)
+        joined = dev is not None  # a controller's instance id can be 0
+        pygame.draw.rect(s, (40, 16, 24) if joined else (24, 14, 20), box, border_radius=10)
+        pygame.draw.rect(s, OK_GREEN if ready else (GOLD if joined else DIM), box, 2, border_radius=10)
+        t = ui.big.render(title, True, GOLD if joined else DIM)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
-        if not dev:
+        if not joined:
             for k, line in enumerate(("Press any button", "on a controller", "", "(or Enter: keyboard)")):
                 t = ui.small.render(line, True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 80 + k * 24)))
@@ -929,7 +930,7 @@ class Launcher:
                     ui.message(p.name, "No savestates yet.")
                     continue
                 k = ui.menu("Go back to…", [(label, "") for label, _, _ in pairs[:9]])
-                if k is None or (not all(self.pads.assign) and self.lobby() is None):
+                if k is None or (None in self.pads.assign and self.lobby() is None):
                     continue
                 label, fa, fb = pairs[k]
                 a, b = load_pair(fa, fb)
@@ -960,7 +961,7 @@ class Launcher:
         names = list(starts)
         k = self.ui.menu("Debug starts", [(n, starts[n]["about"]) for n in names],
                          "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
-        if k is None or (not all(self.pads.assign) and self.lobby() is None):
+        if k is None or (None in self.pads.assign and self.lobby() is None):
             return
         file = str(self.starts_dir() / starts[names[k]]["file"])
         with self.session((file, file), None) as s:
