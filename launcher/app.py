@@ -88,6 +88,9 @@ class UI:
     def items(self, items, sel, top=200, hero=False):
         """hero: the first item is the big button (home: Continue / New game)."""
         y = top
+        rest = [label for k, (label, _) in enumerate(items) if not (hero and k == 0)]
+        widest = max((self.big.size("›  " + label)[0] for label in rest), default=0)
+        left = max(20, (SIZE[0] - widest) // 2)
         for k, (label, hint) in enumerate(items):
             color = GOLD if k == sel else INK
             if hero and k == 0:
@@ -103,7 +106,7 @@ class UI:
                     self.screen.blit(h, ((SIZE[0] - h.get_width()) // 2, SIZE[1] - 64))
                 continue
             t = self.big.render(("›  " if k == sel else "   ") + label, True, color)
-            self.screen.blit(t, (SIZE[0] // 2 - 140, y))
+            self.screen.blit(t, (left, y))
             y += 38
             if k == sel and hint:
                 h = self.small.render(hint, True, DIM)
