@@ -14,7 +14,7 @@ _Last updated: 2026-10-19_
 
 ## In flight
 - PR #4 lands M1–M3 on `coop`. PR #5 (`coop-m4-shared-rooms`) has M3b and M4, built and passing.
-- **M4b and M5 built, all criteria pass** on `coop-m5-bosses`, in a PR stacked on #5.
+- **M4b and M5 built, all criteria pass** on `coop-m5-bosses`, PR #6 (stacked on #5).
   - **M4b:** every playtest-1 note is fixed or explained, plus three bugs found in my own playtests: a glitch when the burning Warg dies, a closed boss door the guest could walk through, and an empty relic message box.
   - **M5:** bosses pull the partner in, have 2× HP and switch targets. A dead player stays down until the boss falls, and cutscenes pull the partner in.
   - **Tools:** autonomous playtests (`harness/playtest.py`: bots, anomaly checks, contact sheets, "suspect" frames) and launcher F9 bookmarks with `harness/replay.py`.
@@ -32,7 +32,7 @@ _Last updated: 2026-10-19_
 - Day 2 of the month (2026-10-19): M0 through M3 done, against budgets that ran to 2026-10-30. Far ahead of plan.
 
 ## Decisions needed (Tucker)
-- Merge PR #4, then #5, then the M4b+M5 PR.
+- Merge PR #4, then #5, then #6 (M4b+M5). Approve or change the M6 design (`design/M6-playable-build.md`): the patch-file distribution is the D9 decision.
 - **Playtest 2:** does the game feel right?
   - aggro switching (a 50% re-roll every 3 s, D62);
   - 2× boss HP;
