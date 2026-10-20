@@ -350,7 +350,10 @@ def _couch(pg, quit_at_end=True):
         ("until", in_game), ("expect", lambda d: d.launcher.pads.assign[1] == 102, "a new controller takes over player 2"),
         ("game_frames", 2300),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("shot", "paused"),
-        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Save and go back to the menu
+        ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("wait", 3),  # Layout: Automatic -> Side by side
+        ("expect", lambda d: d.launcher.settings.get("layout") == "side", "the pause menu changes the layout (View, from a controller)"),
+        ("call", lambda d: d.launcher.action("layout:auto")),
+        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back to the menu
         ("screen", "Home"), ("shot", "home-again"),
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
 
@@ -369,7 +372,7 @@ def _window(pg):
                   ("wait", 20), ("shot", f"resized-{w}x{h}")]
     steps += [("menu", "fullscreen"), ("wait", 30), ("shot", "fullscreen"), ("menu", "fullscreen"),
               ("call", lambda d: d.launcher.display.window.maximize()), ("wait", 30), ("shot", "maximized"),
-              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
               ("screen", "Home"),
               ("expect", lambda d: d.launcher.settings.get("layout") == "auto", "the layout is remembered"),
               ("key", pg.K_UP), ("key", pg.K_RETURN)]
@@ -411,7 +414,7 @@ def _online_host(pg, code_file):
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
-            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
@@ -428,7 +431,7 @@ def _online_join(pg, code_file):
             ("pad", 200, A), ("pad", 200, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
-            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
@@ -453,7 +456,7 @@ def _perf(pg):
                 steps += [("menu", "fullscreen"), ("call", lambda d: d.launcher.display.window.restore())]
     steps += [("menu", "layout:auto"),
               ("expect", lambda d: min(d.perf.values()) >= 55, "60 fps (55+) at every size and layout"),
-              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
     return steps
 

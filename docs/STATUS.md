@@ -20,20 +20,40 @@ _Last updated: 2026-10-20_
   - **M9:** Android port of the launcher and session engine.
   - **M10:** AYN Thor curated dual-screen support (top screen = you, bottom screen = partner) + true expanded-FOV widescreen on the top screen.
 
+- **M7b built** (`coop-m7b-polish`, design `docs/design/M7b-polish.md`, all 9 criteria with evidence):
+  - **Release:** `scripts/release.py` builds a **draft** GitHub release `v0.7.1` (installer + SHA-256), with a game-data check. The README is rewritten for first-time players.
+  - **Launcher:** a mode-first home, a couch lobby (press a button to join, characters with Richter/Maria locked, ready), and an online lobby with room code and ping. A native Windows menu bar, a resizable window, fullscreen, layouts (automatic, side by side, stacked, one player, two windows), and sharp 4:3 pixels: 60 fps at every size on Windows. An unplugged controller pauses its game. The pause menu carries the View settings. Help pages, and an icon.
+  - **Netcode (wire v9):**
+    - a playout/jitter buffer
+    - XOR-delta snapshots (841 → about 250 kbit/s)
+    - round trips measured for free
+    - resends on a measured timeout
+    - STUN on the game socket, two-way rendezvous, hole punching, a room token, restarts handled
+  - **Before/after on simulated networks:** transatlantic stutter 24.7% → 1.7%, bad Wi-Fi 36% → 1.8%. Routers: 12/16 kinds of pairings connect, and the other 4 fail with a reason.
+  - **Stranger playtest** (`docs/playtest/M7b-stranger.md`): found and fixed a silent crash when the installer starts the launcher (Windows RedirectionGuard), a lobby crash with real controllers, LAN candidates, an unclean uninstall, and missing glyphs.
+  - **Widescreen spike** (`docs/design/M10-widescreen-spike.md`): the emulator hack does nothing for SOTN, and true FOV is blocked by VRAM.
+
 ## In flight
-- **M7b (`docs/design/M7b-polish.md`), approved 2026-10-20, being built on `coop-m7b-polish`:** a real GitHub release, a mode-first launcher with couch/online lobbies, a native menu bar, a resizable window with layouts, a widescreen spike, a networking review under simulated real-world networks, and a "stranger" playtest from the README.
-- Correction: no M7 PRs exist. M7 landed on `main` directly, and the repo has no GitHub release yet.
+- **PR for M7b** on `tucker-bower/sotn-coop`, and the **draft release v0.7.1** for Tucker to test and publish.
 
 ## Next
-- **M7b** once approved.
+- Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
 - **M8 tabled (2026-10-20)** while Tucker decides the mixed-character rules. Offered: a bot spike that checks Richter/Maria can reach every area in a normal playthrough, plus a count of the character checks in the game code.
-- M8 design (`docs/design/M8-maria-and-richter.md`):** inspect `disks/sotn.pspus.iso` (`ULUS-10277`) to map Maria, Richter, and alternate DXC dialogue/voice assets, and design character selection + cross-character shared progression rules (D27).
-- **Playtest:** `SOTN-Coop-setup-0.7.0.exe` (couch + online play).
+- Follow-ups worth having:
+  - UPnP port mapping (rescues some symmetric-router cases)
+  - accept `.chd` disc images
+  - a small branded `.exe` so the firewall prompt doesn't say "Python"
 
 ## Budget
-- Day 2 of the month (2026-10-19): M0 through M7 done, far ahead of the 2026-11-18 target.
+- Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
+- **Publish v0.7.1:** after you've tested the draft. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
+- **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
+  - keep it as is (the launcher explains the failure)
+  - UPnP (free, partial)
+  - a small TURN server (about $5/month)
+- **M10 widescreen:** I recommend dropping true expanded FOV (VRAM-blocked, 3–6 weeks of risk) and using the 16:9 bars for co-op info on the AYN Thor.
 - **Before M8 implementation:** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
 
 ## Environment notes

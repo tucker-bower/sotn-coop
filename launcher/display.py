@@ -141,6 +141,7 @@ class Display:
         self._bar_key = None
         self.font = pygame.font.SysFont("consolas", 15)
         self.on_resize = []
+        self.on_fullscreen = []  # f(fullscreen): the menu bar hides in fullscreen
         self._last = ("canvas", False)  # what the window shows: the canvas (over the games?), or the games
 
     # --- settings
@@ -174,6 +175,8 @@ class Display:
             self.remember()
             self.window.set_fullscreen(desktop=True)
             self.settings["_fullscreen"] = True
+        for f in self.on_fullscreen:
+            f(self.fullscreen)
 
     def handle(self, ev):
         """Window events the display looks after itself. True if it used the event."""

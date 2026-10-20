@@ -359,6 +359,7 @@ class Launcher:
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
         self.menubar.update(self.settings)
+        self.display.on_fullscreen.append(lambda fs: self.menubar.show(not fs))
         self.ui = UI(self.display, self.action)
         self.screen = self.display.canvas
         from gameview import Pads
@@ -384,7 +385,6 @@ class Launcher:
             st["netsim"] = None if action.endswith("off") else action.split(":", 1)[1]
         elif action == "fullscreen":
             self.display.toggle_fullscreen()
-            self.menubar.show(not self.display.fullscreen)
         elif action == "data_folder":
             paths.open_folder(paths.data_dir())
         elif action == "open_log":

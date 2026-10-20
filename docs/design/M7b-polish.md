@@ -1,6 +1,25 @@
 # M7b design: Polish M7 into something a non-technical player can use
 
-**Status:** approved 2026-10-20 (Tucker: no stretch mode, ship unsigned, Tucker publishes the release after testing it, and add a networking review, part 6). M8 is tabled until Tucker decides the mixed-character rules.
+**Status:** built 2026-10-20 on `coop-m7b-polish`, with a draft release `v0.7.1` for Tucker to test and publish. Approved earlier that day (Tucker: no stretch mode, ship unsigned, Tucker publishes the release after testing it, and add a networking review, part 6). M8 is tabled until Tucker decides the mixed-character rules.
+
+## Result
+| # | criterion | evidence |
+|---|---|---|
+| 1 | `release_draft` | `scripts/release.py 0.7.1`: draft release with `SOTN-Coop-setup.exe` + `SHA256SUMS.txt`. Game-data check passes (1,286 files; our `app/` files on an allow-list; no disc images, savestates or cards anywhere; nothing disc-sized). The download from the draft matches its SHA-256. The README link (`releases/latest/download/SOTN-Coop-setup.exe`) resolves once Tucker publishes. |
+| 2 | `ux_couch_lobby` | `launcher/uxdriver.py couch`, on Linux headless, on Windows from the stage, and on Windows from the **installed** copy (also under RedirectionGuard). It passes all of these, with 21 screenshots: the locked character can't be ready, home to playing in 10 or fewer inputs (5 on the plain path), Back un-joins, an unplugged pad pauses that game, another pad takes over, and the pause menu changes the layout. |
+| 3 | `ux_online_lobby` | `uxdriver.py online` on Windows: two launchers, host and join by room code, both lobbies show "Connected · ping", both play 15 s, both status bars show "Partner connected · ping 19 ms (good)". Passes through the folder relay **and through the real ntfy.sh relay with real STUN**. |
+| 4 | `window_layouts` | `uxdriver.py window`: every layout (automatic, side by side, stacked, P1, P2, two windows) × both pixel modes, plus 1280×720, 1920×1080, 1080×1920, 700×400, fullscreen and maximized: 34 screenshots. `uxdriver.py perf` on Windows: a steady **60 fps** at every size, in fullscreen at the monitor's native resolution, and with two windows (59.8–60.4). The settings are saved to `settings.json` on every change. |
+| 5 | `menu_bar` | `uxdriver.py menus` on Windows clicks every item through the real menu bar's window procedure (`PostMessage WM_COMMAND`). `win-home.png` shows the native bar. It hides in fullscreen (F11 or the menu). From a controller, the pause menu has Layout, Pixels and How to play, and Settings has everything else. |
+| 6 | `widescreen_spike` | `docs/design/M10-widescreen-spike.md`: the emulator hack gives a pixel-identical picture. True FOV is blocked by VRAM (the framebuffers would overlap the stage textures). Recommendation: drop it, and use the 16:9 bars for co-op info. |
+| 7 | `stranger_playtest` | `docs/playtest/M7b-stranger.md`: 15 friction items, 11 fixed, including **a silent crash when the installer starts the launcher** and a lobby crash with real controllers. README rewritten. |
+| 8 | `net_profiles` | `docs/design/M7b-netcode.md`: before/after across 6 profiles, and `link/test_connect.py` (16 router pairings). Stutter: transatlantic 24.7% → 1.7%, bad Wi-Fi 36% → 1.8%. Bandwidth 841 → about 250 kbit/s. No hand-over on a 0.4 s blip. The host never waits (under 0.4 ms per frame, p99). |
+| 9 | No regressions | 61/61 harness scenarios, `launcher/smoke.py`, `patcher/test_patcher.py` (final run: see the PR). |
+
+**Changed from the design while building**
+- **Pixels:** *Sharp* is "sharp bilinear": enlarged by whole pixels, then smoothed only the last fraction, at the true 4:3 shape. Integer multiples with borders can't also be 4:3 at most window sizes. *Smooth* is plain filtering. No stretch, ever.
+- **Layouts:** added **Automatic**, the default. It picks side by side or stacked, whichever gives each game the bigger picture.
+- **Game menu:** Pause, Report a problem, Leave. Reset and "Joint save now" were left out: the coffins are the save points by design, and a reset of one game mid-co-op has no clear meaning.
+- **Debug starts and network simulation:** under Help › Developer. *Simulate a network* runs couch play through the network simulator (`link/netsim.py`), to feel it.
 **Why:** M7 works in the harness, but a stranger can't actually get it. The README links to a release that doesn't exist, the launcher is a fixed-size window with a flat menu, and couch and online play are mixed together on one home screen.
 
 ## What I found
@@ -122,7 +141,7 @@ The M7 online code (`link/`) has only been tested on loopback, plus one MTU and 
 ## Defaults I'll take unless you object
 - Branch `coop-m7b-polish`, version **0.7.1**.
 - Richter and Maria shown greyed out as "Coming later" in the lobby, not hidden.
-- Default layout: side by side, *Sharp* scaling.
+- Default layout: Automatic (built; see above), *Sharp* pixels.
 - Debug starts move out of the home screen and into Help ▸ Developer.
 
 ## Decisions (resolved 2026-10-20, D76)
