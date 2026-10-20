@@ -49,14 +49,16 @@ class UdpTransport:
         self._snap_parts = {}     # snap_id -> {chunk_idx: bytes, "_cnt": chunk_cnt}
         self._snap_done = 0       # highest snap_id reassembled
         self.max_packet_sent = 0
+        self.bytes_sent = self.packets_sent = 0  # on the wire, with UDP/IP headers
         # Simulated WAN conditions for harness tests (set_wan)
         self.mtu = 0              # if > 0, drop any UDP payload > self.mtu bytes
         self.mtu_drops = 0
         self.loss = 0.0           # fraction of packets randomly dropped (0.0 - 1.0)
         self.loss_drops = 0
-        self.latency_ms = 0       # one-way delay in ms
         self._rng = random.Random(1)
-        self._delayed = []        # [(deliver_at, packet_bytes, peer)]
+        # Time, for everything that waits: the wall clock, or the harness's virtual time
+        self.clock = time.monotonic
+        self.sim = None           # a simulated internet on the way in (link/netsim.py)
 
     def connect(self, peer):
         """peer: port (int), (host, port) tuple/list, or 'host:port' string."""
@@ -70,35 +72,36 @@ class UdpTransport:
         else:
             self.peer = None
 
-    def set_wan(self, mtu=0, loss=0.0, latency_ms=0, seed=1):
-        """Configures simulated WAN limits (MTU cap, packet loss, latency) for harness testing."""
+    def set_wan(self, mtu=0, loss=0.0, seed=1):
+        """Simple sender-side limits for harness tests: an MTU cap and random loss."""
         self.mtu = int(mtu)
         self.loss = float(loss)
-        self.latency_ms = float(latency_ms)
         self._rng = random.Random(seed)
         return True
+
+    def set_netsim(self, profile="lan", seed=1, **overrides):
+        """A simulated internet (link/netsim.py) on datagrams coming in. Both ends must turn it
+        on (it adds a timestamp to every datagram). profile=None turns it off."""
+        from .netsim import NetSim
+        self.sim = NetSim(self.clock, profile, seed, **overrides) if profile else None
+        return True
+
+    def netsim_outage(self, seconds, start=None):
+        """Simulated: nothing gets through, starting now (or at `start`), for `seconds`."""
+        self.sim.outage(self.clock() if start is None else start, seconds)
+        return True
+
+    def netsim_stats(self):
+        return self.sim.stats() if self.sim else None
 
     def wan_stats(self):
         return {
             "max_packet_sent": self.max_packet_sent,
             "mtu_drops": self.mtu_drops,
             "loss_drops": self.loss_drops,
+            "bytes_sent": self.bytes_sent,
+            "packets_sent": self.packets_sent,
         }
-
-    def _flush_delayed(self):
-        if not self._delayed:
-            return
-        now = time.monotonic()
-        still = []
-        for deliver_at, pkt, peer in self._delayed:
-            if now >= deliver_at:
-                try:
-                    self.sock.sendto(pkt, peer)
-                except OSError:
-                    pass
-            else:
-                still.append((deliver_at, pkt, peer))
-        self._delayed = still
 
     def _send_datagram(self, tag, payload):
         if self.peer is None or self.partitioned:
@@ -113,17 +116,16 @@ class UdpTransport:
         if self.loss > 0.0 and self._rng.random() < self.loss:
             self.loss_drops += 1
             return
-        if self.latency_ms > 0:
-            self._delayed.append((time.monotonic() + self.latency_ms / 1000.0, pkt, self.peer))
-            self._flush_delayed()
-            return
+        self.bytes_sent += len(pkt) + 28
+        self.packets_sent += 1
+        if self.sim:
+            pkt = self.sim.stamp(pkt)
         try:
             self.sock.sendto(pkt, self.peer)
         except OSError:  # partner not listening (yet, or any more): presence is best-effort
             pass
 
     def send(self, tag, payload):
-        self._flush_delayed()
         if self.peer is None or self.partitioned:
             return
         if tag == TAG_SNAP:
@@ -138,20 +140,15 @@ class UdpTransport:
 
     def receive(self):
         """All datagrams waiting right now, as (tag, seq, payload), oldest first."""
-        self._flush_delayed()
         out = []
-        while True:
-            try:
-                data, addr = self.sock.recvfrom(65536)
-            except (BlockingIOError, ConnectionRefusedError, OSError):
-                return out
+        for data, addr in self._datagrams():
             if len(data) < _HEADER.size or self.partitioned:
                 continue
             tag, seq = _HEADER.unpack_from(data)
             body = data[_HEADER.size:]
             if self.learn_peer and tag in (TAG_HELLO, TAG_PRESENCE, TAG_EVENTS, TAG_ACK, TAG_SNAP, TAG_SNPC, TAG_CTRL, TAG_CACK):
                 self.peer = addr
-            self.last_rx_time = time.monotonic()
+            self.last_rx_time = self.clock()
             if tag == TAG_SNPC and len(body) >= _SNPC_HDR.size:
                 snap_id, idx, cnt = _SNPC_HDR.unpack_from(body)
                 if snap_id <= self._snap_done or cnt == 0 or idx >= cnt:
@@ -173,6 +170,21 @@ class UdpTransport:
                     del self._snap_parts[oldest]
             else:
                 out.append((tag, seq, body))
+        return out
+
+    def _datagrams(self):
+        """What came in from the socket, through the simulated internet if there is one."""
+        raw = []
+        while True:
+            try:
+                raw.append(self.sock.recvfrom(65536))
+            except (BlockingIOError, ConnectionRefusedError, OSError):
+                break
+        if not self.sim:
+            return raw
+        for data, addr in raw:
+            self.sim.arrive(data, addr)
+        return self.sim.ready()
 
     def close(self):
         self.sock.close()

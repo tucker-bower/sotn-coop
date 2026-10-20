@@ -52,7 +52,7 @@ class Host:
 
     def status(self):
         """Connection and handshake status for the launcher UI and tests."""
-        age = None if self.transport.last_rx_time is None else round(time.monotonic() - self.transport.last_rx_time, 2)
+        age = None if self.transport.last_rx_time is None else round(self.transport.clock() - self.transport.last_rx_time, 2)
         return {
             "rank": self.rank,
             "peer": self.transport.peer,

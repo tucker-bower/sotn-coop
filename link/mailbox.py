@@ -176,6 +176,9 @@ class Mailbox:
         seq, size = struct.unpack("<II", self.adapter.read_bytes(self.address + SNAP_OUT_SEQ, 8))
         return seq, self.adapter.read_bytes(self.address + SNAP_OUT, min(size, SNAP_MAX)) if seq else b""
 
+    def snapshot_in_seq(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + SNAP_IN_SEQ, 4))[0]
+
     def put_snapshot(self, data):
         seq, _ = struct.unpack("<II", self.adapter.read_bytes(self.address + SNAP_IN_SEQ, 8))
         self.adapter.write_bytes(self.address + SNAP_IN, data[:SNAP_MAX])
