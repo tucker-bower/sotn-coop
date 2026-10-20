@@ -87,9 +87,7 @@ def check_continue(launcher, starts):
     p = archive.Playthrough.new("Continue test")
     file = str(launcher.starts_dir() / starts["Alchemy Lab: save room"]["file"])
     with launcher.session((file, file), p) as s:
-        res = save_in_coffin(SessionRun(s, "continue"), s, s.a, s.b, p.joint_save)
-        print("  save:", res, "seq", s.a.mailbox("save_seq"), s.b.mailbox("save_seq"), "card", s.b.mailbox("card_result"),
-              "rooms", s.a.mailbox("self_presence").room, s.b.mailbox("self_presence").room, "joint", s.joint and s.joint.saves)
+        save_in_coffin(SessionRun(s, "continue"), s, s.a, s.b, p.joint_save)
         for who, g in zip("AB", (s.a, s.b)):
             p.card(who).write_bytes(g.card())
     check(p.joint_save.exists(), "the joint save was written")
