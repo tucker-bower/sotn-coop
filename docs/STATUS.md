@@ -34,7 +34,7 @@ _Last updated: 2026-10-20_
   - **Widescreen spike** (`docs/design/M10-widescreen-spike.md`): the emulator hack does nothing for SOTN, and true FOV is blocked by VRAM.
 
 ## In flight
-- **PR for M7b** on `tucker-bower/sotn-coop`, and the **draft release v0.7.1** for Tucker to test and publish.
+- **PR #1 (M7b)** on `tucker-bower/sotn-coop`, and the **draft release v0.7.1** for Tucker to test and publish.
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
