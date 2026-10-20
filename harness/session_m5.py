@@ -162,13 +162,13 @@ def boss_dead_stays_down(run):
                "B fights on")
     for slot in bosses(b):  # B finishes the boss (harness shortcut: one hit left)
         b.write(b.entity(slot), 1, "<h", 0x3E)
-    bot = walker("left", attack_every=6)
     for i in range(1800):
-        run.step(1, p1=("", bot(b.snapshot(), i)))
+        living = list(bosses(b))
+        if not living:
+            break
+        run.step(1, p1=("", toward(b, b, living[0], i)))
         if i % 20 == 0:
             heal(b)
-        if not bosses(b):
-            break
     run.expect(not bosses(b), "B beat the boss", frames=i)
     t = wait_pulled(run, a, b, 1800)
     st = status(a)
