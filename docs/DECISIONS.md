@@ -323,3 +323,21 @@ We publish an xdelta of `DRA.BIN`, `COOP.BIN` and a manifest; never game data. T
 
 **D72: Move the mod to its own repository** (owner, 2026-10-19)
 The co-op mod moves out of the sotn-decomp fork into its own repository, to make it easier to share. Planned for M7. The mod still builds against sotn-decomp, as a dependency rather than a fork.
+
+---
+## M7–M10 planning (2026-10-19)
+
+**D73: Standalone repository target (`tucker-bower/sotn-coop`) and self-hosted CI** (owner, 2026-10-19)
+- **Repository:** `mods/co-op/` moves to `tucker-bower/sotn-coop`, keeping its git commit history.
+- **Dependency model:** `sotn-decomp` is fetched at a pinned commit into `.env/src/sotn-decomp` (or `decomp/`), and our 5-file upstream hook diff (`src/dra/{42398,5087C,62DEC}.c`, `tools/builds/gen.py`, `tools/sotn-assets/build.go`) is applied from a tracked patch file during bootstrap/build.
+- **CI:** runs on a self-hosted runner where the retail disc and BIOS are already available on disk, verifying a clean checkout build and the full harness suite on every push/PR.
+
+**D74: Zero-infrastructure online PC co-op with compressed, MTU-chunked snapshots** (owner / agent-default, 2026-10-19)
+- **Connect codes:** zero-infrastructure P2P connection using public STUN servers (`stun.l.google.com:19302`, `stun.cloudflare.com:3478`) + UPnP port mapping where available, encoding the discovered `ip:port` into a short connect code (plus optional public WebSocket relay signaling for 1-code room matching), with a direct `ip:port` fallback.
+- **Smooth UDP transport:** over the internet, raw 8 KB `SNAP` datagrams exceed path MTU (~1200–1400 bytes) and would suffer IP fragmentation drops. `SNAP` payloads are compressed (`zlib`/`zstd`) and split at the application layer into ≤ 1200-byte chunks (`TAG_SNAP` / `TAG_SNPC`), reassembled per `snap_seq`.
+- **Joint saves online:** when either player saves at a save room (or when the host initiates a Continue / both-dead reload), `JointSave` relays the partner's save command and `SaveData` blob over the reliable event/control channel so both players' local memory cards and `session.coop` files stay in sync across machines.
+
+**D75: Roadmap M8–M10: Richter & Maria from the start + DXC audio/dialogue (M8), Android port (M9), and AYN Thor dual-screen + widescreen (M10)** (owner, 2026-10-19)
+- **M8 (Playable Richter & Maria + DXC dialogue/voices):** Either player can choose Alucard, Richter, or Maria from the start of a fresh playthrough. Character and audio/dialogue assets are extracted from Tucker's local *Dracula X Chronicles* USA ISO (`disks/sotn.pspus.iso`, solving D15 with a `pspus` asset map). Includes a launcher/mod option to use the alternate DXC dialogue and voice acting.
+- **M9 (Android port):** Port the launcher, session engine, and SwanStation Android core integration to Android.
+- **M10 (AYN Thor dual-screen & widescreen):** Curated dual-screen mode for the AYN Thor handheld: the top 6.0" 16:9 screen displays your game and the bottom 3.92" screen displays your partner's screen. Plus an expanded-FOV widescreen mode (not stretched) on the top screen.

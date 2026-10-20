@@ -21,19 +21,23 @@ _Last updated: 2026-10-19_
 - **Playtest 2 is installed** in `Emulators\SOTN-Coop`: 8 presets, including "Boss fight together" and "Cutscene together".
 
 ## Next
-- Tucker's playtest 2 (`README-playtest.md`), plus more autonomous playtest tours meanwhile.
-- **M6 built** (`coop-m6-playable`, PR stacked on #6): the Windows installer, disc patcher, bundled OpenBIOS, event savestates with visible storage, F9 snapshots and the link protocol spec. All 57 scenarios pass. **Next:** Tucker's playtest 3 (`docs/playtest_notes/playtest_3_plan.md`).
-- **M7:** move the mod to its own repository (D72), then online PC co-op.
+- Tucker's playtest 2 (`README-playtest.md`) and playtest 3 (`docs/playtest_notes/playtest_3_plan.md`).
+- **M6 built and verified** (`coop-m6-playable`, PR stacked on #6): Windows installer, disc patcher, bundled OpenBIOS, event savestates with visible storage, F9 snapshots, and link protocol spec. Full multi-instance harness suite passes 57/57.
+- **M7 design ready for review** (`docs/design/M7-repo-and-online.md`): standalone repository (`tucker-bower/sotn-coop`, self-hosted CI, pinned `sotn-decomp` dependency, D72/D73) + online PC co-op (zero-infra connect codes, direct-IP fallback, compressed MTU-chunked snapshots, online joint saves, version mismatch refusal, D74).
+- **Roadmap updated with M8–M10 (D75):**
+  - **M8:** Maria and Richter playable by either player from the start of a fresh playthrough (using local `disks/sotn.pspus.iso`), plus optional DXC alternate dialogue and voice acting.
+  - **M9:** Android port of the launcher and session engine.
+  - **M10:** AYN Thor curated dual-screen support (top screen = you, bottom screen = partner) + true expanded-FOV widescreen on the top screen.
 - **Known gaps:**
   - moving platforms don't carry the guest (D52);
   - bosses other than the Doppleganger are untested (M5 risks);
   - big rooms share only while the players' screens overlap.
 
 ## Budget
-- Day 2 of the month (2026-10-19): M0 through M3 done, against budgets that ran to 2026-10-30. Far ahead of plan.
+- Day 2 of the month (2026-10-19): M0 through M6 done, far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
-- Merge PR #4, then #5, then #6 (M4b+M5). **Approve M6 v2** (`design/M6-playable-build.md`), revised from Tucker's comments: OpenBIOS bundled (tested), savestates never deleted, F9 full snapshot, the launcher architecture ready for online and Android, the Slippi and BBLauncher-style setup, and the patch file (the D9 decision).
+- **Approve M7 design** (`docs/design/M7-repo-and-online.md`). Once approved, I'll branch `coop-m7-repo-online`, build and test online PC co-op + standalone repo scripts, and migrate `mods/co-op/` into `tucker-bower/sotn-coop` with self-hosted CI.
 - **Playtest 2:** does the game feel right?
   - aggro switching (a 50% re-roll every 3 s, D62);
   - 2× boss HP;

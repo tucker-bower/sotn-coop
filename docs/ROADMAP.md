@@ -21,11 +21,13 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M4 | Shared rooms: same enemies, fight together ✅ | 25% | 2026-11-04 (done 10-19) |
 | M4b | Playtest 1 fixes, autonomous playtesting ✅ | (from reserve) | 2026-10-19 (done 10-19) |
 | M5 | Bosses and cutscenes together ✅ | 12% | 2026-11-13 (done 10-19) |
-| M6 | Playable build + playtest | 10% | 2026-11-18 |
+| M6 | Playable build + playtest ✅ | 10% | 2026-11-18 (done 10-19) |
 | — | Reserve | 3% (M3b came out of the M2/M3 savings) | — |
 | R1 | Product emulator: **decided**, our own launcher (D36) | — | — |
-| M7 | Its own repository (D72), online PC co-op | post-month | — |
-| M8+ | Richter/Maria, inverted castle, speedrun features, Android | post-month | — |
+| M7 | Its own repository (`tucker-bower/sotn-coop`, D72/D73), online PC co-op (D74) | post-month | — |
+| M8 | Playable Maria & Richter from the start + DXC alternate dialogue/voices (D75) | post-month | — |
+| M9 | Android port of the launcher and session engine (D36, D75) | post-month | — |
+| M10 | AYN Thor curated dual-screen (top = you, bottom = partner) + true widescreen FOV (D75) | post-month | — |
 | Last | **3–4 players** (D48) | post-month | — |
 
 **Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
@@ -81,9 +83,21 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - Manual (Tucker): install from scratch, then play from a new game through the first few bosses.
 - Online play between two PCs comes next (M7+), then Android (with the disc patched on a PC).
 
-### M7: Its own repository, then online PC co-op
-- **Its own repository (D72):** the co-op mod moves out of the sotn-decomp fork into a repository of its own, which builds against sotn-decomp as a dependency (a pinned version), not as a fork. History for `mods/co-op/` comes along. CI builds and tests from a clean checkout, given a disc and BIOS on the runner.
-- **Online PC co-op:** each player runs one game, connecting with short connect codes and a direct-IP fallback. Mismatched versions are refused with a clear message.
+### M7: Its own repository, then online PC co-op (design: `design/M7-repo-and-online.md`)
+- **Its own repository (D72, D73):** the co-op mod moves out of the sotn-decomp fork into `tucker-bower/sotn-coop`, which builds against a pinned `sotn-decomp` commit as a dependency, not a fork. Git history for `mods/co-op/` comes along. Self-hosted CI builds and runs the full harness suite from a clean checkout.
+- **Online PC co-op (D74):** each player runs one game on their own PC, connecting with zero-infrastructure connect codes (STUN + base32 endpoint/room code) and a direct-IP fallback. Shared-room snapshots are compressed and chunked below path MTU for smooth WAN play, joint saves and both-dead reloads sync over the link, and mismatched versions are refused with a clear message.
+
+### M8: Maria and Richter playable from the start + DXC dialogue/voices (D75)
+- **Playable characters from a fresh game:** either player can pick Alucard, Richter, or Maria right from the start of a new playthrough (including mixed pairs like Alucard + Maria or Richter + Maria), with cross-character puppet rendering in the 8MB area and clear shared-progression rules (D27).
+- **Extracted from local DXC USA (`disks/sotn.pspus.iso`):** builds a `pspus` asset map so Maria's sprites, overlays, and SFX extract cleanly from the USA *Dracula X Chronicles* ISO (resolving D15 without needing the EU disc).
+- **Alternate dialogue & voice acting option:** optional toggle in the patcher/launcher to use the *Dracula X Chronicles* (PSP) English script and voice acting preferred by some players.
+
+### M9: Android port (D36, D75)
+- **Native Android launcher & session engine:** runs the co-op disc on Android using the SwanStation Android arm64 core (`swanstation_libretro_android.so`) and the link protocol (`docs/link-protocol.md`), connecting over Wi-Fi/internet to another Android device or PC, with controller-first UI, event savestates, and F9 snapshots.
+
+### M10: AYN Thor dual-screen & widescreen (D75)
+- **Curated AYN Thor dual-screen mode:** on the AYN Thor clamshell handheld, the top 6.0" 16:9 AMOLED screen renders your game while the bottom 3.92" screen displays your partner's screen live.
+- **True widescreen on the top screen:** expanded horizontal FOV (not stretched 4:3) on the 16:9 top display, widening the draw/clip viewport, room scroll bounds, and entity layout spawn window so rooms and enemies render naturally across the 16:9 frame.
 
 ### Last: 3–4 players (D48)
 Three or four players, each in their own game:
