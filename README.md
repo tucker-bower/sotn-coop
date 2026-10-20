@@ -1,8 +1,8 @@
 # SOTN Co-op
 
-*What is a man? A miserable little pile of secrets — and now, a party of two.*
+*What is a man? A co-operative little pile of friendship.*
 
-**Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two-player odyssey: each hunter roams the cursed corridors on their own screen, free to part ways in the moonlit Marble Gallery or descend together into the Catacombs. Every relic one claims, every door one breaks, every chamber one charts belongs to both — the moment it happens. When fate brings you to the same room, you face the same horde, blade beside blade. When a lord of the night stirs, your partner is summoned to your side and the beast rises with twice its strength, turning its fury from one of you to the other. Fall, and you are reborn beside your ally; fall before a boss, and you must trust your partner to carry the fight. Teleport across the castle in an instant, save at the coffins as one, and stand witness together as the tale unfolds. The night is long. Hunt it together.
+**Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two player adventure: each hunter roams the cursed corridors on their own screen. Explore independently, fight bosses together, share relic and equipment pickups. See your partner's location on the map and teleport to them at will. This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, communicating with each other over a python api. 
 
 ## Quick start (Windows — couch or online co-op)
 1. **You need:** your own copy of *Castlevania: Symphony of the Night* (USA, SLUS-00067) as a disc image (`.bin`/`.cue`; rip it from your disc), a Windows PC, and a controller (two controllers for couch co-op). No BIOS is needed: an open-source one comes with the launcher.
