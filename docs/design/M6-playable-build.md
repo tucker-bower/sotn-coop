@@ -1,6 +1,6 @@
 # M6 design: A playable build
 
-**Status:** approved 2026-10-19 (v2, with Tucker's changes: no timed autosaves, storage made visible; the patch-file patcher approved; nothing moves to M7).
+**Status:** built 2026-10-19 (PR open); awaiting playtest 3. Approved 2026-10-19 (v2, with Tucker's changes: no timed autosaves, storage made visible; the patch-file patcher approved; nothing moves to M7).
 **Context:**
 - D8: ship as a patched disc image.
 - D9: build it from the user's own disc.
@@ -154,11 +154,8 @@ F9, or "Report a problem" on the pause screen, writes one zip to `reports/<time>
 | 4 | Savestates never deleted, and their space visible | **Done:** `launcher/smoke.py`. Moments are a new area, a boss and quitting; 2.1 MB each (B compressed against A). Nothing is overwritten. The home screen and Savestates screen show sizes, and delete asks first. |
 | 5 | The F9 report is complete, and `replay.py` replays it | **Done:** `launcher/smoke.py`, plus `replay.py` on a smoke-test report. |
 | 6 | Debug starts load | **Done:** 9 starts, made in about 26 s on the player's PC. The smoke test plays from one, and the Continue check from another. |
-| 7 | Suite on the patcher's disc, on OpenBIOS and a real BIOS | **Running.** OpenBIOS with the build's disc: all 55 pass. |
+| 7 | Suite on the patcher's disc, on OpenBIOS and a real BIOS | **Done:** on the patcher's disc, OpenBIOS 55/55 and the real BIOS 56/57; the one failure was the save-room fix, not yet built at the time, which now passes on both. The full suite on the final build: 57/57. |
 | 8 | `docs/link-protocol.md`, plus a test from the spec alone | **Done:** `link_spec_conformance`. It also added a version handshake (`HELO`) for online play. |
 | 9 | Manual: Tucker's playtest 3 | **To come.** |
 
-**Still to do:**
-- Finish 7.
-- Tucker's look at the menus: the home screen, the wizard, savestates and settings.
-- Playtest 3 delivery.
+**Still to do:** Tucker's playtest 3 (the installer is in `Emulators\SOTN-Coop-release\`).

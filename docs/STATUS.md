@@ -22,7 +22,7 @@ _Last updated: 2026-10-19_
 
 ## Next
 - Tucker's playtest 2 (`README-playtest.md`), plus more autonomous playtest tours meanwhile.
-- **M6 (approved 2026-10-19, in progress):** the Windows installer, disc patcher, OpenBIOS, event savestates with visible storage, F9 snapshots, the session engine and the link protocol spec.
+- **M6 built** (`coop-m6-playable`, PR stacked on #6): the Windows installer, disc patcher, bundled OpenBIOS, event savestates with visible storage, F9 snapshots and the link protocol spec. All 57 scenarios pass. **Next:** Tucker's playtest 3 (`docs/playtest_notes/playtest_3_plan.md`).
 - **M7:** move the mod to its own repository (D72), then online PC co-op.
 - **Known gaps:**
   - moving platforms don't carry the guest (D52);
