@@ -16,7 +16,7 @@ import sys
 from coop_env import DISKS, savestate
 from emu import SYMBOLS, Emu
 
-GAME_PLAY, GAME_NOW_LOADING, GAME_VIDEO, GAME_PROLOGUE_END = 2, 4, 5, 7
+GAME_TITLE, GAME_PLAY, GAME_NOW_LOADING, GAME_VIDEO, GAME_PROLOGUE_END = 1, 2, 4, 5, 7
 STAGE_ST0, STAGE_NO3 = 0x1F, 0x41
 STATUS_SIZE = 0x334  # sizeof(PlayerStatus)
 PLAY_WAIT_STAGE_PRG = 10  # g_GameStep during Game_NowLoading
@@ -36,7 +36,8 @@ def wait_until(e, cond, limit, what, p1=0):
 
 def new_game(e):
     """Title screen -> File select -> New game -> name 'A' -> prologue starts."""
-    e.step(1800)                      # boot + title
+    wait_until(e, lambda: e.read("g_GameState") == GAME_TITLE, 6000, "title screen")  # boot
+    e.step(600)                       # the title's own intro
     e.step(2, "start"); e.step(360)   # main menu
     e.step(2, "cross"); e.step(300)   # File select: memory card check
     e.step(2, "cross"); e.step(120)   # New game -> name entry

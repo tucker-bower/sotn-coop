@@ -297,3 +297,23 @@ The layout spawner's cursors are in the copied stage BSS, so at hand-over they p
 - **What changed:** hearts, gold and subweapons are prize drops, the same entity in every stage. When the guest's hit detection marks a mirrored drop as touched, the guest runs that drop's update once. It collects into the guest's own status, with the sound and the text.
 - **The authority:** `EV_TAKEN` tells it to remove its drop without a reward.
 - **Edge cases:** the guest doesn't copy that slot's drop again for half a second, until the authority has removed it. The old subweapon, dropped when you take a new one, reaches the authority through the spawn relay (D57).
+
+---
+## M6 planning (2026-10-19)
+
+**D67: Agents document, commit and push before they can run out of tokens** (owner, 2026-10-19)
+This is a rule in `AGENTS.md`: at every natural checkpoint, and always before a likely cut-off, update the docs, then commit and push, marking unfinished work as such.
+
+**D68: Ship OpenBIOS by default** (agent proposal, pending owner approval in M6)
+- **Tested:** SOTN co-op runs on OpenBIOS (PCSX-Redux's open-source BIOS, MIT) in our SwanStation core. That covers boot, new game, the save rooms, memory cards, the Load menu, and the harness suite (`COOP_BIOS=…`).
+- **What it means:** no BIOS for players to find.
+- **The fallback:** a real-BIOS option in Settings, with a plain prompt naming the files that work.
+
+**D69: The launcher never deletes or overwrites a savestate** (owner, 2026-10-19)
+- **The rule:** playthroughs keep every savestate the launcher makes, compressed and uniquely named, both rolling and on events. Players may delete them; the launcher never does.
+- **Debugging:** predefined debug starts, made on the player's PC because they hold game RAM, and F9 as a full environment snapshot.
+
+**D70: Plan for online and Android now** (owner, 2026-10-19)
+- **Structure:** a headless session engine under the launcher UI, and the link protocol written down (`docs/link-protocol.md`).
+- **The patcher:** separate from the launcher, so the disc can be patched on a PC for an Android player.
+- **The model:** ease of use after Slippi and BBLauncher.

@@ -70,11 +70,15 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - When either player triggers a cutscene, the partner is brought in, both see it, and both get credit (flags).
 - **Death during a boss fight:** the player who died stays dead until the boss is killed, then respawns next to the survivor. If both die, they reload the last joint save (D24). Scripted boss fights cover each case with no softlocks.
 
-### M6: Playable build + playtest
-- **The couch co-op launcher (D36):** two games, two pads, both screens in one window, audio, and joint saves.
-- The bring-your-own-disc build script produces the patched image (D9).
-- Manual (Tucker): a human playtest from the start through the first few bosses.
-- Online play between two PCs comes after couch co-op works (M7+), then Android.
+### M6: Playable build + playtest (design: `design/M6-playable-build.md`)
+- **A Windows installer:** the launcher, the SwanStation core, OpenBIOS (no BIOS hunt) and a disc patcher that builds the co-op disc from the player's own image (D9). There's a first-run wizard, then one big Continue / New game button (the Slippi and BBLauncher model).
+- **Nothing is ever deleted:**
+  - every savestate the launcher makes (rolling, and on events) is kept;
+  - predefined debug starts are made on the player's PC;
+  - F9 makes a full environment snapshot.
+- **Built for what's next:** a headless session engine and a written link protocol, so online (M7) and Android reuse them.
+- Manual (Tucker): install from scratch, then play from a new game through the first few bosses.
+- Online play between two PCs comes next (M7+), then Android (with the disc patched on a PC).
 
 ### Last: 3–4 players (D48)
 Three or four players, each in their own game:

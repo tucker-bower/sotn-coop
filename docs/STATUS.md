@@ -32,7 +32,7 @@ _Last updated: 2026-10-19_
 - Day 2 of the month (2026-10-19): M0 through M3 done, against budgets that ran to 2026-10-30. Far ahead of plan.
 
 ## Decisions needed (Tucker)
-- Merge PR #4, then #5, then #6 (M4b+M5). Approve or change the M6 design (`design/M6-playable-build.md`): the patch-file distribution is the D9 decision.
+- Merge PR #4, then #5, then #6 (M4b+M5). **Approve M6 v2** (`design/M6-playable-build.md`), revised from Tucker's comments: OpenBIOS bundled (tested), savestates never deleted, F9 full snapshot, the launcher architecture ready for online and Android, the Slippi and BBLauncher-style setup, and the patch file (the D9 decision).
 - **Playtest 2:** does the game feel right?
   - aggro switching (a 50% re-roll every 3 s, D62);
   - 2× boss HP;

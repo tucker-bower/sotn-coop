@@ -21,7 +21,7 @@ from libretro.drivers.audio.array import ArrayAudioDriver
 from libretro.drivers.environment import composite as _composite
 from libretro.drivers.input.iterable import IterableInputDriver
 
-from coop_env import REPO, TOOLS
+from coop_env import BIOS, REPO, TOOLS
 
 # libretro.py 0.12 bug: a NULL frame pointer arrives as value None, not 0. Treat it as "dupe frame".
 _orig_video_refresh = _composite.CompositeEnvironmentDriver.video_refresh
@@ -101,6 +101,10 @@ OPTIONS = {
 }
 
 
+if BIOS:
+    OPTIONS["swanstation_BIOS_PathNTSCU"] = BIOS.name
+
+
 class Emu:
     def __init__(self, disc, ram_8mb=True, options=None, audio=False):
         """audio: keep the core's sound (take_audio() drains it), for real-time play."""
@@ -113,7 +117,7 @@ class Emu:
             str(TOOLS["swanstation_core"]), str(disc),
             input=self._input, audio=self._audio,
             options=DictOptionDriver(variables=opts),
-            path=ExplicitPathDriver(system=str(TOOLS["bios_dir"]), save=self._tmp.name,
+            path=ExplicitPathDriver(system=str(BIOS.parent if BIOS else TOOLS["bios_dir"]), save=self._tmp.name,
                                     assets=self._tmp.name, playlist=self._tmp.name),
         )
         self.frame = 0

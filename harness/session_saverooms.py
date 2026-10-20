@@ -16,7 +16,7 @@ from session_progress import arrive, status
 NZ0 = 0x0C
 SAVE_ROOM = 200       # NZ0 room (16,35): a save room
 COFFIN = (128, 0xA4)  # where a save-room load puts the player, in the coffin
-TITLE_TO_LOAD = [(1800, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross")]
+TITLE_TO_LOAD = [(600, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross")]  # from the title
 
 
 def save_in_coffin(run, s, saver, partner, path):
@@ -72,6 +72,10 @@ def save_and_check(run):
 
 def boot_and_load(g):
     """From power-on: title -> File select -> the first save."""
+    for _ in range(6000):  # boot: how long depends on the BIOS
+        if g.read("g_GameState") == 1:
+            break
+        g.step(1)
     for n, pad in TITLE_TO_LOAD:
         for _ in range(n):
             g.step(1, pad)

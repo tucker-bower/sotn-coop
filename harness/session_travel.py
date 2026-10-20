@@ -231,7 +231,10 @@ def joint_save_and_resume(run):
     with Session(COOP_DISC, starts=(None, None), session_file=path) as s:
         sub = type(run)(s, run.name)
         a, b = s.a, s.b
-        sub.step(1800)  # boot to the title screen
+        for _ in range(6000):  # boot to the title screen (how long depends on the BIOS)
+            sub.step(1)
+            if a.read("g_GameState") == 1 and b.read("g_GameState") == 1:
+                break
         run.expect(a.read("g_GameState") == 1 and b.read("g_GameState") == 1, "both at the title screen")
         s.joint.resume()
         ok = False

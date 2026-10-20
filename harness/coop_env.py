@@ -1,6 +1,7 @@
 """Loads the co-op environment manifest: env.example.toml defaults, overridden by env.toml."""
 
 import tomllib
+import os
 from pathlib import Path
 
 COOP = Path(__file__).resolve().parent.parent
@@ -32,6 +33,12 @@ ENV_DIR = path(ENV["paths"]["env"])
 TOOLS = {k: path(v) for k, v in ENV["tools"].items()}
 
 
+# COOP_BIOS=path/to/bios.bin runs every game on that BIOS instead of the configured one (e.g.
+# OpenBIOS, which can be shipped). Savestates hold the BIOS's RAM, so they get their own library.
+BIOS = Path(os.environ["COOP_BIOS"]) if os.environ.get("COOP_BIOS") else None
+
+
 def savestate(disc, name):
-    """Savestates only load on the disc image that made them, so the library is keyed by disc."""
-    return TOOLS["savestates"] / Path(disc).stem / f"{name}.state"
+    """Savestates only load on the disc image (and BIOS) that made them: keyed by both."""
+    key = Path(disc).stem + (f"@{BIOS.stem}" if BIOS else "")
+    return TOOLS["savestates"] / key / f"{name}.state"
