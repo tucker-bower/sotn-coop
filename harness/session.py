@@ -351,10 +351,11 @@ class OnlineSession:
 SESSION_SCENARIOS = {}
 
 
-def session_scenario(starts=("entrance", "entrance"), discs=None):
-    """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice."""
+def session_scenario(starts=("entrance", "entrance"), discs=None, characters=(0, 0)):
+    """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice.
+    characters: each game's CHAR_* (design/M8), from its next load."""
     def register(fn):
-        SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs)
+        SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs, characters)
         return fn
     return register
 
@@ -404,13 +405,13 @@ def run_session_scenario(name):
     from scenario import Failed
     from module import COOP_DISC
 
-    fn, starts, discs = SESSION_SCENARIOS[name]
+    fn, starts, discs, characters = SESSION_SCENARIOS[name]
     out = TOOLS["out"] / name
     out.mkdir(parents=True, exist_ok=True)
     t0, error = time.time(), None
     run = None
     try:
-        with Session(discs or COOP_DISC, starts) as s:
+        with Session(discs or COOP_DISC, starts, characters=characters) as s:
             run = SessionRun(s, name)
             try:
                 fn(run)
