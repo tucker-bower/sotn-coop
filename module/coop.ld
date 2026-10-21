@@ -3,7 +3,8 @@
    COOP.BIN: loading it is the only initialization. */
 SECTIONS {
     .boot 0x801B9870 : {
-        KEEP(*(.coop-boot))
+        KEEP(*(.coop-boot))          /* CoopBoot first: DRA calls the section's start */
+        KEEP(*(.coop-boot-helpers))
         KEEP(*(.coop-boot-data))
     }
     .text 0x80280000 : {

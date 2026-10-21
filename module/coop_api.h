@@ -13,6 +13,11 @@
 
 #define COOP_ADDR 0x80280000
 #define COOP_MAGIC 0x504F4F43 // 'COOP'
+// Copies CoopBoot reads for drawing a partner who plays another character (design/M8 §2):
+// our Richter (COOPRIC.BIN) and Alucard's sprites (BIN/ARC_F.BIN), each as linked at 0x8013C000.
+#define PUPPET_RIC_ADDR 0x80500000
+#define PUPPET_ALU_ADDR 0x80540000
+#define PUPPET_RICPAL_ADDR 0x80580000 // Richter's palettes 0x100-0x13F (F_GAME2.BIN at 0x40000)
 
 void CoopBoot(void);           // replaces InitializePads()
 bool CoopUpdate(void);         // replaces DebugUpdate(): main loop, before UpdateGame

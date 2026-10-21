@@ -1,6 +1,15 @@
 // Our Richter's co-op additions (design/M8b): his power grows like Alucard's.
 #include "ric.h"
 
+// Richter's frame tables (his animSets 0x8010-0x8013), at a fixed place in the file (ric.ld:
+// right after richter_sprites, 0x8013C334), so another character's game can draw him from its
+// copy of this file (module/puppet.c).
+extern s16* spritebank0[];
+extern s16* spritebank1[];
+extern s16* spritebank2[];
+extern s16* spritebank3[];
+s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
+
 // Tuning knobs (M8b §5: the balance runs set them).
 #define WHIP_STR_PCT 100   // the whip gains this % of STR (Alucard's weapons gain all of it)
 #define SUBWPN_INT_DIV 50  // subweapons and crashes: × (1 + INT / this)
