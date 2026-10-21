@@ -5,7 +5,7 @@ from session import session_scenario  # first: puts `link` on the path
 from bots import walker
 import hashlib
 
-from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_LOAD_SAVE, CMD_SAVE_NOW,
+from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
                           IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST)
 from module import COOP_DISC
 from session_progress import arrive
@@ -16,6 +16,7 @@ import savestates as route
 NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria"}
 STATUS = 0x80097964  # g_Status (include/game.h)
 HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC
+VCOUNT = 0x801362D4  # D_801362D4 (DRA): GsGetVcount() after the frame's drawing
 STAGE_NO3, HALL_ROOM_ID = 0x41, 72  # the castle entrance, and its zombie hall (room 14,40)
 
 
@@ -251,3 +252,83 @@ def mixed_party_cutscene(run):
             break
     run.step(120)
     assert_converged(run)
+
+
+def mixed_soak(run, ca, cb, minutes):
+    """M8 criterion 3 (performance): A and B, as these characters, fight in the hall with random
+    input for `minutes`, sharing the room. Measured: frames a game's main loop missed (g_Timer
+    falling behind the emulated frames, while in play), each frame's cost as the game sees it
+    (GsGetVcount after its drawing: scanlines of the 263 a frame has), and the host's time per
+    frame (p99 under 1 ms). Two Alucards miss a few frames in this busy room too; a mixed team
+    must not miss more than they do (the caller compares)."""
+    from lockstep import random_inputs
+    from session_scenarios import assert_converged, heal
+    a, b = run.s.a, run.s.b
+    for g, c in ((a, ca), (b, cb)):
+        if c != CHAR_ALUCARD:
+            run.expect(reload_game(run, g), f"{'AB'[g is b]} loads as {NAMES[c]}")
+    arrive(run, a, STAGE_NO3, HALL_ROOM_ID, 1300, 200)
+    run.step(60)
+    arrive(run, b, STAGE_NO3, HALL_ROOM_ID, 1324, 200)
+    a.host_ms(), b.host_ms()  # from here
+    frames = int(minutes * 3600)
+    ia, ib = list(random_inputs(41, frames)), list(random_inputs(42, frames))
+    shared = slow = played = 0
+    ms, vcount = [], []
+
+    def sample(i, sa, sb):
+        if i % 10 == 0:
+            vcount.extend(g.read(VCOUNT) for g in (a, b))
+    for t in range(0, frames, 600):
+        t0 = [g.read("g_Timer") for g in (a, b)]
+        run.step(600, p1=lambda i, sa, sb, t=t: (ia[t + i][0], ib[t + i][0]), each=sample)
+        for g, before in zip((a, b), t0):
+            if g.snapshot()["game_state"] == 2:
+                played += 600
+                slow += max(0, 600 - (g.read("g_Timer") - before))
+        shared += roles(run) in ((ROLE_AUTHORITY, ROLE_GUEST), (ROLE_GUEST, ROLE_AUTHORITY))
+        ms += a.host_ms() + b.host_ms()
+        heal(a), heal(b)
+        p = a.mailbox("self_presence")
+        if not roles(run)[0]:
+            b.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x, p.ground_y)
+    ms.sort()
+    vcount.sort()
+    p99 = ms[int(len(ms) * 0.99)] if ms else 0
+    numbers = {"dropped": slow, "of": played, "host_p99_ms": round(p99, 3), "shared": shared,
+               "scanlines_p50": vcount[len(vcount) // 2], "scanlines_p99": vcount[int(len(vcount) * 0.99)]}
+    run.expect(a.snapshot()["game_state"] == 2 and b.snapshot()["game_state"] == 2, "both still in play")
+    run.expect(shared >= frames // 600 // 2, "shared most of the time", shared=shared, checks=frames // 600)
+    run.expect(p99 < 1.0, "host p99 under 1 ms per frame", **numbers)
+    assert_converged(run)
+    return numbers
+
+
+
+@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
+def mixed_soak_10min(run):
+    """Richter (A) and Maria (B), 10 minutes, against two Alucards' numbers from
+    mixed_soak_baseline_10min (run it first): no more missed frames (within 0.5% of play), p99
+    scanlines within 5%."""
+    import json
+    from coop_env import TOOLS
+    mixed = mixed_soak(run, CHAR_RICHTER, CHAR_MARIA, 10)
+    base = json.loads((TOOLS["out"] / "mixed_soak_baseline_10min" / "report.json").read_text())
+    base = next(c for c in base["checks"] if c["what"].startswith("host p99"))
+    run.expect(mixed["dropped"] - base["dropped"] <= mixed["of"] // 200,
+               "no more missed frames than two Alucards", mixed=mixed["dropped"], alucards=base["dropped"])
+    run.expect(mixed["scanlines_p99"] <= base["scanlines_p99"] * 1.05,
+               "each frame costs the game no more than with two Alucards (p99)",
+               mixed=mixed["scanlines_p99"], alucards=base["scanlines_p99"])
+
+
+@session_scenario()
+def mixed_soak_baseline_10min(run):
+    """Two Alucards: mixed_soak's numbers, for mixed_soak_10min to compare with."""
+    mixed_soak(run, CHAR_ALUCARD, CHAR_ALUCARD, 10)
+
+
+@session_scenario(characters=(CHAR_ALUCARD, CHAR_MARIA))
+def mixed_soak_short(run):
+    """Alucard (A) and Maria (B): mixed_soak, 2 minutes."""
+    mixed_soak(run, CHAR_ALUCARD, CHAR_MARIA, 2)

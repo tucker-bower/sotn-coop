@@ -150,6 +150,15 @@ static void Growth(void) {
     }
 }
 
+// Familiars load at 0x80170000 (FAMILIAR_PTR), inside our Richter's and Maria's code (they're
+// bigger than retail Richter): for them, a familiar card switched on in the menu calls nobody,
+// or that load would overwrite the player. (Familiars for them: design/M8b §3, not yet.)
+static void NoFamiliar(void) {
+    if (CharacterLoaded() != CHAR_ALUCARD && g_StageId != STAGE_ST0) {
+        g_Servant = 0;
+    }
+}
+
 void CharacterFrame(void) {
     const CharBlob* b;
 
@@ -174,5 +183,6 @@ void CharacterFrame(void) {
     }
     SoundBankStep();
     s_PrevLoadFile = g_LoadFile;
+    NoFamiliar();
     Growth();
 }
