@@ -12,8 +12,11 @@ COOP_DISC = Path(os.environ["COOP_DISC"]) if os.environ.get("COOP_DISC") else TO
 COOP_MAGIC = 0x504F4F43  # 'COOP'
 
 
-def symbols():
-    text = (REPO / "build/coop/coop.map").read_text()
+def symbols(disc=None):
+    """The module's symbols for that disc (default COOP_DISC): build_disc.sh keeps the map next
+    to each disc it builds, so a newer build elsewhere can't shift them. Else the build's map."""
+    own = Path(str(disc or COOP_DISC)).with_suffix(".coop.map")
+    text = (own if own.exists() else REPO / "build/coop/coop.map").read_text()
     return {m[2]: int(m[1], 16) for m in re.finditer(r"^\s+(0x[0-9a-f]{8})\s+(\w+)$", text, re.M)}
 
 

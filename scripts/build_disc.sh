@@ -62,6 +62,7 @@ mv build/sotn.us.bin "$OUT/$NAME.us.bin"
 sed "s/sotn\.us\.bin/$NAME.us.bin/" build/sotn.us.cue > "$OUT/$NAME.us.cue"
 rm -f build/sotn.us.cue
 python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/$NAME.us.cue"
+cp build/coop/coop.map "$OUT/$NAME.us.coop.map"  # the harness reads the module's symbols for this disc
 
 echo "== restore the matching build (checked against retail)"
 restore

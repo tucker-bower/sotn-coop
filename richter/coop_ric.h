@@ -10,6 +10,8 @@ extern unsigned int g_CoopOptions; // included before game.h: no u32 yet
 
 // A move Alucard's relic unlocks (M8b §3): the relic is found and switched on.
 #define COOP_CAN(relic) (g_Status.relics[relic] & RELIC_FLAG_ACTIVE)
+struct Entity;
+int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
 #define COOP_SHORTCUT(pad) ((g_CoopOptions & OPT_SHORTCUTS) && (g_Player.padTapped & (pad)))
 
 #endif

@@ -14,11 +14,13 @@
 #include "coop_api.h"
 #include "link.h"
 #include "character.h"
+#include "message.h"
 
 #define PLAYER_OVL_ADDR 0x8013C000 // RIC.BIN's address (config/splat.us.ric.yaml)
 #define PLAYER_OVL_MAX (0x80180000 - PLAYER_OVL_ADDR) // the stage overlay follows
 
 void FlushCache(void); // main.exe (PsyQ)
+u32 CheckAndDoLevelUp(void); // DRA: level up from EXP; 1 = level up, 2 = hearts, 3 = HP max up
 typedef struct { // DRA's CdFile (src/dra/dra.h)
     s32 loc;  // sector
     s32 cb;   // CdCallbacks
@@ -85,6 +87,23 @@ void CharacterApply(void) {
     PointRichterLoad();
 }
 
+// Richter and Maria grow like Alucard (design/M8b §4). Alucard's own code checks his EXP every
+// frame (src/dra/692E8.c) and shows LEVEL UP with one of his entities; theirs never did. The
+// same check here, with the module's text box for the news.
+static void Growth(void) {
+    static const char* const s_News[] = {NULL, "Level up!", "Max hearts up", "Max HP up"};
+    u32 r;
+
+    if (g_GameState != Game_Play || g_StageId == STAGE_ST0 || CharacterLoaded() == CHAR_ALUCARD ||
+        g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    r = CheckAndDoLevelUp();
+    if (r && r < LEN(s_News)) {
+        CoopMessage(s_News[r]);
+    }
+}
+
 void CharacterFrame(void) {
     const CharBlob* b;
 
@@ -99,4 +118,5 @@ void CharacterFrame(void) {
         CopyOverlay(b);
     }
     s_PrevLoadFile = g_LoadFile;
+    Growth();
 }

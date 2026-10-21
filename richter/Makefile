@@ -7,16 +7,20 @@ BUILD   := $(ROOT)/build/coop/ric
 SRC     := $(ROOT)/src/ric
 CROSS   := mipsel-linux-gnu-
 CFLAGS  := -mno-abicalls -G0 -fno-pic -g -O2 -I$(ROOT)/include -I$(ROOT)/include/psxsdk -I$(SRC) -msoft-float -march=r3000
-CFLAGS  += -funsigned-char -fno-builtin -fcommon -fno-toplevel-reorder -fdata-sections -fno-stack-protector -DVERSION_US -D_internal_version_$(VERSION) -DCOOP_RIC -include $(CURDIR)/coop_ric.h -Dabs=__builtin_abs -Dlabs=__builtin_labs
+CFLAGS  += -funsigned-char -fno-builtin -fcommon -fno-toplevel-reorder -fdata-sections -fno-stack-protector -D_internal_version_$(VERSION) -DCOOP_RIC -include $(CURDIR)/coop_ric.h -Dabs=__builtin_abs -Dlabs=__builtin_labs
 # ovl_load.c is the PSP build's loader.
 CFLAGS  += -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types
 # pl_header first: its .data (the g_PlOvl table DRA jumps through) must sit at 0x8013C000.
 SRCS    := pl_header.c $(filter-out pl_header.c ovl_load.c,$(notdir $(wildcard $(SRC)/*.c)))
-OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
+OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS)) $(BUILD)/coop_ric.o
 
 all: $(BUILD)/COOPRIC.BIN
 
 $(BUILD)/%.o: $(SRC)/%.c coop_ric.h
+	@mkdir -p $(BUILD)
+	$(CROSS)gcc $(CFLAGS) -c $< -o $@
+
+$(BUILD)/coop_ric.o: coop_ric.c coop_ric.h
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 

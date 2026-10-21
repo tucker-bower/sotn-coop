@@ -273,6 +273,21 @@ index 027137b05..89fb5df33 100644
              g_GameStep = Play_16;
          } else {
  #ifdef VERSION_PSP
+diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
+index 4fd830174..8fc74fb2b 100644
+--- a/src/ric/pl_blueprints.c
++++ b/src/ric/pl_blueprints.c
+@@ -102,6 +102,10 @@ void RicSetSubweaponParams(Entity* entity) {
+     entity->stunFrames = subwpn->stunFrames;
+     entity->hitEffect = subwpn->hitEffect;
+     entity->entityRoomIndex = subwpn->entityRoomIndex;
++#ifdef COOP_RIC
++    entity->attack = CoopRicAttack(
++        entity, entity->ext.subweapon.subweaponId, entity->attack); // M8b §4
++#endif
+     entity->attack = g_api.func_800FD664(entity->attack);
+     func_8015F9F0(entity);
+ }
 diff --git a/src/ric/pl_collision.c b/src/ric/pl_collision.c
 index 17a7d39df..b97288d17 100644
 --- a/src/ric/pl_collision.c
