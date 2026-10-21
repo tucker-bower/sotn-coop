@@ -33,8 +33,12 @@ _Last updated: 2026-10-20_
   - **Stranger playtest** (`docs/playtest/M7b-stranger.md`): found and fixed a silent crash when the installer starts the launcher (Windows RedirectionGuard), a lobby crash with real controllers, LAN candidates, an unclean uninstall, and missing glyphs.
   - **Widescreen spike** (`docs/design/M10-widescreen-spike.md`): the emulator hack does nothing for SOTN, and true FOV is blocked by VRAM.
 
+- **After M7b (2026-10-20, branch `coop-fix-dualsense`):**
+  - **Controller fixes from Tucker's test:** a PS5 controller that re-appears ~7 s after start was never opened, and a controller with id 0 could ready up but never start the game. The couch walkthrough now uses id 0.
+  - **Boss debug starts (D83):** Developer › Debug starts › Bosses has one start outside each of the 12 first-castle bosses, with a typical player's level, gold, gear, relics, map and beaten bosses. A bot proves each one reaches its boss, and `smoke.py` requires all 12. They take about 51 s to make on Tucker's PC, along with the other debug starts.
+
 ## In flight
-- **PR #1 (M7b)** on `tucker-bower/sotn-coop`, and the **draft release v0.7.1** for Tucker to test and publish.
+- **Draft release v0.7.1** (rebuilt with the fixes and boss starts) for Tucker to test and publish, after merging `coop-fix-dualsense`.
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.

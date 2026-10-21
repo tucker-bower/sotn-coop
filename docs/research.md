@@ -255,3 +255,28 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
 - **DXC 2007 English dialogue & voice acting in `sotn.pspus.iso`:**
   - Cutscene scripts (`cutscene_script_en`) live in `PSP_GAME/USRDIR/res/ps/PSPBIN/{st0,cen,dai,dre,lib,no3,no4,sel}.bin`.
   - Voice streams (`.at3`) live in `PSP_GAME/USRDIR/res/ps/snd_e/XA/*.at3` (English) and `sound/XA/*.at3` (Japanese).
+
+## First-castle route and bosses (checked 2026-10-20, for the boss debug starts, D83)
+- **Typical critical path** (Gamer Corner walkthrough, guides.gamercorner.net/sotn/walkthrough):
+  1. Entrance (Cube of Zoe)
+  2. Alchemy Lab: **Slogra & Gaibon**
+  3. Marble Gallery (Spirit Orb)
+  4. Outer Wall: **Doppleganger10**
+  5. Long Library (Faerie Scroll, Jewel of Open), then Outer Wall (Soul of Wolf)
+  6. Royal Chapel: **Hippogryph**
+  7. Castle Keep (Leap Stone)
+  8. Colosseum: **Minotaur & Werewolf** (Form of Mist)
+  9. Long Library: **Lesser Demon** (Soul of Bat)
+  10. Clock Tower: **Karasuman** (Fire of Bat); Castle Keep (Ghost Card, Power of Mist)
+  11. Olrox's Quarters: **Olrox** (Echo of Bat); Sword Card, Holy Sword, Gravity Boots
+  12. Underground Caverns: **Succubus** (Gold Ring), Merman Statue, then **Scylla Wyrm** and **Scylla** (Holy Symbol)
+  13. Abandoned Mine: **Cerberus** (Demon Card)
+  14. Catacombs (Spike Breaker): **Granfaloon**
+  15. Silver Ring, Holy Glasses, then Castle Keep: **Richter** (or Shaft's orb with the glasses)
+- **Where the game keeps it (decomp):**
+  - boss rooms: `g_RoomBossTeleports`, plus the stage teleports in and out of each boss overlay (`src/dra/5087C.c`)
+  - in-stage bosses: Slogra & Gaibon in NZ0 room 16, Karasuman in NZ1 room 0, Lesser Demon in LIB room 0 (spawned by entity 0x41), Succubus in DRE
+  - defeated bosses: `g_Settings.timeAttackRecords`
+  - story flags: `include/castle_flags.h`
+  - the explored map: `g_CastleMap`, 2 bits per cell
+  - level ups: `CheckAndDoLevelUp`, `g_ExpNext`, `g_LevelHPIncrease`

@@ -197,7 +197,17 @@ class UI:
         rest = [label for k, (label, _) in enumerate(items) if not (hero and k == 0)]
         widest = max((self.big.size("›  " + label)[0] for label in rest), default=0)
         left = max(20, (SIZE[0] - widest) // 2)
+        rows = max(1, (SIZE[1] - 100 - top) // 38)  # long lists scroll with the selection
+        first = 0 if hero or len(items) <= rows else min(max(0, sel - rows // 2), len(items) - rows)
+        if first:
+            t = self.small.render("more above", True, DIM)
+            self.screen.blit(t, (left, y - 24))
         for k, (label, hint) in enumerate(items):
+            if not hero and not first <= k < first + rows:
+                if k == first + rows:
+                    t = self.small.render("more below", True, DIM)
+                    self.screen.blit(t, (left, y))
+                continue
             color = GOLD if k == sel else INK
             if hero and k == 0:
                 t = self.title.render(label, True, color)
@@ -952,16 +962,27 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir())
-        if not starts:
-            if self.ui.confirm("Debug starts", "They haven't been made yet (about a minute). Make them now?"):
+        if not starts or not any(v.get("boss") for v in starts.values()):
+            ask = ("They haven't been made yet (about a minute). Make them now?" if not starts else
+                   "There are new ones: one outside each boss, with the level and gear a player\n"
+                   "usually has by then. Make them now (about a minute)?")
+            if self.ui.confirm("Debug starts", ask):
                 self.make_debug_starts()
             starts = debugstarts.load(self.starts_dir())
             if not starts:
                 return
-        names = list(starts)
-        k = self.ui.menu("Debug starts", [(n, starts[n]["about"]) for n in names],
-                         "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
-        if k is None or (None in self.pads.assign and self.lobby() is None):
+        while True:
+            group = self.ui.menu("Debug starts", [("Bosses", "Outside each boss of the first castle, with a typical player's progress"),
+                                                  ("Places", "Spots along the route, with the gear from the start")],
+                                 "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
+            if group is None:
+                return
+            names = [n for n in starts if bool(starts[n].get("boss")) == (group == 0)]
+            k = self.ui.menu("Bosses" if group == 0 else "Places",
+                             [(n.removeprefix("Boss: "), starts[n]["about"]) for n in names])
+            if k is not None:
+                break
+        if None in self.pads.assign and self.lobby() is None:
             return
         file = str(self.starts_dir() / starts[names[k]]["file"])
         with self.session((file, file), None) as s:

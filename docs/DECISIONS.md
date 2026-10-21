@@ -384,3 +384,11 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D82: Widescreen / expanded FOV is tabled** (Tucker, 2026-10-20)
 - True expanded FOV needs a VRAM relayout of every stage (`docs/design/M10-widescreen-spike.md`: 3–6 weeks, high risk); the emulator hack does nothing for SOTN, and stretching is ruled out (D76).
 - Revisit only with the side-bar co-op info idea, or not at all.
+
+**D83: Boss debug starts carry a typical first-playthrough's progress** (agent-default, 2026-10-20)
+- One start outside each of the 12 first-castle bosses (Developer › Debug starts › Bosses), made on the player's PC with the other debug starts (never shipped: D9, D69).
+- **Route:** the critical path in `docs/research.md` (Slogra & Gaibon → … → Richter). **Levels** rise from 8 to 38; level-up gains are applied at the game's own averages (`CheckAndDoLevelUp`), and vessels follow the route. **Gear** is items found on the way by then (the per-area item lists in `castle_flags.h`), plus a few earlier pieces in the bag and potions. Familiar cards are found but not summoned.
+- **Earlier bosses** are recorded as beaten (time attack records, `SLO_GAI_DEFEATED`), with the story flags met so far. **The map** shows every area visited so far, fully explored (from each area's own room table, read at build time).
+- **The state is a real save:** it's written, then saved and loaded through the joint-save commands, so the game recomputes attack, defense and stat totals as after a memory card load.
+- **Placement exceptions:** Scylla starts past the Scylla Wyrm (beaten), at her own door. Lesser Demon starts at the bars you pass in mist form. Richter starts at his arena's door, with his intro dialogue; Holy Glasses are in the bag, not worn (equip them for Shaft's orb instead).
+- **Why:** quick to tune, since each boss is one row in `launcher/bossstarts.py`. Every start is proved by a bot that walks in until the boss is there; `launcher/smoke.py` requires all 12.
