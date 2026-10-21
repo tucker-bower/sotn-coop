@@ -20,4 +20,11 @@ void CoopRenderEntities(void); // replaces RenderEntities()
 void CoopDrawMapCursor(void);  // replaces DrawMapCursor()
 void CoopStoreSaveData(SaveData* save, s32 block, s32 cardIcon); // replaces the save room's StoreSaveData()
 
+// M8: the character this game's player is (PLAYER_ALUCARD / PLAYER_RICHTER; Maria runs as
+// Richter's overlay). DRA's player code reads it through dra.h's PL_CHARACTER; the world keeps
+// g_PlayableCharacter = PLAYER_ALUCARD, so stages, cutscenes, shops and saves see Alucard.
+// A word in the module's fixed table (dra_hooks.ld).
+extern s32 g_CoopCharacter;
+#define PL_CHARACTER g_CoopCharacter
+
 #endif

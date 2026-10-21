@@ -26,6 +26,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         "j RenderEntitiesHook\nnop\n"
         "j DrawMapCursorHook\nnop\n"
         "j StoreSaveDataHook\nnop\n"
+        ".globl g_CoopCharacter\ng_CoopCharacter: .word 0\n" // coop_api.h
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};

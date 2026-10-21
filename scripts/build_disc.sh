@@ -32,7 +32,11 @@ restore() {  # leave upstream's tracked file list and build dir as we found them
 trap restore EXIT
 
 echo "== compile game with the co-op hooks (unchecked: the image differs from retail by design)"
+# DRA's objects depend on the module's coop_api.h through a link (mods/co-op), which ninja
+# doesn't always see change: rebuild DRA from scratch so a stale object can't slip in.
+rm -f build/us/src/dra/*.o
 COOP=1 SKIP_CHECK=1 ./sotn.sh build us >/dev/null
+cp build/us/dra.map "$OUT.dra-coop.map"
 dra_end=$(awk '$2 == "dra_data_VRAM_END" {print $1}' build/us/dra.map)
 if [ "$dra_end" != "0x801b9870" ]; then
     echo "DRA's image now ends at $dra_end, not 0x801b9870: a COOP hook changed DRA's size" >&2
@@ -58,5 +62,8 @@ python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/sotn_coop.us
 
 echo "== restore the matching build (checked against retail)"
 restore
+rm -f build/us/src/dra/*.o
 ./sotn.sh build us >/dev/null
+python3 "$MOD/scripts/check_dra_symbols.py" build/us/dra.map "$OUT.dra-coop.map"  # D33: nothing in DRA moved
+rm -f "$OUT.dra-coop.map"
 echo "== built $OUT/sotn_coop.us.cue"

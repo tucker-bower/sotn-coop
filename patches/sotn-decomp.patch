@@ -45,8 +45,21 @@ index 3e7101345..1f59ff30f 100644
              if (g_GameState == Game_Play && g_DebugEnabled) {
                  if (g_DebugHitboxViewMode != 0) {
                      DrawEntitiesHitbox(g_DebugHitboxViewMode);
+diff --git a/src/dra/4A538.c b/src/dra/4A538.c
+index 4b041d73c..2ec738876 100644
+--- a/src/dra/4A538.c
++++ b/src/dra/4A538.c
+@@ -283,7 +283,7 @@ s32 func_800EAD0C(void) { // the return type is needed for matching
+     func_800EA5E4(7);
+     func_800EA5E4(8);
+ 
+-    if (g_PlayableCharacter == PLAYER_ALUCARD && g_StageId != STAGE_ST0) {
++    if (PL_CHARACTER == PLAYER_ALUCARD && g_StageId != STAGE_ST0) {
+         func_800EA5E4(0x17);
+     }
+ }
 diff --git a/src/dra/5087C.c b/src/dra/5087C.c
-index 073dbffd2..b44f7c9ff 100644
+index 073dbffd2..a675746d6 100644
 --- a/src/dra/5087C.c
 +++ b/src/dra/5087C.c
 @@ -4,6 +4,9 @@
@@ -59,6 +72,24 @@ index 073dbffd2..b44f7c9ff 100644
  
  // fake struct for D_801375BC
  typedef struct {
+@@ -1262,7 +1265,7 @@ void RunMainEngine(void) {
+         func_800EAD7C();
+         DrawHud();
+         func_800F2404(0);
+-        if (g_StageId == STAGE_ST0 || g_PlayableCharacter != PLAYER_ALUCARD) {
++        if (g_StageId == STAGE_ST0 || PL_CHARACTER != PLAYER_ALUCARD) {
+             playerInit = (void*)g_PlOvl.D_8013C004;
+             if (g_StageId == STAGE_ST0) {
+                 playerInit(1);
+@@ -1427,7 +1430,7 @@ void RunMainEngine(void) {
+         g_Player.unk7E = PLAYER.posY.i.hi;
+         g_unkGraphicsStruct.shoveX.val = 0;
+         g_unkGraphicsStruct.shoveY.val = 0;
+-        if (g_StageId == STAGE_ST0 || g_PlayableCharacter != PLAYER_ALUCARD) {
++        if (g_StageId == STAGE_ST0 || PL_CHARACTER != PLAYER_ALUCARD) {
+             g_PlOvl.D_8013C000();
+             g_PlOvl.D_8013C008();
+         } else {
 @@ -1696,7 +1699,11 @@ void RunMainEngine(void) {
          break;
      case Engine_Map:
@@ -71,6 +102,46 @@ index 073dbffd2..b44f7c9ff 100644
          }
          if (g_pads[0].tapped & (PAD_START | PAD_SELECT)) {
              SetFadeMode(FADE_HIDE_MAP);
+@@ -1912,7 +1919,7 @@ void RunMainEngine(void) {
+     case 0x5:
+         if (g_unkGraphicsStruct.unk28 != 0) {
+             if (g_StageId != STAGE_ST0) {
+-                if (g_PlayableCharacter == PLAYER_ALUCARD) {
++                if (PL_CHARACTER == PLAYER_ALUCARD) {
+                     if (g_unkGraphicsStruct.unk28 == 0xFFF) {
+                         EntityAlucard();
+                         func_8011A870();
+diff --git a/src/dra/5F60C.c b/src/dra/5F60C.c
+index 9500e4fdb..9aa681cc0 100644
+--- a/src/dra/5F60C.c
++++ b/src/dra/5F60C.c
+@@ -83,7 +83,7 @@ void UpdateCapePalette(void) {
+ }
+ 
+ void RefreshCapePalette(void) {
+-    if (g_StageId != STAGE_ST0 && g_PlayableCharacter == PLAYER_ALUCARD) {
++    if (g_StageId != STAGE_ST0 && PL_CHARACTER == PLAYER_ALUCARD) {
+         UpdateCapePalette();
+     }
+ }
+@@ -1198,7 +1198,7 @@ void DrawHud(void) {
+     g_PlayerHud.displayHP = g_Status.hp;
+     g_PlayerHud.g_HealingMailTimer = 0;
+ 
+-    if ((g_StageId == STAGE_ST0) || (g_PlayableCharacter != PLAYER_ALUCARD)) {
++    if ((g_StageId == STAGE_ST0) || (PL_CHARACTER != PLAYER_ALUCARD)) {
+         DrawRichterHud();
+         return;
+     }
+@@ -1244,7 +1244,7 @@ void DrawHudSubweapon() {
+     u32 clut;
+     u32 leading_zeros;
+ 
+-    if (g_StageId == STAGE_ST0 || g_PlayableCharacter != PLAYER_ALUCARD) {
++    if (g_StageId == STAGE_ST0 || PL_CHARACTER != PLAYER_ALUCARD) {
+         DrawRichterHudSubweapon();
+         return;
+     }
 diff --git a/src/dra/62DEC.c b/src/dra/62DEC.c
 index 3bed4600e..24896f205 100644
 --- a/src/dra/62DEC.c
@@ -97,6 +168,111 @@ index 3bed4600e..24896f205 100644
  #ifdef VERSION_PSP
          func_psp_090DFC68();
          if (MemcardWriteFile(D_80097924, 0, saveFile, g_Pix, 1, i, 1) != 0) {
+diff --git a/src/dra/6BF64.c b/src/dra/6BF64.c
+index 0f5a310a1..f88aba65c 100644
+--- a/src/dra/6BF64.c
++++ b/src/dra/6BF64.c
+@@ -48,7 +48,7 @@ Point16 g_SensorsWall[NUM_VERTICAL_SENSORS * 2] = {
+ void GetPlayerSensor(Collider* col) {
+     void (*theFunc)(Collider* col);
+     u32 mod = 0;
+-    if (g_PlayableCharacter == PLAYER_ALUCARD) {
++    if (PL_CHARACTER == PLAYER_ALUCARD) {
+         if (g_Player.status & PLAYER_STATUS_WOLF_FORM) {
+             mod += 2;
+         }
+@@ -75,7 +75,7 @@ void func_8010BFFC(void) {
+ #ifdef VERSION_US
+     if ((g_Player.status &
+          (PLAYER_STATUS_TRANSFORM | PLAYER_STATUS_UNK40000000)) ||
+-        ((g_PlayableCharacter != 0) && (PLAYER.step == 0x18))) {
++        ((PL_CHARACTER != 0) && (PLAYER.step == 0x18))) {
+         return;
+     }
+ #else
+@@ -121,7 +121,7 @@ void func_8010BFFC(void) {
+                 x = PLAYER.posX.i.hi + g_SensorsCeiling[i].x;
+                 y = PLAYER.posY.i.hi + g_SensorsCeiling[i].y;
+ #if defined(VERSION_US)
+-                if (g_PlayableCharacter != PLAYER_ALUCARD) {
++                if (PL_CHARACTER != PLAYER_ALUCARD) {
+                     y += 6;
+                 }
+ #endif
+diff --git a/src/dra/7879C.c b/src/dra/7879C.c
+index bedfbdebf..155da293b 100644
+--- a/src/dra/7879C.c
++++ b/src/dra/7879C.c
+@@ -1785,7 +1785,7 @@ void func_8011A9D8(void) {
+             DestroyEntity(entity);
+         }
+ #if defined(VERSION_US)
+-        if (g_PlayableCharacter == PLAYER_ALUCARD && 0x36 < entity->entityId &&
++        if (PL_CHARACTER == PLAYER_ALUCARD && 0x36 < entity->entityId &&
+             entity->entityId < 0x3D && entity->step != 0) {
+             entity->pfnUpdate(entity);
+         }
+diff --git a/src/dra/cd.c b/src/dra/cd.c
+index 86bb025c9..bee9c3aa6 100644
+--- a/src/dra/cd.c
++++ b/src/dra/cd.c
+@@ -675,7 +675,7 @@ void UpdateCd(void) {
+         }
+         if (*pLoadFile == CdFile_GameChr) {
+             if (g_StageId == STAGE_ST0 ||
+-                g_PlayableCharacter != PLAYER_ALUCARD) {
++                PL_CHARACTER != PLAYER_ALUCARD) {
+                 g_LbaBinGame.loc = OFF_BIN_FGAME2;
+                 g_LbaBinGame.nextCdFileType = CdFile_RichterPrg;
+             } else {
+diff --git a/src/dra/dra.h b/src/dra/dra.h
+index 3799f72af..b70052ae5 100644
+--- a/src/dra/dra.h
++++ b/src/dra/dra.h
+@@ -898,4 +898,12 @@ s16 func_80110394(void);
+ int MemcardDetectSave(s32 nPort, u8* expectedSaveName, s32 block);
+ #endif
+ 
++// Co-op (mods/co-op, M8): the code that runs the player reads the player's own character;
++// the world keeps g_PlayableCharacter (Alucard).
++#ifdef COOP
++#include "../../mods/co-op/module/coop_api.h"
++#else
++#define PL_CHARACTER g_PlayableCharacter
++#endif
++
+ #endif
+diff --git a/src/dra/game_handlers.c b/src/dra/game_handlers.c
+index 027137b05..89fb5df33 100644
+--- a/src/dra/game_handlers.c
++++ b/src/dra/game_handlers.c
+@@ -1460,7 +1460,7 @@ void HandleNowLoading(void) {
+             g_LoadFile = CdFile_GameChr;
+         } else {
+             if (g_StageId == STAGE_ST0 ||
+-                g_PlayableCharacter != PLAYER_ALUCARD) {
++                PL_CHARACTER != PLAYER_ALUCARD) {
+ #ifndef VERSION_PSP
+                 if (0) { // to align curly braces
+ #else
+@@ -1545,7 +1545,7 @@ void HandleNowLoading(void) {
+             }
+         } else {
+             if (g_StageId == STAGE_ST0 ||
+-                g_PlayableCharacter != PLAYER_ALUCARD) {
++                PL_CHARACTER != PLAYER_ALUCARD) {
+                 if (LOADFILESIM_PSPALT(13, SimFileType_System) < 0) {
+                     break;
+                 }
+@@ -1642,7 +1642,7 @@ void HandleNowLoading(void) {
+         g_ServantLoaded = 0;
+         g_EquippedWeaponIds[0] = -1;
+         g_EquippedWeaponIds[1] = -1;
+-        if (g_StageId == STAGE_ST0 || g_PlayableCharacter != PLAYER_ALUCARD) {
++        if (g_StageId == STAGE_ST0 || PL_CHARACTER != PLAYER_ALUCARD) {
+             g_GameStep = Play_16;
+         } else {
+ #ifdef VERSION_PSP
 diff --git a/tools/builds/gen.py b/tools/builds/gen.py
 index 1857c555e..9661b9de0 100644
 --- a/tools/builds/gen.py
