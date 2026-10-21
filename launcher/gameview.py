@@ -9,8 +9,10 @@ from array import array
 
 import pygame
 
-from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, IN_PLAY,
+from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CUTSCENE, IN_PLAY,
                           ROLE_AUTHORITY, ROLE_GUEST)
+
+STAGE_ST0 = 0x1F  # the prologue
 from winmenu import MENU_EVENT
 
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
@@ -39,9 +41,16 @@ FORMATS = {  # libretro pixel format -> (bits per pixel, RGB masks)
 }
 
 
-def mix(sounds):
-    """Both games' sound (16-bit stereo) mixed into one stream, clipped. Only one game plays
-    music (CONTROL_MUTE_MUSIC), so the sum is mostly sound effects."""
+KNEE = 24576  # above this the mix is compressed 4:1 instead of clipped
+
+
+def mix(sounds, solo=None):
+    """Both games' sound (16-bit stereo) mixed into one stream. Only one game plays music in play
+    (CONTROL_MUTE_MUSIC), so the sum is mostly sound effects. solo: that game's sound alone, for
+    when both games are making the same sound (the title, the intro, the prologue, the same
+    cutscene): the two copies summed clipped hard (playtest 2026-10-20: buzzing and crackling)."""
+    if solo is not None and solo < len(sounds) and sounds[solo]:
+        return sounds[solo]
     sounds = [x for x in sounds if x]
     if len(sounds) < 2:
         return sounds[0] if sounds else b""
@@ -50,8 +59,21 @@ def mix(sounds):
         a, b = b, a
     for i, v in enumerate(b):
         v += a[i]
-        a[i] = 32767 if v > 32767 else -32768 if v < -32768 else v
+        if v > KNEE:
+            v = min(32767, KNEE + (v - KNEE) // 4)
+        elif v < -KNEE:
+            v = max(-32768, -KNEE + (v + KNEE) // 4)
+        a[i] = v
     return a.tobytes()
+
+
+def same_sound(pa, pb):
+    """Both games make the same sound: neither is in play in the castle (title, intro video,
+    prologue, menus), or both run the same cutscene."""
+    in_castle = [q.flags & IN_PLAY and q.stage != STAGE_ST0 for q in (pa, pb)]
+    if not any(in_castle):
+        return True
+    return bool(pa.flags & pb.flags & CUTSCENE) and pa.stage == pb.stage and pa.room == pb.room
 
 
 class Audio:
@@ -60,6 +82,8 @@ class Audio:
     def __init__(self):
         from pygame._sdl2 import audio as sdl_audio
         self.buf, self.lock = bytearray(), threading.Lock()
+        self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
+        self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
         self.dev = sdl_audio.AudioDevice(devicename=None, iscapture=False, frequency=44100,
                                          audioformat=sdl_audio.AUDIO_S16, numchannels=2, chunksize=1024,
                                          allowed_changes=0, callback=self._pull)
@@ -70,18 +94,31 @@ class Audio:
             n = min(len(mem), len(self.buf))
             mem[:n] = self.buf[:n]
             del self.buf[:n]
+            self.pulls += 1
+            if n < len(mem):
+                self.underruns += 1
+                self.short_bytes += len(mem) - n
         for i in range(n, len(mem)):
             mem[i] = 0
 
     def push(self, data):
+        if data:
+            x = array("h", data[:len(data) // 2 * 2])
+            self.pushes += 1
+            self.clipped += max(x) >= 32767 or min(x) <= -32768
         with self.lock:
             self.buf += data
             if len(self.buf) > 44100 * 4 // 5:  # over 0.2 s behind: drop the oldest
+                self.dropped_bytes += len(self.buf) - 44100 * 4 // 10
                 del self.buf[:len(self.buf) - 44100 * 4 // 10]
 
     def clear(self):
         with self.lock:
             self.buf.clear()
+
+    def stats(self):
+        return {"pushes": self.pushes, "clipped": self.clipped, "pulls": self.pulls, "underruns": self.underruns, "short_ms": round(self.short_bytes / 176.4),
+                "dropped_ms": round(self.dropped_bytes / 176.4)}
 
 
 def frame_surface(surf, fmt, pitch, height):
@@ -170,6 +207,7 @@ class GameView:
         self.online = len(self.games) == 1
         self.playthrough, self.goal = playthrough, goal
         self.music_mode, self.music = music, None
+        self.solo = 0  # couch: play one game's sound while both make the same (see same_sound)
         chance = max(0, min(255, round(aggro * 256 / 100)))
         self.aggro = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
         self.save_cards = save_cards  # (path A, path B) or (path local,)
@@ -268,7 +306,8 @@ class GameView:
         if note is None:
             note = self.ask_note()
         path = report.write(self.games, self.playthrough, shot, self.rolling, self.inputs,
-                            self.frame_times, self.pads.names(), note)
+                            self.frame_times, self.pads.names(), note,
+                            extra={"audio": self.audio.stats() if self.audio else None, "solo": self.solo})
         self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
         return path
 
@@ -483,7 +522,7 @@ class GameView:
                 else:
                     frames.append(None)
             if self.audio:
-                self.audio.push(mix([sound for _, sound in replies]))
+                self.audio.push(mix([sound for _, sound in replies], self.solo))
             self.frame += 1
             if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
@@ -493,6 +532,7 @@ class GameView:
                 else:
                     pa, pb = s.a.mailbox("self_presence"), s.b.mailbox("self_presence")
                     want = {"left": 0, "right": 1}.get(self.music_mode, 1 if not pa.flags & IN_PLAY and pb.flags & IN_PLAY else 0)
+                    self.solo = (self.music if self.music is not None else want) if same_sound(pa, pb) else None
                     if want != self.music:  # only that game plays music (the other's is muted in-game)
                         self.music = want
                         for i, g in enumerate(self.games):

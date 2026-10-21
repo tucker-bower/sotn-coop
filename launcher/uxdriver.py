@@ -237,6 +237,9 @@ class Driver:
             args[0](self)
         elif kind == "shot":
             self._maybe_shot(args[0])
+            audio = getattr(self.launcher, "audio", None)
+            if audio is not None and hasattr(audio, "stats"):
+                print(f"audio at {args[0]}: {audio.stats()}", flush=True)
         elif kind == "winshot":  # Windows: the whole window, title and menu bar too
             if sys.platform == "win32":
                 mb = self.launcher.menubar

@@ -71,7 +71,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 ## Presence (0x2C bytes)
 | offset | type | field |
 |---|---|---|
-| 0x00 | u8 | flags: 1 in play, 2 sprite drawable, 4 paused (menu/map), 8 busy (loading, cutscene, arriving), 16 dead, 32 boss fight, 64 cutscene |
+| 0x00 | u8 | flags: 1 in play, 2 sprite drawable, 4 paused (menu/map), 8 busy (loading, cutscene, arriving), 16 dead, 32 boss fight, 64 cutscene, 128 in a cutscene it was pulled into (follower) |
 | 0x01 | u8 | character (0 Alucard) |
 | 0x02 | u8 | flipX (bit 1) |
 | 0x03 | u8 | blend mode |

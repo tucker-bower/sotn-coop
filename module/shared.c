@@ -214,6 +214,12 @@ static bool PartnerShareable(void) {
     if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep != Engine_Normal) {
         return false;
     }
+    // This game's own cutscene: its actors are its own. As a guest they'd be replaced by the
+    // partner's, whose scene may be over (playtest 2026-10-20: Maria vanished mid-exit in one
+    // game, its scene waited for her forever).
+    if (g_CutsceneHasControl) {
+        return false;
+    }
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }

@@ -23,7 +23,7 @@ STARTS = {
 }
 
 
-def _build(disc, out_dir, queue):
+def _build(disc, out_dir, queue, patch=None):
     """In a worker process: the emulator core loads once per process."""
     import sys
     try:
@@ -85,7 +85,8 @@ def _build(disc, out_dir, queue):
                 e.save_state_file(out / file)
                 about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the boss)")
                 index[name] = {"about": about, "file": file, "where": e.snapshot(), "boss": True, "checked": ok}
-        (out / "index.json").write_text(json.dumps(index, indent=1))
+        # The starts hold the co-op module as it was: made for one patch only.
+        (out / "index.json").write_text(json.dumps({"patch": patch, "starts": index}, indent=1))
         queue.put(("done", steps, steps, str(out)))
     except Exception as exc:  # noqa: BLE001 - reported to the wizard, in words
         import traceback
@@ -160,15 +161,22 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
     return ok
 
 
-def start(disc, out_dir):
-    """Starts making them; returns (process, queue of ("progress"|"done"|"error", step, steps, text))."""
+def start(disc, out_dir, patch=None):
+    """Starts making them; returns (process, queue of ("progress"|"done"|"error", step, steps, text)).
+    patch: the co-op patch's id (its target CRC), recorded with them."""
     queue = multiprocessing.Queue()
-    proc = multiprocessing.Process(target=_build, args=(str(disc), str(out_dir), queue), daemon=True)
+    proc = multiprocessing.Process(target=_build, args=(str(disc), str(out_dir), queue, patch), daemon=True)
     proc.start()
     return proc, queue
 
 
-def load(out_dir):
-    """{name: {"about", "file", "where"}} for starts already made, or {}."""
+def load(out_dir, patch=None):
+    """{name: {"about", "file", "where"}} for starts already made with this patch, or {}. Starts
+    from another patch would run its co-op module (playtest 2026-10-20: old code came back)."""
     index = Path(out_dir) / "index.json"
-    return json.loads(index.read_text()) if index.exists() else {}
+    if not index.exists():
+        return {}
+    data = json.loads(index.read_text())
+    if "starts" not in data or data.get("patch") != patch:
+        return {}
+    return data["starts"]

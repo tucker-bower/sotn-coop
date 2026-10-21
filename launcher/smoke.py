@@ -42,7 +42,7 @@ def main():
     launcher.settings.update(disc=str(cue), pads_set=True, bios=os.environ.get("COOP_BIOS"))
     paths.save_settings(launcher.settings)
     launcher.make_debug_starts()
-    starts = debugstarts.load(launcher.starts_dir())
+    starts = debugstarts.load(launcher.starts_dir(), launcher.patch_crc())
     import bossstarts
     check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B), "debug starts made", n=len(starts))
     unchecked = [n for n, v in starts.items() if v.get("boss") and not v.get("checked")]
