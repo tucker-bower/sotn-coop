@@ -37,6 +37,14 @@ _Last updated: 2026-10-20_
   - **Controller fixes from Tucker's test:** a PS5 controller that re-appears ~7 s after start was never opened, and a controller with id 0 could ready up but never start the game. The couch walkthrough now uses id 0.
   - **Boss debug starts (D83):** Developer › Debug starts › Bosses has one start outside each of the 12 first-castle bosses, with a typical player's level, gold, gear, relics, map and beaten bosses. A bot proves each one reaches its boss, and `smoke.py` requires all 12. They take about 51 s to make on Tucker's PC, along with the other debug starts.
 
+- **Playtest fixes (2026-10-20 evening, `docs/playtest/2026-10-20-tucker-couch.md`, branch `coop-fix-cutscene-audio`):**
+  - Cutscenes play in step: the leader holds, followers are flagged, there's a cooldown, and no shared room while your own scene runs. That ends the Maria loop.
+  - The couch mix no longer doubles the same sound (no clipping).
+  - Audio stats in F9 reports.
+  - Debug starts are tied to their patch.
+  - 63/63 harness and smoke pass.
+  - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
+
 ## In flight
 - **Draft release v0.7.1** (rebuilt with the fixes and boss starts) for Tucker to test and publish, after merging `coop-fix-dualsense`.
 
