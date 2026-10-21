@@ -129,3 +129,125 @@ def char_select_session(run):
                            hearts=g.read(HEARTS, "<i"))
     after = hashlib.sha1(disc.read_bytes()).hexdigest()
     run.expect(before == after, "the disc is unchanged", sha1=after)
+
+
+def as_characters(run, ca, cb):
+    """Both games load as these characters (a joint save and its load each)."""
+    for g, c in zip((run.s.a, run.s.b), (ca, cb)):
+        run.expect(reload_game(run, g), f"{'AB'[g is run.s.b]} loads as {NAMES[c]}")
+        run.expect(g.mailbox("self_presence").character == c, f"{'AB'[g is run.s.b]} plays {NAMES[c]}")
+
+
+def progression(run, ca, cb):
+    """M8 criterion 4 (pickups): A finds a relic, B armor, a Life Max Up and a Heart Max Up. Each
+    partner gets them all, as with Alucard: +5 max HP and +5 max hearts in both games (M8b §4:
+    Richter's vanilla double HP is normalized, and Heart Max Up counts)."""
+    from session_progress import (CUBE_OF_ZOE, HEART_VESSEL, HOLY_MAIL, LIFE_VESSEL,
+                                  RELIC_CUBE_OF_ZOE, counts, status, take)
+    a, b = run.s.a, run.s.b
+    as_characters(run, ca, cb)
+    take(run, a, CUBE_OF_ZOE)
+    run.step(10)
+    run.expect(status(a)["relics"][RELIC_CUBE_OF_ZOE] & 1 and status(b)["relics"][RELIC_CUBE_OF_ZOE] & 1,
+               f"{NAMES[ca]}'s relic (the Cube of Zoe) is {NAMES[cb]}'s too")
+    a0, b0 = status(a), status(b)
+    for spot in (HOLY_MAIL, LIFE_VESSEL, HEART_VESSEL):
+        take(run, b, spot)
+    run.step(10)
+    a1, b1 = status(a), status(b)
+    run.expect(counts(b1) > counts(b0) and counts(a1) - counts(a0) == counts(b1) - counts(b0),
+               f"{NAMES[cb]}'s armor (the Holy Mail) is {NAMES[ca]}'s too", a=counts(a1) - counts(a0),
+               b=counts(b1) - counts(b0))
+    for k, what in (("hp_max", "max HP"), ("hearts_max", "max hearts")):
+        run.expect(a1[k] - a0[k] == 5 and b1[k] - b0[k] == 5, f"+5 {what} in both games",
+                   a=a1[k] - a0[k], b=b1[k] - b0[k])
+
+
+@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
+def mixed_party_progression(run):
+    """Richter finds the relic, Maria the rest: progression()."""
+    progression(run, CHAR_RICHTER, CHAR_MARIA)
+
+
+@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER))
+def mixed_party_progression_mr(run):
+    """Maria finds the relic, Richter the rest (his own vessels): progression()."""
+    progression(run, CHAR_MARIA, CHAR_RICHTER)
+
+
+@session_scenario(characters=(CHAR_RICHTER, CHAR_ALUCARD))
+def mixed_party_progression_ra(run):
+    """Richter finds the relic, Alucard the rest: progression()."""
+    progression(run, CHAR_RICHTER, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("no1", "entrance"), characters=(CHAR_RICHTER, CHAR_MARIA))
+def mixed_party_boss(run):
+    """M8 criterion 4 (bosses): Richter (A) walks into the Doppleganger's room, Maria (B) is
+    pulled in, both hurt it, it dies once and the kill is recorded in both worlds."""
+    from link.mailbox import BOSS
+    from session_m5 import bosses, into_boss_room, toward, wait_pulled
+    from session_scenarios import heal
+    a, b = run.s.a, run.s.b
+    as_characters(run, CHAR_RICHTER, CHAR_MARIA)
+    run.expect(into_boss_room(run, a) is not None, "Richter is in the boss fight")
+    run.expect(wait_pulled(run, b, a, 300) is not None, "Maria was pulled in")
+    run.step(30)
+    slot = next(iter(bosses(a)))
+    hit_by = set()
+    for i in range(3600):
+        before = bosses(a).get(slot, (0, 0, 0))[1]
+        who = (i // 300) % 2
+        g = a if who == 0 else b
+        pad = toward(g, a, slot, i)
+        run.step(1, p1=(pad, "") if who == 0 else ("", pad))
+        if i % 20 == 0:
+            heal(a), heal(b)
+        after = bosses(a).get(slot, (0, 0, 0))[1]
+        if after < before:
+            hit_by.add(NAMES[(CHAR_RICHTER, CHAR_MARIA)[who]])
+        if slot not in bosses(a) or after <= 0:
+            break
+        if len(hit_by) == 2:
+            a.write(a.entity(slot), 1, "<h", 0x3E)  # both have hit it: finish it (harness shortcut)
+    run.expect(hit_by == {"Richter", "Maria"}, "both hurt the boss", hit_by=sorted(hit_by))
+    for i in range(1800):
+        run.step(1)
+        if not (a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & BOSS:
+            break
+    run.step(120)
+    rec = lambda g: [g.read("g_Settings", "<i", 0x30 + 4 * k) for k in range(32)]
+    run.expect(any(rec(a)) and rec(a) == rec(b), "the kill is recorded in both worlds")
+
+
+@session_scenario(starts=("no0", "entrance"), characters=(CHAR_MARIA, CHAR_RICHTER))
+def mixed_party_cutscene(run):
+    """M8 criterion 4 (cutscenes): Maria (A) walks into the room where Alucard first meets Maria:
+    the world sees Alucard, so the scene plays; Richter (B) is pulled in and sees it too."""
+    from bots import walker
+    from link.mailbox import CUTSCENE
+    from session_m5 import LEFT_OF_MARIA, NO0
+    from session_scenarios import assert_converged
+    a, b = run.s.a, run.s.b
+    as_characters(run, CHAR_MARIA, CHAR_RICHTER)
+    arrive(run, a, NO0, *LEFT_OF_MARIA)
+    bot, started = walker("right", attack_every=0), None
+    for i in range(1800):
+        run.step(1, p1=(bot(a.snapshot(), i), ""))
+        if a.mailbox("self_presence").flags & CUTSCENE:
+            started = i
+            break
+    run.expect(started is not None, "Maria's game plays Alucard's cutscene")
+    saw = None
+    for i in range(1800):
+        run.step(1)
+        if b.mailbox("self_presence").flags & CUTSCENE:
+            saw = i
+            break
+    run.expect(saw is not None, "Richter's game plays it too")
+    for _ in range(3600):
+        run.step(1)
+        if not (a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & CUTSCENE:
+            break
+    run.step(120)
+    assert_converged(run)
