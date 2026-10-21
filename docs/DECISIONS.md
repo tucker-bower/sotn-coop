@@ -380,3 +380,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D81: The pause menu carries the View settings** (agent-default, 2026-10-20)
 - Layout, Pixels and How to play, so couch players on a TV with only controllers can reach what the menu bar has.
+
+**D82: Widescreen / expanded FOV is tabled** (Tucker, 2026-10-20)
+- True expanded FOV needs a VRAM relayout of every stage (`docs/design/M10-widescreen-spike.md`: 3–6 weeks, high risk); the emulator hack does nothing for SOTN, and stretching is ruled out (D76).
+- Revisit only with the side-bar co-op info idea, or not at all.
