@@ -10,6 +10,7 @@
 #define COOP_MODULE
 #include <game.h>
 #include <disk.h>
+#include <psxsdk/libcd.h>
 #include "coop_api.h"
 #include "link.h"
 #include "character.h"
@@ -18,6 +19,13 @@
 #define PLAYER_OVL_MAX (0x80180000 - PLAYER_OVL_ADDR) // the stage overlay follows
 
 void FlushCache(void); // main.exe (PsyQ)
+typedef struct { // DRA's CdFile (src/dra/dra.h)
+    s32 loc;  // sector
+    s32 cb;   // CdCallbacks
+    s32 size; // bytes
+    u8 vabId, unkD, nextCdFileType, unkF;
+} CdFile;
+extern CdFile g_LbaBinRichter; // DRA: RIC.BIN's place on the disc
 
 static u32 s_Loaded;        // CHAR_* of the player the last load brought in
 static s32 s_PrevLoadFile;  // g_LoadFile last frame
@@ -41,20 +49,47 @@ static void CopyOverlay(const CharBlob* b) {
     FlushCache(); // new code (D17)
 }
 
+// Richter's load reads our Richter (COOPRIC.BIN) in the castle, and the retail RIC.BIN in the
+// prologue (its stage is built around the retail one).
+static void PointRichterLoad(void) {
+    static s32 s_RetailLoc, s_RetailSize;
+
+    if (!s_RetailLoc) {
+        s_RetailLoc = g_LbaBinRichter.loc;
+        s_RetailSize = g_LbaBinRichter.size;
+    }
+    if (s_Loaded == CHAR_RICHTER && g_StageId != STAGE_ST0 && g_CoopRicFile.size) {
+        g_LbaBinRichter.loc = CdPosToInt(&g_CoopRicFile.pos);
+        g_LbaBinRichter.size = g_CoopRicFile.size;
+    } else {
+        g_LbaBinRichter.loc = s_RetailLoc;
+        g_LbaBinRichter.size = s_RetailSize;
+    }
+}
+
 u32 CharacterLoaded(void) {
     return g_StageId == STAGE_ST0 ? CHAR_RICHTER : s_Loaded; // the prologue is always Richter's
 }
 
-void CharacterFrame(void) {
+// The host's choice becomes this game's character. Only right before a load picks the player's
+// files: from a new game's NowLoading, or a joint save's (arrive.c's LoadSave, which starts
+// NowLoading at Play_PrepareDemo in the same frame).
+void CharacterApply(void) {
     u32 want = g_CoopLink.character;
-    const CharBlob* b;
 
     if (want > CHAR_MARIA) {
         want = CHAR_ALUCARD;
     }
+    g_CoopCharacter = want == CHAR_ALUCARD ? PLAYER_ALUCARD : PLAYER_RICHTER;
+    s_Loaded = want;
+    PointRichterLoad();
+}
+
+void CharacterFrame(void) {
+    const CharBlob* b;
+
     if (g_GameState == Game_NowLoading && g_GameStep <= Play_PrepareDemo) {
-        g_CoopCharacter = want == CHAR_ALUCARD ? PLAYER_ALUCARD : PLAYER_RICHTER;
-        s_Loaded = want;
+        CharacterApply();
     }
     // Richter's overlay slot was just filled from the disc (the CD chain moved past it).
     if (s_PrevLoadFile == CdFile_RichterPrg && g_LoadFile != CdFile_RichterPrg &&

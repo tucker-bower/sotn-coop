@@ -16,6 +16,7 @@ void FlushCache(void);     // main.exe (PsyQ)
 
 // String literals would land in .rodata, which is in COOP.BIN: keep this one here.
 static char s_CoopFile[] __attribute__((section(".coop-boot-data"))) = "\\COOP.BIN;1";
+static char s_RicFile[] __attribute__((section(".coop-boot-data"))) = "\\COOPRIC.BIN;1";
 
 void BOOT CoopBoot(void) {
     CdlFILE file;
@@ -29,6 +30,10 @@ void BOOT CoopBoot(void) {
         CdControl(CdlSetloc, (u8*)&file.pos, NULL);
         CdRead((file.size + 0x7FF) >> 11, (u_long*)COOP_ADDR, CdlModeSpeed);
     } while (CdReadSync(0, NULL) < 0);
+    // Where our Richter is (design/M8): character.c points Richter's CD load there.
+    if (CdSearchFile(&file, s_RicFile)) {
+        g_CoopRicFile = file;
+    }
     FlushCache(); // just loaded code: the I-cache and recompilers only see it after a flush (D17)
     InitializePads();
 }

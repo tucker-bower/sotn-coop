@@ -9,6 +9,7 @@
 #include <game.h>
 #include <sfx.h>
 #include "arrive.h"
+#include "character.h"
 #include "boss.h"
 #include "message.h"
 #include "link.h"
@@ -378,6 +379,8 @@ static bool CutsceneHold(void) {
 
 static void LoadSave(void) {
     ApplySaveData((SaveData*)g_CoopLink.saveIn);
+    g_PlayableCharacter = PLAYER_ALUCARD; // the world is Alucard's, whoever saved (design/M8)
+    CharacterApply();
     D_8003C730 = 1; // as after loading a memory card save: keep the saved status
     g_GameEngineStep = Engine_Init;
     SetGameState(Game_NowLoading);

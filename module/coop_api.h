@@ -27,4 +27,9 @@ void CoopStoreSaveData(SaveData* save, s32 block, s32 cardIcon); // replaces the
 extern s32 g_CoopCharacter;
 #define PL_CHARACTER g_CoopCharacter
 
+#ifdef COOP_MODULE
+// Our Richter on the disc (COOPRIC.BIN), found by CoopBoot; size 0 if it isn't there.
+extern CdlFILE g_CoopRicFile;
+#endif
+
 #endif

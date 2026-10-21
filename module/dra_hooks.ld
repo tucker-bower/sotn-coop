@@ -8,3 +8,4 @@ CoopRenderEntities = 0x80280008;
 CoopDrawMapCursor = 0x80280010;
 CoopStoreSaveData = 0x80280018;
 g_CoopCharacter = 0x80280020;
+g_CoopRicFile = 0x80280024;
