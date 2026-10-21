@@ -77,6 +77,7 @@ def main():
     ap.add_argument("--notes", help="release notes (markdown); default docs/releases/v<version>.md")
     ap.add_argument("--no-build", action="store_true", help="use the installer already built")
     ap.add_argument("--target", default=None, help="the branch or commit the tag will point at")
+    ap.add_argument("--published", action="store_true", help="allow replacing the installer of a published release")
     args = ap.parse_args()
     v = args.version
     out = emulators() / "SOTN-Coop-release"
@@ -95,7 +96,11 @@ def main():
     sums = tmp / "SHA256SUMS.txt"
     sums.write_text(f"{sha256(fixed)}  SOTN-Coop-setup.exe\n")
     print(sums.read_text().strip())
-    existing = subprocess.run(["gh", "release", "view", f"v{v}", "-R", REPO], capture_output=True)
+    existing = subprocess.run(["gh", "release", "view", f"v{v}", "-R", REPO, "--json", "isDraft", "--jq", ".isDraft"],
+                              capture_output=True, text=True)
+    if existing.returncode == 0 and existing.stdout.strip() != "true" and not args.published:
+        raise SystemExit(f"v{v} is published: refusing to replace what players download. "
+                         "Use a new version, or --published if Tucker asked for it.")
     if existing.returncode == 0:
         sh("gh", "release", "upload", f"v{v}", fixed, sums, "--clobber", "-R", REPO)
         sh("gh", "release", "edit", f"v{v}", "--notes-file", notes, "-R", REPO)
