@@ -91,6 +91,69 @@ def create(source, target, metadata=b""):
     return bytes(out)
 
 
+def _signed(n):
+    return _number((abs(n) << 1) | (n < 0))
+
+
+def create_moving(source, target, metadata=b"", min_match=8, report=None):
+    """Like create(), for files whose data moves (a target built from a source's pieces, e.g.
+    Maria's overlay from the DXC disc's): copies runs of 8 or more matching bytes from anywhere
+    in the source, and repeats from earlier in the target (zeros), so only what has no match
+    is stored. report: a list that gets (target offset, length) of every stored run."""
+    source, target = bytes(source), bytes(target)
+    index = {}
+    for i in range(len(source) - min_match + 1):
+        index.setdefault(source[i:i + min_match], []).append(i)
+    out = bytearray(b"BPS1")
+    out += _number(len(source)) + _number(len(target)) + _number(len(metadata)) + metadata
+    src_rel = dst_rel = 0
+    pending = 0  # start of the stored run being gathered
+    o = 0
+
+    def flush(upto):
+        if upto > pending:
+            out.extend(_number(((upto - pending - 1) << 2) | TARGET_READ))
+            out.extend(target[pending:upto])
+            if report is not None:
+                report.append((pending, upto - pending))
+
+    while o < len(target):
+        best_len, best_at, best_kind = 0, 0, None
+        for at in index.get(target[o:o + min_match], ())[:64]:
+            n = min_match
+            while o + n < len(target) and at + n < len(source) and source[at + n] == target[o + n]:
+                n += 1
+            if n > best_len:
+                best_len, best_at, best_kind = n, at, SOURCE_COPY
+        if best_len < min_match and o >= 1 and target[o] == 0:  # a run of zeros: repeat one
+            n = 0
+            while o + n < len(target) and target[o + n] == 0:
+                n += 1
+            zero = target.rfind(b"\0", 0, o)
+            if n >= min_match and zero >= 0:
+                best_len, best_at, best_kind = n, zero, None  # handled below
+                flush(o)
+                out.extend(_number(((n - 1) << 2) | TARGET_READ))  # zeros are ours to store
+                out.extend(bytes(n))
+                o += n
+                pending = o
+                continue
+        if best_len >= min_match:
+            flush(o)
+            out.extend(_number(((best_len - 1) << 2) | SOURCE_COPY))
+            out.extend(_signed(best_at - src_rel))
+            src_rel = best_at + best_len
+            o += best_len
+            pending = o
+        else:
+            o += 1
+    flush(len(target))
+    out += zlib.crc32(source).to_bytes(4, "little")
+    out += zlib.crc32(target).to_bytes(4, "little")
+    out += zlib.crc32(out).to_bytes(4, "little")
+    return bytes(out)
+
+
 def info(patch):
     """(source size, target size, metadata, source CRC32, target CRC32)."""
     if patch[:4] != b"BPS1":

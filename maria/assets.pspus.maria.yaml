@@ -1,0 +1,50 @@
+version: pspus
+files:
+  - target: disks/pspus/PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin
+    asset_path: assets/maria
+    src_path: src/maria
+    splat_config_path: config/splat.pspus.maria.yaml
+    segments:
+      - start: 0
+        vram: 0x09228A00
+        assets:
+          - [0x0, skip]
+          - [0x138A8, subweaponsdef, subweapons, MarSubweapons, MarBlueprints]
+          - [0x13B28, skip]
+          - [0x13C78, blueprintsdef, blueprints, MarBlueprints, MarEntities]
+          - [0x13E50, skip]
+          - [0x14548, spriteset, maria_spr]
+          - [0x14B18, palette, maria_pal, 16]
+          - [0x15118, spriteset, wpn_owl_spr]
+          - [0x153F0, palette, wpn_owl_pal, 16]
+          - [0x159F0, cmpgfx, wpn_owl_gfx, 128, 128, 4, 0x153F0]
+          - [0x16168, spriteset, wpn_doll_spr]
+          - [0x16360, palette, wpn_doll_pal, 16]
+          - [0x16960, cmpgfx, wpn_doll_gfx, 128, 128, 4, 0x16360]
+          - [0x173A8, spriteset, wpn_turtle_spr]
+          - [0x17498, palette, wpn_turtle_pal, 16]
+          - [0x174B8, palette, wpn_turtle2_pal, 16]
+          - [0x17A98, cmpgfx, wpn_turtle_gfx, 128, 128, 4, 0x17498]
+          - [0x18C58, spriteset, wpn_cardinal_spr]
+          - [0x19770, palette, wpn_cardinal_pal, 16]
+          - [0x19D70, cmpgfx, wpn_cardinal_gfx, 128, 128, 4, 0x19770]
+          - [0x1AC20, spriteset, wpn_cat_spr]
+          - [0x1B038, palette, wpn_cat_pal, 16]
+          - [0x1B058, palette, wpn_cat2_pal, 16]
+          - [0x1B638, cmpgfx, wpn_cat_gfx, 128, 128, 4, 0x1B038]
+          - [0x1C310, spriteset, wpn_dragon_spr]
+          - [0x1C518, palette, wpn_dragon_pal, 16]
+          - [0x1C538, palette, wpn_dragon2_pal, 16]
+          - [0x1CB18, cmpgfx, wpn_dragon_gfx, 128, 128, 4, 0x1C518]
+          - [0x1D750, spritesheet, maria, disks/pspus/PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin, 0x14B18]
+          - [0x2D560, cmpgfx, items_gfx, 128, 128, 4]
+          - [0x2E500, cmpgfx, hud_en, 128, 128, 4]
+          - [0x2F2F0, cmpgfx, crash_turtle_gfx, 128, 128, 4, 0x33620]
+          - [0x30248, cmpgfx, crash_dragon_gfx, 128, 128, 4, 0x33640]
+          - [0x314D0, cmpgfx, crash_cardinal_gfx, 128, 128, 4, 0x33660]
+          - [0x32738, cmpgfx, crash_cat_gfx, 128, 128, 4, 0x33600]
+          - [0x33600, palette, crash_cat_pal, 16]
+          - [0x33620, palette, crash_turtle_pal, 16]
+          - [0x33640, palette, crash_dragon_pal, 16]
+          - [0x33660, palette, crash_cardinal_pal, 16]
+          - [0x33C00, skip]

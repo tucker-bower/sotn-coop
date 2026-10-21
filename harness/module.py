@@ -30,3 +30,19 @@ def stage_symbol(overlay, name):
 def coop_state(emu):
     """The g_CoopLink header (module/link.h): (magic, version, heartbeat)."""
     return struct.unpack("<III", emu.read_bytes(symbols()["g_CoopLink"], 12))
+
+
+def maria_blob():
+    """Maria's CharBlob for tests (launcher/characters.py), built once from the dev DXC disc
+    (disks/sotn.pspus.iso) and maria/make_patches.py's patches; None if they aren't there."""
+    out = TOOLS["out"] / "maria"
+    blob = out / "maria.blob"
+    iso = REPO / "disks/sotn.pspus.iso"
+    if not blob.exists() or (out / "maria.bps").stat().st_mtime > blob.stat().st_mtime:
+        if not (out / "maria.bps").exists() or not iso.exists():
+            return None
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+        import characters
+        characters.maria_blob(iso, out, blob)
+    return blob.read_bytes()

@@ -33,83 +33,111 @@ static u8* Rebase(u32 ptr, u32 base) {
     return (u8*)(ptr - OVL_ADDR + base);
 }
 
-#define RIC_BANKS 0x8013C334 // our Richter's frame tables (richter/coop_ric.c, ric.ld)
+// Another character's player file, as copied into this game (design/M8 §2): where the copy is,
+// and, for the overlay characters, their frame tables and palettes (fixed places in our
+// builds: richter/ric.ld, maria/maria.ld).
+typedef struct {
+    u32 base;      // the copy (linked at OVL_ADDR), or 0 if this game has none
+    u32 banks;     // address (as linked) of the pointer to their animSet 0x8010 frame table
+    u32 pals;      // their first palettes, 16 colors each (0: DRA's, as for Alucard)
+    u16 palFirst;  // the palette index those are
+} Foreign;
 
-// A partner's frame (sprite index, then offsets): DRA's tables for Alucard's animSets, Richter's
-// own for his (animSet 0x8010, which his code installs into g_api.o.spriteBanks).
+#define RICPAL_FIRST 0x120
+#define MARPAL_FIRST 0x114 // PAL_MARIA (src/maria/maria.h)
+#define PAL_COUNT 16
+#define PAL_VRAM_X 0x1C0 // below the puppet's sprite, in the same free texture page
+#define PAL_VRAM_Y 0x1E0
+
+static bool ForeignOf(u32 character, Foreign* f) {
+    const CharBlob* b = (const CharBlob*)CHAR_BLOB_ADDR;
+
+    f->pals = 0;
+    switch (character) {
+    case CHAR_ALUCARD:
+        f->base = PUPPET_ALU_ADDR;
+        f->banks = 0;
+        return true;
+    case CHAR_RICHTER:
+        f->base = PUPPET_RIC_ADDR;
+        f->banks = 0x8013C334; // CoopRicBanks
+        f->pals = PUPPET_RICPAL_ADDR + (RICPAL_FIRST - 0x100) * 32;
+        f->palFirst = RICPAL_FIRST;
+        return g_CoopRicFile.size != 0;
+    case CHAR_MARIA: // her blob, which the launcher puts in every game where someone plays her
+        if (b->magic != CHAR_BLOB_MAGIC || b->character != CHAR_MARIA) {
+            return false;
+        }
+        f->base = (u32)(b + 1);
+        f->banks = 0x8013C1F0; // CoopMarBanks
+        f->pals = f->base + (0x8013C1F4 - OVL_ADDR); // maria_pal
+        f->palFirst = MARPAL_FIRST;
+        return true;
+    }
+    return false;
+}
+
+// A partner's frame (sprite index, then offsets): DRA's tables for Alucard's animSets, the
+// character's own for animSet 0x8010 (which their code installs into g_api.o.spriteBanks).
 static s16* PartnerFrame(const CoopPresence* p, s32 pose) {
+    Foreign f;
     s16** table;
 
     if (p->animSet > 0 && p->animSet < 18) {
         return D_800A3B70[p->animSet][pose];
     }
-    if ((u16)p->animSet != 0x8010 || p->character != CHAR_RICHTER) {
-        return NULL; // other overlay sets (Maria: to do)
+    if ((u16)p->animSet != 0x8010) {
+        return NULL; // their other overlay sets (weapons, guardians) aren't drawn
     }
-    if (CharacterLoaded() == CHAR_RICHTER) {
+    if (p->character == CharacterLoaded()) {
         return ((s16***)g_api.o.spriteBanks)[16][pose];
     }
-    if (!g_CoopRicFile.size) {
+    if (!ForeignOf(p->character, &f) || !f.banks) {
         return NULL;
     }
-    table = (s16**)Rebase(*(u32*)(RIC_BANKS - OVL_ADDR + PUPPET_RIC_ADDR), PUPPET_RIC_ADDR);
-    return table ? (s16*)Rebase((u32)table[pose], PUPPET_RIC_ADDR) : NULL;
+    table = (s16**)Rebase(*(u32*)Rebase(f.banks, f.base), f.base);
+    return table ? (s16*)Rebase((u32)table[pose], f.base) : NULL;
 }
 
 // The sprite for frame sheetIdx of a partner's animSet: from our own player's sheets if the
-// partner plays the same character, else from the copies CoopBoot read (design/M8 §2).
+// partner plays the same character, else from the copy (design/M8 §2).
 static u8* PartnerSprite(const CoopPresence* p, s32 animSet, s32 sheetIdx) {
-    u32 base;
+    Foreign f;
     u8** table;
 
     if (p->character == CharacterLoaded()) {
         table = animSet == 13 ? *g_PlOvlAluBatSpritesheet : (u8**)SPRITESHEET_PTR;
         return table[sheetIdx];
     }
-    if (p->character == CHAR_RICHTER) {
-        if (!g_CoopRicFile.size) {
-            return NULL;
-        }
-        base = PUPPET_RIC_ADDR;
-    } else if (p->character == CHAR_ALUCARD) {
-        base = PUPPET_ALU_ADDR;
-    } else {
-        return NULL; // Maria: to do
+    if (!ForeignOf(p->character, &f)) {
+        return NULL;
     }
-    // Both files start like g_PlOvl: the bat's sheet table pointer at +4, the body's table at +0x20.
-    table = animSet == 13 ? (u8**)Rebase(*(u32*)(base + 4), base) : (u8**)(base + 0x20);
-    return table ? Rebase((u32)table[sheetIdx], base) : NULL;
+    // Every player file starts like g_PlOvl: the bat's sheet table pointer at +4, the body's
+    // table at +0x20.
+    table = animSet == 13 ? (u8**)Rebase(*(u32*)(f.base + 4), f.base) : (u8**)(f.base + 0x20);
+    return table ? Rebase((u32)table[sheetIdx], f.base) : NULL;
 }
 
-// A partner Richter's palettes in another character's game (where palettes 0x120+ are someone
-// else's): uploaded below the puppet's sprite, in the same free texture page.
-#define RICPAL_FIRST 0x120
-#define RICPAL_COUNT 16
-#define RICPAL_VRAM_X 0x1C0
-#define RICPAL_VRAM_Y 0x1E0
-
-static void UploadRichterPalettes(void) {
-    RECT rect;
-
-    if ((g_Timer & 0x1F) && g_Timer > 1) { // now and then, in case a stage load cleared VRAM
-        return;
-    }
-    rect.x = RICPAL_VRAM_X;
-    rect.y = RICPAL_VRAM_Y;
-    rect.w = 16;
-    rect.h = RICPAL_COUNT;
-    LoadImage(&rect, (u_long*)(PUPPET_RICPAL_ADDR + (RICPAL_FIRST - 0x100) * 32));
-}
-
+// A partner's palette: in another character's game, the overlay characters' palette indexes
+// hold someone else's colors, so theirs go to a spot of their own.
 static u16 PartnerClut(const CoopPresence* p, s32 pal) {
-    s32 y = RICPAL_VRAM_Y + (pal - RICPAL_FIRST);
+    Foreign f;
+    RECT rect;
+    s32 y;
 
-    if (p->character == CHAR_RICHTER && CharacterLoaded() != CHAR_RICHTER &&
-        pal >= RICPAL_FIRST && pal < RICPAL_FIRST + RICPAL_COUNT) {
-        UploadRichterPalettes();
-        return getClut(RICPAL_VRAM_X, y);
+    if (p->character == CharacterLoaded() || !ForeignOf(p->character, &f) || !f.pals ||
+        pal < f.palFirst || pal >= f.palFirst + PAL_COUNT) {
+        return g_ClutIds[pal];
     }
-    return g_ClutIds[pal];
+    if (!(g_Timer & 0x1F) || g_Timer <= 1) { // now and then, in case a stage load cleared VRAM
+        rect.x = PAL_VRAM_X;
+        rect.y = PAL_VRAM_Y;
+        rect.w = 16;
+        rect.h = PAL_COUNT;
+        LoadImage(&rect, (u_long*)f.pals);
+    }
+    y = PAL_VRAM_Y + (pal - f.palFirst);
+    return getClut(PAL_VRAM_X, y);
 }
 
 static void Upload(u8* sprite, s32 w, s32 h) {
