@@ -1,14 +1,15 @@
 """M8 and M8b scenarios (design/M8-maria-and-richter.md, design/M8b-character-balance.md): one
-game on the co-op disc, playing as Richter in Alucard's castle."""
+game on the co-op disc, playing as Richter or Maria in Alucard's castle. Each character test is
+registered once per character: <name>_richter, <name>_maria (Maria needs the dev DXC disc)."""
 
 from bots import walker
 from coop_env import REPO
 from emu import SYMBOLS
 from link.adapter import HarnessAdapter
-from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_RICHTER, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
-                          IN_PLAY, OPT_SHORTCUTS, Mailbox)
-from module import COOP_DISC, symbols
-from scenario import scenario
+from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
+                          CHAR_BLOB_ADDR, IN_PLAY, OPT_SHORTCUTS, Mailbox)
+from module import COOP_DISC, maria_blob, symbols
+from scenario import SCENARIOS, scenario
 import savestates as route
 
 # include/game.h: RelicIds, and g_Status's fields (relics[] is its first member)
@@ -36,8 +37,13 @@ def wait(run, cond, frames, what, p1=0):
 
 
 def reload_as(run, mb, character):
-    """A joint save and its load with this game's character set: how Continue switches it."""
+    """A joint save and its load with this game's character set: how Continue switches it.
+    Maria's blob goes into the 8MB RAM first, as the launcher's host does."""
     e = run.emu
+    if character == CHAR_MARIA:
+        blob = maria_blob()
+        run.expect(blob is not None, "Maria's blob builds (dev DXC disc)")
+        e.write_bytes(CHAR_BLOB_ADDR, blob)
     mb.set_character(character)
     seq, p = mb.save_seq(), mb.self_presence()
     mb.command(CMD_SAVE_NOW, p.stage, 0, p.room_left, p.room_top)
@@ -62,35 +68,53 @@ def rise(run, inputs):
     return best
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m8_richter_in_the_castle(run):
-    """M8 §1: an Alucard save loads as Richter (our COOPRIC.BIN), the world stays Alucard's, and
-    back as Alucard."""
+NAMES = {CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria"}
+
+
+def per_character(fn):
+    """Registers fn(run, character) as <name>_richter and <name>_maria."""
+    for ch, name in NAMES.items():
+        def one(run, ch=ch):
+            return fn(run, ch)
+        one.__name__ = f"{fn.__name__}_{name.lower()}"
+        one.__doc__ = fn.__doc__
+        scenario(start="entrance", disc=COOP_DISC)(one)
+    return fn
+
+
+@per_character
+def m8_in_the_castle(run, ch):
+    """M8 §1: an Alucard save loads as Richter (our COOPRIC.BIN) or Maria (her blob), the world
+    stays Alucard's, and back as Alucard."""
     e, mb = run.emu, mailbox(run)
-    ours = REPO / "build/coop/ric/COOPRIC.BIN"
-    reload_as(run, mb, CHAR_RICHTER)
-    run.expect(mb.self_presence().character == CHAR_RICHTER, "the game reports Richter",
+    reload_as(run, mb, ch)
+    run.expect(mb.self_presence().character == ch, f"the game reports {NAMES[ch]}",
                character=mb.self_presence().character)
     run.expect(e.read("g_PlayableCharacter") == 0, "the world still sees Alucard",
                g_PlayableCharacter=e.read("g_PlayableCharacter"))
-    if ours.exists():
+    ours = REPO / "build/coop/ric/COOPRIC.BIN" if ch == CHAR_RICHTER else None
+    if ours and ours.exists():
         run.expect(e.read_bytes(RICHTER_OVERLAY, 64) == ours.read_bytes()[:64],
                    "Richter's slot holds our Richter (COOPRIC.BIN)")
-    x0 = e.snapshot()["world_x"]
+    if ch == CHAR_MARIA:
+        ovl = maria_blob()[32:96]
+        run.expect(e.read_bytes(RICHTER_OVERLAY, 64) == ovl, "Richter's slot holds Maria's overlay")
+    s0 = e.snapshot()
     s = run.play(walker("left", attack_every=12), 300)
-    run.expect(s["world_x"] < x0 - 50 and s["hp"] > 0, "Richter walks and whips in the castle",
-               moved=x0 - s["world_x"])
+    run.expect((s["world_x"] < s0["world_x"] - 50 or s["room"] != s0["room"]) and s["hp"] > 0,
+               f"{NAMES[ch]} walks and attacks in the castle", moved=s0["world_x"] - s["world_x"],
+               room=s["room"])
     reload_as(run, mb, CHAR_ALUCARD)
     run.expect(mb.self_presence().character == CHAR_ALUCARD, "and loads back as Alucard",
                character=mb.self_presence().character)
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m8b_relic_gates(run):
+@per_character
+def m8b_relic_gates(run, ch):
     """M8b criteria 1 and 6: the high jump needs Gravity Boots; L2 does it only with the player's
-    shortcuts on. (The other gates are the same check in our Richter: COOP_CAN.)"""
+    shortcuts on. (The other gates are the same check in our overlays: COOP_CAN.)"""
     e, mb = run.emu, mailbox(run)
-    reload_as(run, mb, CHAR_RICHTER)
+    reload_as(run, mb, ch)
     start = e.save_state()
     high_jump = ["down"] * 3 + [""] * 2 + ["up"] * 2 + ["up+cross"] * 2 + [""] * 60
     l2 = ["l2"] * 2 + [""] * 60
@@ -110,24 +134,24 @@ def m8b_relic_gates(run):
     run.expect(off < 20 and on > 150, "L2 high-jumps only with shortcuts on", off=off, on=on)
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m8b_growth(run):
-    """M8b criterion 5: Richter levels up from EXP like Alucard (HP grows too)."""
+@per_character
+def m8b_growth(run, ch):
+    """M8b criterion 5: Richter and Maria level up from EXP like Alucard (HP grows too)."""
     e, mb = run.emu, mailbox(run)
-    reload_as(run, mb, CHAR_RICHTER)
+    reload_as(run, mb, ch)
     level, hp = e.read(LEVEL), e.read(HP_MAX)
     e.write(EXP, 5000)
     run.step(30)
-    run.expect(e.read(LEVEL) > level and e.read(HP_MAX) > hp, "Richter levels up",
+    run.expect(e.read(LEVEL) > level and e.read(HP_MAX) > hp, f"{NAMES[ch]} levels up",
                level=(level, e.read(LEVEL)), hp_max=(hp, e.read(HP_MAX)))
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m8b_mist_step(run):
-    """M8b criterion 2: Richter passes the bars before the Lesser Demon with Form of Mist, and
-    can't without it."""
+@per_character
+def m8b_mist_step(run, ch):
+    """M8b criterion 2: Richter and Maria pass the bars before the Lesser Demon with Form of Mist,
+    and can't without it."""
     e, mb = run.emu, mailbox(run)
-    reload_as(run, mb, CHAR_RICHTER)
+    reload_as(run, mb, ch)
     start = e.save_state()
     for relic in (False, True):
         e.load_state(start)
@@ -143,6 +167,6 @@ def m8b_mist_step(run):
             run.step(1, "left+cross" if i % 60 < 20 and i < 200 else "left")
             xs.append(mb.self_presence().x)
         if relic:
-            run.expect(min(xs) < 700, "with Form of Mist, Richter is past the bars", x=min(xs))
+            run.expect(min(xs) < 700, f"with Form of Mist, {NAMES[ch]} is past the bars", x=min(xs))
         else:
-            run.expect(min(xs) > 760, "without it, the bars stop him", x=min(xs))
+            run.expect(min(xs) > 760, "without it, the bars stop them", x=min(xs))
