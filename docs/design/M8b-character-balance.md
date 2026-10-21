@@ -140,10 +140,10 @@ Facts marked **(code)** are from the decomp (`src/ric`, `src/maria`, `src/dra`, 
 - **Alternative (knob):** crashes from the start, priced in hearts, the way Alucard's spells are priced in MP.
 
 ### 3.1 Mist Step (borrowed from Alucard)
-- **What the player does:** with Form of Mist, Richter or Maria walks into a mist grate and holds toward it with ✕ held. They dissolve (a flicker plus Alucard's mist puff sound), pass through, and reform on the other side. They're invulnerable while passing.
-  - Without Power of Mist, only grates up to 2 tiles thick, the same limit Alucard has in practice.
+- **What the player does:** with Form of Mist, Richter or Maria keeps walking into a mist grate for half a second. They dissolve (a flicker and Alucard's transform sound), drift through unseen, and reform on the other side, invulnerable throughout. (Holding ✕ was the first idea, but ✕ jumps.)
+  - Without Power of Mist, only grates up to about 2 tiles thick, the same limit Alucard has in practice.
   - With it, any length.
-- **How:** the module sees `EFFECT_MIST_ONLY` tiles ahead of the player (stage collision), checks the relic, and moves the player through over a few frames, with collision off.
+- **How (built):** the module sees mist-only tiles ahead of the player (stage collision) and checks the relic. While they drift, their collision ignores mist-only tiles, exactly as Alucard's does in mist form: the module swaps `g_api.CheckCollision` for the frame and walks them through.
   - It needs no change to the player overlays, and works the same for both.
   - It's deterministic, so shared rooms stay in step.
 - **Not done:** a real mist *form* for Richter and Maria (free movement as mist). That needs new sprites and physics in their overlays, and only grates need it.
