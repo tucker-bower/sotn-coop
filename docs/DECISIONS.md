@@ -392,3 +392,10 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **The state is a real save:** it's written, then saved and loaded through the joint-save commands, so the game recomputes attack, defense and stat totals as after a memory card load.
 - **Placement exceptions:** Scylla starts past the Scylla Wyrm (beaten), at her own door. Lesser Demon starts at the bars you pass in mist form. Richter starts at his arena's door, with his intro dialogue; Holy Glasses are in the bag, not worn (equip them for Shaft's orb instead).
 - **Why:** quick to tune, since each boss is one row in `launcher/bossstarts.py`. Every start is proved by a bot that walks in until the boss is there; `launcher/smoke.py` requires all 12.
+
+**D84: M8 direction** (Tucker, 2026-10-20; one agent-default noted)
+- **Characters are chosen every session** in the lobby, in any combination. The same playthrough continues with any characters, and the disc is never rebuilt for a choice: the launcher loads Maria and our Richter into expansion RAM (M8 option 1A).
+- **Mixed-team puppets:** option 2A, provided it costs no performance. That's an acceptance criterion with numbers.
+- **Every character gets the full Alucard castle (3A).** Richter's and Maria's progression is tied to Alucard's relics, aiming at equal power at every point; abilities that don't map are borrowed from Alucard (Mist Step). Details and the mapping: `docs/design/M8b-character-balance.md`, for Tucker's review.
+- **Maria comes from the optional USA DXC disc (4A).** A clear game-files screen covers the SOTN disc, the DXC disc and the BIOS.
+- **The DXC 2007 dialogue and voice option is dropped from M8 and goes on the backlog** (agent-default: Tucker said "whatever is easiest"; it's weeks of audio and script work for few players).

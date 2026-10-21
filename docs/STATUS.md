@@ -42,7 +42,7 @@ _Last updated: 2026-10-20_
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
-- **M8 tabled (2026-10-20)** while Tucker decides the mixed-character rules. Offered: a bot spike that checks Richter/Maria can reach every area in a normal playthrough, plus a count of the character checks in the game code.
+- **M8 design revised** (`docs/design/M8-maria-and-richter.md`, D84) with Tucker's answers, plus a new **M8b** (`docs/design/M8b-character-balance.md`): what each character can do (from the decomp), what the castle requires, a relic → Richter/Maria mapping, Mist Step, power scaling and a balance method using the boss debug starts. Waiting on Tucker's review of M8b §7.
 - Follow-ups worth having:
   - UPnP port mapping (rescues some symmetric-router cases)
   - accept `.chd` disc images
@@ -57,7 +57,11 @@ _Last updated: 2026-10-20_
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **Before M8 implementation (tabled; Tucker undecided, 2026-10-20):** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
+- **M8 / M8b approval** (M8b §7):
+  - the relic → move mapping table
+  - crashes gated by Echo of Bat, or from the start
+  - Alucard's equip menu for Richter/Maria, or auto-equip
+  - carried weapons raise attack only
 
 ## Environment notes
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).
