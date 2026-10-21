@@ -170,3 +170,44 @@ def m8b_mist_step(run, ch):
             run.expect(min(xs) < 700, f"with Form of Mist, {NAMES[ch]} is past the bars", x=min(xs))
         else:
             run.expect(min(xs) > 760, "without it, the bars stop them", x=min(xs))
+
+
+SPELLS_LEARNT, MP, MP_MAX = 0x80097B9C, 0x80097BB0, 0x80097BB4
+SERVANT, FAM_ACTIVE_SWORD = 0x8006CBC4, 5  # g_Servant (include/game.h)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m8b_spell_shortcuts(run):
+    """M8b criterion 6 (Alucard): with shortcuts on, a right-stick flick casts the spell the player
+    put on that direction, if he knows it, for its MP. Not if he doesn't know it, nor with the
+    shortcuts off. Each castable spell, on each direction."""
+    from link.mailbox import SPELLS, spell_options
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    dirs = ("rs_up", "rs_right", "rs_down", "rs_left")
+
+    def cast(spell, k, learnt=True, options=OPT_SHORTCUTS, servant=None):
+        e.load_state(start)
+        if servant is not None:
+            e.write(SERVANT, servant)
+        e.write(SPELLS_LEARNT, 0xFF if learnt else 0)
+        e.write(MP, 99, "<i")
+        e.write(MP_MAX, 99, "<i")
+        spells = [None] * 4
+        spells[k] = spell
+        mb.set_options(options | spell_options(spells))
+        run.step(10)
+        run.step(1, dirs[k])
+        for _ in range(200):
+            run.step(1)
+        return 99 - e.read(MP, "<i")
+
+    castable = [i for i, name in enumerate(SPELLS) if name]
+    for n, spell in enumerate(castable):
+        sword = SPELLS[spell] == "Sword Brothers"
+        if sword:  # only with the Sword familiar out (vanilla's rule)
+            run.expect(cast(spell, n % 4) == 0, "Sword Brothers needs the Sword familiar out")
+        used = cast(spell, n % 4, servant=FAM_ACTIVE_SWORD if sword else None)
+        run.expect(used > 0, f"{SPELLS[spell]} casts with {dirs[n % 4]}", mp_used=used)
+    run.expect(cast(castable[0], 0, learnt=False) == 0, "an unknown spell doesn't cast")
+    run.expect(cast(castable[0], 0, options=0) == 0, "with the shortcuts off, the stick does nothing")

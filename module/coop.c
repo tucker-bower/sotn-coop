@@ -11,6 +11,7 @@
 #include "progress.h"
 #include "puppet.h"
 #include "shared.h"
+#include "spells.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -102,6 +103,7 @@ static void MusicUpdate(void) {
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
     CharacterFrame();
+    SpellsUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {

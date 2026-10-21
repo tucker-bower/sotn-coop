@@ -27,6 +27,13 @@ CONTROL = 0x21448
 CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
+OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
+SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
+
+
+def spell_options(spells):
+    """OPT_* bits for four spell ids (or None) on the right stick: up, right, down, left."""
+    return sum(((s + 1) if s is not None else 0) << (OPT_SPELL_SHIFT + 4 * k) for k, s in enumerate(spells))
 CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80400000, 0x52414843  # CharBlob (module/link.h)
 CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
@@ -80,6 +87,9 @@ class Mailbox:
 
     def __init__(self, adapter, address):
         self.adapter, self.address = adapter, address
+        emu = getattr(adapter, "emu", None)
+        if emu is not None and hasattr(emu, "pad_extra_addr"):  # the harness: pads carry rs_* too
+            emu.pad_extra_addr = address + PAD_EXTRA
 
     def header(self):
         return _HEADER.unpack(self.adapter.read_bytes(self.address, _HEADER.size))
