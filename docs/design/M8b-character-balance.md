@@ -1,6 +1,6 @@
 # M8b design: Richter and Maria balance and the ability mapping
 
-**Status:** revised 2026-10-21 with Tucker's answers (D85): the mapping and the balance plan are accepted; new are one-button moves (§3.2) and off-hand weapons (§4.1). Awaiting final approval. It goes with `docs/design/M8-maria-and-richter.md` (option 3A: one Alucard castle for every character).
+**Status:** approved by Tucker 2026-10-21 (D85, D86), with one-button moves (§3.2) and off-hand weapons (§4.1). In progress on `coop-m8-maria-richter`. It goes with `docs/design/M8-maria-and-richter.md` (option 3A: one Alucard castle for every character).
 **Goal (Tucker):** Richter and Maria progress through the whole game, and never feel more or less powerful than Alucard at any point. Abilities that don't map can be borrowed from Alucard: for example, Richter must be able to pass mist grates.
 
 Facts marked **(code)** are from the decomp (`src/ric`, `src/maria`, `src/dra`, `src/st`). Facts marked **(verify)** are to confirm in the M8 spike, and the rest are game knowledge. The proposals are mine, and every number is a tuning knob.
@@ -149,6 +149,8 @@ Facts marked **(code)** are from the decomp (`src/ric`, `src/maria`, `src/dra`, 
 - **Not done:** a real mist *form* for Richter and Maria (free movement as mist). That needs new sprites and physics in their overlays, and only grates need it.
 
 ### 3.2 One-button moves (Tucker, 2026-10-21)
+**Every shortcut here is optional, per player:** each player turns them on or off in the launcher (the lobby's character card, and Settings › Controls), and the choice is remembered per controller seat. Off, the game plays exactly as vanilla.
+
 The fighting-game inputs also get a button of their own, on buttons the character doesn't use in vanilla. The original inputs keep working, and the same relic gates both.
 
 | Move | Vanilla input | Its own button | Who |
@@ -162,7 +164,7 @@ The fighting-game inputs also get a button of their own, on buttons the characte
 - **Nothing new to carry:** they're ordinary PlayStation buttons, so the harness, recordings and online play carry them as they are, and each game stays deterministic.
 - **Discoverable:** How to play and the lobby's character card show them.
 
-**Alucard (decision, §7):** he already uses every PlayStation button: □ ○ for his hands and all four shoulders for wolf, mist, bat (code: `g_ButtonMask`). His fighting-game inputs are spells (Soul Steal, Hellfire, Dark Metamorphosis...). A modern pad has buttons the PlayStation lacks: L3, R3 and the right stick.
+**Alucard (Tucker: in M8):** he already uses every PlayStation button: □ ○ for his hands and all four shoulders for wolf, mist, bat (code: `g_ButtonMask`). His fighting-game inputs are spells (Soul Steal, Hellfire, Dark Metamorphosis...). A modern pad has buttons the PlayStation lacks: L3, R3 and the right stick.
 - The launcher would send them to the game as one extra byte with the pad, through the mailbox. It's recorded with the inputs, so it stays deterministic.
 - The module casts a spell Alucard has learned, for its usual MP. Right stick ↑ → ↓ ← would be four spells, picked in Settings › Controls.
 
@@ -199,9 +201,11 @@ Richter always has his whip and Maria her guardians. In the other hand, each can
 
 | Option | Idea | Verdict |
 |---|---|---|
-| **A. Each weapon class on one of their own poses** | Each class (sword, short sword, greatsword, spear, club, fist, katana...) gets a Richter pose and a Maria pose from their existing sprites (the whip swing, the subweapon throw, the blade dash's punch). A small module entity draws **the weapon's own sprite** (from its overlay's graphics) as an arc or a thrust, by class. Damage, element and hits use the game's own weapon stats through DRA's normal damage, so ATK, STR and elements work as for Alucard. | ✅ **Recommended.** Every weapon works and looks like itself, with no new art. |
+| **A. Each weapon class on one of their own poses (Tucker: approved, existing art only)** | Each class (sword, short sword, greatsword, spear, club, fist, katana...) gets a Richter pose and a Maria pose from their existing sprites (the whip swing, the subweapon throw, the blade dash's punch). A small module entity draws **the weapon's own sprite** (from its overlay's graphics) as an arc or a thrust, by class. Damage, element and hits use the game's own weapon stats through DRA's normal damage, so ATK, STR and elements work as for Alucard. | ✅ **Recommended.** Every weapon works and looks like itself, with no new art. |
 | B. The real weapon overlays, fed a fake Alucard swing | The module gives each overlay the animation frames it expects | ❌ About 60 overlays expect Alucard's player state: high risk, a bug hunt per weapon |
 | C. Stats only (the earlier proposal) | A carried weapon only raises the whip's damage | ❌ Tucker wants to use the weapons |
+
+**Existing art only (Tucker):** no new animations, poses or drawn art. The swing is made only from the game's own sprites: Richter's and Maria's existing frames, and the weapon's own frames from Alucard's swing, placed and timed so the swing looks as natural as possible.
 
 **Other hand items under A:**
 - **Shields** add their DEF. There's no guard pose, so no blocking.
@@ -241,7 +245,11 @@ with the same level, gear and relics: one boss debug start, three characters. Ri
 3. **Reachability audit** (`m8b_reachability`): from the boss debug starts, a route bot shows that every pre-inverted relic, boss and save room can be reached by each character with exactly the relics a player has by then. Nothing is reachable earlier than Alucard can reach it, give or take one room.
 4. **Power curve** (`m8b_power_curve`): at all 12 boss starts, time to kill and damage taken for Richter and Maria are within ±20% of Alucard's. The table goes into this doc.
 5. **Growth works** (`m8b_growth`): Richter and Maria level up and equip armor and accessories, and defense and resistances apply. The whip's and guardians' damage follows STR.
-6. **One-button moves** (`m8b_buttons`): L2 does the high jump and R2 the blade dash for Richter and Maria, gated by the same relics as the original inputs, which still work. Maria's L1/R1 dashes are unchanged.
+6. **One-button moves** (`m8b_buttons`):
+   - With shortcuts on, L2 does the high jump and R2 the blade dash for Richter and Maria, gated by the same relics as the original inputs, which still work. Maria's L1/R1 dashes are unchanged.
+   - With them off, L2 and R2 do nothing for them, as in vanilla.
+   - For Alucard, with shortcuts on, each right-stick direction casts its chosen spell if he knows it, for its MP.
+   - Couch: P1 on and P2 off (and the reverse) works in one session, and the choice is remembered.
 7. **Off-hand weapons** (`m8b_offhand`):
    - For Richter and Maria, one weapon of every class equips in the other hand and hits with ○. The damage matches DRA's formula for that weapon, ATK + STR, with its element.
    - Each one shows its own sprite (screenshots in the PR).
@@ -258,9 +266,10 @@ with the same level, gear and relics: one boss debug start, three characters. Ri
 - Found weapons go in the other hand, on their own button (§4.1).
 - An Alucard player is the safety net for any spot the audit misses (§2).
 
-**For final approval (recommendations in bold):**
-1. **Off-hand weapons:** **A (each weapon class on one of their own poses)**, or B?
-2. **Spell shortcuts for Alucard** on the right stick (§3.2): in M8, or **on the backlog**? M8 is already large, and this isn't needed for Richter and Maria.
+**Final (2026-10-21):**
+- Off-hand weapons: option A, existing art only.
+- Alucard's spell shortcuts: in M8.
+- All button shortcuts are optional, per player, set in the launcher.
 
 ## Appendix: where the game checks the character (code, for the M8 spike)
 - **Player dispatch** (must see the real character):
