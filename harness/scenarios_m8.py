@@ -2,6 +2,8 @@
 game on the co-op disc, playing as Richter or Maria in Alucard's castle. Each character test is
 registered once per character: <name>_richter, <name>_maria (Maria needs the dev DXC disc)."""
 
+import struct
+
 from bots import walker
 from coop_env import REPO
 from emu import SYMBOLS
@@ -211,3 +213,84 @@ def m8b_spell_shortcuts(run):
         run.expect(used > 0, f"{SPELLS[spell]} casts with {dirs[n % 4]}", mp_used=used)
     run.expect(cast(castable[0], 0, learnt=False) == 0, "an unknown spell doesn't cast")
     run.expect(cast(castable[0], 0, options=0) == 0, "with the shortcuts off, the stick does nothing")
+
+
+EQUIPMENT, ATTACK_HANDS, DEFENSE_EQUIP = 0x80097C00, 0x80097C1C, 0x80097C24
+HP_NOW = STATUS + 0x23C
+E_OFFHAND = 0x7E  # module/offhand.c
+NO3, HALL_ROOM = 0x41, 72  # the castle entrance's zombie hall (room 14,40)
+OFFHAND_ITEMS = ((19, "short sword"), (86, "sword"), (27, "two-handed sword"), (128, "club"),
+                 (85, "fist"), (133, "throwing weapon"))
+LEATHER_SHIELD, POTION, APPLE = 5, 159, 30
+
+
+def offhand_entity(e):
+    """(slot, attack) of the off-hand swing, or None."""
+    for slot in range(0x18, 0x30):
+        a = e.entity(slot)
+        if e.read(a, "<H", 0x26) == E_OFFHAND:
+            return slot, e.read(a, "<h", 0x40)
+    return None
+
+
+def enemies_hp(e):
+    raw = e.read_bytes("g_Entities", 0xBC * 256)
+    return {s: struct.unpack_from("<h", raw, s * 0xBC + 0x3E)[0] for s in range(64, 256)
+            if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0]}
+
+
+@per_character
+def m8b_offhand(run, ch):
+    """M8b criterion 7: one weapon of every class in the other hand hits with ○, with the game's
+    own numbers for that hand (ATK + STR: g_Status.attackHands), drawn with its own sprite (the
+    screenshots in the out folder). A shield adds its DEF, a potion and food heal."""
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    out = TOOLS["out"] / run.name
+    start = e.save_state()
+    for item, what in OFFHAND_ITEMS:
+        e.load_state(start)
+        e.write(EQUIPMENT, item)
+        reload_as(run, mb, ch)
+        mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+        wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+            mb.self_presence()), 900, "arrived in the hall")
+        run.step(90)  # the module loads the weapon
+        attack, hit, shot = None, False, False
+        for i in range(1200):
+            route.heal(e)
+            before = enemies_hp(e)
+            pad = ("circle" if i % 24 == 0 else "") + ("+left" if (i // 120) % 2 else "+right")
+            run.step(1, pad.strip("+"))
+            sw = offhand_entity(e)
+            if sw:
+                attack = sw[1]
+                if not shot and i % 24 == 6:
+                    e.screenshot(out / f"{NAMES[ch].lower()}-{what.replace(' ', '-')}.png")
+                    shot = True
+                now = enemies_hp(e)
+                if any(s in now and now[s] < hp < 32767 for s, hp in before.items()):
+                    hit = True
+                    break
+        hands = e.read(ATTACK_HANDS, "<i")
+        run.expect(attack is not None and attack == hands, f"{what}: swings with the hand's attack",
+                   attack=attack, attack_hands=hands)
+        run.expect(hit, f"{what}: hits an enemy")
+    # A shield adds its DEF.
+    e.load_state(start)
+    reload_as(run, mb, ch)
+    bare = e.read(DEFENSE_EQUIP, "<i")
+    e.load_state(start)
+    e.write(EQUIPMENT, LEATHER_SHIELD)
+    reload_as(run, mb, ch)
+    run.expect(e.read(DEFENSE_EQUIP, "<i") > bare, "a shield adds its DEF", bare=bare,
+               shield=e.read(DEFENSE_EQUIP, "<i"))
+    # A potion and food heal.
+    for item, what in ((POTION, "a potion"), (APPLE, "food")):
+        e.load_state(start)
+        e.write(EQUIPMENT, item)
+        reload_as(run, mb, ch)
+        e.write(HP_NOW, 10, "<i")
+        run.step(1, "circle")
+        run.step(120)
+        run.expect(e.read(HP_NOW, "<i") > 10, f"{what} heals", hp=e.read(HP_NOW, "<i"))

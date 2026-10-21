@@ -12,6 +12,7 @@
 #include "puppet.h"
 #include "shared.h"
 #include "spells.h"
+#include "offhand.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -104,6 +105,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
     CharacterFrame();
     SpellsUpdate();
+    OffhandUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
