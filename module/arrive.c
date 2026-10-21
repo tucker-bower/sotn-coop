@@ -94,7 +94,7 @@ static bool PartnerFresh(void) {
 static bool PartnerReachable(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return PartnerFresh() && !(p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) &&
-           p->character == g_PlayableCharacter;
+           SAME_WORLD(p);
 }
 
 static bool SameRoomAsPartner(void) {

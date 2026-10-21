@@ -9,3 +9,4 @@ CoopDrawMapCursor = 0x80280010;
 CoopStoreSaveData = 0x80280018;
 g_CoopCharacter = 0x80280020;
 g_CoopRicFile = 0x80280024;
+g_CoopOptions = 0x8028003C;

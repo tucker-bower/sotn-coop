@@ -198,11 +198,13 @@ class HostProxy:
 
 
 class Session:
-    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False):
+    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False,
+                 characters=(0, 0)):
         """disc: one disc for both games, or (disc A, disc B). session_file: run the couch
         launcher's joint saves (link.jointsave) into that file, every frame. audio: keep sound
-        (the launcher)."""
+        (the launcher). characters: each game's CHAR_* (design/M8), from its next load."""
         self.disc, self.starts, self.session_file, self.audio = disc, starts, session_file, audio
+        self.characters = characters
         self.joint = None
 
     def __enter__(self):
@@ -233,6 +235,8 @@ class Session:
         self.a, self.b = self.games
         self.a._ask("connect", ports[1])
         self.b._ask("connect", ports[0])
+        for g, c in zip(self.games, self.characters):
+            g.host("set_player", character=c)
         if self.session_file:
             from link.jointsave import JointSave
             self.joint = JointSave([MailboxProxy(self.a), MailboxProxy(self.b)], self.session_file)
@@ -281,8 +285,8 @@ class OnlineSession:
     """One local game instance per player (design/M7, D74), connected to a remote partner over UDP."""
 
     def __init__(self, disc, start=None, rank=0, peer=None, session_file=None, audio=False,
-                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True):
-        self.disc, self.start, self.rank = disc, start, rank
+                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True, character=0):
+        self.disc, self.start, self.rank, self.character = disc, start, rank, character
         self.peer, self.session_file, self.audio = peer, session_file, audio
         self.bind_host, self.req_port = bind_host, port
         self.patch_crc, self.learn_peer = patch_crc, learn_peer
@@ -314,6 +318,7 @@ class OnlineSession:
         self.games = [game]
         self.local = self.a = game
         self.b = None
+        game.host("set_player", character=self.character)
         if self.peer is not None:
             self.connect(self.peer)
         if self.session_file:

@@ -29,6 +29,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         "j StoreSaveDataHook\nnop\n"
         ".globl g_CoopCharacter\ng_CoopCharacter: .word 0\n" // coop_api.h
         ".globl g_CoopRicFile\ng_CoopRicFile: .space 24\n" // CdlFILE of COOPRIC.BIN (boot.c)
+        ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (richter/coop_ric.h)
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};

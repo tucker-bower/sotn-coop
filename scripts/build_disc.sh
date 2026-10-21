@@ -17,7 +17,8 @@ if [ -f "$MOD/.env/src/sotn-decomp/sotn.sh" ]; then
 else
     ROOT="$(cd "$MOD/../.." && pwd)"
 fi
-OUT="$MOD/.env/out/disc"
+OUT="${COOP_OUT:-$MOD/.env/out/disc}"   # COOP_OUT: build elsewhere (e.g. while tests use the main one)
+NAME="${COOP_NAME:-sotn_coop}"
 cd "$ROOT"
 # shellcheck disable=SC1091
 . .venv/bin/activate
@@ -57,10 +58,10 @@ sed -i 's|^SD/CD1.DA;1,A,|COOPPAD.;1,X,20261018-000000-36\nCOOP.BIN;1,N,20261018
 echo "== master the disc"
 COOP=1 SKIP_CHECK=1 ./sotn.sh disk >/dev/null
 mkdir -p "$OUT"
-mv build/sotn.us.bin "$OUT/sotn_coop.us.bin"
-sed 's/sotn\.us\.bin/sotn_coop.us.bin/' build/sotn.us.cue > "$OUT/sotn_coop.us.cue"
+mv build/sotn.us.bin "$OUT/$NAME.us.bin"
+sed "s/sotn\.us\.bin/$NAME.us.bin/" build/sotn.us.cue > "$OUT/$NAME.us.cue"
 rm -f build/sotn.us.cue
-python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/sotn_coop.us.cue"
+python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/$NAME.us.cue"
 
 echo "== restore the matching build (checked against retail)"
 restore
@@ -68,4 +69,4 @@ rm -f build/us/src/dra/*.o
 ./sotn.sh build us >/dev/null
 python3 "$MOD/scripts/check_dra_symbols.py" build/us/dra.map "$OUT.dra-coop.map"  # D33: nothing in DRA moved
 rm -f "$OUT.dra-coop.map"
-echo "== built $OUT/sotn_coop.us.cue"
+echo "== built $OUT/$NAME.us.cue"

@@ -88,6 +88,8 @@ void CharacterApply(void) {
 void CharacterFrame(void) {
     const CharBlob* b;
 
+    g_CoopOptions = g_CoopLink.options; // for the player overlays
+
     if (g_GameState == Game_NowLoading && g_GameStep <= Play_PrepareDemo) {
         CharacterApply();
     }

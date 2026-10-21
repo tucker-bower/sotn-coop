@@ -53,7 +53,7 @@ INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (
 OK_GREEN = (140, 200, 120)
 BUNDLED_BIOS = APP / "bios" / "openbios.bin"
 PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
-CHARACTERS = (("Alucard", True), ("Richter", False), ("Maria", False))  # (name, playable yet)
+CHARACTERS = (("Alucard", True), ("Richter", True), ("Maria", False))  # (name, playable yet); index = CHAR_*
 
 log = logging.getLogger("launcher")
 
@@ -371,6 +371,9 @@ class Launcher:
     def __init__(self):
         pygame.init()
         self.settings = load_settings()
+        # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
+        self.characters = [c if 0 <= c < len(CHARACTERS) and CHARACTERS[c][1] else 0
+                           for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
         self.menubar.update(self.settings)
@@ -513,7 +516,7 @@ class Launcher:
         ui = self.ui
         joined = [None] * slots   # each player's device
         ready = [False] * slots
-        char = [0] * slots
+        char = list(self.characters[:slots])
         names = {}
         while True:
             for a in ui.events(raw=True):
@@ -564,6 +567,8 @@ class Launcher:
             partner = online() if online else None
             if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
+                self.characters[:slots] = char
+                self.settings["characters"] = list(self.characters)
                 return list(joined)
             ui.frame("Press a button on your controller to join", subtitle)
             n = slots + (1 if online else 0)
@@ -694,10 +699,17 @@ class Launcher:
         from session import Session
         self.apply_bios()
         return Session(self.disc(), starts=starts, audio=True,
-                       session_file=playthrough.joint_save if playthrough else None)
+                       session_file=playthrough.joint_save if playthrough else None,
+                       characters=tuple(self.characters))
+
+    def apply_players(self, s):
+        """Each game gets its player's character (online: this player's own), from its next load."""
+        for i, g in enumerate(s.games):
+            g.host("set_player", character=self.characters[i])
 
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
+        self.apply_players(s)
         if len(s.games) == 1:
             who = "A" if getattr(s, "rank", 0) == 0 else "B"
             cards = (playthrough.card(who),) if playthrough else None
@@ -742,6 +754,7 @@ class Launcher:
             if not fresh:
                 self.load_cards(s, playthrough)
             if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
+                self.apply_players(s)
                 s.joint.resume()
             playthrough.save_info()
             self.run_view(s, playthrough)
@@ -875,6 +888,7 @@ class Launcher:
             if not fresh:
                 self.load_cards(s, playthrough)
             if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
+                self.apply_players(s)
                 s.joint.resume()
             playthrough.save_info()
             self.run_view(s, playthrough)

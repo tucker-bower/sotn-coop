@@ -42,6 +42,15 @@ class Host:
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
         self._frames = 0
+        self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
+
+    def set_player(self, character=None, options=None):
+        """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
+        Written into the game every frame, so loading a savestate can't undo them."""
+        if character is not None:
+            self.character = character
+        if options is not None:
+            self.options = options
 
     def _note(self, way, what):
         self.log.append((time.monotonic(), way, what))
@@ -173,6 +182,8 @@ class Host:
                     self._check_hello(payload, addr)
             return
         self.mailbox.set_rank(self.rank)
+        self.mailbox.set_character(self.character)
+        self.mailbox.set_options(self.options)
         self.transport.send(TAG_PRESENCE, self.mailbox.self_presence().pack())
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:

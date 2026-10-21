@@ -30,6 +30,8 @@ extern s32 g_CoopCharacter;
 #ifdef COOP_MODULE
 // Our Richter on the disc (COOPRIC.BIN), found by CoopBoot; size 0 if it isn't there.
 extern CdlFILE g_CoopRicFile;
+// The player's OPT_* settings, for the player overlays (richter/coop_ric.h): mirrors the mailbox.
+extern u32 g_CoopOptions;
 #endif
 
 #endif

@@ -134,6 +134,8 @@ typedef struct {
 #define CHAR_ALUCARD 0
 #define CHAR_RICHTER 1
 #define CHAR_MARIA 2
+// The player's own settings (CoopLink.options), per player in the launcher.
+#define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
 // The launcher writes the chosen character's overlay and sound bank into expansion RAM before
 // the game boots: a CharBlob header, then the overlay, the .VH and the .VB. Without one (or for
 // another character), Richter's retail files from the disc are used.

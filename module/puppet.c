@@ -4,6 +4,7 @@
 #define COOP_MODULE
 #include <game.h>
 #include "puppet.h"
+#include "character.h"
 
 extern s16** D_800A3B70[]; // DRA: per-animSet frame tables (src/dra/d_37d8.c)
 
@@ -53,10 +54,10 @@ void DrawPuppet(const CoopPresence* p) {
     s32 pose, sheetIdx, w, h, x, y, u, v;
 
     // Only a same-character partner in this very room, with a sprite-sheet body frame.
-    // Wolf, mist and multi-part frames are M4; other characters are M7.
+    // Wolf, mist and multi-part frames are M4; other characters are M8 (to do).
     pose = p->animCurFrame & 0x7FFF;
     if (g_GameState != Game_Play || !(p->flags & PRESENCE_SPRITE) ||
-        p->character != g_PlayableCharacter || p->stage != g_StageId ||
+        p->character != CharacterLoaded() || p->stage != g_StageId ||
         p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top ||
         p->animSet <= 0 || p->animSet >= 18 || !pose ||
         g_GpuUsage.gt4 >= MAX_POLY_GT4_COUNT) {

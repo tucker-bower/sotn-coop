@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-21_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -46,11 +46,16 @@ _Last updated: 2026-10-20_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **Draft release v0.7.1** (rebuilt with the fixes and boss starts) for Tucker to test and publish, after merging `coop-fix-dualsense`.
+- **M8 (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`** (stacked on PR #3). Done so far:
+  - **The world stays Alucard's, the player is anyone:** DRA's 15 player-code checks read a per-game `g_CoopCharacter`; stages, cutscenes, shops and saves keep seeing Alucard. `build_disc.sh` now proves every DRA symbol keeps its retail address (`check_dra_symbols.py`).
+  - **The host picks each game's character** (mailbox v9); it applies at the game's next load (new game after the prologue, or Continue). The lobby keeps each seat's pick; Richter is selectable.
+  - **Our own Richter** (`richter/`, built from `src/ric`) is on the co-op disc as `COOPRIC.BIN`; the prologue still uses the retail one.
+  - **Spikes:** Richter plays the castle intro, the Warg chase and Death's scene, walks/whips/jumps/slides/throws, and gets Alucard's full menu (equipment, relics) on Start.
+- **Next in M8:** mixed-team puppets, the M8b moves (relic gates, one-button moves, Mist Step, growth, off-hand weapons, Alucard spell shortcuts), Maria from the DXC disc, the game-files screen, both HUDs visible, then balance tuning and the reachability audit.
+- **Known so far:** after a save load, Richter's HUD name box is blank (also with the retail Richter: a palette not loaded on that path). Richter's overlay overlaps the familiar overlay's address (0x80170000), so familiars for Richter/Maria need a different home (M8b §3).
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
-- **M8 design revised** (`docs/design/M8-maria-and-richter.md`, D84) with Tucker's answers, plus a new **M8b** (`docs/design/M8b-character-balance.md`): what each character can do (from the decomp), what the castle requires, a relic → Richter/Maria mapping, Mist Step, power scaling and a balance method using the boss debug starts. Waiting on Tucker's review of M8b §7.
 - Follow-ups worth having:
   - UPnP port mapping (rescues some symmetric-router cases)
   - accept `.chd` disc images
@@ -58,17 +63,14 @@ _Last updated: 2026-10-20_
 
 ## Budget
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
+- Day 4 (2026-10-21): M8 designs approved; M8 implementation started (character split, our Richter on the disc).
 
 ## Decisions needed (Tucker)
-- **Publish v0.7.1:** Tucker is testing couch and online on 2026-10-20. PR #1 is merged and the draft now targets `main`. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
 - **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **M8 final approval** (D85: everything else is answered). Three open points, each with a recommendation:
-  - **Where F9 reports go** (M8 §6): a free Cloudflare relay into a private repo, `tucker-bower/sotn-coop-reports` (recommended). It needs Tucker's free Cloudflare account and one GitHub token (about 15 min).
-  - **Off-hand weapons** (M8b §4.1): option A, each weapon class on one of Richter's or Maria's own poses, showing the weapon's own sprite (recommended).
-  - **Alucard's spell shortcuts** on the right stick (M8b §3.2): on the backlog (recommended), or in M8.
 
 ## Environment notes
+- **The decomp's `mods/co-op/module` is a link to this repo's `module/`** (2026-10-21). `.env` here points into the old fork (`/home/tucker/sotn-decomp-coop/mods/co-op/.env`), whose `mods/co-op` folder was an Oct 19 copy: DRA was being built against its stale `coop_api.h`. The stale folder is kept as `module.stale-2026-10-19`.
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).
