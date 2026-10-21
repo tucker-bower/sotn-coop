@@ -399,3 +399,17 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Every character gets the full Alucard castle (3A).** Richter's and Maria's progression is tied to Alucard's relics, aiming at equal power at every point; abilities that don't map are borrowed from Alucard (Mist Step). Details and the mapping: `docs/design/M8b-character-balance.md`, for Tucker's review.
 - **Maria comes from the optional USA DXC disc (4A).** A clear game-files screen covers the SOTN disc, the DXC disc and the BIOS.
 - **The DXC 2007 dialogue and voice option is dropped from M8 and goes on the backlog** (agent-default: Tucker said "whatever is easiest"; it's weeks of audio and script work for few players).
+
+**D85: M8 approved options, and the backlog** (Tucker, 2026-10-21)
+- **M8:** every recommended option (1A–4A) is approved. Added to M8:
+  - both players' HUDs fully visible in every layout (P1's may be cut off in the 2026-10-20 footage)
+  - F9 sends a bug report: a form plus the full game state, to Tucker's private storage, never anything outside the launcher window
+- **M8b:** the mapping and the balance plan are accepted, including crashes gated by Echo of Bat and Alucard's equip menu. Added:
+  - one-button moves: L2 high jump, R2 blade dash, on buttons Richter and Maria don't use in vanilla
+  - off-hand weapons on ○, with the whip and guardians always in the other hand
+- **Safety net:** a spot only Alucard can pass is still passable by a team with an Alucard player (the partner teleports). The audit still aims for full parity.
+- **Backlog:** a new section at the end of `docs/ROADMAP.md`, for the most ambitious long-term ideas. Tucker moves items into milestones. It starts with the DXC dialogue/voice swap and 3–4 players.
+- **Still open, for final approval:**
+  - where reports go (M8 §6: a Cloudflare relay into a private repo, recommended)
+  - off-hand option A
+  - Alucard's spell shortcuts in M8 or on the backlog
