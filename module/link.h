@@ -14,6 +14,7 @@
 #define PRESENCE_DEAD 16   // dying, or waiting for a respawn or a joint-save reload
 #define PRESENCE_BOSS 32   // a living boss is in this room (design/M5)
 #define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
+#define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
 
 typedef struct {
     /* 0x00 */ u8 flags;     // PRESENCE_*

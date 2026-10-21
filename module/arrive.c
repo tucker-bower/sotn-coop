@@ -61,6 +61,16 @@ static bool s_DownForBoss; // dead while the partner fights a boss: respawn once
 
 // Pulled into the partner's boss fight / cutscene (design/M5): once per fight or cutscene
 static bool s_BossPulled, s_CutscenePulled;
+// Cutscenes together (playtest 2026-10-20): the game whose scene starts holds on its first
+// frame until the partner, pulled in, has its own copy running, so both play at the same time.
+// A pulled-in game is a follower: nobody is pulled into a follower's scene (each copy used to
+// pull the other back in when its player left the room, forever). After a scene, a short
+// cooldown before this game can be pulled into another.
+#define CS_HOLD_MAX 600      // frames the leader waits for the partner (10 s)
+#define CS_FOLLOW_MAX 300    // frames a pulled-in game waits for its copy of the scene to start
+#define CS_COOLDOWN 300      // frames after a scene before this game can be pulled into another
+static bool s_CsOn, s_CsFollower;
+static s16 s_CsHold, s_CsFollowAge, s_CsCooldown;
 
 // The partner saved at a save room: this game writes its own memory card save for the same
 // save room, through the game's own card code, frozen while it does (D46, D49).
@@ -315,12 +325,53 @@ static void PullIn(void) {
     if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || (p->flags & PRESENCE_DEAD) ||
         p->stage == STAGE_ST0) {
         s_CutscenePulled = false;
-    } else if (!s_CutscenePulled && CanBePulled()) {
+    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled()) {
         // The partner is busy (the cutscene has control): arrive anyway. This game runs its
         // own copy of the scene; the flags it sets are shared, so it plays out the same.
         s_CutscenePulled = true;
+        s_CsFollower = true;
+        s_CsFollowAge = 0;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
     }
+}
+
+// Before PullIn: the edges of this game's own cutscenes.
+static void CutsceneTrack(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    bool on = g_CutsceneHasControl != 0;
+
+    if (s_CsCooldown) {
+        s_CsCooldown--;
+    }
+    if (on && !s_CsOn && !s_CsFollower && g_StageId != STAGE_ST0 && PartnerFresh() &&
+        !(p->flags & (PRESENCE_DEAD | PRESENCE_CUTSCENE)) && p->stage != STAGE_ST0 && !SameRoomAsPartner()) {
+        s_CsHold = 1; // the partner will be pulled in: wait for it
+    }
+    if (!on && s_CsOn) {
+        s_CsFollower = false;
+        s_CsHold = 0;
+        s_CsCooldown = CS_COOLDOWN;
+    }
+    if (s_CsFollower && !on && !ArriveBusy() && ++s_CsFollowAge > CS_FOLLOW_MAX) {
+        s_CsFollower = false; // pulled in, but no scene here: an ordinary game again
+    }
+    s_CsOn = on;
+}
+
+// True while the leader holds its scene for the partner (this frame's game update is skipped).
+static bool CutsceneHold(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    if (!s_CsHold) {
+        return false;
+    }
+    if (!PartnerFresh() || (p->flags & PRESENCE_DEAD) || s_CsHold >= CS_HOLD_MAX ||
+        ((p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner())) {
+        s_CsHold = 0; // the partner's copy runs (or it can't come): go
+        return false;
+    }
+    s_CsHold++;
+    return true;
 }
 
 // --- commands from the host
@@ -431,7 +482,10 @@ void CoopSaveRoomStore(SaveData* save, s32 block, s32 cardIcon) {
 // --- presence additions and the shared-room pause
 
 void ArrivePresence(CoopPresence* p) {
-    p->flags &= ~(PRESENCE_PAUSED | PRESENCE_BUSY | PRESENCE_DEAD);
+    p->flags &= ~(PRESENCE_PAUSED | PRESENCE_BUSY | PRESENCE_DEAD | PRESENCE_CS_FOLLOWER);
+    if (s_CsFollower && g_CutsceneHasControl) {
+        p->flags |= PRESENCE_CS_FOLLOWER;
+    }
     if (!(p->flags & PRESENCE_IN_PLAY)) {
         p->flags |= PRESENCE_BUSY;
         return;
@@ -470,9 +524,13 @@ bool ArriveFrame(void) {
     }
     CommandUpdate();
     TeleportInput();
+    CutsceneTrack();
     PullIn();
     ArriveUpdate();
     if (!DeathUpdate()) {
+        return false;
+    }
+    if (CutsceneHold()) {
         return false;
     }
     // Shared-room pause: the partner is in their menu in my room, so my world waits too.

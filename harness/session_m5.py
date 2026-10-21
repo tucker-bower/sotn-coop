@@ -287,3 +287,84 @@ def guest_blocked_by_closed_door(run):
             heal(a), heal(b)
     run.expect(b.mailbox("self_presence").room == room, "B is still in the boss room",
                b=str(b.mailbox("self_presence").room), x=b.snapshot()["x"])
+
+
+STAGE_MAR = 0x17
+
+
+def _scene_then_leave(run, together):
+    """A meets Maria; B is pulled in; both scenes play; then they leave the clock room, one at a
+    time or both at once (playtest 2026-10-20: leaving pulled the other back in, forever)."""
+    from link.mailbox import CUTSCENE
+    from bots import walker
+    a, b = run.s.a, run.s.b
+    arrive(run, a, NO0, *LEFT_OF_MARIA)
+    bot = walker("right", attack_every=0)
+    for i in range(1800):
+        run.step(1, p1=(bot(a.snapshot(), i), ""))
+        if a.mailbox("self_presence").flags & CUTSCENE:
+            break
+    run.expect(a.mailbox("self_presence").flags & CUTSCENE, "A's cutscene started", frames=i)
+    began, ended = {}, {}
+    for i in range(6000):
+        run.step(1)
+        for k, g in (("A", a), ("B", b)):
+            on = g.mailbox("self_presence").flags & CUTSCENE
+            if on and k not in began:
+                began[k] = i
+            if not on and k in began and k not in ended:
+                ended[k] = i
+        if len(ended) == 2:
+            break
+    run.expect(len(began) == 2, "both games ran the scene", began=began)
+    run.expect(len(ended) == 2 and abs(ended["A"] - ended["B"]) <= 30,
+               "the scenes ended together (within half a second)", ended=ended)
+    run.step(60)
+
+    def leave(who, backdash=False):
+        pads = {g: walker("left", attack_every=0) for g in who}
+        for i in range(1500):
+            inp = ["", ""]
+            for k, g in enumerate((a, b)):
+                if g in pads:
+                    inp[k] = pads[g](g.snapshot(), i) + ("+triangle" if backdash and i % 90 < 2 else "")
+            run.step(1, p1=tuple(inp))
+            if all(g.snapshot()["stage"] == NO0 for g in who) and i > 200:
+                break
+
+    def quiet(frames, what):
+        scenes = 0
+        for _ in range(frames):
+            run.step(1)
+            scenes += bool((a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & CUTSCENE)
+        run.expect(scenes == 0, what, scene_frames=scenes,
+                   a=hex(a.snapshot()["stage"]), b=hex(b.snapshot()["stage"]))
+
+    if together:
+        leave((a, b), backdash=True)
+        run.expect(a.snapshot()["stage"] == b.snapshot()["stage"] == NO0, "both left the clock room together",
+                   a=hex(a.snapshot()["stage"]), b=hex(b.snapshot()["stage"]))
+        quiet(1200, "no scene starts again afterwards")
+    else:
+        leave((a,))
+        run.expect(a.snapshot()["stage"] == NO0, "A left the clock room", a=hex(a.snapshot()["stage"]),
+                   x=a.snapshot()["world_x"])
+        quiet(900, "A isn't pulled back, and B's scene doesn't start again")
+        run.expect(a.snapshot()["stage"] == NO0 and b.snapshot()["stage"] == STAGE_MAR, "each stays where they are",
+                   a=hex(a.snapshot()["stage"]), b=hex(b.snapshot()["stage"]))
+        leave((b,))
+        run.expect(b.snapshot()["stage"] == NO0, "B left too", b=hex(b.snapshot()["stage"]))
+        quiet(900, "still no scene")
+    for g in (a, b):
+        p = g.mailbox("self_presence")
+        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, "both are in play", flags=p.flags)
+
+
+@session_scenario(starts=("no0", "entrance"))
+def cutscene_then_leave_one_by_one(run):
+    _scene_then_leave(run, together=False)
+
+
+@session_scenario(starts=("no0", "entrance"))
+def cutscene_then_leave_together(run):
+    _scene_then_leave(run, together=True)

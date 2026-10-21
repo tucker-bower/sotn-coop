@@ -1,71 +1,107 @@
-# M8 design: Playable Maria & Richter + Optional DXC Dialogue/Voices
+# M8 design: playable Maria and Richter
 
-**Status:** proposed 2026-10-19 (awaiting Tucker's review of design & shared-progression questions).
-**Context:** D27 (character choice at New Game), D75 (M8: Maria and Richter playable from a fresh playthrough using local `sotn.pspus.iso`, plus optional DXC alternate dialogue and voice acting).
+**Status:** revised 2026-10-20 after Tucker's feedback (D84). Awaiting approval. Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
+**Context:** D27 (character choice), D75 (M8 scope), D84 (Tucker's M8 decisions).
 
 ## Goal
-1. **Any player can choose Alucard, Richter, or Maria** at the start of a fresh co-op playthrough (couch or online), in any combination (e.g., Alucard + Maria, Alucard + Richter, Richter + Maria, Maria + Maria).
-2. **Use the USA *Dracula X Chronicles* ISO (`disks/sotn.pspus.iso`, `ULUS-10277`)** that Tucker already owns — no European PSP ISO needed.
-3. **Optional DXC dialogue & voice acting:** when the player provides a DXC ISO, allow toggling between original PS1 1997 voice acting/dialogue ("What is a man?!") and the 2007 DXC script/redub.
+1. **Each player picks Alucard, Richter or Maria every time they play**, in the launcher's lobby, in any combination (Alucard + Alucard, Maria + Maria, Richter + Alucard...).
+   - The same playthrough can be continued with different characters: two hours as double Alucard today, Maria + Richter tomorrow.
+   - The disc is never rebuilt for a character choice.
+2. **Every character gets the full Alucard castle:** all bosses, relics, items, cutscenes and switches, and progression for Richter and Maria that keeps them as strong as Alucard at every point (M8b).
+3. **Maria comes from the player's own *Dracula X Chronicles* (USA PSP) disc image**, which is optional. Without it, Maria shows as locked in the lobby, as now.
+4. **Setting up the game files is clear to a first-time player:** the SOTN disc (required), the DXC disc (optional, adds Maria), and the BIOS (included, replaceable).
 
----
+## Spike findings (`disks/sotn.pspus.iso`, 2026-10-19)
+- **Richter is entirely on the US PS1 disc:** `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB`, decompiled in `src/ric/`.
+- **Maria's assets are on the USA DXC disc (`ULUS-10277`):**
+  - In `PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin`, every asset sits at a constant `-0xB780` offset from the EU disc that `mods/mariapsp-forpsx` targets. So no EU disc is needed.
+  - Her English and Japanese voice/SFX banks (`sd_mar2.spk`) build through `tools/maria-sfx`.
+- **The game already switches characters at runtime:** one variable, `g_PlayableCharacter`, selects the player overlay (`game_handlers.c`, `cd.c`). Nothing in the save format depends on it, apart from the save name.
 
-## Spike findings (`disks/sotn.pspus.iso` inspection)
-1. **Richter is 100% on the US PS1 disc (`sotn.us.cue`):**
-   - `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB` are already on the retail US PS1 disc and decompiled in `src/ric/`.
-2. **Maria's assets in `sotn.pspus.iso` (`ULUS-10277`) match `pspeu` with an exact `-0xB780` offset shift:**
-   - `D15` noted that `mods/mariapsp-forpsx` was configured for `sotn.pspeu.iso` (`ULES-00841`).
-   - By inspecting the `MWo3` overlay header of `PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin` in `sotn.pspus.iso` (`base=0x09228A00, text=0x1220C, data=0x21D34`), we found that `pspus` simply omits the 5 non-English European HUD textures (`font_eu`, `hud_sp/it/ge/fr`), shifting every single Maria asset from `subweapons` (`0x1EFE0 -> 0x13860`) through `crash_cardinal_pal` (`0x3F338 -> 0x33BB8`) by a **constant `-0xB780` bytes**.
-   - `PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk` (English voice/SFX) and `sound/SE/sd_mar2.spk` (Japanese voice/SFX) are both present on `sotn.pspus.iso` and compile cleanly through `tools/maria-sfx`.
-3. **DXC dialogue & voice files in `sotn.pspus.iso`:**
-   - English cutscene scripts (`cutscene_script_en`) are embedded in `PSP_GAME/USRDIR/res/ps/PSPBIN/*.bin` (`st0.bin`, `cen.bin`, `dai.bin`, `dre.bin`, `lib.bin`, `no3.bin`, `no4.bin`, `sel.bin`).
-   - English voice tracks are in `PSP_GAME/USRDIR/res/ps/snd_e/XA/*.at3` (and Japanese in `sound/XA/*.at3`).
-
----
-
-## Architecture Options
-
-### 1. Coexisting Alucard, Richter, and Maria on the disc
-Upstream `mods/mariapsp-forpsx` overwrote `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB` on the PS1 disc, which meant Maria *replaced* Richter. We need both Richter and Maria available simultaneously.
-
+## 1. Richter and Maria alongside Alucard, chosen per session
 | Option | Idea | Verdict |
 |---|---|---|
-| **A. Keep retail `RIC.BIN` untouched; add `MARIA.BIN` + `SD_MAR.VH/.VB` after `COOP.BIN` (or in 8 MB RAM)** | Retail `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB` stay at their exact retail LBAs (preserving D34). `MARIA.BIN`, `SD_MAR.VH`, and `SD_MAR.VB` are appended after `COOP.BIN` (or preloaded into the 8 MB expansion RAM at `0x80280000`). When the local player selects Maria (`char_id = 2`), the module intercepts the player overlay load (`RIC.BIN` / `SD_RIH`) and copies `MARIA.BIN` + `SD_MAR` from 8 MB RAM / CD instead. | ✅ **Recommended.** Zero retail files moved (D34 intact), both Richter and Maria work from the same disc, and loading from 8 MB RAM is instant. |
-| B. Build two separate patched discs (one Richter, one Maria) | Swap discs depending on character choice | ❌ Breaks Richter + Maria co-op and doubles disc storage. |
+| **A. Retail files untouched; Maria (and our Richter) loaded into the 8 MB expansion RAM by the launcher** | The disc stays as patched once. At boot, the launcher writes the chosen characters' player overlays and sound banks into expansion RAM (above `COOP.BIN`): `MARIA.BIN` + `SD_MAR`, and our `RIC.BIN` (built from the decomp with the M8b changes). The module then loads the player overlay from RAM instead of the CD. The character is a session setting, not part of the save. | ✅ **Recommended (Tucker: option A).** |
+| B. Two patched discs | One for Richter, one for Maria | ❌ No mixed teams, and the disc rebuilds |
 
-### 2. Cross-character puppet rendering in shared rooms (`module/puppet.c`)
-When Player 1 is Alucard and Player 2 is Maria (or Richter), Player 1's VRAM `0x8000` player sprite area holds Alucard's spritesheet (`F_PL00.BIN`), not Maria's or Richter's.
+**Why the launcher loads the characters:**
+- The disc never changes after the first patch.
+- Adding a DXC disc later only extracts Maria into the data folder: no re-patching.
+- Each game can load a different character.
+- D34 holds: no retail file moves; `RIC.BIN` on the disc stays retail.
 
+**Our own Richter:** M8b gates his moves behind relics, so we need a modified Richter. It's built from `src/ric/` with our changes and loaded like Maria. The retail `RIC.BIN` remains for the prologue.
+
+**Saves:** joint saves keep working across characters, because the status, relics, items and flags are character-neutral. On Continue, each game gets the character its player picked in the lobby, not the one that saved.
+
+**The prologue:** both games play it as retail Richter, as now. Characters take over at the castle entrance.
+
+## 2. Partner puppets for mixed teams
 | Option | Idea | Verdict |
 |---|---|---|
-| **A. 8 MB RAM sprite cache + dynamic single-frame VRAM upload (`LoadImage`)** | Store Richter's and Maria's uncompressed 4bpp spritesheets + spritebank tables in the 8 MB expansion RAM (`0x80300000–0x80380000`). Each frame in a shared room, when `partner.character != self.character`, DMA only the partner's current pose tiles (~1–2 KB) into a reserved 64×64 VRAM slot and point the puppet `PRIM_SPRT` primitives at that slot + partner CLUT. | ✅ **Recommended.** Same technique PS1/Saturn games use for dynamic player sprites; uses ~2 KB DMA per frame and < 512 KB of our 6 MB free expansion RAM. |
-| B. Squeeze all three full spritesheets into PS1 VRAM simultaneously | Keep Alucard, Richter, and Maria sheets in VRAM at all times | ❌ Impossible: PS1 VRAM is 1 MB total and stage tiles + enemy sheets fill the remaining texture pages. |
+| **A. Sprite cache in expansion RAM + per-frame upload of the partner's current pose** | The other characters' sprite sheets and palettes live in expansion RAM (< 512 KB of the 6 MB free). In a shared room, when the partner is a different character, the module uploads only the current pose (about 1–2 KB) into a reserved 64×64 VRAM slot and draws the puppet from it. | ✅ **Recommended (Tucker: option A, provided it doesn't cost performance).** |
+| B. All three sheets in VRAM | — | ❌ No room: stage tiles and enemies fill VRAM |
 
-### 3. Shared progression across different characters (D27)
-In vanilla SOTN:
-- **Alucard** uses RPG stats, equipment, relics, and triggers story cutscenes/gates (e.g. Spike Breaker armor in Catacombs, Mist form grates, Holy Glasses cutscene in `CEN`).
-- **Richter** and **Maria** start with all movement abilities (High Jump / Slide / Uppercut / Air Dash; Double Jump / Slide / Guardian Knuckle), have no equipment menu, and in vanilla Richter Mode many Alucard cutscenes/relics are disabled and certain doors are pre-opened.
+**Performance guard (acceptance criterion 3):**
+- The upload is one `LoadImage` of ≤ 2 KB per frame, only when the pose changes.
+- Measured in a 10-minute mixed-team shared-room session: the game's own frame time and the host's per-frame time must stay within M7b's numbers.
+  - no dropped emulated frames
+  - host p99 < 1 ms
+  - the launcher at 60 fps on Tucker's PC
 
+## 3. Progression for Richter and Maria
 | Option | Idea | Verdict |
 |---|---|---|
-| **A. Unified "Full Castle" world rules + cross-character pickup sharing** | Regardless of which characters are picked, the world runs the **full Alucard castle layout** (all bosses, relic orbs, item drops, and switches spawn) so a Maria+Alucard or Maria+Richter pair gets the full SOTN co-op experience:<br>- When **Richter or Maria** touches a relic orb or item pickup, they collect it and emit the `EVENT_GRANT` / `EVENT_ITEM` / `EVENT_FLAG` to their partner (so an Alucard partner receives the relic/item, and progression gates like Jewel of Open / Leap Stone / Form of Mist / Spike Breaker / Gold & Silver Rings unlock for both).<br>- Max-HP (`Life Vessel`) and Max-Heart (`Heart Vessel`) upgrades apply to all three characters; pooled gold and map exploration work identically.<br>- Alucard-only physical barriers (e.g. Mist grates when *neither* player is Alucard, or Spike Breaker corridor) open when the corresponding relic flag is owned, or Maria/Richter's invulnerability/slide moves pass through them as in `mariapsp-forpsx`. | ✅ **Recommended.** Makes mixed teams (Alucard + Maria, Maria + Richter) first-class without locking an Alucard partner out of relics/items. |
-| B. Vanilla Richter-mode world when playing Richter/Maria | Disable relics, items, and story cutscenes for Richter/Maria | ❌ Breaks mixed-character co-op (a Richter/Maria player would see different room contents from an Alucard partner in shared rooms). |
+| **A. One Alucard castle for every character, with Richter and Maria's growth tied to Alucard's progression** | The world always runs Alucard's rules: every relic, item, boss and cutscene, whoever plays. Relics, items, vessels, gold, map and flags are shared as now. Richter's and Maria's moves unlock with the same relics, and they gain power from levels and equipment, so no character is ahead or behind at any point. | ✅ **Recommended (Tucker: option A).** Details: M8b. |
+| B. Vanilla Richter mode for Richter/Maria players | Their world skips relics and cutscenes | ❌ The two games' worlds would differ in shared rooms |
 
-### 4. Optional DXC dialogue & voice acting
+**The world sees Alucard:**
+- About 50 places in the game check `g_PlayableCharacter`. Most skip Alucard's cutscenes, shops and events for Richter or Maria (`nz0`, `no3`, `dai`, `dre`, `top`, `cen` cutscenes, the Librarian's shop, a red door in `no1`). A few choose the player overlay and its graphics.
+- The module keeps `g_PlayableCharacter = ALUCARD` for the world. Only the player-dispatch sites read the session's character, through size-neutral DRA hooks (D33).
+- The M8 spike classifies every site first: the list is in M8b's appendix.
+
+## 4. The DXC disc (Maria) and the game-files screen
 | Option | Idea | Verdict |
 |---|---|---|
-| **A. Patcher/Launcher option when `sotn.pspus.iso` is provided** | During disc setup (or in Settings), if the user supplies `sotn.pspus.iso`:<br>- Extract Maria's overlay/assets (`MARIA.BIN`, `SD_MAR.VH/.VB`) from `sotn.pspus.iso`.<br>- Offer a toggle **Dialogue & Voices: Original 1997 (PS1) / Dracula X Chronicles (2007)**, which swaps the cutscene text tables (`cutscene_script_en`) and XA voice streams from `sotn.pspus.iso`. | ✅ **Recommended.** Legal (built locally from the user's own DXC ISO, zero game data distributed) and gives players the choice per playthrough. |
+| **A. Optional DXC disc in the launcher; Maria extracted from it locally** | The player points the launcher at their DXC `.iso`. Maria's overlay, graphics and voice/SFX are extracted into the data folder once. Nothing is distributed. | ✅ **Recommended (Tucker: option A).** |
 
----
+**DXC dialogue and voice acting:** Tucker said "whatever is easiest; most users won't care". Swapping the 2007 script and voices means converting ATRAC3 audio and replacing cutscene scripts in 8 stages, which is weeks of work for an option few will use. **Dropped from M8; on the backlog** (agent-default, D84). Maria's own voice clips come with her either way.
 
-## Open questions for Tucker (before M8 implementation)
-1. **Cross-character progression (Option 3A above):** Should mixed/non-Alucard runs keep the full Alucard castle (all relics, items, and bosses spawn so Richter/Maria can pick up relics/items for an Alucard partner and unlock progression gates), or do you want different rules when *both* players are Richter/Maria?
-2. **Prologue (`ST0` Dracula fight):** When starting a New Game, should each player pick their character **before** the game starts (in the launcher / New Game character select, skipping or playing the prologue with their chosen character), or after the prologue?
-3. **DXC voice/dialogue toggle:** Should the 1997 vs. 2007 dialogue/voice option be a per-playthrough setting in the launcher?
+**The game-files screen** (first run, and Settings › Game files), one row per file:
 
-## Testable acceptance criteria (for M8)
-1. **`pspus` asset extraction (`test_pspus_extract`):** extracts Maria's sprites, palettes, blueprints, and SFX from `disks/sotn.pspus.iso` (`ULUS-10277`) and builds `MARIA.BIN` + `SD_MAR.VH/.VB` with zero `pspeu` files required.
-2. **Fresh-start character selection (`char_select_fresh`):** starting a fresh playthrough as Alucard, Richter, or Maria for P1 and P2 spawns each player as their chosen character in Castle Entrance (`NO0`) with working attacks, subweapons, and movement abilities.
-3. **Cross-character shared room & puppets (`mixed_party_shared_room`):** Alucard + Maria and Richter + Maria in the Entrance Hall render each other's animated puppets with correct sprites/palettes and fight shared enemies together.
-4. **Cross-character progression (`mixed_party_progression`):** Maria or Richter picking up a relic/item grants it to an Alucard partner over the link, and max-HP/Heart upgrades + map + castle flags sync across all character combinations.
-5. **DXC dialogue option (`dxc_dialogue_toggle`):** with the DXC dialogue option enabled, cutscene scripts use the 2007 DXC text and complete without desync.
+```
+ Game files                                                    
+                                                               
+ ✓  Symphony of the Night (PS1, USA)        required           
+    D:\Games\SOTN\Castlevania - SOTN (USA).cue      [Change]   
+                                                               
+ +  Dracula X Chronicles (PSP, USA)          optional          
+    Adds Maria as a playable character.             [Choose]   
+                                                               
+ ✓  PlayStation BIOS                         included          
+    OpenBIOS (free, built in). Your own BIOS works too. [Change]
+```
+
+- **Each row says what it's for, whether it's needed, and what's set.** It's checked when chosen (the disc's ID and size), with a plain error otherwise, e.g. "That's the European PSP version (ULES-00841): Maria needs the USA one (ULUS-10277)".
+- **The lobby explains a locked Maria:** "Maria: add your *Dracula X Chronicles* disc in Settings › Game files". Pressing a button there opens that screen.
+- **Only the SOTN disc blocks playing.** The DXC disc can be added at any time, and nothing is rebuilt.
+
+## Tucker's answers to the open questions (2026-10-20)
+1. Every character gets the full Alucard castle.
+2. Characters are picked in the launcher's lobby, as now.
+3. DXC dialogue and voices: whatever is easiest. That means not in M8 (above).
+
+## Acceptance criteria
+1. **Maria from the USA DXC disc** (`test_pspus_extract`): her overlay, graphics, palettes and SFX are built from `disks/sotn.pspus.iso` alone, into the data folder.
+2. **Any combination, every session, without re-patching** (`char_select_session`):
+   - All 9 pairs start from the same save, each game as its chosen character, with working attacks, subweapons and moves.
+   - Continuing that save with different characters works.
+   - The patched disc's hash is unchanged throughout.
+3. **Mixed-team puppets at full speed** (`mixed_party_shared_room`):
+   - Alucard + Maria, Richter + Maria and Alucard + Richter draw each other's animated puppets correctly and fight shared enemies.
+   - In a 10-minute shared-room session: no dropped emulated frames, host p99 < 1 ms, and 60 fps on Tucker's PC.
+4. **One world for all** (`mixed_party_progression`):
+   - A Richter or Maria player picks up relics and items, beats bosses, and sees Alucard's cutscenes and shops.
+   - Everything they get is shared with the partner, as with Alucard, in every combination.
+5. **Game files screen** (`ux_game_files`): a stranger following only the screen sets up both discs. Each wrong file (EU PSP disc, PS1 disc of another region, a random file) gets a plain error that says what's needed.
+6. **M8b's criteria** (character balance) pass.

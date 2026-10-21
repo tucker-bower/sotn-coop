@@ -482,7 +482,7 @@ class Launcher:
     def make_debug_starts(self):
         import debugstarts
         self.apply_bios()
-        proc, queue = debugstarts.start(self.disc(), self.starts_dir())
+        proc, queue = debugstarts.start(self.disc(), self.starts_dir(), self.patch_crc())
         text, done, total = "Starting", 0, 1
         while True:
             while not queue.empty():
@@ -961,14 +961,14 @@ class Launcher:
 
     def debug_starts(self):
         import debugstarts
-        starts = debugstarts.load(self.starts_dir())
+        starts = debugstarts.load(self.starts_dir(), self.patch_crc())
         if not starts or not any(v.get("boss") for v in starts.values()):
-            ask = ("They haven't been made yet (about a minute). Make them now?" if not starts else
+            ask = ("They haven't been made for this version yet (about a minute). Make them now?" if not starts else
                    "There are new ones: one outside each boss, with the level and gear a player\n"
                    "usually has by then. Make them now (about a minute)?")
             if self.ui.confirm("Debug starts", ask):
                 self.make_debug_starts()
-            starts = debugstarts.load(self.starts_dir())
+            starts = debugstarts.load(self.starts_dir(), self.patch_crc())
             if not starts:
                 return
         while True:

@@ -6,7 +6,7 @@ from dataclasses import astuple, dataclass
 COOP_MAGIC = 0x504F4F43  # 'COOP'
 LINK_VERSION = 8
 
-IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE = 1, 2, 4, 8, 16, 32, 64  # CoopPresence.flags
+IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
 _PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhHH")  # CoopPresence, 0x2C bytes
 ROLE_NONE, ROLE_AUTHORITY, ROLE_GUEST = 0, 1, 2
