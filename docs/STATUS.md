@@ -65,11 +65,10 @@ _Last updated: 2026-10-20_
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **M8 / M8b approval** (M8b §7):
-  - the relic → move mapping table
-  - crashes gated by Echo of Bat, or from the start
-  - Alucard's equip menu for Richter/Maria, or auto-equip
-  - carried weapons raise attack only
+- **M8 final approval** (D85: everything else is answered). Three open points, each with a recommendation:
+  - **Where F9 reports go** (M8 §6): a free Cloudflare relay into a private repo, `tucker-bower/sotn-coop-reports` (recommended). It needs Tucker's free Cloudflare account and one GitHub token (about 15 min).
+  - **Off-hand weapons** (M8b §4.1): option A, each weapon class on one of Richter's or Maria's own poses, showing the weapon's own sprite (recommended).
+  - **Alucard's spell shortcuts** on the right stick (M8b §3.2): on the backlog (recommended), or in M8.
 
 ## Environment notes
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).
