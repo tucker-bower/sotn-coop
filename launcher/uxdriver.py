@@ -36,21 +36,25 @@ class Failed(Exception):
     pass
 
 
-def window_image(hwnd):
+def window_image(hwnd, client=False):
     """One window as Windows draws it, frame and menu bar included (PrintWindow): never brought
-    to the front, and nothing else on the screen is captured."""
+    to the front, and nothing else on the screen is captured. client: only its client area (what
+    the player sees of the games, under the menu bar)."""
     import ctypes
     from ctypes import wintypes
     from PIL import Image
     u, g = ctypes.windll.user32, ctypes.windll.gdi32
     r = wintypes.RECT()
-    u.GetWindowRect(hwnd, ctypes.byref(r))
+    if client:
+        u.GetClientRect(hwnd, ctypes.byref(r))
+    else:
+        u.GetWindowRect(hwnd, ctypes.byref(r))
     w, h = r.right - r.left, r.bottom - r.top
     hdc = u.GetWindowDC(hwnd)
     mem = g.CreateCompatibleDC(hdc)
     bmp = g.CreateCompatibleBitmap(hdc, w, h)
     g.SelectObject(mem, bmp)
-    u.PrintWindow(hwnd, mem, 2)  # PW_RENDERFULLCONTENT
+    u.PrintWindow(hwnd, mem, 3 if client else 2)  # PW_RENDERFULLCONTENT (| PW_CLIENTONLY)
 
     class BMI(ctypes.Structure):
         _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
@@ -289,6 +293,25 @@ def run(script, out, retail_cue=None):
     if not (ROOT / "patcher" / "sotn-coop.bps").exists() and dev_patch.exists():
         os.environ.setdefault("COOP_PATCH", str(dev_patch))
     sys.path.insert(0, str(HERE))
+    if os.environ.get("COOP_UX_BEHIND") and sys.platform == "win32":
+        # Windows, while someone uses the PC: our windows are made hidden, put behind every other
+        # window, then shown without being activated. Never in the way, and PrintWindow can
+        # still read them (an off-screen window isn't drawn at all).
+        import ctypes
+        import pygame._sdl2.video as video
+        real = video.Window
+
+        def behind(title, *a, **kw):
+            kw["hidden"] = True
+            win = real(title, *a, **kw)
+            u = ctypes.windll.user32
+            hwnd = u.FindWindowW(None, title)
+            u.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x13)  # HWND_BOTTOM; no move, size or activation
+            u.ShowWindow(hwnd, 8)  # SW_SHOWNA
+            return win
+        video.Window = behind
+        import display
+        display.Window = behind
     import app
     import pygame
     steps = SCRIPTS[script](pygame)
@@ -516,7 +539,86 @@ def _characters(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "characters": _characters, "perf": _perf, "window": _window, "menus": _menus,
+def hud_check(name):
+    """Both games' pictures, top rows included (each HUD), are on screen as drawn: the window's
+    client area (Windows: PrintWindow, under the menu bar) matches what we rendered, at the size
+    we laid it out for (design/M8 §5)."""
+    def check(d):
+        from display import cells
+        disp = d.launcher.display
+        drawn = disp.screenshot()  # what we rendered, at the size SDL says the window has
+        if drawn is None:
+            return d.check(False, f"{name}: the window can be read back")
+        from PIL import Image
+        drawn = Image.frombytes("RGBA", drawn.get_size(), pygame_bytes(drawn)).convert("RGB")
+        mb = d.launcher.menubar
+        shown = window_image(mb.hwnd, client=True) if sys.platform == "win32" and mb.ok else drawn
+        shown.save(d.out / f"hud-{name}.png")
+        drawn.save(d.out / f"hud-{name}-drawn.png")
+        d.shots.append(f"hud-{name}.png")
+        d.check(shown.size == drawn.size, f"{name}: the window shows all {drawn.size[1]} rows we draw",
+                shown=shown.size, drawn=drawn.size)
+        if shown.size != drawn.size:
+            return
+        for k, rect in enumerate(cells(disp.layout, disp.window.size, len(disp.games))):
+            if rect is None or rect.w == 0:
+                continue
+            top = (rect.x, rect.y, rect.right, rect.y + max(8, rect.h // 6))  # the HUD's rows
+            a, b = drawn.crop(top), shown.crop(top)
+            diff = sum(abs(x - y) for p, q in zip(a.getdata(), b.getdata()) for x, y in zip(p, q))
+            mean = diff / max(1, a.size[0] * a.size[1] * 3)
+            lit = sum(1 for p in a.getdata() if sum(p) > 150)
+            d.check(mean < 8 and lit > 20, f"{name}: game {k + 1}'s top rows (its HUD) are on screen",
+                    mean_diff=round(mean, 2), lit=lit)
+            # ...and they're the core's own top rows: nothing of its frame is cut on the way.
+            frame = disp.games[k]._last
+            if frame is not None:
+                core = Image.frombytes("RGB", frame.get_size(), pygame_bytes(frame, "RGB"))
+                core = core.resize((rect.w, rect.h), Image.BILINEAR).crop((0, 0, rect.w, top[3] - rect.y))
+                diff = sum(abs(x - y) for p, q in zip(core.getdata(), a.getdata()) for x, y in zip(p, q))
+                mean = diff / max(1, a.size[0] * a.size[1] * 3)
+                d.check(mean < 20, f"{name}: game {k + 1}'s top rows are the core's frame's", mean_diff=round(mean, 2))
+    return ("call", check)
+
+
+def pygame_bytes(surface, fmt="RGBA"):
+    import pygame
+    return pygame.image.tobytes(surface, fmt)
+
+
+def make_starts(d):
+    import pygame as pg
+    if d.subtitle.startswith(("They", "There")):
+        d.post_key(pg.K_DOWN)
+        d.post_key(pg.K_RETURN)
+
+
+def _hud(pg):
+    """Both games in play (a debug start at the castle entrance: each HUD on screen), then every
+    layout (two windows too), both pixel modes and three window sizes: hud_check()."""
+    A = pg.CONTROLLER_BUTTON_A
+    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+             ("screen", "Home"), ("menu", "debug_starts"),
+             ("until", lambda d: d.heading == "Debug starts"),
+             ("call", make_starts),                               # not made yet: Yes, make them
+             ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Both")),
+             ("key", pg.K_DOWN), ("key", pg.K_RETURN),            # Places
+             ("screen", "Places"), ("key", pg.K_RETURN),           # the first: the castle entrance
+             ("screen", "Press a button"), ("pad", 0, A), ("pad", 101, A), ("pad", 0, A), ("pad", 101, A),
+             ("until", lambda d: d.heading == "Game"), ("game_frames", 240)]
+    for w, h in ((1032, 592), (1600, 900), (800, 1000)):
+        steps += [("call", lambda d, w=w, h=h: setattr(d.launcher.display.window, "size", (w, h))), ("wait", 20)]
+        for layout in ("side", "stacked", "p1", "p2", "windows", "auto"):
+            for scaling in ("sharp", "smooth"):
+                steps += [("menu", f"layout:{layout}"), ("menu", f"scaling:{scaling}"), ("wait", 20),
+                          hud_check(f"{w}x{h}-{layout}-{scaling}")]
+    steps += [("menu", "layout:auto"), ("menu", "scaling:sharp"),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+    return steps
+
+
+SCRIPTS = {"couch": _couch, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

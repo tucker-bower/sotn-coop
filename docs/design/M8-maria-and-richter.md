@@ -97,6 +97,11 @@
 
 **Fix:** find the cause, fix it in the launcher, and add a check for it, below.
 
+**Found (2026-10-21):** none of the three. The launcher was maximized on Tucker's 3440×1440 ultrawide (its `settings.json`: 3440×1349, maximized), and the recording (`Videos/2026-10-20 20-49-30.mp4`) is 1280×720, a 16:9 view of that 21:9 window. That cuts both outer sides: P1's HP, hearts and name on the left, the right edge of P2's picture on the right. The status bar's text is cut at its left too. On the monitor itself, both HUDs were whole.
+- Ruled out with evidence: the menu bar doesn't take rows from what we draw (the client area equals the size we render at, on Windows); the core's overscan crop leaves the HUD whole (the HP orb starts about 3 rows down in its 256×240 frame); our notices draw in the status bar, not over the games.
+- **Check:** `uxdriver.py hud` on Windows: both games in play, then every layout (two windows too) × both pixel modes × 3 window sizes. Each game's top rows on screen (PrintWindow of the client area) match what we render, and match the core's own frame (144/144 checks).
+- **Hardening:** a remembered window size is clamped to the biggest screen there is now, so a size from another monitor can't hang off the edges.
+
 ## Tucker's answers to the open questions (2026-10-20)
 1. Every character gets the full Alucard castle.
 2. Characters are picked in the launcher's lobby, as now.
