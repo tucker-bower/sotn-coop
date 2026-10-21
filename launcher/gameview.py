@@ -29,10 +29,13 @@ PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harnes
 KEYS = [  # per player: key -> button
     {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
      pygame.K_z: "cross", pygame.K_x: "square", pygame.K_c: "circle", pygame.K_v: "triangle",
-     pygame.K_a: "l1", pygame.K_s: "r1", pygame.K_RETURN: "start", pygame.K_RSHIFT: "select"},
+     pygame.K_a: "l1", pygame.K_s: "r1", pygame.K_d: "l2", pygame.K_w: "r2",
+     pygame.K_RETURN: "start", pygame.K_RSHIFT: "select",
+     pygame.K_KP8: "rs_up", pygame.K_KP6: "rs_right", pygame.K_KP2: "rs_down", pygame.K_KP4: "rs_left"},
     {pygame.K_i: "up", pygame.K_k: "down", pygame.K_j: "left", pygame.K_l: "right",
      pygame.K_f: "cross", pygame.K_g: "square", pygame.K_h: "circle", pygame.K_t: "triangle",
-     pygame.K_q: "l1", pygame.K_e: "r1", pygame.K_SPACE: "start", pygame.K_TAB: "select"},
+     pygame.K_q: "l1", pygame.K_e: "r1", pygame.K_r: "l2", pygame.K_y: "r2",
+     pygame.K_SPACE: "start", pygame.K_TAB: "select"},
 ]
 FORMATS = {  # libretro pixel format -> (bits per pixel, RGB masks)
     0: (16, (0x7C00, 0x03E0, 0x001F, 0)),       # 0RGB1555
@@ -185,6 +188,10 @@ class Pads:
             x, y = c.get_axis(pygame.CONTROLLER_AXIS_LEFTX), c.get_axis(pygame.CONTROLLER_AXIS_LEFTY)
             pressed |= {n for n, on in (("left", x < -16000), ("right", x > 16000), ("up", y < -16000),
                                         ("down", y > 16000)) if on}
+            # The right stick (Alucard's spell shortcuts: design/M8b §3.2), as the game's padExtra.
+            x, y = c.get_axis(pygame.CONTROLLER_AXIS_RIGHTX), c.get_axis(pygame.CONTROLLER_AXIS_RIGHTY)
+            pressed |= {n for n, on in (("rs_left", x < -20000), ("rs_right", x > 20000), ("rs_up", y < -20000),
+                                        ("rs_down", y > 20000)) if on}
             if c.get_axis(pygame.CONTROLLER_AXIS_TRIGGERLEFT) > 16000:
                 pressed.add("l2")
             if c.get_axis(pygame.CONTROLLER_AXIS_TRIGGERRIGHT) > 16000:

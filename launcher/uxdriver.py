@@ -8,6 +8,9 @@
                                                         real menu bar's window procedure)
     python launcher/uxdriver.py online    [--out DIR]   two launchers on this PC: one hosts, the
                                                         other types the room code; both play
+    python launcher/uxdriver.py characters [--out DIR]  Settings › Game files: wrong discs refused in
+                                                        plain words, then the DXC disc adds Maria;
+                                                        Maria + Richter play (design/M8 criterion 5)
 
 The real launcher runs, in a fresh data folder, with scripted input injected into its event
 queue: keys, controller buttons (virtual controllers, launcher/gameview.Pads.virtual), menu-bar
@@ -72,6 +75,7 @@ class Driver:
         self.steps = list(steps)
         self.out = out
         self.heading = None
+        self.subtitle = ""
         self.log = []
         self.checks = []
         self.shots = []
@@ -109,6 +113,7 @@ class Driver:
 
         def frame(heading, subtitle=""):
             drv.screen(heading or "Home")
+            drv.subtitle = subtitle
             return orig(heading, subtitle)
         ui.frame = frame
 
@@ -339,12 +344,18 @@ def _couch(pg, quit_at_end=True):
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
-        ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter-locked"),  # Richter: not yet
-        ("pad", 101, A),                                      # can't be ready as Richter
-        ("wait", 10), ("expect", lambda d: d.heading.startswith("Press a button"), "a locked character can't be ready"),
-        ("pad", 101, pg.CONTROLLER_BUTTON_DPAD_RIGHT),        # back to Alucard
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Maria: no DXC disc yet
+        ("pad", 101, A),                                      # can't be ready as Maria: it opens Game files
+        ("screen", "Game files"), ("shot", "game-files-from-lobby"),
+        ("key", pg.K_ESCAPE), ("screen", "Press a button"),
+        ("expect", lambda d: d.launcher.shortcuts(1), "shortcuts start on"),
+        ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
+        ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
-        ("until", in_game), ("expect", lambda d: d.inputs <= 10, "home to playing in 10 inputs or fewer"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 13, "home to playing in 13 inputs or fewer (10, plus the detours to Game files and shortcuts)"),
+        ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
+         "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
         ("hold", 0, "start"), ("game_frames", 2060), ("hold", 0, ""), ("game_frames", 2200),
         ("unplug", 101),
@@ -464,7 +475,48 @@ def _perf(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "perf": _perf, "window": _window, "menus": _menus,
+def _characters(pg):
+    """Settings › Game files: three wrong files refused in plain words, then the DXC disc adds Maria
+    (design/M8 criterion 5). Then Maria (player 1) and Richter (player 2) start a game."""
+    import test_characters
+    A, L, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_LEFT, pg.CONTROLLER_BUTTON_DPAD_RIGHT
+    tmp = Path(tempfile.mkdtemp(prefix="coop-ux-files-"))
+    junk = tmp / "notes.txt"
+    junk.write_bytes(b"hello" * 2000)
+    wrong = [(test_characters.fake_psp_iso(tmp / "Castlevania DXC (Europe).iso", "ULES-00841"), "ULUS-10277", "eu"),
+             (next((ROOT / "disks").glob("*Track 1).bin")), "PlayStation disc", "ps1"),
+             (junk, "isn't a disc image", "junk")]
+
+    def pick(path):
+        return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
+    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+             ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
+             ("screen", "Game files"), ("shot", "game-files-first"),
+             ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
+    for path, words, name in wrong:
+        steps += [pick(path), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+                  ("screen", "That disc won't work"), ("shot", f"dxc-wrong-{name}"),
+                  ("expect", lambda d, w=words: w in d.subtitle, f"{name}: the error says {words!r}"),
+                  ("key", pg.K_RETURN), ("screen", "Game files")]
+    steps += [pick(ROOT / "disks" / "sotn.pspus.iso"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+              ("screen", "Maria is ready"), ("shot", "maria-ready"), ("key", pg.K_RETURN),
+              ("screen", "Game files"), ("shot", "game-files-done"),
+              ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
+              ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
+              ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Couch co-op
+              ("screen", "Press a button"),
+              ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
+              ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+              ("until", lambda d: d.heading == "Game"),
+              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),
+              ("game_frames", 600), ("shot", "maria-and-richter"),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),
+              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+    return steps
+
+
+SCRIPTS = {"couch": _couch, "characters": _characters, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

@@ -40,6 +40,10 @@ class Iso:
         self.f = open(path, "rb")
         pvd = self._sector(16)
         if pvd[1:6] != b"CD001":
+            self.f.seek(16 * 2352 + 25)  # a raw CD image (2352-byte sectors): a PlayStation disc
+            if self.f.read(5) == b"CD001":
+                raise DiscError("That's a PlayStation disc. Maria comes from the PSP game: choose your "
+                                "Dracula X Chronicles .iso (USA, ULUS-10277).")
             raise DiscError("That file isn't a disc image (.iso). Choose your Dracula X Chronicles .iso.")
         self.root = pvd[156:156 + 34]
 
