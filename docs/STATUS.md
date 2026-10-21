@@ -46,13 +46,15 @@ _Last updated: 2026-10-21_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **M8 (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`** (stacked on PR #3). Done so far:
-  - **The world stays Alucard's, the player is anyone:** DRA's 15 player-code checks read a per-game `g_CoopCharacter`; stages, cutscenes, shops and saves keep seeing Alucard. `build_disc.sh` now proves every DRA symbol keeps its retail address (`check_dra_symbols.py`).
-  - **The host picks each game's character** (mailbox v9); it applies at the game's next load (new game after the prologue, or Continue). The lobby keeps each seat's pick; Richter is selectable.
-  - **Our own Richter** (`richter/`, built from `src/ric`) is on the co-op disc as `COOPRIC.BIN`; the prologue still uses the retail one.
-  - **Spikes:** Richter plays the castle intro, the Warg chase and Death's scene, walks/whips/jumps/slides/throws, and gets Alucard's full menu (equipment, relics) on Start.
-- **Next in M8:** mixed-team puppets, the M8b moves (relic gates, one-button moves, Mist Step, growth, off-hand weapons, Alucard spell shortcuts), Maria from the DXC disc, the game-files screen, both HUDs visible, then balance tuning and the reachability audit.
-- **Known so far:** after a save load, Richter's HUD name box is blank (also with the retail Richter: a palette not loaded on that path). Richter's overlay overlaps the familiar overlay's address (0x80170000), so familiars for Richter/Maria need a different home (M8b §3).
+- **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
+  - **Done, with passing tests:**
+    - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
+    - `char_select_session`: all 9 pairs from one save, re-picked at each load, disc unchanged. `mixed_party_shared_room` (+`_am`, `_rm`): puppets both ways, the guest's hits count. `mixed_party_progression` (R+M, M+R, R+A), `mixed_party_boss`, `mixed_party_cutscene`.
+    - M8b for Richter and Maria: relic gates, L2/R2 shortcuts, growth (levels, STR/INT scaling, Fire of Bat), Mist Step; Life/Heart Max Up give +5 for everyone.
+    - Alucard's spells on the right stick (`m8b_spell_shortcuts`, all 6 castable spells).
+    - Launcher: Game files screen (`uxdriver.py characters`: wrong files refused in plain words, then Maria), lobby (Maria locked until her disc, Triangle/Y shortcuts per player), Settings › Controls. `test_characters.py` (Maria from the USA DXC disc).
+    - **Patch hygiene fix:** COOPRIC.BIN had put Richter's retail art into the patch as literal bytes. Now copied from the player's RIC.BIN, and changed sectors' EDC/ECC are computed on the player's PC; `test_patcher.py` proves the patch holds no retail data or checksums.
+  - **Left:** off-hand weapons (§4.1), the remaining relic mappings (Force of Echo, Gas Cloud, Holy Symbol, spike/rings/glasses, familiars spike), both HUDs visible (§5), the 10-minute mixed-team performance soak, the reachability audit and the power-curve tuning (bot fights at the 12 boss starts).
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
@@ -63,7 +65,7 @@ _Last updated: 2026-10-21_
 
 ## Budget
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
-- Day 4 (2026-10-21): M8 designs approved; M8 implementation started (character split, our Richter on the disc).
+- Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
 - **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:

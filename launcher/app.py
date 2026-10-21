@@ -561,12 +561,12 @@ class Launcher:
             bios = "OpenBIOS (free, built in). Your own BIOS works too." if self.bios() == BUNDLED_BIOS \
                 else f"Your BIOS: {self.bios().name}"
             k = ui.menu("Game files", [
-                ("✓  Symphony of the Night (PS1, USA)    required",
+                (f"Symphony of the Night (PS1, USA):  required, {'set' if disc else 'not set'}",
                  f"{disc.name if disc else 'Not chosen'}   (choose again)"),
-                (("✓" if self.maria_ready() else "+") + "  Dracula X Chronicles (PSP, USA)    optional",
+                (f"Dracula X Chronicles (PSP, USA):  optional, {'Maria added' if self.maria_ready() else 'adds Maria'}",
                  (Path(iso).name + "   (choose again)") if iso and self.maria_ready()
                  else "Adds Maria as a playable character. Choose your .iso"),
-                ("✓  PlayStation BIOS    included", bios + "   (change)")],
+                ("PlayStation BIOS:  included", bios + "   (change)")],
                 "Only the Symphony of the Night disc is needed to play.")
             if k is None:
                 return
@@ -751,8 +751,7 @@ class Launcher:
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
         if not playable:  # Maria without her disc
-            for k, line in enumerate(("Add your Dracula X Chronicles disc", "in Settings › Game files",
-                                      "(Cross / A: open it)")):
+            for k, line in enumerate(("Needs your Dracula X", "Chronicles disc (PSP)", "Cross / A: add it")):
                 t = ui.small.render(line, True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
         if playable:
