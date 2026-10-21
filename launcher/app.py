@@ -53,7 +53,10 @@ INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (
 OK_GREEN = (140, 200, 120)
 BUNDLED_BIOS = APP / "bios" / "openbios.bin"
 PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
-CHARACTERS = (("Alucard", True), ("Richter", True), ("Maria", False))  # (name, playable yet); index = CHAR_*
+# Maria's patches (maria/make_patches.py): the installer's, or a dev checkout's build.
+MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
+                      if (d / "maria.json").exists()), APP / "patcher" / "maria")
+CHARACTERS = ("Alucard", "Richter", "Maria")  # index = CHAR_* (module/link.h)
 
 log = logging.getLogger("launcher")
 
@@ -372,7 +375,7 @@ class Launcher:
         pygame.init()
         self.settings = load_settings()
         # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
-        self.characters = [c if 0 <= c < len(CHARACTERS) and CHARACTERS[c][1] else 0
+        self.characters = [c if 0 <= c < len(CHARACTERS) and self.playable(c) else 0
                            for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
@@ -442,6 +445,78 @@ class Launcher:
     def disc(self):
         d = self.settings.get("disc")
         return Path(d) if d and Path(d).exists() else None
+
+    # --- characters (design/M8)
+
+    def maria_blob_path(self):
+        return paths.characters_dir() / "maria.blob"
+
+    def maria_ready(self):
+        """Maria is made (from the player's DXC disc) for this version's patches. A newer launcher
+        remakes her from the disc it remembers, quietly."""
+        blob, about = self.maria_blob_path(), MARIA_PATCHES / "maria.json"
+        if not about.exists():
+            return False
+        if blob.exists() and blob.stat().st_mtime >= about.stat().st_mtime:
+            return True
+        iso = self.settings.get("dxc_iso")
+        if iso and Path(iso).exists():
+            import characters
+            try:
+                characters.maria_blob(iso, MARIA_PATCHES, blob)
+                return True
+            except characters.DiscError:
+                log.exception("remaking Maria")
+        return False
+
+    def playable(self, character):
+        return character != 2 or self.maria_ready()
+
+    def blob(self):
+        """Maria's blob for every game when she's made: a partner who plays her is drawn from it."""
+        return self.maria_blob_path().read_bytes() if self.maria_ready() else None
+
+    def add_dxc(self):
+        """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
+        import characters
+        path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                         [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")])
+        if not path:
+            return
+        try:
+            self.ui.wait_for("Adding Maria", f"From {path.name}\nThis takes a few seconds.",
+                             lambda progress: characters.maria_blob(path, MARIA_PATCHES, self.maria_blob_path()))
+        except characters.DiscError as e:
+            self.ui.message("That disc won't work", str(e))
+            return
+        self.settings["dxc_iso"] = str(path)
+        save_settings(self.settings)
+        self.ui.message("Maria is ready", "Pick her in the lobby, as either player.")
+
+    def game_files(self):
+        ui = self.ui
+        while True:
+            disc, iso = self.disc(), self.settings.get("dxc_iso")
+            bios = "OpenBIOS (free, built in). Your own BIOS works too." if self.bios() == BUNDLED_BIOS \
+                else f"Your BIOS: {self.bios().name}"
+            k = ui.menu("Game files", [
+                ("✓  Symphony of the Night (PS1, USA)    required",
+                 f"{disc.name if disc else 'Not chosen'}   (choose again)"),
+                (("✓" if self.maria_ready() else "+") + "  Dracula X Chronicles (PSP, USA)    optional",
+                 (Path(iso).name + "   (choose again)") if iso and self.maria_ready()
+                 else "Adds Maria as a playable character. Choose your .iso"),
+                ("✓  PlayStation BIOS    included", bios + "   (change)")],
+                "Only the Symphony of the Night disc is needed to play.")
+            if k is None:
+                return
+            if k == 0:
+                self.settings["disc"] = None
+                save_settings(self.settings)
+                self.wizard()
+            elif k == 1:
+                self.add_dxc()
+            elif k == 2:
+                self.choose_bios()
 
     def starts_dir(self):
         return paths.debug_starts_dir() / f"{self.disc().stem}@{self.bios().stem}"
@@ -555,8 +630,10 @@ class Launcher:
                     continue
                 i = mine[-1]
                 if key == "ok":
-                    if CHARACTERS[char[i]][1]:
+                    if self.playable(char[i]):
                         ready[i] = True
+                    elif char[i] == 2:  # Maria: her disc isn't added yet
+                        self.game_files()
                 elif key == "back":
                     if ready[i]:
                         ready[i] = False
@@ -600,7 +677,7 @@ class Launcher:
         name = "Keyboard" if dev == "kb" else names.get(dev, "Controller")
         t = ui.small.render(name[:32], True, INK)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 56)))
-        cname, playable = CHARACTERS[char]
+        cname, playable = CHARACTERS[char], self.playable(char)
         t = ui.big.render(cname, True, INK if playable else DIM)
         r = t.get_rect(midtop=(box.centerx, box.y + 104))
         s.blit(t, r)
@@ -608,13 +685,17 @@ class Launcher:
             for sign, x in ((-1, r.left - 22), (1, r.right + 22)):
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
-        if not playable:
-            t = ui.small.render("Coming in a later version", True, DIM)
-            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 142)))
+        if not playable:  # Maria without her disc
+            for k, line in enumerate(("Add your Dracula X Chronicles disc", "in Settings › Game files",
+                                      "(Cross / A: open it)")):
+                t = ui.small.render(line, True, DIM)
+                s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
         if ready:
             t = ui.big.render("Ready!", True, OK_GREEN)
-        else:
+        elif playable:
             t = ui.small.render("Cross / A when ready", True, DIM)
+        else:
+            return
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 188)))
 
     def _partner_card(self, box, text, connected):
@@ -700,12 +781,13 @@ class Launcher:
         self.apply_bios()
         return Session(self.disc(), starts=starts, audio=True,
                        session_file=playthrough.joint_save if playthrough else None,
-                       characters=tuple(self.characters))
+                       characters=tuple(self.characters), blob=self.blob())
 
     def apply_players(self, s):
         """Each game gets its player's character (online: this player's own), from its next load."""
+        blob = self.blob()
         for i, g in enumerate(s.games):
-            g.host("set_player", character=self.characters[i])
+            g.host("set_player", character=self.characters[i], blob=blob)
 
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
@@ -853,7 +935,7 @@ class Launcher:
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True,
             session_file=playthrough.joint_save if playthrough else None,
-            patch_crc=self.patch_crc(),
+            patch_crc=self.patch_crc(), blob=self.blob(),
         )
 
     def partner_line(self, s, waiting):
@@ -1007,14 +1089,12 @@ class Launcher:
         sel = 0
         while True:
             st = self.settings
-            bios = "OpenBIOS (included)" if self.bios() == BUNDLED_BIOS else f"Your BIOS: {self.bios().name}"
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Pixels: {'Sharp' if st.get('scaling', 'sharp') == 'sharp' else 'Smooth'}",
                       "Sharp keeps every pixel crisp; Smooth softens them. Always the true 4:3 picture."),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
-                     (bios, "Change the BIOS"),
-                     ("Disc: choose again", self.settings.get("disc") or ""),
+                     ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Open the data folder", str(paths.data_dir()))]
             k = ui.menu("Settings", items, footer=self.storage_line(), sel=sel)
             if k is None:
@@ -1030,12 +1110,8 @@ class Launcher:
             elif k == 3:
                 st["aggro"] = (st.get("aggro", 50) + 10) % 110
             elif k == 4:
-                self.choose_bios()
+                self.game_files()
             elif k == 5:
-                st["disc"] = None
-                save_settings(st)
-                self.wizard()
-            elif k == 6:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)
