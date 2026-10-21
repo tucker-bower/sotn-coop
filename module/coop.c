@@ -6,6 +6,7 @@
 #include "message.h"
 #include "arrive.h"
 #include "boss.h"
+#include "character.h"
 #include "progress.h"
 #include "puppet.h"
 #include "shared.h"
@@ -42,7 +43,7 @@ static void CapturePresence(CoopPresence* p) {
         return;
     }
     p->flags = PRESENCE_IN_PLAY;
-    p->character = g_PlayableCharacter;
+    p->character = CharacterLoaded();
     p->stage = g_StageId;
     p->roomLeft = g_Tilemap.left;
     p->roomTop = g_Tilemap.top;
@@ -97,6 +98,7 @@ static void MusicUpdate(void) {
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    CharacterFrame();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
