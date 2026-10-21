@@ -43,7 +43,18 @@ def main():
     paths.save_settings(launcher.settings)
     launcher.make_debug_starts()
     starts = debugstarts.load(launcher.starts_dir())
-    check(len(starts) == len(debugstarts.STARTS), "debug starts made", n=len(starts))
+    import bossstarts
+    check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B), "debug starts made", n=len(starts))
+    unchecked = [n for n, v in starts.items() if v.get("boss") and not v.get("checked")]
+    check(not unchecked, "a bot reaches every boss from its boss start", failed=unchecked)
+    from link.mailbox import IN_PLAY
+    file = str(launcher.starts_dir() / starts["Boss: Doppleganger10"]["file"])
+    with launcher.session((file, file), None) as s:  # what Developer › Debug starts does
+        for _ in range(240):
+            s.step(1)
+        pa, pb = s.a.mailbox("self_presence"), s.b.mailbox("self_presence")
+        check(pa.stage == pb.stage == 0x01 and all(q.flags & IN_PLAY for q in (pa, pb)),
+              "a boss start plays in both games, outside the boss", a=str(pa.room), b=str(pb.room))
 
     p = archive.Playthrough.new("Smoke test")
     file = str(launcher.starts_dir() / starts["Entrance hall"]["file"])

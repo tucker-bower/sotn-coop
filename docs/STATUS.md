@@ -33,8 +33,12 @@ _Last updated: 2026-10-20_
   - **Stranger playtest** (`docs/playtest/M7b-stranger.md`): found and fixed a silent crash when the installer starts the launcher (Windows RedirectionGuard), a lobby crash with real controllers, LAN candidates, an unclean uninstall, and missing glyphs.
   - **Widescreen spike** (`docs/design/M10-widescreen-spike.md`): the emulator hack does nothing for SOTN, and true FOV is blocked by VRAM.
 
+- **After M7b (2026-10-20, branch `coop-fix-dualsense`):**
+  - **Controller fixes from Tucker's test:** a PS5 controller that re-appears ~7 s after start was never opened, and a controller with id 0 could ready up but never start the game. The couch walkthrough now uses id 0.
+  - **Boss debug starts (D83):** Developer › Debug starts › Bosses has one start outside each of the 12 first-castle bosses, with a typical player's level, gold, gear, relics, map and beaten bosses. A bot proves each one reaches its boss, and `smoke.py` requires all 12. They take about 51 s to make on Tucker's PC, along with the other debug starts.
+
 ## In flight
-- **PR #1 (M7b)** on `tucker-bower/sotn-coop`, and the **draft release v0.7.1** for Tucker to test and publish.
+- **Draft release v0.7.1** (rebuilt with the fixes and boss starts) for Tucker to test and publish, after merging `coop-fix-dualsense`.
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
@@ -48,13 +52,12 @@ _Last updated: 2026-10-20_
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
 
 ## Decisions needed (Tucker)
-- **Publish v0.7.1:** after you've tested the draft. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
+- **Publish v0.7.1:** Tucker is testing couch and online on 2026-10-20. PR #1 is merged and the draft now targets `main`. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
 - **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **M10 widescreen:** I recommend dropping true expanded FOV (VRAM-blocked, 3–6 weeks of risk) and using the 16:9 bars for co-op info on the AYN Thor.
-- **Before M8 implementation:** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
+- **Before M8 implementation (tabled; Tucker undecided, 2026-10-20):** what mixed characters mean for shared progression (D27) — e.g. when Richter or Maria picks up an Alucard relic/equipment item or vice versa, and how Richter/Maria world differences (like Alucard-only gates or dialogue triggers) behave in a mixed party.
 
 ## Environment notes
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).

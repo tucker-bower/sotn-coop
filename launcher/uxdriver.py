@@ -329,13 +329,13 @@ def _couch(pg, quit_at_end=True):
         ("count_inputs",),
         ("screen", "Home"), ("key", pg.K_RETURN),            # Couch co-op
         ("screen", "Press a button"), ("shot", "lobby-empty"),
-        ("pad", 100, A),                                      # player 1 joins
+        ("pad", 0, A),                                      # player 1 joins (id 0, like the first real controller)
         ("pad", 101, A),                                      # player 2 joins
         ("wait", 3), ("shot", "lobby-joined"),
         ("pad", 101, B),                                      # player 2 leaves...
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
-        ("pad", 100, A), ("wait", 2), ("shot", "lobby-p1-ready"),
+        ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter-locked"),  # Richter: not yet
         ("pad", 101, A),                                      # can't be ready as Richter
         ("wait", 10), ("expect", lambda d: d.heading.startswith("Press a button"), "a locked character can't be ready"),
@@ -343,7 +343,7 @@ def _couch(pg, quit_at_end=True):
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
         ("until", in_game), ("expect", lambda d: d.inputs <= 10, "home to playing in 10 inputs or fewer"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
-        ("hold", 100, "start"), ("game_frames", 2060), ("hold", 100, ""), ("game_frames", 2200),
+        ("hold", 0, "start"), ("game_frames", 2060), ("hold", 0, ""), ("game_frames", 2200),
         ("unplug", 101),
         ("screen", "controller disconnected"), ("shot", "unplugged"),
         ("pad", 102, A),                                      # any controller: it's player 2's now

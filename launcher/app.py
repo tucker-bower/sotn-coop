@@ -109,6 +109,7 @@ class UI:
         self.small = pygame.font.SysFont("georgia", 17)
         self.mono = pygame.font.SysFont("consolas", 14)
         self._rects = []
+        self.pads = None  # gameview.Pads, once the launcher has made it
 
     def events(self, raw=False):
         """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit",
@@ -137,8 +138,12 @@ class UI:
                 out.append(("pad", ev.instance_id))
                 if a:
                     out.append(a)
-            elif ev.type == pygame.CONTROLLERDEVICEADDED:
-                pygame._sdl2.controller.Controller(ev.device_index)
+            elif ev.type in (pygame.CONTROLLERDEVICEADDED, pygame.CONTROLLERDEVICEREMOVED):
+                # Pads keeps every plugged-in controller open: one opened here and dropped closes
+                # again, and sends no buttons. (A DualSense on Windows drops out about 0.5 s after
+                # start and comes back as a new device about 7 s later.)
+                if self.pads:
+                    self.pads.refresh()
             elif ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
                 pos = self.display.to_canvas(ev.pos)
                 hit = next((k for k, r in self._rects if pos and r.collidepoint(pos)), None)
@@ -192,7 +197,17 @@ class UI:
         rest = [label for k, (label, _) in enumerate(items) if not (hero and k == 0)]
         widest = max((self.big.size("›  " + label)[0] for label in rest), default=0)
         left = max(20, (SIZE[0] - widest) // 2)
+        rows = max(1, (SIZE[1] - 100 - top) // 38)  # long lists scroll with the selection
+        first = 0 if hero or len(items) <= rows else min(max(0, sel - rows // 2), len(items) - rows)
+        if first:
+            t = self.small.render("more above", True, DIM)
+            self.screen.blit(t, (left, y - 24))
         for k, (label, hint) in enumerate(items):
+            if not hero and not first <= k < first + rows:
+                if k == first + rows:
+                    t = self.small.render("more below", True, DIM)
+                    self.screen.blit(t, (left, y))
+                continue
             color = GOLD if k == sel else INK
             if hero and k == 0:
                 t = self.title.render(label, True, color)
@@ -364,6 +379,7 @@ class Launcher:
         self.screen = self.display.canvas
         from gameview import Pads
         self.pads = Pads((None, None))
+        self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
         try:
@@ -517,7 +533,7 @@ class Launcher:
                            pygame.K_LEFT: "left", pygame.K_RIGHT: "right"}.get(ev.key)
                     if key is None:
                         continue
-                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and not any(joined):
+                elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and joined.count(None) == slots:
                     return None  # right click: back
                 else:
                     continue
@@ -529,7 +545,7 @@ class Launcher:
                 # first player is ready (two people, one keyboard: KEYS has two layouts).
                 if not mine or (dev == "kb" and key == "ok" and ready[mine[-1]] and None in joined):
                     if key == "back":
-                        if not any(joined):
+                        if joined.count(None) == slots:
                             return None
                     elif None in joined:
                         joined[joined.index(None)] = dev
@@ -546,7 +562,7 @@ class Launcher:
                 elif key in ("left", "right") and not ready[i]:
                     char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
             partner = online() if online else None
-            if all(joined) and all(ready) and (partner is None or partner[1]):
+            if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
                 return list(joined)
             ui.frame("Press a button on your controller to join", subtitle)
@@ -560,17 +576,18 @@ class Launcher:
                 else:
                     self._partner_card(box, *partner)
             ui.footer("Joined? Left / right picks a character. Cross / A / Enter: ready. Circle / B / Esc: leave."
-                      if any(joined) else "No controller? Press Enter to play with the keyboard.   Esc: back")
+                      if joined.count(None) < slots else "No controller? Press Enter to play with the keyboard.   Esc: back")
             ui.flip()
             pygame.time.wait(16)
 
     def _card(self, box, title, dev, ready, char, names):
         s, ui = self.screen, self.ui
-        pygame.draw.rect(s, (40, 16, 24) if dev else (24, 14, 20), box, border_radius=10)
-        pygame.draw.rect(s, OK_GREEN if ready else (GOLD if dev else DIM), box, 2, border_radius=10)
-        t = ui.big.render(title, True, GOLD if dev else DIM)
+        joined = dev is not None  # a controller's instance id can be 0
+        pygame.draw.rect(s, (40, 16, 24) if joined else (24, 14, 20), box, border_radius=10)
+        pygame.draw.rect(s, OK_GREEN if ready else (GOLD if joined else DIM), box, 2, border_radius=10)
+        t = ui.big.render(title, True, GOLD if joined else DIM)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
-        if not dev:
+        if not joined:
             for k, line in enumerate(("Press any button", "on a controller", "", "(or Enter: keyboard)")):
                 t = ui.small.render(line, True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 80 + k * 24)))
@@ -923,7 +940,7 @@ class Launcher:
                     ui.message(p.name, "No savestates yet.")
                     continue
                 k = ui.menu("Go back to…", [(label, "") for label, _, _ in pairs[:9]])
-                if k is None or (not all(self.pads.assign) and self.lobby() is None):
+                if k is None or (None in self.pads.assign and self.lobby() is None):
                     continue
                 label, fa, fb = pairs[k]
                 a, b = load_pair(fa, fb)
@@ -945,16 +962,27 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir())
-        if not starts:
-            if self.ui.confirm("Debug starts", "They haven't been made yet (about a minute). Make them now?"):
+        if not starts or not any(v.get("boss") for v in starts.values()):
+            ask = ("They haven't been made yet (about a minute). Make them now?" if not starts else
+                   "There are new ones: one outside each boss, with the level and gear a player\n"
+                   "usually has by then. Make them now (about a minute)?")
+            if self.ui.confirm("Debug starts", ask):
                 self.make_debug_starts()
             starts = debugstarts.load(self.starts_dir())
             if not starts:
                 return
-        names = list(starts)
-        k = self.ui.menu("Debug starts", [(n, starts[n]["about"]) for n in names],
-                         "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
-        if k is None or (not all(self.pads.assign) and self.lobby() is None):
+        while True:
+            group = self.ui.menu("Debug starts", [("Bosses", "Outside each boss of the first castle, with a typical player's progress"),
+                                                  ("Places", "Spots along the route, with the gear from the start")],
+                                 "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
+            if group is None:
+                return
+            names = [n for n in starts if bool(starts[n].get("boss")) == (group == 0)]
+            k = self.ui.menu("Bosses" if group == 0 else "Places",
+                             [(n.removeprefix("Boss: "), starts[n]["about"]) for n in names])
+            if k is not None:
+                break
+        if None in self.pads.assign and self.lobby() is None:
             return
         file = str(self.starts_dir() / starts[names[k]]["file"])
         with self.session((file, file), None) as s:

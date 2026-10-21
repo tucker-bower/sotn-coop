@@ -1,8 +1,8 @@
 """Debug starts: savestates to start anywhere on the route, made on the player's PC from their
 own disc (savestates hold game RAM, so they're never shipped: D9, D69).
 
-Made once, by the first-run wizard (about a minute), with the disc and BIOS in use; each start
-loads into both games. They live in debug-starts/<disc>@<bios>/ with index.json.
+Made once (about a minute), with the disc and BIOS in use; each start
+loads into both games. The boss starts (bossstarts.py) come with a typical player's progress. They live in debug-starts/<disc>@<bios>/ with index.json.
 """
 
 import json
@@ -36,7 +36,8 @@ def _build(disc, out_dir, queue):
 
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        steps = 3 + len(STARTS)
+        import bossstarts
+        steps = 3 + len(STARTS) + 1 + len(bossstarts.B)
         queue.put(("progress", 0, steps, "Starting a new game"))
         index = {}
         with Emu(disc) as e:
@@ -74,12 +75,89 @@ def _build(disc, out_dir, queue):
                 file = name.replace(":", " -") + ".state"
                 e.save_state_file(out / file)
                 index[name] = {"about": about, "file": file, "where": e.snapshot()}
+            queue.put(("progress", 3 + len(STARTS), steps, "Mapping the castle"))
+            rooms = _survey(e, bases["entrance"], route, bossstarts)
+            for k, b in enumerate(bossstarts.B):
+                queue.put(("progress", 4 + len(STARTS) + k, steps, b["name"]))
+                name = f"Boss: {b['name']}"
+                ok = _boss_start(e, mb, bases["entrance"], b, rooms, bossstarts)
+                file = name.replace(":", " -").replace("&", "and") + ".state"
+                e.save_state_file(out / file)
+                about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the boss)")
+                index[name] = {"about": about, "file": file, "where": e.snapshot(), "boss": True, "checked": ok}
         (out / "index.json").write_text(json.dumps(index, indent=1))
         queue.put(("done", steps, steps, str(out)))
     except Exception as exc:  # noqa: BLE001 - reported to the wizard, in words
         import traceback
         queue.put(("error", 0, 0, f"{exc}\n{traceback.format_exc()}"))
         sys.exit(1)
+
+
+def _wait(e, cond, frames):
+    for _ in range(frames):
+        if cond():
+            return True
+        e.step(1)
+    return False
+
+
+def _survey(e, entrance, route, bossstarts):
+    """{area: map cells}, from each area's own room table (warping there from the entrance)."""
+    areas = sorted({a for b in bossstarts.B for a in b["areas"]})
+    rooms = {}
+    for a in areas:
+        e.load_state(entrance)
+        if a != "NO3":
+            route.warp(e, bossstarts.STAGES[a])
+        rooms[a] = bossstarts.survey(e)
+    return rooms
+
+
+def _boss_start(e, mb, entrance, b, rooms, bossstarts):
+    """Leaves the emulator outside boss b with b's progress; True if a bot then reached the boss."""
+    from link.mailbox import BOSS, BUSY, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, IN_PLAY
+    from bots import walker
+    import savestates as route
+
+    e.load_state(entrance)
+    bossstarts.apply(e, b, e.read_bytes("g_Status", route.STATUS_SIZE), rooms)
+    # A joint save and its load: the game recomputes everything from the status, as after a
+    # memory card load.
+    seq, p = mb.save_seq(), mb.self_presence()
+    mb.command(CMD_SAVE_NOW, p.stage, 0, p.room_left, p.room_top)
+    if not _wait(e, lambda: mb.save_seq() != seq, 3000):
+        raise RuntimeError(f"{b['name']}: the save never came")
+    mb.put_save(mb.save_out())
+    mb.command(CMD_LOAD_SAVE)
+    playing = lambda: (lambda q: q.flags & IN_PLAY and not q.flags & BUSY)(mb.self_presence())
+    if not (_wait(e, lambda: e.read("g_GameState") == route.GAME_NOW_LOADING, 600) and
+            _wait(e, lambda: e.read("g_GameState") == route.GAME_PLAY and playing(), 3000)):
+        raise RuntimeError(f"{b['name']}: the save didn't load")
+    e.step(60)
+    stage = bossstarts.STAGES[b["stage"]]
+    room, x, y = b["arrive"]
+    mb.command(CMD_ARRIVE, stage, room, x, y)
+    here = lambda: (lambda q: q.stage == stage and q.room_id == room)(mb.self_presence())
+    scene = lambda: mb.self_presence().flags & CUTSCENE  # the Nightmare opens with one
+    if not _wait(e, lambda: here() and (playing() or scene()), 1200):
+        raise RuntimeError(f"{b['name']}: never arrived: {e.snapshot()}")
+    e.step(90)
+    route.heal(e)
+    e.step(1)
+    start = e.save_state()
+    if b["check"]:
+        mb.command(CMD_ARRIVE, stage, *b["check"])
+        _wait(e, lambda: mb.self_presence().x != 0 and playing(), 1200)
+        e.step(60)
+    bot = walker(b["walk"], attack_every=0)
+    ok = False
+    for i in range(7200):  # an arena may take a while to bring its boss in; Richter talks first
+        if mb.self_presence().flags & BOSS:
+            ok = True
+            break
+        e.step(1, bot(e.snapshot(), i))
+    e.load_state(start)
+    return ok
 
 
 def start(disc, out_dir):
