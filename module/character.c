@@ -18,6 +18,7 @@
 
 #define PLAYER_OVL_ADDR 0x8013C000 // RIC.BIN's address (config/splat.us.ric.yaml)
 #define PLAYER_OVL_MAX (0x80180000 - PLAYER_OVL_ADDR) // the stage overlay follows
+#define CdFile_SdRihVh 20 // D_800ACC74's g_LbaSdRihVh (src/dra/cd.c); its .VB comes with it
 
 void FlushCache(void); // main.exe (PsyQ)
 u32 CheckAndDoLevelUp(void); // DRA: level up from EXP; 1 = level up, 2 = hearts, 3 = HP max up
@@ -31,6 +32,7 @@ extern CdFile g_LbaBinRichter; // DRA: RIC.BIN's place on the disc
 
 static u32 s_Loaded;        // CHAR_* of the player the last load brought in
 static s32 s_PrevLoadFile;  // g_LoadFile last frame
+static bool s_RihLoading;   // the disc is loading Richter's sound bank
 
 static const CharBlob* Blob(u32 character) {
     const CharBlob* b = (const CharBlob*)CHAR_BLOB_ADDR;
@@ -39,6 +41,50 @@ static const CharBlob* Blob(u32 character) {
         return NULL;
     }
     return b;
+}
+
+// DRA's sound bank addresses (libsnd is psxsdk/libsnd.h): Richter's bank is VAB 1 (g_LbaSdRihVh).
+extern u32 g_VabAddrs[];
+void SsVabClose(s16 vabId); // main.exe (libsnd)
+#define PLAYER_VAB 1
+#define VAB_CHUNK 0x800
+
+// The blob's sound bank (Maria's voice and sounds) replaces Richter's, which the disc just
+// loaded into the same VAB and the same place in sound memory (it's no bigger). One chunk a
+// frame, as the game's own CD loader does (src/dra/cd.c).
+static const CharBlob* s_Bank; // being sent
+static u32 s_BankSent;
+
+static void SoundBankStart(const CharBlob* b) {
+    u8* vh = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3);
+
+    SsVabClose(PLAYER_VAB);
+    if (SsVabOpenHeadSticky(vh, PLAYER_VAB, g_VabAddrs[PLAYER_VAB]) < 0) {
+        return;
+    }
+    s_Bank = b;
+    s_BankSent = 0;
+}
+
+static void SoundBankStep(void) {
+    const CharBlob* b = s_Bank;
+    u8* vb;
+    u32 n;
+
+    if (!b || (s_BankSent && (s16)SsVabTransCompleted(SS_IMEDIATE) != 1)) {
+        return;
+    }
+    if (s_BankSent >= b->vbSize) {
+        s_Bank = NULL;
+        return;
+    }
+    vb = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3);
+    n = b->vbSize - s_BankSent < VAB_CHUNK ? b->vbSize - s_BankSent : VAB_CHUNK;
+    if (SsVabTransBodyPartly(vb + s_BankSent, n, PLAYER_VAB) == -1) {
+        s_Bank = NULL;
+        return;
+    }
+    s_BankSent += n;
 }
 
 static void CopyOverlay(const CharBlob* b) {
@@ -117,6 +163,16 @@ void CharacterFrame(void) {
         g_StageId != STAGE_ST0 && (b = Blob(s_Loaded)) != NULL) {
         CopyOverlay(b);
     }
+    // ...and its sound bank, once the chain that loads Richter's (SD_RIH, then SD_MAR) is done.
+    if (g_LoadFile == CdFile_SdRihVh) {
+        s_RihLoading = true;
+    } else if (s_RihLoading && g_LoadFile == CdFile_None) {
+        s_RihLoading = false;
+        if (g_StageId != STAGE_ST0 && (b = Blob(s_Loaded)) != NULL && b->vhSize && b->vbSize) {
+            SoundBankStart(b);
+        }
+    }
+    SoundBankStep();
     s_PrevLoadFile = g_LoadFile;
     Growth();
 }
