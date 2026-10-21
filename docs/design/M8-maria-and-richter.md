@@ -1,6 +1,6 @@
 # M8 design: playable Maria and Richter
 
-**Status:** revised 2026-10-21. Tucker approved every recommended option (1A–4A) and added §5 (both HUDs visible) and §6 (F9 sends reports) (D85). Awaiting final approval. Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
+**Status:** approved by Tucker 2026-10-21 (D85, D86). Every recommended option (1A–4A), plus §5 (both HUDs visible). In progress on `coop-m8-maria-richter`. Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
 **Context:** D27 (character choice), D75 (M8 scope), D84 (Tucker's M8 decisions).
 
 ## Goal
@@ -11,7 +11,6 @@
 3. **Maria comes from the player's own *Dracula X Chronicles* (USA PSP) disc image**, which is optional. Without it, Maria shows as locked in the lobby, as now.
 4. **Setting up the game files is clear to a first-time player:** the SOTN disc (required), the DXC disc (optional, adds Maria), and the BIOS (included, replaceable).
 5. **Both players always see their own health, MP and hearts** (§5).
-6. **F9 sends a bug report to Tucker:** a short form plus the full game state, so players who download a release can report problems (§6).
 
 ## Spike findings (`disks/sotn.pspus.iso`, 2026-10-19)
 - **Richter is entirely on the US PS1 disc:** `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB`, decompiled in `src/ric/`.
@@ -98,62 +97,12 @@
 
 **Fix:** find the cause, fix it in the launcher, and add a check for it, below.
 
-## 6. F9: Report a problem, sent to Tucker
-**Today:** F9 writes a full snapshot zip into the player's `reports/` folder. It only helps if the player finds the zip and sends it somehow.
-
-**In M8:** F9 opens a short form and sends the report. The snapshot is taken the moment F9 is pressed, so filling in the form takes as long as it needs. On the couch both games pause; online, the partner keeps playing.
-
-```
- Report a problem                                               
-                                                                
- What happened?     [                                         ] 
- What kind?         ‹ Crash or freeze ›    Visuals · Sound · Controls ·
-                                           Co-op / sync · Online connection · Other
- How often?         ‹ First time ›         Sometimes · Every time
- Contact (optional) [ GitHub name or e-mail, if you want a reply ]
-                                                                
- [✓] Include the game's state: savestates and the last 60 s,    
-     so the problem can be replayed exactly.       about 10 MB  
-     [See what's sent]                                          
-                                                                
-            [ Send ]      [ Save only ]      [ Cancel ]         
-```
-
-**The form:**
-- **Controller-friendly:** the kind and how often are chosen with the d-pad. The text boxes need a keyboard, and they're optional, so a couch player with only a controller can still send.
-- **After Send:** "Sent: report #1234. Thank you!" The zip also stays in `reports/`.
-- **Offline, or the send fails:** the report is kept, and the launcher offers to send it the next time it starts.
-
-**What's captured.** The snapshot is the same as today:
-- both games' savestates and memory cards, plus the joint save
-- the states from 5 and 10 s earlier
-- 60 s of inputs, link traffic and frame times
-- audio stats, versions, settings, controllers, presences and the log
-
-**Added in M8:**
-- **The form's answers.**
-- **Online, both sides:** the partner's launcher is told over the link and adds its own snapshot to the same report. Most online bugs need both sides. A setting can turn it off; it's on by default, and the partner sees a notice.
-
-**Privacy:**
-- **Pictures come only from our own window:** the frames the launcher draws, read back from its own renderer, as now. It never captures the screen, and nothing outside the window.
-- **Nothing else from the PC:** the Windows user name in paths is replaced by `%USERPROFILE%`. No disc image, BIOS or other files are included.
-- **The player sees the file list and size before sending**, and can untick the game state.
-- **The savestates hold the game's memory**, so reports go only to private storage. They're never public and never committed (AGENTS.md).
-
-**Where reports go:**
-| Option | Idea | Verdict |
-|---|---|---|
-| **A. A small relay we host → a private GitHub repo** | The launcher posts the form and zip over HTTPS to a Cloudflare Worker (free tier). It stores the zip in Cloudflare R2 (10 GB free) and opens an issue in a private repo, `tucker-bower/sotn-coop-reports`. The issue has the form, versions, the screenshot and a link to the zip. The GitHub token lives only in the Worker; it caps reports at 50 MB and rate-limits per address. | ✅ **Recommended.** Players need no account, nothing is public, and reports arrive where we already work (`gh`). **Needs Tucker:** a free Cloudflare account and one GitHub token, about 15 minutes with my instructions. |
-| B. No server: a prefilled GitHub issue in the browser | The player attaches the zip themselves | ❌ Needs a GitHub account, it's public, and many players won't bother |
-| C. A Discord webhook, or Sentry | — | ❌ A webhook address inside the app can be abused; Sentry's free tier caps attachments |
-
-**Downstream:** `scripts/reports.py` lists new reports, downloads a zip and opens it in `harness/replay.py`. I triage reports into issues on the main repo, with a repro.
-
 ## Tucker's answers to the open questions (2026-10-20)
 1. Every character gets the full Alucard castle.
 2. Characters are picked in the launcher's lobby, as now.
 3. DXC dialogue and voices: whatever is easiest. That means not in M8 (above).
-4. **2026-10-21:** every recommended option (1A, 2A, 3A, 4A) is approved. The DXC voice and dialogue swap goes on the roadmap's backlog. New: §5 and §6 here, plus one-button moves and off-hand weapons in M8b.
+4. **2026-10-21:** every recommended option (1A, 2A, 3A, 4A) is approved. The DXC voice and dialogue swap goes on the roadmap's backlog. New: §5 here, plus one-button moves and off-hand weapons in M8b.
+5. **2026-10-21, final:** sending F9 reports moves to the backlog (D86, `docs/design/backlog-report-sending.md`). Off-hand weapons use option A with existing art only. Alucard's spell shortcuts are in M8, and every button shortcut is an option each player sets in the launcher.
 
 ## Acceptance criteria
 1. **Maria from the USA DXC disc** (`test_pspus_extract`): her overlay, graphics, palettes and SFX are built from `disks/sotn.pspus.iso` alone, into the data folder.
@@ -173,9 +122,3 @@
    - Every layout (side by side, stacked, two windows, fullscreen), every scaling and three window sizes are covered.
    - In each, both games' HP, MP and hearts readout appears in full in the window, compared with the core's own frame.
    - The cause found is named in the PR.
-8. **F9 reports arrive** (`ux_report_send`):
-   - A report sent from the installed build on Tucker's PC arrives in the private repo as an issue, with its zip.
-   - That zip replays in `harness/replay.py`.
-   - **Online:** one report holds both players' snapshots.
-   - **Offline:** the report is kept and offered again at the next start.
-   - **Privacy:** the zip contains no user name, no disc or BIOS, and no pixel from outside the launcher window (test: a window placed over ours during the report).

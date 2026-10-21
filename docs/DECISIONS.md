@@ -413,3 +413,10 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
   - where reports go (M8 §6: a Cloudflare relay into a private repo, recommended)
   - off-hand option A
   - Alucard's spell shortcuts in M8 or on the backlog
+
+**D86: M8 final approval** (Tucker, 2026-10-21)
+- **Sending F9 reports goes on the backlog** (no hosted relay for now). The design moved to `docs/design/backlog-report-sending.md`; F9 keeps saving the local zip.
+- **Off-hand weapons:** option A, using only existing art. No new animations, poses or drawn art; the swing is made from Richter's and Maria's own frames plus the weapon's own sprite, as natural as possible.
+- **Alucard's spell shortcuts on the right stick are in M8.**
+- **Every button shortcut is optional, per player,** set in the launcher. Off means vanilla controls.
+- **Go ahead with M8.**

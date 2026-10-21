@@ -92,7 +92,7 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - **Every character gets the full Alucard castle.** Richter's and Maria's moves unlock with Alucard's relics, and they gain power from levels, equipment and an off-hand weapon, staying within ±20% of Alucard at every boss. The fighting-game inputs get buttons of their own.
 - **Maria comes from the player's own USA *Dracula X Chronicles* disc** (optional), set up on a clear game-files screen.
 - **Both players' HUDs are fully visible**, in every layout.
-- **F9 sends a bug report to Tucker:** a form plus the full game state, never anything outside the launcher window.
+- **Optional button shortcuts, per player:** one-button high jump and blade dash for Richter and Maria, and spells on the right stick for Alucard.
 
 ### M9: Android port (D36, D75)
 - **Native Android launcher & session engine:** runs the co-op disc on Android using the SwanStation Android arm64 core (`swanstation_libretro_android.so`) and the link protocol (`docs/link-protocol.md`), connecting over Wi-Fi/internet to another Android device or PC, with controller-first UI, event savestates, and F9 snapshots.
@@ -110,6 +110,9 @@ An option to use the *Dracula X Chronicles* (2007) English script and voices ins
 - replacing the cutscene scripts in 8 stages
 
 It needs the player's DXC disc, as Maria does.
+
+### F9 sends bug reports (D86)
+F9's snapshot plus a short form, sent to a private repo through a small hosted relay, so players who download a release can report problems. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
 
 ### 3–4 players (D48)
 Three or four players, each in their own game:
