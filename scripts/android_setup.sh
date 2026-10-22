@@ -6,7 +6,7 @@ set -euo pipefail
 A="${ANDROID_HOME:-$HOME/android}"
 mkdir -p "$A"
 sudo apt-get install -y -qq openjdk-17-jdk-headless unzip autoconf automake libtool pkg-config zlib1g-dev \
-    libncurses-dev cmake libffi-dev libssl-dev lld patch ccache >/dev/null
+    libncurses-dev zip cmake libffi-dev libssl-dev lld patch ccache >/dev/null
 if [ ! -x "$A/cmdline-tools/latest/bin/sdkmanager" ]; then
     curl -sSLo /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
     rm -rf "$A/cmdline-tools" && mkdir -p "$A/cmdline-tools"
@@ -19,4 +19,6 @@ $SDKM "platform-tools" "emulator" "platforms;android-34" "build-tools;34.0.0" \
 python3 -m venv "$A/p4a-venv"
 "$A/p4a-venv/bin/pip" install -q --upgrade pip
 "$A/p4a-venv/bin/pip" install -q "python-for-android" cython==0.29.36 setuptools wheel
+python3 -m venv "$A/cython-venv"   # android/recipes/pygame: Cython for Python 3.14
+"$A/cython-venv/bin/pip" install -q "cython==3.1.*" setuptools
 echo "android toolchain ready in $A"
