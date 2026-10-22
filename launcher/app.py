@@ -25,6 +25,7 @@ for sub in ("launcher", "harness", "patcher", ""):
     sys.path.insert(0, str(APP / sub) if sub else str(APP))
 
 import paths  # noqa: E402
+from platform_android import ANDROID  # noqa: E402
 
 if sys.platform == "win32":
     # pygame's DLLs (libpng: the icon) are loaded by name, later. Windows looks through PATH,
@@ -364,6 +365,15 @@ def pick_file(title, types):
     """The system's file picker: Windows' own dialog, or tkinter elsewhere."""
     if os.environ.get("COOP_PICK_FILE"):  # tests (launcher/uxdriver.py)
         return Path(os.environ["COOP_PICK_FILE"])
+    if ANDROID:  # the system's picker: the files are copied into the app's folder (design/M9)
+        import platform_android
+        try:
+            got = platform_android.pick_files(title, paths.data_dir() / "discs")
+        except Exception:  # noqa: BLE001
+            log.exception("file picker")
+            return None
+        cues = [p for p in got if p.suffix.lower() == ".cue"]
+        return (cues or got or [None])[0]
     if sys.platform == "win32":
         try:
             return _pick_file_windows(title, types)
@@ -796,14 +806,17 @@ class Launcher:
                     act, pending = pending, None
                     self.go(act)
                     continue
-                choice = self.ui.menu("", [("Couch co-op", "Two players on this PC, each with a controller"),
-                                           ("Online co-op", "Play with a friend on their own PC"),
-                                           ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls"),
-                                           ("Quit", "")], footer=self.storage_line(), hero=True)
-                if choice == 3:
-                    return
+                items = [("Couch co-op", "Two players on this PC, each with a controller", "couch"),
+                         ("Online co-op", "Play with a friend on their own PC or phone", "online"),
+                         ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls", "settings"),
+                         ("Quit", "", "quit")]
+                if ANDROID:  # one game per device on Android (design/M9)
+                    items = items[1:]
+                choice = self.ui.menu("", [i[:2] for i in items], footer=self.storage_line(), hero=True)
                 if choice is not None:
-                    self.go(("couch", "online", "settings")[choice])
+                    if items[choice][2] == "quit":
+                        return
+                    self.go(items[choice][2])
             except Navigate as n:
                 pending = n.action
 
@@ -1009,6 +1022,8 @@ class Launcher:
             self.disc(), start=start, rank=rank, peer=peer, audio=True,
             session_file=playthrough.joint_save if playthrough else None,
             patch_crc=self.patch_crc(), blob=self.blob(),
+            port=int(os.environ.get("COOP_PORT", 0)),  # tests: a fixed port (Android emulators: design/M9)
+            in_process=ANDROID,  # Android can't start worker processes
         )
 
     def partner_line(self, s, waiting):

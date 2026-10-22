@@ -437,6 +437,12 @@ def _menus(pg):
     return steps
 
 
+def _to_online(pg):
+    """Home to Online co-op: the second item, or the first on Android (no couch there: design/M9)."""
+    from platform_android import ANDROID
+    return [] if ANDROID else [("key", pg.K_DOWN)]
+
+
 def _online_host(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
 
@@ -445,7 +451,7 @@ def _online_host(pg, code_file):
         Path(code_file).write_text(room)
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
-            ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host: new game
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
@@ -459,7 +465,7 @@ def _online_join(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
-            ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Join your partner
             ("screen", "Join your partner"),
             *[("key", pg.K_BACKSPACE)] * 24,  # the box starts with the clipboard (here: the host's code)

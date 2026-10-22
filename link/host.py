@@ -139,8 +139,9 @@ class Host:
             theirs = json.loads(payload)
         except ValueError:
             return
-        if self.hello.get("room") and theirs.get("room") != self.hello["room"]:
-            return  # someone without our room code: not our partner
+        if self.hello.get("room") and theirs.get("room") not in (None, self.hello["room"]):
+            return  # someone in another room: not our partner. (No room at all: a partner who
+            # typed our ip:port, the fallback when room codes can't connect: design/M7b, M9.)
         if theirs.get("sid") == self.hello["sid"]:
             return  # our own HELO, come back to us (a candidate that was this PC)
         clock = theirs.pop("clock", None)

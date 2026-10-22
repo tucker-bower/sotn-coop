@@ -48,3 +48,21 @@ def online_in_process(run):
                    roles=roles)
         run.expect(a.mailbox("partner_presence").stage == b.mailbox("self_presence").stage,
                    "A sees B")
+
+
+@session_scenario()
+def online_direct_join(run):
+    """The ip:port fallback (Help › Online troubleshooting): A hosts by room code, B types A's
+    address instead. They connect (a host only refuses HELOs of another room)."""
+    with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1") as s0, \
+         OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1") as s1:
+        relay = FileRelay(tempfile.mkdtemp(prefix="coop-relay-"))
+        s0.local.host("start_connect", make_room_code(), "host", relay=relay, stun_servers=(), resolve=False)
+        s1.connect(("127.0.0.1", s0.port))
+        for i in range(600):
+            step_pair(s0, s1, 1)
+            h0, h1 = s0.local.host("status"), s1.local.host("status")
+            if s0.local.host("handshake_tick").get("partner_hello") and s1.local.host("handshake_tick").get("partner_hello"):
+                break
+        run.expect(s0.local.host("handshake_tick").get("partner_hello"), "the host heard the direct joiner", frames=i)
+        run.expect(s1.local.host("handshake_tick").get("partner_hello"), "and the joiner heard the host")
