@@ -126,3 +126,10 @@ Three or four players, each in their own game:
 
 The link was built per-partner, so this mostly means turning "the partner" into "the partners".
 
+
+### M8 leftovers (2026-10-21)
+- **Off-hand swing poses:** Richter and Maria keep their pose while the weapon swings, and the partner's puppet doesn't show the weapon (its sprites aren't loaded in the partner's game).
+- **Thrown items and the stat/resist potions** from the off hand (TNT, Karma Coin, Str. potion, Resist potions...), and weapon specials (Crissaegrim, Muramasa, Shield Rod spells).
+- **Familiars for Richter/Maria:** only the bat and the ghost are tested; the faerie, demon and sword need a check.
+- **Richter's HUD name box** is blank after a save load (a palette not loaded on that path; retail Richter too).
+- **The M8b audit and balance** if Tucker picks the automated options: the full reachability route bot, and per-boss bots for power-curve tuning.
