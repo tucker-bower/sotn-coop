@@ -459,3 +459,9 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D92: Performance is measured against two Alucards** (agent-default, 2026-10-21; design/M8 criterion 3)
 - In the 10-minute shared fight, the game's main loop misses about 1% of frames with **two Alucards** too (686 of 72,000), in that busy room. "No dropped frames" can't be absolute.
 - The criterion became "a mixed team misses no more frames than two Alucards with the same inputs (within 0.5% of play), and costs no more scanlines per frame (p99 within 5%)". Richter + Maria: 821 missed, p99 200 scanlines (two Alucards: 686, 202). Host p99 0.20 ms.
+
+**D93: Android runs the same Python** (agent-default, 2026-10-21; Tucker delegated M9's design)
+- python-for-android packages CPython, pygame (SDL2) and our `harness`/`link` code. The game runs in the app's own process (no worker processes on Android), loading the SwanStation Android core through ctypes, as the PC does.
+- **Why:** one implementation of the link protocol, so Android ↔ Android and Android ↔ PC play by construction, already tested by the harness.
+- Options considered: a native Kotlin app (a protocol port to keep in sync forever); RetroArch plus a companion app (two apps, no per-frame RAM mailbox).
+- Online only; touch controls go on the backlog (controller-first, as the roadmap says).
