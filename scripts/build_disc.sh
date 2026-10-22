@@ -5,7 +5,7 @@
 # Mirrors upstream's `make disk`, with two changes (module/coop_api.h and boot.c explain why):
 #   - DRA is built with its co-op hooks (COOP=1), and the module's boot stub is appended to
 #     DRA.BIN, inside its last CD sector;
-#   - COOP.BIN (the module) is added after every retail file, behind COOPPAD.: the 150 blank
+#   - COOP.BIN (the module) and COOPRIC.BIN (our Richter, design/M8) are added after every retail file, behind COOPPAD.: the 150 blank
 #     sectors retail has after the XA music stream (upstream's mastering drops them). Music
 #     streaming reads past the stream's end; with module data right there, the game hung.
 # No retail file may move: scripts/check_disc_layout.py enforces it.
@@ -17,7 +17,8 @@ if [ -f "$MOD/.env/src/sotn-decomp/sotn.sh" ]; then
 else
     ROOT="$(cd "$MOD/../.." && pwd)"
 fi
-OUT="$MOD/.env/out/disc"
+OUT="${COOP_OUT:-$MOD/.env/out/disc}"   # COOP_OUT: build elsewhere (e.g. while tests use the main one)
+NAME="${COOP_NAME:-sotn_coop}"
 cd "$ROOT"
 # shellcheck disable=SC1091
 . .venv/bin/activate
@@ -27,36 +28,46 @@ LIST=config/disk.us.lba
 
 restore() {  # leave upstream's tracked file list and build dir as we found them
     git checkout -q "$LIST"
-    rm -f build/us/COOP.BIN build/us/COOPPAD.
+    rm -f build/us/COOP.BIN build/us/COOPRIC.BIN build/us/COOPPAD.
 }
 trap restore EXIT
 
 echo "== compile game with the co-op hooks (unchecked: the image differs from retail by design)"
+# DRA's objects depend on the module's coop_api.h through a link (mods/co-op), which ninja
+# doesn't always see change: rebuild DRA from scratch so a stale object can't slip in.
+rm -f build/us/src/dra/*.o
 COOP=1 SKIP_CHECK=1 ./sotn.sh build us >/dev/null
+cp build/us/dra.map "$OUT.dra-coop.map"
 dra_end=$(awk '$2 == "dra_data_VRAM_END" {print $1}' build/us/dra.map)
 if [ "$dra_end" != "0x801b9870" ]; then
     echo "DRA's image now ends at $dra_end, not 0x801b9870: a COOP hook changed DRA's size" >&2
     exit 1
 fi
 
-echo "== compile co-op module"
+echo "== compile co-op module, and our Richter (design/M8)"
 make -s -C "$MOD/module" ROOT="$ROOT"
+make -s -C "$MOD/richter" ROOT="$ROOT" >/dev/null
 truncate -s "$DRA_END" build/us/DRA.BIN
 cat build/coop/boot.bin >> build/us/DRA.BIN
 cp build/coop/COOP.BIN build/us/COOP.BIN
+cp build/coop/ric/COOPRIC.BIN build/us/COOPRIC.BIN
 head -c $((150 * 2336)) /dev/zero > build/us/COOPPAD.  # 150 raw XA sectors: zero subheader, zero data
 # After the last data file (the CD-DA track stays last).
-sed -i 's|^SD/CD1.DA;1,A,|COOPPAD.;1,X,20261018-000000-36\nCOOP.BIN;1,N,20261018-000000-36\n&|' "$LIST"
+sed -i 's|^SD/CD1.DA;1,A,|COOPPAD.;1,X,20261018-000000-36\nCOOP.BIN;1,N,20261018-000000-36\nCOOPRIC.BIN;1,N,20261021-000000-36\n&|' "$LIST"
 
 echo "== master the disc"
 COOP=1 SKIP_CHECK=1 ./sotn.sh disk >/dev/null
 mkdir -p "$OUT"
-mv build/sotn.us.bin "$OUT/sotn_coop.us.bin"
-sed 's/sotn\.us\.bin/sotn_coop.us.bin/' build/sotn.us.cue > "$OUT/sotn_coop.us.cue"
+mv build/sotn.us.bin "$OUT/$NAME.us.bin"
+sed "s/sotn\.us\.bin/$NAME.us.bin/" build/sotn.us.cue > "$OUT/$NAME.us.cue"
 rm -f build/sotn.us.cue
-python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/sotn_coop.us.cue"
+python3 "$MOD/scripts/check_disc_layout.py" disks/sotn.us.cue "$OUT/$NAME.us.cue"
+cp build/coop/coop.map "$OUT/$NAME.us.coop.map"  # the harness reads the module's symbols for this disc
 
 echo "== restore the matching build (checked against retail)"
 restore
+rm -f build/us/src/dra/*.o
 ./sotn.sh build us >/dev/null
-echo "== built $OUT/sotn_coop.us.cue"
+python3 "$MOD/scripts/check_dra_symbols.py" build/us/dra.map "$OUT.dra-coop.map"  # D33: nothing in DRA moved
+rm -f "$OUT.dra-coop.map"
+echo "== built $OUT/$NAME.us.cue"

@@ -87,10 +87,12 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - **Its own repository (D72, D73):** the co-op mod moves out of the sotn-decomp fork into `tucker-bower/sotn-coop`, which builds against a pinned `sotn-decomp` commit as a dependency, not a fork. Git history for `mods/co-op/` comes along. Self-hosted CI builds and runs the full harness suite from a clean checkout.
 - **Online PC co-op (D74):** each player runs one game on their own PC, connecting with zero-infrastructure connect codes (STUN + base32 endpoint/room code) and a direct-IP fallback. Shared-room snapshots are compressed and chunked below path MTU for smooth WAN play, joint saves and both-dead reloads sync over the link, and mismatched versions are refused with a clear message.
 
-### M8: Maria and Richter playable from the start + DXC dialogue/voices (D75)
-- **Playable characters from a fresh game:** either player can pick Alucard, Richter, or Maria right from the start of a new playthrough (including mixed pairs like Alucard + Maria or Richter + Maria), with cross-character puppet rendering in the 8MB area and clear shared-progression rules (D27).
-- **Extracted from local DXC USA (`disks/sotn.pspus.iso`):** builds a `pspus` asset map so Maria's sprites, overlays, and SFX extract cleanly from the USA *Dracula X Chronicles* ISO (resolving D15 without needing the EU disc).
-- **Alternate dialogue & voice acting option:** optional toggle in the patcher/launcher to use the *Dracula X Chronicles* (PSP) English script and voice acting preferred by some players.
+### M8: Maria and Richter playable (designs: `design/M8-maria-and-richter.md`, `design/M8b-character-balance.md`; D75, D84, D85)
+- **Characters are picked every session** in the lobby, in any combination, with no disc rebuild. Mixed-team puppets run at full speed.
+- **Every character gets the full Alucard castle.** Richter's and Maria's moves unlock with Alucard's relics, and they gain power from levels, equipment and an off-hand weapon, staying within ±20% of Alucard at every boss. The fighting-game inputs get buttons of their own.
+- **Maria comes from the player's own USA *Dracula X Chronicles* disc** (optional), set up on a clear game-files screen.
+- **Both players' HUDs are fully visible**, in every layout.
+- **Optional button shortcuts, per player:** one-button high jump and blade dash for Richter and Maria, and spells on the right stick for Alucard.
 
 ### M9: Android port (D36, D75)
 - **Native Android launcher & session engine:** runs the co-op disc on Android using the SwanStation Android arm64 core (`swanstation_libretro_android.so`) and the link protocol (`docs/link-protocol.md`), connecting over Wi-Fi/internet to another Android device or PC, with controller-first UI, event savestates, and F9 snapshots.
@@ -99,7 +101,20 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 - **Curated AYN Thor dual-screen mode:** on the AYN Thor clamshell handheld, the top 6.0" 16:9 AMOLED screen renders your game while the bottom 3.92" screen displays your partner's screen live.
 - **True widescreen on the top screen:** expanded horizontal FOV (not stretched 4:3) on the 16:9 top display, widening the draw/clip viewport, room scroll bounds, and entity layout spawn window so rooms and enemies render naturally across the 16:9 frame.
 
-### Last: 3–4 players (D48)
+## Backlog (Tucker, 2026-10-21)
+The most ambitious long-term ideas wait here. Tucker moves one into a milestone when he wants it worked on.
+
+### DXC dialogue and voice acting (D84)
+An option to use the *Dracula X Chronicles* (2007) English script and voices instead of the 1997 ones:
+- converting the PSP's ATRAC3 voice audio
+- replacing the cutscene scripts in 8 stages
+
+It needs the player's DXC disc, as Maria does.
+
+### F9 sends bug reports (D86)
+F9's snapshot plus a short form, sent to a private repo through a small hosted relay, so players who download a release can report problems. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
+
+### 3–4 players (D48)
 Three or four players, each in their own game:
 - **Presence and the map** show every partner.
 - **Teleport** offers a choice of which partner to go to.

@@ -5,6 +5,7 @@
         playthroughs/<id>/         A.mcd, B.mcd, session.coop, playthrough.json, savestates/
         reports/                   F9 bug reports (zips)
         debug-starts/              savestates made from the player's own disc, to start anywhere
+        characters/maria.blob      Maria, made from the player's own Dracula X Chronicles disc (M8)
 
 COOP_DATA overrides the folder (tests, portable installs). Nothing here is ever deleted by the
 launcher, except a playthrough's savestates when the player asks, and confirms (D69).
@@ -39,6 +40,12 @@ def reports_dir():
 
 def debug_starts_dir():
     d = data_dir() / "debug-starts"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def characters_dir():
+    d = data_dir() / "characters"
     d.mkdir(exist_ok=True)
     return d
 

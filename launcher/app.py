@@ -53,7 +53,14 @@ INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (
 OK_GREEN = (140, 200, 120)
 BUNDLED_BIOS = APP / "bios" / "openbios.bin"
 PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
-CHARACTERS = (("Alucard", True), ("Richter", False), ("Maria", False))  # (name, playable yet)
+# Maria's patches (maria/make_patches.py): the installer's, or a dev checkout's build.
+MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
+                      if (d / "maria.json").exists()), APP / "patcher" / "maria")
+CHARACTERS = ("Alucard", "Richter", "Maria")  # index = CHAR_* (module/link.h)
+# Alucard's spells for the right stick (design/M8b §3.2): SpellIds, None = nothing there.
+SPELL_CHOICES = (None, 0, 1, 2, 3, 5, 7)
+DEFAULT_SPELLS = [2, 5, 3, 0]  # up Hellfire, right Soul Steal, down Tetra Spirit, left Dark Metamorphosis
+STICK = ("↑", "→", "↓", "←")
 
 log = logging.getLogger("launcher")
 
@@ -64,6 +71,15 @@ Meet in the same room to fight the same enemies. Bosses pull you both in.
 Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
 Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
 Save at a coffin: it saves both games. Continue loads both.
+
+Characters: pick Alucard, Richter or Maria in the lobby (Maria needs your Dracula X Chronicles
+disc: Settings › Game files). Richter and Maria learn their moves from Alucard's relics: Leap Stone
+for the second jump, Gravity Boots for the high jump, Soul of Wolf for the slide, Form of Mist to
+pass through grates (keep walking into them), Echo of Bat for item crashes. They level up and wear
+Alucard's armor (Start: the equipment menu).
+Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
+L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
+(Settings › Controls picks which).
 
 Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
 
@@ -78,9 +94,9 @@ If it can't connect:
 The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
 
 KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
-               Enter Start,  Right Shift Select.
+               D L2,  W R2,  Enter Start,  Right Shift Select.  Keypad 8 6 2 4: the right stick.
 Player 2:  I J K L to move.  F Cross,  G Square,  H Circle,  T Triangle,  Q L1,  E R1,
-               Space Start,  Tab Select.
+               R L2,  Y R2,  Space Start,  Tab Select.
 
 Esc: pause.   F9: report a problem.   F11: fullscreen.   F1 (couch): which game plays the music."""
 
@@ -371,6 +387,9 @@ class Launcher:
     def __init__(self):
         pygame.init()
         self.settings = load_settings()
+        # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
+        self.characters = [c if 0 <= c < len(CHARACTERS) and self.playable(c) else 0
+                           for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
         self.menubar.update(self.settings)
@@ -439,6 +458,126 @@ class Launcher:
     def disc(self):
         d = self.settings.get("disc")
         return Path(d) if d and Path(d).exists() else None
+
+    # --- characters (design/M8)
+
+    def maria_blob_path(self):
+        return paths.characters_dir() / "maria.blob"
+
+    def maria_ready(self):
+        """Maria is made (from the player's DXC disc) for this version's patches. A newer launcher
+        remakes her from the disc it remembers, quietly."""
+        blob, about = self.maria_blob_path(), MARIA_PATCHES / "maria.json"
+        if not about.exists():
+            return False
+        if blob.exists() and blob.stat().st_mtime >= about.stat().st_mtime:
+            return True
+        iso = self.settings.get("dxc_iso")
+        if iso and Path(iso).exists():
+            import characters
+            try:
+                characters.maria_blob(iso, MARIA_PATCHES, blob)
+                return True
+            except characters.DiscError:
+                log.exception("remaking Maria")
+        return False
+
+    # --- each player's button shortcuts (design/M8b §3.2): on or off per seat, remembered
+
+    def shortcuts(self, seat):
+        return bool((self.settings.get("shortcuts") or [True, True])[seat])
+
+    def set_shortcuts(self, seat, on):
+        v = list(self.settings.get("shortcuts") or [True, True])
+        v[seat] = on
+        self.settings["shortcuts"] = v
+        save_settings(self.settings)
+
+    def spells(self, seat):
+        v = (self.settings.get("spells") or [DEFAULT_SPELLS, DEFAULT_SPELLS])[seat]
+        return list(v) if len(v) == 4 else list(DEFAULT_SPELLS)
+
+    def options(self, seat):
+        """The OPT_* bits for that seat's game (link/mailbox.py)."""
+        from link.mailbox import OPT_SHORTCUTS, spell_options
+        return (OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat))
+
+    def controls_menu(self):
+        """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
+        from link.mailbox import SPELLS
+        ui, sel = self.ui, 0
+        while True:
+            items = []
+            for seat in (0, 1):
+                items.append((f"Player {seat + 1} shortcuts: {'On' if self.shortcuts(seat) else 'Off'}",
+                              "Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. "
+                              "Off: the original controls only."))
+                for d, spell in enumerate(self.spells(seat)):
+                    items.append((f"Player {seat + 1} right stick {STICK[d]}: {SPELLS[spell] if spell is not None else 'Nothing'}",
+                                  "Alucard casts it if he knows the spell and has the MP"))
+            k = ui.menu("Controls", items, footer="Also on each player's card in the lobby: Triangle / Y")
+            if k is None:
+                return
+            sel = k
+            seat, row = divmod(k, 5)
+            if row == 0:
+                self.set_shortcuts(seat, not self.shortcuts(seat))
+            else:
+                spells = [list(self.spells(0)), list(self.spells(1))]
+                cur = spells[seat][row - 1]
+                spells[seat][row - 1] = SPELL_CHOICES[(SPELL_CHOICES.index(cur) + 1) % len(SPELL_CHOICES)] \
+                    if cur in SPELL_CHOICES else None
+                self.settings["spells"] = spells
+                save_settings(self.settings)
+
+    def playable(self, character):
+        return character != 2 or self.maria_ready()
+
+    def blob(self):
+        """Maria's blob for every game when she's made: a partner who plays her is drawn from it."""
+        return self.maria_blob_path().read_bytes() if self.maria_ready() else None
+
+    def add_dxc(self):
+        """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
+        import characters
+        path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                         [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")])
+        if not path:
+            return
+        try:
+            self.ui.wait_for("Adding Maria", f"From {path.name}\nThis takes a few seconds.",
+                             lambda progress: characters.maria_blob(path, MARIA_PATCHES, self.maria_blob_path()))
+        except characters.DiscError as e:
+            self.ui.message("That disc won't work", str(e))
+            return
+        self.settings["dxc_iso"] = str(path)
+        save_settings(self.settings)
+        self.ui.message("Maria is ready", "Pick her in the lobby, as either player.")
+
+    def game_files(self):
+        ui = self.ui
+        while True:
+            disc, iso = self.disc(), self.settings.get("dxc_iso")
+            bios = "OpenBIOS (free, built in). Your own BIOS works too." if self.bios() == BUNDLED_BIOS \
+                else f"Your BIOS: {self.bios().name}"
+            k = ui.menu("Game files", [
+                (f"Symphony of the Night (PS1, USA):  required, {'set' if disc else 'not set'}",
+                 f"{disc.name if disc else 'Not chosen'}   (choose again)"),
+                (f"Dracula X Chronicles (PSP, USA):  optional, {'Maria added' if self.maria_ready() else 'adds Maria'}",
+                 (Path(iso).name + "   (choose again)") if iso and self.maria_ready()
+                 else "Adds Maria as a playable character. Choose your .iso"),
+                ("PlayStation BIOS:  included", bios + "   (change)")],
+                "Only the Symphony of the Night disc is needed to play.")
+            if k is None:
+                return
+            if k == 0:
+                self.settings["disc"] = None
+                save_settings(self.settings)
+                self.wizard()
+            elif k == 1:
+                self.add_dxc()
+            elif k == 2:
+                self.choose_bios()
 
     def starts_dir(self):
         return paths.debug_starts_dir() / f"{self.disc().stem}@{self.bios().stem}"
@@ -513,7 +652,7 @@ class Launcher:
         ui = self.ui
         joined = [None] * slots   # each player's device
         ready = [False] * slots
-        char = [0] * slots
+        char = list(self.characters[:slots])
         names = {}
         while True:
             for a in ui.events(raw=True):
@@ -526,11 +665,12 @@ class Launcher:
                     dev = ev.instance_id
                     key = {pygame.CONTROLLER_BUTTON_A: "ok", pygame.CONTROLLER_BUTTON_START: "ok",
                            pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left",
-                           pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right"}.get(ev.button, "any")
+                           pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
+                           pygame.CONTROLLER_BUTTON_Y: "shortcuts"}.get(ev.button, "any")
                 elif ev.type == pygame.KEYDOWN and not ev.mod & pygame.KMOD_ALT:
                     dev = "kb"
                     key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back",
-                           pygame.K_LEFT: "left", pygame.K_RIGHT: "right"}.get(ev.key)
+                           pygame.K_LEFT: "left", pygame.K_RIGHT: "right", pygame.K_s: "shortcuts"}.get(ev.key)
                     if key is None:
                         continue
                 elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and joined.count(None) == slots:
@@ -552,18 +692,24 @@ class Launcher:
                     continue
                 i = mine[-1]
                 if key == "ok":
-                    if CHARACTERS[char[i]][1]:
+                    if self.playable(char[i]):
                         ready[i] = True
+                    elif char[i] == 2:  # Maria: her disc isn't added yet
+                        self.game_files()
                 elif key == "back":
                     if ready[i]:
                         ready[i] = False
                     else:
                         joined[i] = None
+                elif key == "shortcuts" and not ready[i]:
+                    self.set_shortcuts(i, not self.shortcuts(i))
                 elif key in ("left", "right") and not ready[i]:
                     char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
             partner = online() if online else None
             if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
+                self.characters[:slots] = char
+                self.settings["characters"] = list(self.characters)
                 return list(joined)
             ui.frame("Press a button on your controller to join", subtitle)
             n = slots + (1 if online else 0)
@@ -572,15 +718,16 @@ class Launcher:
             for k in range(n):
                 box = pygame.Rect(x0 + k * (w + 30), 180, w, 240)
                 if k < slots:
-                    self._card(box, "You" if online else f"Player {k + 1}", joined[k], ready[k], char[k], names)
+                    self._card(box, "You" if online else f"Player {k + 1}", joined[k], ready[k], char[k], names,
+                               self.shortcuts(k))
                 else:
                     self._partner_card(box, *partner)
-            ui.footer("Joined? Left / right picks a character. Cross / A / Enter: ready. Circle / B / Esc: leave."
+            ui.footer("Joined? Left / right: character. Triangle / Y / S: shortcuts. Cross / A / Enter: ready. Circle / B / Esc: leave."
                       if joined.count(None) < slots else "No controller? Press Enter to play with the keyboard.   Esc: back")
             ui.flip()
             pygame.time.wait(16)
 
-    def _card(self, box, title, dev, ready, char, names):
+    def _card(self, box, title, dev, ready, char, names, shortcuts=True):
         s, ui = self.screen, self.ui
         joined = dev is not None  # a controller's instance id can be 0
         pygame.draw.rect(s, (40, 16, 24) if joined else (24, 14, 20), box, border_radius=10)
@@ -595,7 +742,7 @@ class Launcher:
         name = "Keyboard" if dev == "kb" else names.get(dev, "Controller")
         t = ui.small.render(name[:32], True, INK)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 56)))
-        cname, playable = CHARACTERS[char]
+        cname, playable = CHARACTERS[char], self.playable(char)
         t = ui.big.render(cname, True, INK if playable else DIM)
         r = t.get_rect(midtop=(box.centerx, box.y + 104))
         s.blit(t, r)
@@ -603,13 +750,25 @@ class Launcher:
             for sign, x in ((-1, r.left - 22), (1, r.right + 22)):
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
-        if not playable:
-            t = ui.small.render("Coming in a later version", True, DIM)
-            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 142)))
+        if not playable:  # Maria without her disc
+            for k, line in enumerate(("Needs your Dracula X", "Chronicles disc (PSP)", "Cross / A: add it")):
+                t = ui.small.render(line, True, DIM)
+                s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
+        if playable:
+            if not shortcuts:
+                line = "Shortcuts off (Triangle / Y)"
+            elif char == 0:
+                line = "Spells on the right stick"
+            else:
+                line = "L2 high jump · R2 blade dash"
+            t = ui.small.render(line, True, INK if shortcuts else DIM)
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 146)))
         if ready:
             t = ui.big.render("Ready!", True, OK_GREEN)
-        else:
+        elif playable:
             t = ui.small.render("Cross / A when ready", True, DIM)
+        else:
+            return
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 188)))
 
     def _partner_card(self, box, text, connected):
@@ -639,7 +798,7 @@ class Launcher:
                     continue
                 choice = self.ui.menu("", [("Couch co-op", "Two players on this PC, each with a controller"),
                                            ("Online co-op", "Play with a friend on their own PC"),
-                                           ("Settings", "Layout, pixels, music, boss aggro, BIOS, disc"),
+                                           ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls"),
                                            ("Quit", "")], footer=self.storage_line(), hero=True)
                 if choice == 3:
                     return
@@ -694,10 +853,18 @@ class Launcher:
         from session import Session
         self.apply_bios()
         return Session(self.disc(), starts=starts, audio=True,
-                       session_file=playthrough.joint_save if playthrough else None)
+                       session_file=playthrough.joint_save if playthrough else None,
+                       characters=tuple(self.characters), blob=self.blob())
+
+    def apply_players(self, s):
+        """Each game gets its player's character (online: this player's own), from its next load."""
+        blob = self.blob()
+        for i, g in enumerate(s.games):
+            g.host("set_player", character=self.characters[i], options=self.options(i), blob=blob)
 
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
+        self.apply_players(s)
         if len(s.games) == 1:
             who = "A" if getattr(s, "rank", 0) == 0 else "B"
             cards = (playthrough.card(who),) if playthrough else None
@@ -742,6 +909,7 @@ class Launcher:
             if not fresh:
                 self.load_cards(s, playthrough)
             if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
+                self.apply_players(s)
                 s.joint.resume()
             playthrough.save_info()
             self.run_view(s, playthrough)
@@ -840,7 +1008,7 @@ class Launcher:
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True,
             session_file=playthrough.joint_save if playthrough else None,
-            patch_crc=self.patch_crc(),
+            patch_crc=self.patch_crc(), blob=self.blob(),
         )
 
     def partner_line(self, s, waiting):
@@ -875,6 +1043,7 @@ class Launcher:
             if not fresh:
                 self.load_cards(s, playthrough)
             if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
+                self.apply_players(s)
                 s.joint.resume()
             playthrough.save_info()
             self.run_view(s, playthrough)
@@ -993,14 +1162,13 @@ class Launcher:
         sel = 0
         while True:
             st = self.settings
-            bios = "OpenBIOS (included)" if self.bios() == BUNDLED_BIOS else f"Your BIOS: {self.bios().name}"
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Pixels: {'Sharp' if st.get('scaling', 'sharp') == 'sharp' else 'Smooth'}",
                       "Sharp keeps every pixel crisp; Smooth softens them. Always the true 4:3 picture."),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
-                     (bios, "Change the BIOS"),
-                     ("Disc: choose again", self.settings.get("disc") or ""),
+                     ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
+                     ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
                      ("Open the data folder", str(paths.data_dir()))]
             k = ui.menu("Settings", items, footer=self.storage_line(), sel=sel)
             if k is None:
@@ -1016,11 +1184,9 @@ class Launcher:
             elif k == 3:
                 st["aggro"] = (st.get("aggro", 50) + 10) % 110
             elif k == 4:
-                self.choose_bios()
+                self.game_files()
             elif k == 5:
-                st["disc"] = None
-                save_settings(st)
-                self.wizard()
+                self.controls_menu()
             elif k == 6:
                 paths.open_folder(paths.data_dir())
             save_settings(st)

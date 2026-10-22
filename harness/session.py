@@ -198,11 +198,14 @@ class HostProxy:
 
 
 class Session:
-    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False):
+    def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False,
+                 characters=(0, 0), blob=None):
         """disc: one disc for both games, or (disc A, disc B). session_file: run the couch
         launcher's joint saves (link.jointsave) into that file, every frame. audio: keep sound
-        (the launcher)."""
+        (the launcher). characters: each game's CHAR_* (design/M8), from its next load. blob:
+        Maria's (launcher/characters.py), for both games, if either plays her."""
         self.disc, self.starts, self.session_file, self.audio = disc, starts, session_file, audio
+        self.characters, self.blob = characters, blob
         self.joint = None
 
     def __enter__(self):
@@ -233,6 +236,8 @@ class Session:
         self.a, self.b = self.games
         self.a._ask("connect", ports[1])
         self.b._ask("connect", ports[0])
+        for g, c in zip(self.games, self.characters):
+            g.host("set_player", character=c, blob=self.blob)
         if self.session_file:
             from link.jointsave import JointSave
             self.joint = JointSave([MailboxProxy(self.a), MailboxProxy(self.b)], self.session_file)
@@ -281,8 +286,8 @@ class OnlineSession:
     """One local game instance per player (design/M7, D74), connected to a remote partner over UDP."""
 
     def __init__(self, disc, start=None, rank=0, peer=None, session_file=None, audio=False,
-                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True):
-        self.disc, self.start, self.rank = disc, start, rank
+                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True, character=0, blob=None):
+        self.disc, self.start, self.rank, self.character, self.blob = disc, start, rank, character, blob
         self.peer, self.session_file, self.audio = peer, session_file, audio
         self.bind_host, self.req_port = bind_host, port
         self.patch_crc, self.learn_peer = patch_crc, learn_peer
@@ -314,6 +319,7 @@ class OnlineSession:
         self.games = [game]
         self.local = self.a = game
         self.b = None
+        game.host("set_player", character=self.character, blob=self.blob)
         if self.peer is not None:
             self.connect(self.peer)
         if self.session_file:
@@ -346,10 +352,11 @@ class OnlineSession:
 SESSION_SCENARIOS = {}
 
 
-def session_scenario(starts=("entrance", "entrance"), discs=None):
-    """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice."""
+def session_scenario(starts=("entrance", "entrance"), discs=None, characters=(0, 0)):
+    """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice.
+    characters: each game's CHAR_* (design/M8), from its next load."""
     def register(fn):
-        SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs)
+        SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs, characters)
         return fn
     return register
 
@@ -399,13 +406,17 @@ def run_session_scenario(name):
     from scenario import Failed
     from module import COOP_DISC
 
-    fn, starts, discs = SESSION_SCENARIOS[name]
+    fn, starts, discs, characters = SESSION_SCENARIOS[name]
     out = TOOLS["out"] / name
     out.mkdir(parents=True, exist_ok=True)
     t0, error = time.time(), None
     run = None
     try:
-        with Session(discs or COOP_DISC, starts) as s:
+        blob = None
+        if 2 in characters:  # CHAR_MARIA
+            from module import maria_blob
+            blob = maria_blob()
+        with Session(discs or COOP_DISC, starts, characters=characters, blob=blob) as s:
             run = SessionRun(s, name)
             try:
                 fn(run)

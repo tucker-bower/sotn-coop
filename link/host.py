@@ -6,7 +6,7 @@ import os
 import struct
 import time
 
-from .mailbox import EVENT_SIZE, Presence
+from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
 from .playout import Playout
 from .transport import (TAG_ACK, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
@@ -42,6 +42,26 @@ class Host:
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
         self._frames = 0
+        self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
+        self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
+
+    def set_player(self, character=None, options=None, blob=None):
+        """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
+        Written into the game every frame, so loading a savestate can't undo them. blob: Maria's
+        overlay and voice (every game where someone plays her gets it: the partner's puppet
+        draws from it too); rewritten whenever the game's copy isn't there."""
+        if character is not None:
+            self.character = character
+        if options is not None:
+            self.options = options
+        if blob is not None:
+            self.blob = blob
+            self._put_blob()
+
+    def _put_blob(self):
+        adapter = self.mailbox.adapter
+        if self.blob and adapter.read_bytes(CHAR_BLOB_ADDR, 32) != self.blob[:32]:
+            adapter.write_bytes(CHAR_BLOB_ADDR, self.blob)
 
     def _note(self, way, what):
         self.log.append((time.monotonic(), way, what))
@@ -157,6 +177,7 @@ class Host:
 
     def after_frame(self):
         self.transport.frame += 1
+        self._put_blob()
         if self.connector and self.connector.state not in ("connected", "failed"):
             self.connector.tick()
         if self._frames % HELLO_EVERY == 0:
@@ -173,6 +194,8 @@ class Host:
                     self._check_hello(payload, addr)
             return
         self.mailbox.set_rank(self.rank)
+        self.mailbox.set_character(self.character)
+        self.mailbox.set_options(self.options)
         self.transport.send(TAG_PRESENCE, self.mailbox.self_presence().pack())
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:

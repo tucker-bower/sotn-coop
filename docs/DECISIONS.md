@@ -399,3 +399,63 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Every character gets the full Alucard castle (3A).** Richter's and Maria's progression is tied to Alucard's relics, aiming at equal power at every point; abilities that don't map are borrowed from Alucard (Mist Step). Details and the mapping: `docs/design/M8b-character-balance.md`, for Tucker's review.
 - **Maria comes from the optional USA DXC disc (4A).** A clear game-files screen covers the SOTN disc, the DXC disc and the BIOS.
 - **The DXC 2007 dialogue and voice option is dropped from M8 and goes on the backlog** (agent-default: Tucker said "whatever is easiest"; it's weeks of audio and script work for few players).
+
+**D85: M8 approved options, and the backlog** (Tucker, 2026-10-21)
+- **M8:** every recommended option (1A–4A) is approved. Added to M8:
+  - both players' HUDs fully visible in every layout (P1's may be cut off in the 2026-10-20 footage)
+  - F9 sends a bug report: a form plus the full game state, to Tucker's private storage, never anything outside the launcher window
+- **M8b:** the mapping and the balance plan are accepted, including crashes gated by Echo of Bat and Alucard's equip menu. Added:
+  - one-button moves: L2 high jump, R2 blade dash, on buttons Richter and Maria don't use in vanilla
+  - off-hand weapons on ○, with the whip and guardians always in the other hand
+- **Safety net:** a spot only Alucard can pass is still passable by a team with an Alucard player (the partner teleports). The audit still aims for full parity.
+- **Backlog:** a new section at the end of `docs/ROADMAP.md`, for the most ambitious long-term ideas. Tucker moves items into milestones. It starts with the DXC dialogue/voice swap and 3–4 players.
+- **Still open, for final approval:**
+  - where reports go (M8 §6: a Cloudflare relay into a private repo, recommended)
+  - off-hand option A
+  - Alucard's spell shortcuts in M8 or on the backlog
+
+**D86: M8 final approval** (Tucker, 2026-10-21)
+- **Sending F9 reports goes on the backlog** (no hosted relay for now). The design moved to `docs/design/backlog-report-sending.md`; F9 keeps saving the local zip.
+- **Off-hand weapons:** option A, using only existing art. No new animations, poses or drawn art; the swing is made from Richter's and Maria's own frames plus the weapon's own sprite, as natural as possible.
+- **Alucard's spell shortcuts on the right stick are in M8.**
+- **Every button shortcut is optional, per player,** set in the launcher. Off means vanilla controls.
+- **Go ahead with M8.**
+
+**D87: Button shortcuts start on, per seat; the right stick's default spells** (agent-default, 2026-10-21)
+- Each seat's shortcuts (Richter/Maria: L2 high jump, R2 blade dash, ○ off-hand; Alucard: spells on the right stick) start **on**. They only use buttons the character doesn't use in vanilla, so on changes nothing a vanilla player does. Off is one press of Triangle / Y on the lobby card, or Settings › Controls.
+- Right stick: ↑ Hellfire, → Soul Steal, ↓ Tetra Spirit, ← Dark Metamorphosis (the four most-used). Each direction cycles through the six castable spells or nothing in Settings › Controls. Wolf Charge and Wing Smash need a form, so they aren't on the stick.
+- **How a spell is cast:** a flick plays the spell's own input sequence into the pad (module/spells.c), so the game's checks decide (known, MP, pose, Sword Brothers' familiar). It costs the sequence's frames (up to ~1.3 s for Tetra Spirit and Sword Brothers, which need up held), the same as the player typing it.
+- Keyboard: player 1 gets D/W for L2/R2 and the keypad 8/6/2/4 for the stick; player 2 gets R/Y for L2/R2.
+- Options considered: off by default (less discoverable, and the buttons are unused anyway); casting directly through DRA's spell functions (skips the game's own pose and MP rules).
+
+**D88: Off-hand weapons, version 1** (agent-default, 2026-10-21; design/M8b §4.1 option A)
+- ○ uses what's in a hand (the first hand holding something usable).
+  - **A weapon** swings its own furthest-reaching frame (from its overlay, which the game loads), with the hilt at the player's hand, turning from raised to lowered. Fists push forward.
+  - It hits with the game's numbers for that hand (`GetEquipProperties`: ATK + STR, element, hit effect, critical rate).
+- **Potions** (Potion, High potion, Elixir, Manna prism) and **food** take effect at once, with DRA's amounts. Alucard's item entities are DRA's, which Richter's entity loop doesn't run, and food is dropped and picked up by its weapon overlay, which would take Richter's sprite bank.
+- **Not yet:**
+  - thrown items (TNT, Karma Coin...)
+  - the stat and resist potions
+  - weapon specials
+  - the partner's puppet showing the swing: the partner's game doesn't have the weapon's sprites loaded. Their hits count either way.
+- No pose change for Richter or Maria during the swing: Tucker's rule is existing art only, and their own attack poses bring their whip or guardian.
+
+**D89: Our Richter's and Maria's code runs from the expansion RAM** (agent-default, 2026-10-21)
+- Only their data (the tables DRA reads at fixed addresses, and their sprites) stays in Richter's overlay slot. Their code and BSS go to 0x805C0000, placed by the module after each load (`richter/ric.ld` and `maria/maria.ld` add a trailer with the sizes).
+- **Why:** built with a modern gcc they're 220–237 KB, past 0x80170000, where familiars and the weapon overlays load. With the code moved, the slot ends at 0x801567D4 (Richter) and 0x8015CF50 (Maria), so familiars work for them too. Their entity loops run familiar entities as DRA's does (a COOP change in `pl_blueprints.c`).
+- Options considered: `-Os` plus dropping unused functions (still 1.8 KB over for Richter); familiars kept off for them (a gap in the design's mapping).
+
+**D90: The patch never carries sector checksums or retail art** (agent-default, 2026-10-21; refines D71)
+- Our Richter (`COOPRIC.BIN`, M8) put Richter's retail art into the patch as literal bytes, and every changed sector's EDC/ECC with it.
+- **Now:** the patch copies our Richter's art from the player's own `RIC.BIN` (BPS source copies), and stores changed sectors with their EDC/ECC zeroed. The patcher computes them on the player's PC (`patcher/sectors.py`), then checks the whole disc's CRC.
+- `test_patcher.py` checks that the patch stores no checksums and nothing of the retail disc (every 64 stored bytes against every retail sector). `test_characters.py` does the same for Maria's patches against the DXC files.
+
+**D91: Both HUDs: nothing was cut in the launcher** (agent-default, 2026-10-21; design/M8 §5)
+- The 2026-10-20 footage is a 16:9 recording of the launcher maximized on a 21:9 monitor (3440×1440). That view cuts P1's HUD on the left and P2's picture on the right; on the monitor itself both were whole.
+- `uxdriver.py hud` checks every layout, pixel mode and three window sizes on Windows: 144/144.
+- Hardening: a remembered window size is clamped to the biggest screen there is.
+- Options considered: re-laying out ultrawide windows (nothing is wrong on screen).
+
+**D92: Performance is measured against two Alucards** (agent-default, 2026-10-21; design/M8 criterion 3)
+- In the 10-minute shared fight, the game's main loop misses about 1% of frames with **two Alucards** too (686 of 72,000), in that busy room. "No dropped frames" can't be absolute.
+- The criterion became "a mixed team misses no more frames than two Alucards with the same inputs (within 0.5% of play), and costs no more scanlines per frame (p99 within 5%)". Richter + Maria: 821 missed, p99 200 scanlines (two Alucards: 686, 202). Host p99 0.20 ms.

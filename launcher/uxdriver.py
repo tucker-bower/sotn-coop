@@ -8,6 +8,9 @@
                                                         real menu bar's window procedure)
     python launcher/uxdriver.py online    [--out DIR]   two launchers on this PC: one hosts, the
                                                         other types the room code; both play
+    python launcher/uxdriver.py characters [--out DIR]  Settings › Game files: wrong discs refused in
+                                                        plain words, then the DXC disc adds Maria;
+                                                        Maria + Richter play (design/M8 criterion 5)
 
 The real launcher runs, in a fresh data folder, with scripted input injected into its event
 queue: keys, controller buttons (virtual controllers, launcher/gameview.Pads.virtual), menu-bar
@@ -33,21 +36,25 @@ class Failed(Exception):
     pass
 
 
-def window_image(hwnd):
+def window_image(hwnd, client=False):
     """One window as Windows draws it, frame and menu bar included (PrintWindow): never brought
-    to the front, and nothing else on the screen is captured."""
+    to the front, and nothing else on the screen is captured. client: only its client area (what
+    the player sees of the games, under the menu bar)."""
     import ctypes
     from ctypes import wintypes
     from PIL import Image
     u, g = ctypes.windll.user32, ctypes.windll.gdi32
     r = wintypes.RECT()
-    u.GetWindowRect(hwnd, ctypes.byref(r))
+    if client:
+        u.GetClientRect(hwnd, ctypes.byref(r))
+    else:
+        u.GetWindowRect(hwnd, ctypes.byref(r))
     w, h = r.right - r.left, r.bottom - r.top
     hdc = u.GetWindowDC(hwnd)
     mem = g.CreateCompatibleDC(hdc)
     bmp = g.CreateCompatibleBitmap(hdc, w, h)
     g.SelectObject(mem, bmp)
-    u.PrintWindow(hwnd, mem, 2)  # PW_RENDERFULLCONTENT
+    u.PrintWindow(hwnd, mem, 3 if client else 2)  # PW_RENDERFULLCONTENT (| PW_CLIENTONLY)
 
     class BMI(ctypes.Structure):
         _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
@@ -72,6 +79,7 @@ class Driver:
         self.steps = list(steps)
         self.out = out
         self.heading = None
+        self.subtitle = ""
         self.log = []
         self.checks = []
         self.shots = []
@@ -109,6 +117,7 @@ class Driver:
 
         def frame(heading, subtitle=""):
             drv.screen(heading or "Home")
+            drv.subtitle = subtitle
             return orig(heading, subtitle)
         ui.frame = frame
 
@@ -284,6 +293,25 @@ def run(script, out, retail_cue=None):
     if not (ROOT / "patcher" / "sotn-coop.bps").exists() and dev_patch.exists():
         os.environ.setdefault("COOP_PATCH", str(dev_patch))
     sys.path.insert(0, str(HERE))
+    if os.environ.get("COOP_UX_BEHIND") and sys.platform == "win32":
+        # Windows, while someone uses the PC: our windows are made hidden, put behind every other
+        # window, then shown without being activated. Never in the way, and PrintWindow can
+        # still read them (an off-screen window isn't drawn at all).
+        import ctypes
+        import pygame._sdl2.video as video
+        real = video.Window
+
+        def behind(title, *a, **kw):
+            kw["hidden"] = True
+            win = real(title, *a, **kw)
+            u = ctypes.windll.user32
+            hwnd = u.FindWindowW(None, title)
+            u.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x13)  # HWND_BOTTOM; no move, size or activation
+            u.ShowWindow(hwnd, 8)  # SW_SHOWNA
+            return win
+        video.Window = behind
+        import display
+        display.Window = behind
     import app
     import pygame
     steps = SCRIPTS[script](pygame)
@@ -339,12 +367,18 @@ def _couch(pg, quit_at_end=True):
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
-        ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter-locked"),  # Richter: not yet
-        ("pad", 101, A),                                      # can't be ready as Richter
-        ("wait", 10), ("expect", lambda d: d.heading.startswith("Press a button"), "a locked character can't be ready"),
-        ("pad", 101, pg.CONTROLLER_BUTTON_DPAD_RIGHT),        # back to Alucard
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Maria: no DXC disc yet
+        ("pad", 101, A),                                      # can't be ready as Maria: it opens Game files
+        ("screen", "Game files"), ("shot", "game-files-from-lobby"),
+        ("key", pg.K_ESCAPE), ("screen", "Press a button"),
+        ("expect", lambda d: d.launcher.shortcuts(1), "shortcuts start on"),
+        ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
+        ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
-        ("until", in_game), ("expect", lambda d: d.inputs <= 10, "home to playing in 10 inputs or fewer"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 13, "home to playing in 13 inputs or fewer (10, plus the detours to Game files and shortcuts)"),
+        ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
+         "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
         ("hold", 0, "start"), ("game_frames", 2060), ("hold", 0, ""), ("game_frames", 2200),
         ("unplug", 101),
@@ -464,7 +498,127 @@ def _perf(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "perf": _perf, "window": _window, "menus": _menus,
+def _characters(pg):
+    """Settings › Game files: three wrong files refused in plain words, then the DXC disc adds Maria
+    (design/M8 criterion 5). Then Maria (player 1) and Richter (player 2) start a game."""
+    import test_characters
+    A, L, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_LEFT, pg.CONTROLLER_BUTTON_DPAD_RIGHT
+    tmp = Path(tempfile.mkdtemp(prefix="coop-ux-files-"))
+    junk = tmp / "notes.txt"
+    junk.write_bytes(b"hello" * 2000)
+    wrong = [(test_characters.fake_psp_iso(tmp / "Castlevania DXC (Europe).iso", "ULES-00841"), "ULUS-10277", "eu"),
+             (next((ROOT / "disks").glob("*Track 1).bin")), "PlayStation disc", "ps1"),
+             (junk, "isn't a disc image", "junk")]
+
+    def pick(path):
+        return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
+    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+             ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
+             ("screen", "Game files"), ("shot", "game-files-first"),
+             ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
+    for path, words, name in wrong:
+        steps += [pick(path), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+                  ("screen", "That disc won't work"), ("shot", f"dxc-wrong-{name}"),
+                  ("expect", lambda d, w=words: w in d.subtitle, f"{name}: the error says {words!r}"),
+                  ("key", pg.K_RETURN), ("screen", "Game files")]
+    steps += [pick(ROOT / "disks" / "sotn.pspus.iso"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+              ("screen", "Maria is ready"), ("shot", "maria-ready"), ("key", pg.K_RETURN),
+              ("screen", "Game files"), ("shot", "game-files-done"),
+              ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
+              ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
+              ("key", pg.K_RETURN),  # Couch co-op
+              ("screen", "Press a button"),
+              ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
+              ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+              ("until", lambda d: d.heading == "Game"),
+              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),
+              ("game_frames", 600), ("shot", "maria-and-richter"),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back
+              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+    return steps
+
+
+def hud_check(name):
+    """Both games' pictures, top rows included (each HUD), are on screen as drawn: the window's
+    client area (Windows: PrintWindow, under the menu bar) matches what we rendered, at the size
+    we laid it out for (design/M8 §5)."""
+    def check(d):
+        from display import cells
+        disp = d.launcher.display
+        drawn = disp.screenshot()  # what we rendered, at the size SDL says the window has
+        if drawn is None:
+            return d.check(False, f"{name}: the window can be read back")
+        from PIL import Image
+        drawn = Image.frombytes("RGBA", drawn.get_size(), pygame_bytes(drawn)).convert("RGB")
+        mb = d.launcher.menubar
+        shown = window_image(mb.hwnd, client=True) if sys.platform == "win32" and mb.ok else drawn
+        shown.save(d.out / f"hud-{name}.png")
+        drawn.save(d.out / f"hud-{name}-drawn.png")
+        d.shots.append(f"hud-{name}.png")
+        d.check(shown.size == drawn.size, f"{name}: the window shows all {drawn.size[1]} rows we draw",
+                shown=shown.size, drawn=drawn.size)
+        if shown.size != drawn.size:
+            return
+        for k, rect in enumerate(cells(disp.layout, disp.window.size, len(disp.games))):
+            if rect is None or rect.w == 0:
+                continue
+            top = (rect.x, rect.y, rect.right, rect.y + max(8, rect.h // 6))  # the HUD's rows
+            a, b = drawn.crop(top), shown.crop(top)
+            diff = sum(abs(x - y) for p, q in zip(a.getdata(), b.getdata()) for x, y in zip(p, q))
+            mean = diff / max(1, a.size[0] * a.size[1] * 3)
+            lit = sum(1 for p in a.getdata() if sum(p) > 150)
+            d.check(mean < 8 and lit > 20, f"{name}: game {k + 1}'s top rows (its HUD) are on screen",
+                    mean_diff=round(mean, 2), lit=lit)
+            # ...and they're the core's own top rows: nothing of its frame is cut on the way.
+            frame = disp.games[k]._last
+            if frame is not None:
+                core = Image.frombytes("RGB", frame.get_size(), pygame_bytes(frame, "RGB"))
+                core = core.resize((rect.w, rect.h), Image.BILINEAR).crop((0, 0, rect.w, top[3] - rect.y))
+                diff = sum(abs(x - y) for p, q in zip(core.getdata(), a.getdata()) for x, y in zip(p, q))
+                mean = diff / max(1, a.size[0] * a.size[1] * 3)
+                d.check(mean < 20, f"{name}: game {k + 1}'s top rows are the core's frame's", mean_diff=round(mean, 2))
+    return ("call", check)
+
+
+def pygame_bytes(surface, fmt="RGBA"):
+    import pygame
+    return pygame.image.tobytes(surface, fmt)
+
+
+def make_starts(d):
+    import pygame as pg
+    if d.subtitle.startswith(("They", "There")):
+        d.post_key(pg.K_DOWN)
+        d.post_key(pg.K_RETURN)
+
+
+def _hud(pg):
+    """Both games in play (a debug start at the castle entrance: each HUD on screen), then every
+    layout (two windows too), both pixel modes and three window sizes: hud_check()."""
+    A = pg.CONTROLLER_BUTTON_A
+    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+             ("screen", "Home"), ("menu", "debug_starts"),
+             ("until", lambda d: d.heading == "Debug starts"),
+             ("call", make_starts),                               # not made yet: Yes, make them
+             ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Both")),
+             ("key", pg.K_DOWN), ("key", pg.K_RETURN),            # Places
+             ("screen", "Places"), ("key", pg.K_RETURN),           # the first: the castle entrance
+             ("screen", "Press a button"), ("pad", 0, A), ("pad", 101, A), ("pad", 0, A), ("pad", 101, A),
+             ("until", lambda d: d.heading == "Game"), ("game_frames", 240)]
+    for w, h in ((1032, 592), (1600, 900), (800, 1000)):
+        steps += [("call", lambda d, w=w, h=h: setattr(d.launcher.display.window, "size", (w, h))), ("wait", 20)]
+        for layout in ("side", "stacked", "p1", "p2", "windows", "auto"):
+            for scaling in ("sharp", "smooth"):
+                steps += [("menu", f"layout:{layout}"), ("menu", f"scaling:{scaling}"), ("wait", 20),
+                          hud_check(f"{w}x{h}-{layout}-{scaling}")]
+    steps += [("menu", "layout:auto"), ("menu", "scaling:sharp"),
+              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+    return steps
+
+
+SCRIPTS = {"couch": _couch, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
