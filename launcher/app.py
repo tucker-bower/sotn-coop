@@ -885,7 +885,7 @@ class Launcher:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
-                        launcher=self)
+                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self)
         result = view.run()
         if result == "quit":
             raise SystemExit

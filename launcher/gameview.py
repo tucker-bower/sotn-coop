@@ -87,6 +87,8 @@ class Audio:
         self.buf, self.lock = bytearray(), threading.Lock()
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
+        if not getattr(pygame, "IS_CE", False) and pygame.mixer.get_init():
+            pygame.mixer.quit()  # pygame (not -ce: Android) opens the default device in init()
         kw = dict(iscapture=False, frequency=44100, audioformat=sdl_audio.AUDIO_S16, numchannels=2,
                   chunksize=1024, allowed_changes=0, callback=self._pull)
         try:
@@ -528,7 +530,9 @@ class GameView:
                 if picture:
                     w, h, fmt, pitch, n = picture
                     raw[i] = frame_surface(raw[i], fmt, pitch, h)
-                    raw[i].get_buffer().write(bytes(g.shm.buf[:n]), 0)
+                    # Through shared memory from a worker process; an in-process game (Android)
+                    # hands the bytes over as they are.
+                    raw[i].get_buffer().write(bytes(g.shm.buf[:n]) if g.shm is not None else n, 0)
                     frames.append(raw[i].subsurface((0, 0, w, h)))
                 else:
                     frames.append(None)

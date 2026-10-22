@@ -443,6 +443,26 @@ def _to_online(pg):
     return [] if ANDROID else [("key", pg.K_DOWN)]
 
 
+def _picture_lit(d):
+    """The game's picture isn't black (its last frame: some pixels lit)."""
+    import pygame
+    games = d.launcher.display.games
+    f = games[0]._last if games else None
+    if f is None:
+        return False
+    small = pygame.transform.scale(f, (64, 48))
+    return sum(1 for x in range(64) for y in range(48) if sum(small.get_at((x, y))[:3]) > 60) > 100
+
+
+def _android_picture(name):
+    """On Android, play on to the title and check the game draws (design/M9)."""
+    from platform_android import ANDROID
+    if not ANDROID:
+        return []
+    return [("game_frames", 2400), ("shot", name + "-later"),
+            ("expect", _picture_lit, "the game draws (the picture isn't black)")]
+
+
 def _online_host(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
 
@@ -457,6 +477,7 @@ def _online_host(pg, code_file):
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            *_android_picture("host-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
@@ -474,6 +495,7 @@ def _online_join(pg, code_file):
             ("pad", 200, A), ("pad", 200, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 

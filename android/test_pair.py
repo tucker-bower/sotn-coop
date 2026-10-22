@@ -3,7 +3,8 @@ emulators run the real app; each plays one launcher/uxdriver.py script (online_h
 online_join), from a fresh install: the disc picked and patched on the device, then Host / Join,
 the lobby, and play with the partner connected.
 
-    python android/test_pair.py [apk]       (default: the newest .env/android/*.apk)
+    python android/test_pair.py [apk]        (default: the newest .env/android/*.apk)
+    python android/test_pair.py --pc [apk]   criterion 3: the PC launcher hosts, an emulator joins
 
 The emulators can't reach each other directly (each is behind its own NAT on this PC), so the
 joiner types the host's address as 10.0.2.2:PORT (this PC, from inside an emulator), which the
@@ -23,7 +24,7 @@ SDK = Path(os.environ.get("ANDROID_HOME", Path.home() / "android"))
 ADB = str(SDK / "platform-tools" / "adb")
 EMULATOR = str(SDK / "emulator" / "emulator")
 PKG = "org.sotncoop.app"
-EXT = f"/sdcard/Android/data/{PKG}/files"
+PRIV = f"/data/data/{PKG}/files"  # the app's private folder: test files go there (run-as)
 PORT = 47000
 DEVICES = {"A": ("coopA", 5554), "B": ("coopB", 5556)}
 DISC = ROOT / "disks"
@@ -35,6 +36,25 @@ OUT = ROOT / ".env" / "out" / "android_pair"
 
 def adb(serial, *args, check=True, **kw):
     return subprocess.run([ADB, "-s", serial, *args], check=check, capture_output=True, text=True, **kw).stdout
+
+
+TMP = "/data/local/tmp/coop"
+# The launcher's settings for the test (its data folder: the app's private one, so a test can
+# reach it). The emulators draw in software (no GPU): "Smooth" is one pass.
+SETTINGS = {"scaling": os.environ.get("COOP_TEST_SCALING", "smooth")}
+
+
+def as_app(serial, command):
+    """A shell command run as the app (its own files: run-as, as the build is debuggable)."""
+    return adb(serial, "shell", f"run-as {PKG} sh -c '{command}'")
+
+
+def put(serial, local, remote):
+    """A file into the app's folder, as the app's own."""
+    name = Path(local).name
+    adb(serial, "push", str(local), f"{TMP}/{name}")
+    adb(serial, "shell", "chmod", "755", f"{TMP}/{name}")
+    as_app(serial, f"cp {TMP}/{name} {remote}")
 
 
 def boot(avd, port):
@@ -52,39 +72,76 @@ def boot(avd, port):
     raise RuntimeError(f"{avd} didn't boot")
 
 
+def install(serial, apk, track):
+    """A fresh install with the retail disc in the app's private folder. Files adb writes into the
+    app's shared folder belong to adb's user, which the app can't read: they go to /data/local/tmp,
+    and the app itself (run-as: the build is debuggable) copies them in."""
+    adb(serial, "uninstall", PKG, check=False)
+    adb(serial, "install", "-r", str(apk))
+    local_cue = OUT / CUE
+    local_cue.write_text("\n".join(
+        [f'FILE "{BINS[0]}" BINARY', "  TRACK 01 MODE2/2352", "    INDEX 01 00:00:00",
+         f'FILE "{BINS[1]}" BINARY', "  TRACK 02 AUDIO", "    INDEX 00 00:00:00", "    INDEX 01 00:02:00"]) + "\n")
+    adb(serial, "shell", "mkdir", "-p", TMP)
+    adb(serial, "push", str(local_cue), f"{TMP}/{CUE}")
+    for b in BINS:
+        adb(serial, "push", str(track[b]), f"{TMP}/{b}")
+    adb(serial, "shell", "chmod", "-R", "755", TMP)
+    as_app(serial, f"mkdir -p {PRIV}/discs && cp {TMP}/*.cue {TMP}/*.bin {PRIV}/discs/")
+
+
+def script_on(serial, who, script, port):
+    """Sets the app up to play one uxdriver script at its next start (android/main.py)."""
+    cfg = {"script": script, "disc": f"discs/{CUE}",  # relative to the app's folder (main.py)
+           "env": {"COOP_UX_CODE": "code.txt" if script == "online_join" else "code-host.txt",
+                   "COOP_PORT": str(port), "COOP_UX_NO_AUDIO": "1", "COOP_PROFILE": "1",
+                   "COOP_DATA_FILE": "data"}}
+    f = OUT / f"coop-ux-{who}.json"
+    f.write_text(json.dumps(cfg))
+    put(serial, f, f"{PRIV}/coop-ux.json")
+    settings = OUT / "settings.json"
+    settings.write_text(json.dumps(SETTINGS))
+    as_app(serial, f"rm -rf {PRIV}/data && mkdir -p {PRIV}/data")
+    put(serial, settings, f"{PRIV}/data/settings.json")
+    adb(serial, "logcat", "-c")
+
+
 def main():
-    apk = Path(sys.argv[1]) if len(sys.argv) > 1 else max((ROOT / ".env" / "android").glob("*.apk"), key=os.path.getmtime)
-    track = {b: next(DISC.glob("*Track 1).bin")) if "1" in b else next(DISC.glob("*Track 2).bin")) for b in BINS}
-    serials = {k: boot(*v) for k, v in DEVICES.items()}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    pc = "--pc" in sys.argv  # A is the PC launcher (criterion 3), not a second emulator
+    apk = Path(args[0]) if args else max((ROOT / ".env" / "android").glob("*.apk"), key=os.path.getmtime)
+    track = {b: DISC / b for b in BINS}  # the retail files (disks/ also holds a patched copy)
+    global OUT, PORT
+    OUT = OUT.with_name("android_pc" if pc else "android_pair")
+    if pc:
+        PORT += 1  # emulator A's redirect (adb emu redir) may hold PORT on this PC
+    OUT.mkdir(parents=True, exist_ok=True)
+    serials = {k: boot(*v) for k, v in DEVICES.items() if not (pc and k == "A")}
     print("booted", serials, flush=True)
     for who, serial in serials.items():
-        adb(serial, "uninstall", PKG, check=False)
-        adb(serial, "install", "-r", str(apk))
-        adb(serial, "shell", "mkdir", "-p", f"{EXT}/discs")
-        # The retail disc, as a player would have it (a .cue naming its two .bin files).
-        local_cue = OUT / CUE
-        OUT.mkdir(parents=True, exist_ok=True)
-        local_cue.write_text("\n".join(
-            [f'FILE "{BINS[0]}" BINARY', "  TRACK 01 MODE2/2352", "    INDEX 01 00:00:00",
-             f'FILE "{BINS[1]}" BINARY', "  TRACK 02 AUDIO", "    INDEX 00 00:00:00", "    INDEX 01 00:02:00"]) + "\n")
-        adb(serial, "push", str(local_cue), f"{EXT}/discs/{CUE}")
-        for b in BINS:
-            adb(serial, "push", str(track[b]), f"{EXT}/discs/{b}")
+        install(serial, apk, track)
         print(who, "installed, disc pushed", flush=True)
-    a, b = serials["A"], serials["B"]
-    adb(a, "emu", "redir", "add", f"udp:{PORT}:{PORT}")
+    b = serials["B"]
     code = OUT / "code.txt"
-    code.write_text(f"10.0.2.2:{PORT}")
-    adb(b, "push", str(code), f"{EXT}/code.txt")
-    for who, script in (("A", "online_host"), ("B", "online_join")):
-        cfg = {"script": script, "disc": f"{EXT}/discs/{CUE}",
-               "env": {"COOP_UX_CODE": f"{EXT}/code{'' if who == 'B' else '-host'}.txt",
-                       "COOP_PORT": str(PORT) if who == "A" else "0", "COOP_UX_NO_AUDIO": "1"}}
-        f = OUT / f"coop-ux-{who}.json"
-        f.write_text(json.dumps(cfg))
-        adb(serials[who], "push", str(f), f"{EXT}/coop-ux.json")
-        adb(serials[who], "logcat", "-c")
-    for serial in (a, b):
+    code.write_text(f"10.0.2.2:{PORT}")  # this PC, seen from inside an emulator
+    put(b, code, f"{PRIV}/code.txt")
+    script_on(b, "B", "online_join", 0)
+    pc_proc = None
+    if pc:  # the PC's own launcher hosts (headless), on the port the emulator's 10.0.2.2 reaches
+        import shutil
+        shutil.rmtree(OUT / "pc-data", ignore_errors=True)  # a fresh install, as the device's
+        env = dict(os.environ, COOP_PORT=str(PORT), COOP_UX_CODE=str(OUT / "code-host.txt"),
+                   SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy", COOP_UX_NO_AUDIO="1",
+                   COOP_DATA=str(OUT / "pc-data"))
+        pc_python = Path(os.environ.get("COOP_PYTHON", ROOT.parent / "sotn-decomp-coop" / ".venv" / "bin" / "python"))
+        pc_proc = subprocess.Popen([str(pc_python), str(ROOT / "launcher" / "uxdriver.py"), "online_host",
+                                    "--out", str(OUT / "A")], env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True)
+    else:
+        a = serials["A"]
+        adb(a, "emu", "redir", "add", f"udp:{PORT}:{PORT}")
+        script_on(a, "A", "online_host", PORT)
+    for serial in serials.values():
         adb(serial, "shell", "am", "start", "-n", f"{PKG}/org.kivy.android.PythonActivity")
     results, t0 = {}, time.time()
     while len(results) < 2 and time.time() - t0 < 1800:
@@ -97,14 +154,22 @@ def main():
                     results[who] = json.loads(line.split("COOP-UX-DONE", 1)[1])
                 elif "Python for android ended" in line and who not in results:
                     results[who] = {"passed": False, "error": "the app ended:\n" + "\n".join(log.splitlines()[-30:])}
+        if pc_proc and "A" not in results and pc_proc.poll() is not None:
+            out = pc_proc.stdout.read()
+            (OUT / "pc.txt").write_text(out)
+            results["A"] = {"passed": pc_proc.returncode == 0, "error": None if pc_proc.returncode == 0 else out[-1500:]}
         time.sleep(5)
     for who, serial in serials.items():
         script = "online_host" if who == "A" else "online_join"
-        adb(serial, "pull", f"{EXT}/ux/{script}", str(OUT / who), check=False)
+        (OUT / who).mkdir(parents=True, exist_ok=True)
+        tar = subprocess.run([ADB, "-s", serial, "exec-out", f"run-as {PKG} tar c -C {PRIV}/ux {script}"],
+                             capture_output=True).stdout
+        subprocess.run(["tar", "x", "-C", str(OUT / who)], input=tar, check=False)
         (OUT / f"logcat-{who}.txt").write_text(adb(serial, "logcat", "-d", "-s", "python:*", check=False))
-    print(json.dumps(results, indent=1))
+    print(json.dumps(results, indent=1)[:3000])
+    name = "android_pc" if pc else "android_pair"
     ok = len(results) == 2 and all(r.get("passed") for r in results.values())
-    print("PASSED android_pair" if ok else "FAILED android_pair", f"({time.time() - t0:.0f} s)")
+    print(f"PASSED {name}" if ok else f"FAILED {name}", f"({time.time() - t0:.0f} s)")
     return 0 if ok else 1
 
 

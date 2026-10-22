@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-21_
+_Last updated: 2026-10-22_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -46,6 +46,11 @@ _Last updated: 2026-10-21_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
+- **M9 Android (design `docs/design/M9-android.md`, D93), branch `coop-m9-android`.** Resumed 2026-10-22 after a cut-off session.
+  - Criterion 1: the debug APK builds (`android/build.sh`, x86_64 tested).
+  - Criterion 2: `android_pair` passed (two emulators, real app, host + join by address).
+  - Criterion 3 (`android_pair --pc`): **failing**. The PC host passes; the Android joiner doesn't see its partner, and its audio fails to open (`devicename must be a string`). Being fixed.
+  - Criteria 4 (device setup errors) and 5 (frame times): not started.
 - **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
   - **Done, with passing tests:**
     - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
