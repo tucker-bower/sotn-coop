@@ -87,16 +87,39 @@ class Audio:
         self.buf, self.lock = bytearray(), threading.Lock()
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
-        if not getattr(pygame, "IS_CE", False) and pygame.mixer.get_init():
-            pygame.mixer.quit()  # pygame (not -ce: Android) opens the default device in init()
+        self.dev = self.chan = None
+        if not getattr(pygame, "IS_CE", False):
+            # pygame (not -ce: Android, design/M9): its AudioDevice's Python callback deadlocks on
+            # the GIL there, so the sound goes through SDL_mixer, queued from the main thread.
+            if pygame.mixer.get_init() != (44100, -16, 2):
+                pygame.mixer.quit()
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+            self.chan = pygame.mixer.Channel(0)
+            return
         kw = dict(iscapture=False, frequency=44100, audioformat=sdl_audio.AUDIO_S16, numchannels=2,
                   chunksize=1024, allowed_changes=0, callback=self._pull)
-        try:
-            self.dev = sdl_audio.AudioDevice(devicename=None, **kw)  # the default output
-        except TypeError:  # pygame (Android: design/M9) wants a name: the first output device
-            names = sdl_audio.get_audio_device_names(False)
-            self.dev = sdl_audio.AudioDevice(devicename=names[0] if names else "", **kw)
+        self.dev = sdl_audio.AudioDevice(devicename=None, **kw)  # the default output
         self.dev.pause(0)
+
+    def _feed(self):
+        """SDL_mixer: keeps one chunk queued behind the one playing (about 23 ms each)."""
+        chunk = 1024 * 4
+        with self.lock:
+            while self.chan.get_queue() is None and len(self.buf) >= chunk:
+                sound = pygame.mixer.Sound(buffer=bytes(self.buf[:chunk]))
+                del self.buf[:chunk]
+                self.pulls += 1
+                if self.chan.get_busy():
+                    self.chan.queue(sound)
+                else:
+                    self.underruns += self.pulls > 1  # it ran dry (the first start isn't)
+                    self.chan.play(sound)
+
+    def close(self):
+        if self.dev is not None:
+            self.dev.close()
+        elif self.chan is not None:
+            self.chan.stop()
 
     def _pull(self, dev, mem):
         with self.lock:
@@ -120,6 +143,8 @@ class Audio:
             if len(self.buf) > 44100 * 4 // 5:  # over 0.2 s behind: drop the oldest
                 self.dropped_bytes += len(self.buf) - 44100 * 4 // 10
                 del self.buf[:len(self.buf) - 44100 * 4 // 10]
+        if self.chan is not None:
+            self._feed()
 
     def clear(self):
         with self.lock:

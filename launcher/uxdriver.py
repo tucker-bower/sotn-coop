@@ -320,6 +320,8 @@ def run(script, out, retail_cue=None):
     try:
         launcher = app.Launcher()
         if os.environ.get("COOP_UX_NO_AUDIO"):
+            if launcher.audio is not None:
+                launcher.audio.close()  # no device left open either (its thread)
             launcher.audio = None
         try:
             launcher.wizard()
@@ -478,6 +480,8 @@ def _online_host(pg, code_file):
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
             *_android_picture("host-playing"),
+            # The host stays until its partner leaves (a slower partner, a phone, checks later).
+            ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 

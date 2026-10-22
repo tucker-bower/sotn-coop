@@ -94,7 +94,7 @@ def script_on(serial, who, script, port):
     """Sets the app up to play one uxdriver script at its next start (android/main.py)."""
     cfg = {"script": script, "disc": f"discs/{CUE}",  # relative to the app's folder (main.py)
            "env": {"COOP_UX_CODE": "code.txt" if script == "online_join" else "code-host.txt",
-                   "COOP_PORT": str(port), "COOP_UX_NO_AUDIO": "1", "COOP_PROFILE": "1",
+                   "COOP_PORT": str(port), "COOP_PROFILE": "1",  # with sound, as players
                    "COOP_DATA_FILE": "data"}}
     f = OUT / f"coop-ux-{who}.json"
     f.write_text(json.dumps(cfg))
