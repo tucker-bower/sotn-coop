@@ -57,7 +57,7 @@ _Last updated: 2026-10-21_
     - Criterion 3: `mixed_soak_10min` against two Alucards (D92). §5 HUDs: the footage's cut was a 16:9 recording of an ultrawide window (D91); `uxdriver.py hud` 144/144 on Windows.
     - Off-hand weapons (D88): every class swings its own sprite and hits with the hand's attack; potions and food heal; a shield adds DEF. Equipping a weapon no longer turns Richter/Maria magenta (a palette clash, fixed).
   - **Built, being tested (uncommitted until it passes):** Richter's and Maria's code moved to expansion RAM so familiars fit (D89), familiars for them, poison water + Holy Symbol, Force of Echo / Gas Cloud for them.
-  - **Left:** the power-curve runs (`harness/power_curve.py`, written) and tuning; the reachability audit (see Decisions needed); the PR and a playtest build.
+  - **Left:** the power-curve tuning and the reachability audit (both decisions below); familiars, weapons and gates for Richter/Maria are done and tested (88/88 suite + M8 tests).
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
@@ -71,6 +71,9 @@ _Last updated: 2026-10-21_
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
+- **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
+  - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
+  - **(b) Per-boss bots** (approach and dodge patterns for each of the 12), then automatic tuning: about 2–3 usage windows.
 - **M8b reachability audit (criterion 3): full route bot, or gate audit + playtest?** As designed, a bot walks each character room by room from every boss start, proving every relic, boss and save room is reachable with exactly the relics a player has. That's a pathfinding bot for the whole first castle, three times over: about 2–3 more usage windows, and brittle. Options:
   - **(a) Gate audit + your playtest (recommended):** a test per gate type from M8b §2 for Richter and Maria: high ledges (Gravity Boots / chained backflips / Maria's wings), low gaps (slide), mist grates (Mist Step, done), poison water (done), blue doors and the ferryman (they read the relic: character-neutral), and the worn-item gates (Spike Breaker, the rings, Holy Glasses), which work because they wear Alucard's gear now. Then a Richter + Maria couch playthrough by you finds what a gate list can't. The safety net (an Alucard player, D85) covers anything missed. About 0.5 window.
   - **(b) The full route bot**, as written: 2–3 windows.

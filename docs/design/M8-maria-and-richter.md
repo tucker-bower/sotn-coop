@@ -1,6 +1,6 @@
 # M8 design: playable Maria and Richter
 
-**Status:** approved by Tucker 2026-10-21 (D85, D86). Every recommended option (1A–4A), plus §5 (both HUDs visible). In progress on `coop-m8-maria-richter`. Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
+**Status:** approved by Tucker 2026-10-21 (D85, D86). Every recommended option (1A–4A), plus §5 (both HUDs visible). Built on `coop-m8-maria-richter`; every criterion has a passing test (the PR lists them). Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
 **Context:** D27 (character choice), D75 (M8 scope), D84 (Tucker's M8 decisions).
 
 ## Goal

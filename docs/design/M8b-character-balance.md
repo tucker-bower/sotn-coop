@@ -1,6 +1,6 @@
 # M8b design: Richter and Maria balance and the ability mapping
 
-**Status:** approved by Tucker 2026-10-21 (D85, D86), with one-button moves (§3.2) and off-hand weapons (§4.1). In progress on `coop-m8-maria-richter`. It goes with `docs/design/M8-maria-and-richter.md` (option 3A: one Alucard castle for every character).
+**Status:** approved by Tucker 2026-10-21 (D85, D86), with one-button moves (§3.2) and off-hand weapons (§4.1). Built on `coop-m8-maria-richter`. Deviations, all logged: Force of Echo is +25% to the whip / her attack (the whip is holy already), off-hand version 1 (D88), familiars via code in expansion RAM (D89). The reachability audit (criterion 3) waits on Tucker's choice (STATUS). It goes with `docs/design/M8-maria-and-richter.md` (option 3A: one Alucard castle for every character).
 **Goal (Tucker):** Richter and Maria progress through the whole game, and never feel more or less powerful than Alucard at any point. Abilities that don't map can be borrowed from Alucard: for example, Richter must be able to pass mist grates.
 
 Facts marked **(code)** are from the decomp (`src/ric`, `src/maria`, `src/dra`, `src/st`). Facts marked **(verify)** are to confirm in the M8 spike, and the rest are game knowledge. The proposals are mine, and every number is a tuning knob.

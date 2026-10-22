@@ -80,29 +80,50 @@ def as_character(e, mb, ch):
     e.step(120)  # the module loads their weapons and familiar
 
 
-def boss_target(e):
-    """(x, hp) of the boss: the enemy with the most HP, or None."""
+def boss_target(e, slot=None):
+    """(slot, x, hp, entityId) of the boss: the enemy with the most HP (or that slot), or None."""
     raw = e.read_bytes("g_Entities", 0xBC * 256)
     best = None
-    for s in range(64, 256):
+    for s in ([slot] if slot is not None else range(64, 256)):
         ent = raw[s * 0xBC:(s + 1) * 0xBC]
-        if not struct.unpack_from("<H", ent, 0x26)[0] or not struct.unpack_from("<H", ent, 0x3C)[0]:
+        eid = struct.unpack_from("<H", ent, 0x26)[0]
+        if not eid or (slot is None and not struct.unpack_from("<H", ent, 0x3C)[0]):
             continue
         hp = struct.unpack_from("<h", ent, 0x3E)[0]
-        if 0 < hp < 32767 and (best is None or hp > best[1]):
-            best = (struct.unpack_from("<h", ent, 2)[0], hp)
+        if (slot is not None or 0 < hp < 32767) and (best is None or hp > best[2]):
+            best = (s, struct.unpack_from("<h", ent, 2)[0], hp, eid)
     return best
 
 
+def records(e):
+    """The time attack records: a boss beaten adds one (src/dra: TimeAttackController)."""
+    return sum(1 for k in range(32) if e.read("g_Settings", "<i", 0x30 + 4 * k))
+
+
 def fight(e, mb, ch, limit):
-    """(seconds to kill or None, damage taken per minute, share of the boss's HP taken)."""
-    taken, frames, first = 0, 0, None
-    while frames < limit:
-        if not mb.self_presence().flags & BOSS:
+    """(seconds to kill or None, damage taken per minute, share of the boss's HP taken). The
+    kill: the boss's entity (the most HP when the fight starts) is gone or at 0 HP, and the game
+    recorded it (a new time attack record)."""
+    taken, frames = 0, 0
+    for _ in range(600):  # the boss comes in
+        if boss_target(e):
             break
-        target = boss_target(e)
-        if target and first is None:
-            first = target[1]
+        e.step(1)
+    first = boss_target(e)
+    if not first:
+        return None
+    slot, eid, hp0, recs = first[0], first[3], first[2], records(e)
+    killed = False
+    while frames < limit:
+        now = boss_target(e, slot)
+        if not now or now[3] != eid or now[2] <= 0:
+            for _ in range(600):  # its death plays out, and the game records it
+                e.step(1)
+                if records(e) > recs:
+                    killed = True
+                    break
+            break
+        target = (now[1], now[2])
         me = e.snapshot()["x"]
         pad = []
         if target:
@@ -122,9 +143,9 @@ def fight(e, mb, ch, limit):
         taken += max(0, hp - e.read(HP, "<i"))
         if e.read(HP, "<i") < e.read(HP_MAX, "<i") // 3:
             route.heal(e)
-    killed = not mb.self_presence().flags & BOSS
-    left = (boss_target(e) or (0, 0))[1]
-    share = 1.0 if killed else (1 - left / first if first else 0.0)
+    now = boss_target(e, slot)
+    left = now[2] if now and now[3] == eid else 0
+    share = 1.0 if killed else max(0.0, 1 - left / hp0)
     return (frames / 60 if killed else None), taken * 3600 / max(frames, 1), share
 
 
@@ -160,7 +181,11 @@ def main():
             continue
         row = {"boss": b["name"], "level": b["level"]}
         for ch in NAMES:
-            r = run_one(files[b["name"]], b, ch, args.minutes)
+            try:
+                r = run_one(files[b["name"]], b, ch, args.minutes)
+            except Exception as exc:  # noqa: BLE001 - one bad run is reported, not fatal
+                r = None
+                print(b["name"], NAMES[ch], "error:", exc, flush=True)
             row[NAMES[ch]] = r
             print(b["name"], NAMES[ch], r, flush=True)
         rows.append(row)
