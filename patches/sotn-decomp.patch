@@ -274,7 +274,7 @@ index 027137b05..89fb5df33 100644
          } else {
  #ifdef VERSION_PSP
 diff --git a/src/maria/pl_blueprints.c b/src/maria/pl_blueprints.c
-index ce01a3c3b..fd2b550d7 100644
+index ce01a3c3b..e05ad0503 100644
 --- a/src/maria/pl_blueprints.c
 +++ b/src/maria/pl_blueprints.c
 @@ -80,6 +80,10 @@ void MarSetSubweaponParams(Entity* entity) {
@@ -288,7 +288,24 @@ index ce01a3c3b..fd2b550d7 100644
      entity->attack = g_api.CalcDealDamageMaria(entity->attack);
      func_maria_8015F9F0(entity);
  }
-@@ -1283,6 +1287,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
+@@ -285,7 +289,15 @@ void MarUpdatePlayerEntities(void) {
+     for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
+         if (entity->entityId != 0) {
+             if (entity->step == 0) {
+-                entity->pfnUpdate = entity_functions[entity->entityId];
++#ifdef COOP_MARIA
++                // Familiars (co-op, design/M8b §3): their entities (0xD0-0xDF) run the
++                // familiar's code (FAMILIAR_PTR), as DRA's loop does for Alucard.
++                if (entity->entityId >= 0xD0 && entity->entityId < 0xE0) {
++                    entity->pfnUpdate =
++                        ((PfnEntityUpdate*)FAMILIAR_PTR)[entity->entityId - 0xD0];
++                } else
++#endif
++                    entity->pfnUpdate = entity_functions[entity->entityId];
+             }
+             if (!isPrologueTimeStopped || (entity->flags & FLAG_UNK_10000)) {
+                 entity->pfnUpdate(entity);
+@@ -1283,6 +1295,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
      entity->stunFrames = stunFrames;
      entity->hitEffect = hitEffect;
      entity->entityRoomIndex = entityRoomIndex;
@@ -409,7 +426,7 @@ index 80452affd..9bf932ffc 100644
      }
      MarDecelerateX(FIX(0.125));
 diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
-index 4fd830174..8fc74fb2b 100644
+index 4fd830174..822a1ab17 100644
 --- a/src/ric/pl_blueprints.c
 +++ b/src/ric/pl_blueprints.c
 @@ -102,6 +102,10 @@ void RicSetSubweaponParams(Entity* entity) {
@@ -423,6 +440,23 @@ index 4fd830174..8fc74fb2b 100644
      entity->attack = g_api.func_800FD664(entity->attack);
      func_8015F9F0(entity);
  }
+@@ -481,7 +485,15 @@ void RicUpdatePlayerEntities(void) {
+     for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
+         if (entity->entityId != 0) {
+             if (entity->step == 0) {
+-                entity->pfnUpdate = entity_functions[entity->entityId];
++#ifdef COOP_RIC
++                // Familiars (co-op, design/M8b §3): their entities (0xD0-0xDF) run the
++                // familiar's code (FAMILIAR_PTR), as DRA's loop does for Alucard.
++                if (entity->entityId >= 0xD0 && entity->entityId < 0xE0) {
++                    entity->pfnUpdate =
++                        ((PfnEntityUpdate*)FAMILIAR_PTR)[entity->entityId - 0xD0];
++                } else
++#endif
++                    entity->pfnUpdate = entity_functions[entity->entityId];
+             }
+             if (!isPrologueTimeStopped || (entity->flags & FLAG_UNK_10000)) {
+                 entity->pfnUpdate(entity);
 diff --git a/src/ric/pl_collision.c b/src/ric/pl_collision.c
 index 17a7d39df..b97288d17 100644
 --- a/src/ric/pl_collision.c

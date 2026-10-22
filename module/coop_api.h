@@ -18,6 +18,12 @@
 #define PUPPET_RIC_ADDR 0x80500000
 #define PUPPET_ALU_ADDR 0x80540000
 #define PUPPET_RICPAL_ADDR 0x80580000 // Richter's palettes 0x100-0x13F (F_GAME2.BIN at 0x40000)
+// Our Richter's and Maria's code and BSS (richter/ric.ld, maria/maria.ld): only their data is
+// in Richter's overlay slot, so familiars fit after it (design/M8b §3). Each has its own
+// address here (0x805C0000, 0x80600000): code rewritten at an address an emulator's recompiler
+// has already compiled may not be noticed (Richter then Maria hung).
+#define COOP_PLAYER_FAR 0x805C0000
+#define COOP_PLAYER_FAR_END 0x80680000
 
 void CoopBoot(void);           // replaces InitializePads()
 bool CoopUpdate(void);         // replaces DebugUpdate(): main loop, before UpdateGame

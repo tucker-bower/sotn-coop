@@ -111,7 +111,10 @@ def char_select_session(run):
             for g, c in zip(games, (ca, cb)):
                 g.host("set_player", character=c)
             pair = f"{NAMES[ca]} + {NAMES[cb]}"
-            run.expect(all(reload_game(run, g) for g in games), f"{pair}: both load")
+            loaded = [reload_game(run, g) for g in games]
+            run.expect(all(loaded), f"{pair}: both load", loaded=loaded,
+                       states=[(g.read("g_GameState"), g.read("g_GameStep"), hex(g.mailbox("self_presence").flags),
+                                g.mailbox("save_seq")) for g in games])
             got = tuple(g.mailbox("self_presence").character for g in games)
             run.expect(got == (ca, cb), f"{pair}: each game plays its pick", got=got)
             for g in games:

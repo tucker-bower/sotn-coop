@@ -54,7 +54,10 @@ _Last updated: 2026-10-21_
     - Alucard's spells on the right stick (`m8b_spell_shortcuts`, all 6 castable spells).
     - Launcher: Game files screen (`uxdriver.py characters`: wrong files refused in plain words, then Maria), lobby (Maria locked until her disc, Triangle/Y shortcuts per player), Settings › Controls. `test_characters.py` (Maria from the USA DXC disc).
     - **Patch hygiene fix:** COOPRIC.BIN had put Richter's retail art into the patch as literal bytes. Now copied from the player's RIC.BIN, and changed sectors' EDC/ECC are computed on the player's PC; `test_patcher.py` proves the patch holds no retail data or checksums.
-  - **Left:** off-hand weapons (§4.1), the remaining relic mappings (Force of Echo, Gas Cloud, Holy Symbol, spike/rings/glasses, familiars spike), both HUDs visible (§5), the 10-minute mixed-team performance soak, the reachability audit and the power-curve tuning (bot fights at the 12 boss starts).
+    - Criterion 3: `mixed_soak_10min` against two Alucards (D92). §5 HUDs: the footage's cut was a 16:9 recording of an ultrawide window (D91); `uxdriver.py hud` 144/144 on Windows.
+    - Off-hand weapons (D88): every class swings its own sprite and hits with the hand's attack; potions and food heal; a shield adds DEF. Equipping a weapon no longer turns Richter/Maria magenta (a palette clash, fixed).
+  - **Built, being tested (uncommitted until it passes):** Richter's and Maria's code moved to expansion RAM so familiars fit (D89), familiars for them, poison water + Holy Symbol, Force of Echo / Gas Cloud for them.
+  - **Left:** the power-curve runs (`harness/power_curve.py`, written) and tuning; the reachability audit (see Decisions needed); the PR and a playtest build.
 
 ## Next
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.

@@ -294,3 +294,53 @@ def m8b_offhand(run, ch):
         run.step(1, "circle")
         run.step(120)
         run.expect(e.read(HP_NOW, "<i") > 10, f"{what} heals", hp=e.read(HP_NOW, "<i"))
+
+
+SERVANT_LOADED = 0x80073064  # g_ServantLoaded
+HOLY_SYMBOL, BAT_CARD, GHOST_CARD = 14, 18, 19
+POISON_WATER = 0x8009744C  # g_unkGraphicsStruct.D_8009744C: the stage marks the player in poison water
+
+
+@per_character
+def m8b_familiar(run, ch):
+    """M8b §3: the familiar cards work for Richter and Maria too. With a card on, the module loads
+    the familiar after a load (their code runs from the expansion RAM, so it fits), it comes out,
+    and they still play."""
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    for relic, fam in ((BAT_CARD, 1), (GHOST_CARD, 2)):
+        e.load_state(start)
+        e.write(STATUS, RELIC_ON, "<B", relic)
+        reload_as(run, mb, ch)
+        run.step(300)
+        ids = [e.read(e.entity(s), "<H", 0x26) for s in range(4, 64)]
+        run.expect(e.read(SERVANT) == fam and e.read(SERVANT_LOADED) == fam,
+                   f"card {relic}: the familiar is loaded", servant=e.read(SERVANT),
+                   loaded=e.read(SERVANT_LOADED))
+        run.expect(any(0xD0 <= i < 0xE0 for i in ids), f"card {relic}: the familiar is out")
+        s0 = e.snapshot()
+        s = run.play(walker("left", attack_every=12), 300)
+        run.expect(s["hp"] > 0 and (s["world_x"] != s0["world_x"] or s["room"] != s0["room"]),
+                   f"card {relic}: {NAMES[ch]} still plays")
+
+
+@per_character
+def m8b_poison_water(run, ch):
+    """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and
+    not with it."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    start = e.save_state()
+    for symbol in (False, True):
+        e.load_state(start)
+        if symbol:
+            e.write(STATUS, RELIC_ON, "<B", HOLY_SYMBOL)
+        hp = e.read(HP_NOW, "<i")
+        for _ in range(180):
+            e.write(POISON_WATER, 8, "<i")
+            run.step(1)
+        lost = hp - e.read(HP_NOW, "<i")
+        if symbol:
+            run.expect(lost == 0, "with Holy Symbol, poison water doesn't hurt", lost=lost)
+        else:
+            run.expect(lost > 0, "without it, poison water hurts", lost=lost)

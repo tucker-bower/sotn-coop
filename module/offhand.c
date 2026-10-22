@@ -46,7 +46,7 @@ extern s32 g_EquippedWeaponIds[2];
 #define WEAPON_PRG(hand) ((hand) ? 0x8017D000 : 0x8017A000)
 #define WEAPON_ANIMSET(hand) ((SpriteParts**)(WEAPON_PRG(hand) + 0x40)) // every w0_/w1_ overlay
 #define WEAPON_SIZE 0x3000
-#define BANK 0x14 // stage sprite banks 0x14-0x15 are free in every stage (Richter: 0x10-0x13)
+#define BANK 0x16 // stage sprite banks 0x16-0x17 are free in every stage (Richter: 0x10-0x13, familiars 0x14)
 #define E_OFFHAND 0x7E
 #define SLOT_FIRST 0x18
 #define SLOT_LAST 0x2F
@@ -161,6 +161,8 @@ static void FixPalettes(s32 hand) {
     PutWeaponPals();
 }
 
+bool OffhandLoading(void) { return s_Loading >= 0; }
+
 // After a load, the game didn't load Richter's or Maria's weapons: the module does, one hand at
 // a time, the way the menu does when it closes.
 static void LoadWeapons(void) {
@@ -176,7 +178,7 @@ static void LoadWeapons(void) {
     }
     for (hand = 0; hand < 2; hand++) {
         if (IsWeapon(Category(hand)) && WeaponOvl(hand) != 0xFF && !Loaded(hand) && !g_IsUsingCd &&
-            LoadWeaponPrg(hand)) {
+            g_LoadFile == CdFile_None && LoadWeaponPrg(hand)) {
             s_Loading = hand;
             return;
         }

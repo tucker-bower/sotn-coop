@@ -14,9 +14,13 @@ s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 #define WHIP_STR_PCT 100   // the whip gains this % of STR (Alucard's weapons gain all of it)
 #define SUBWPN_INT_DIV 50  // subweapons and crashes: × (1 + INT / this)
 #define FIRE_WHIP_PCT 125  // Fire of Bat: the whip burns, for this % of its damage
+#define ECHO_WHIP_PCT 125  // Force of Echo: the whip's echo, this % of its damage (it's holy already)
 
 #define SUBWPN_WHIP 14       // gen/subweapons.h: the whip (32)
 #define SUBWPN_FLAME_WHIP 15 // △ with no subweapon (64)
+#define SUBWPN_HOLY_WATER 3  // and its flames (11) and crash, Hydro Storm (16)
+#define SUBWPN_HOLY_FLAMES 11
+#define SUBWPN_HYDRO_STORM 16
 
 // RicSetSubweaponParams's attack, for every attack Richter makes (the whip is a "subweapon").
 s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
@@ -26,8 +30,16 @@ s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
             attack = attack * FIRE_WHIP_PCT / 100;
             entity->attackElement |= ELEMENT_FIRE;
         }
+        if (COOP_CAN(RELIC_FORCE_OF_ECHO)) {
+            attack = attack * ECHO_WHIP_PCT / 100;
+        }
     } else if (attack) {
         attack += attack * g_Status.statsTotal[STAT_INT] / SUBWPN_INT_DIV;
+    }
+    // Gas Cloud: holy water and its crash poison (M8b §3).
+    if ((id == SUBWPN_HOLY_WATER || id == SUBWPN_HOLY_FLAMES || id == SUBWPN_HYDRO_STORM) &&
+        COOP_CAN(RELIC_GAS_CLOUD)) {
+        entity->attackElement |= ELEMENT_POISON;
     }
     return attack;
 }
