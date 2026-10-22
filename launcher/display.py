@@ -135,7 +135,8 @@ class Display:
                 pass
         if settings.get("window_maximized"):
             self.window.maximize()
-        self.window.minimum_size = (640, 360)
+        if hasattr(self.window, "minimum_size"):  # pygame-ce (pygame, on Android: design/M9)
+            self.window.minimum_size = (640, 360)
         self.renderer = Renderer(self.window, accelerated=-1, vsync=False)
         self.canvas = pygame.Surface(CANVAS, pygame.SRCALPHA)
         self._canvas_tex = None

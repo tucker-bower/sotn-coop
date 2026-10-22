@@ -87,9 +87,13 @@ class Audio:
         self.buf, self.lock = bytearray(), threading.Lock()
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
-        self.dev = sdl_audio.AudioDevice(devicename=None, iscapture=False, frequency=44100,
-                                         audioformat=sdl_audio.AUDIO_S16, numchannels=2, chunksize=1024,
-                                         allowed_changes=0, callback=self._pull)
+        kw = dict(iscapture=False, frequency=44100, audioformat=sdl_audio.AUDIO_S16, numchannels=2,
+                  chunksize=1024, allowed_changes=0, callback=self._pull)
+        try:
+            self.dev = sdl_audio.AudioDevice(devicename=None, **kw)  # the default output
+        except TypeError:  # pygame (Android: design/M9) wants a name: the first output device
+            names = sdl_audio.get_audio_device_names(False)
+            self.dev = sdl_audio.AudioDevice(devicename=names[0] if names else "", **kw)
         self.dev.pause(0)
 
     def _pull(self, dev, mem):
