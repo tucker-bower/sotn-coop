@@ -47,9 +47,10 @@ _Last updated: 2026-10-22_
 
 ## In flight
 - **M9 Android (design `docs/design/M9-android.md`, D93), branch `coop-m9-android`.** Resumed 2026-10-22 after a cut-off session.
-  - Criterion 1: the debug APK builds (`android/build.sh`, x86_64 tested).
-  - Criterion 2: `android_pair` passed (two emulators, real app, host + join by address).
-  - Criterion 3 (`android_pair --pc`): **failing**. The PC host passes; the Android joiner doesn't see its partner, and its audio fails to open (`devicename must be a string`). Being fixed.
+  - Criterion 1: `android/build.sh` builds arm64-v8a + x86_64 (39 MB, no game data). Fixed: pyjnius needed `wheel` without build isolation.
+  - Criterion 2: `android_pair` **passes** (74 s); criterion 3: `android_pc` **passes** (60 s). Both now run with sound on.
+  - Fixed on the way: on Android (plain pygame) the SDL audio callback deadlocked on the GIL as soon as an online session started (the earlier pass had sound off). Sound now goes through SDL_mixer, queued from the main thread.
+  - **Open:** sound on the emulator underruns often (1138 of 1728 chunks); frames take about 16 ms (games 4–6 + draw 11), right at the 60 fps limit. Criterion 5 work: measure, then tune (bigger queue, cheaper draw).
   - Criteria 4 (device setup errors) and 5 (frame times): not started.
 - **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
   - **Done, with passing tests:**
