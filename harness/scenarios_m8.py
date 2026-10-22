@@ -344,3 +344,67 @@ def m8b_poison_water(run, ch):
             run.expect(lost == 0, "with Holy Symbol, poison water doesn't hurt", lost=lost)
         else:
             run.expect(lost > 0, "without it, poison water hurts", lost=lost)
+
+
+SKILL_OF_WOLF = 6
+HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC  # g_Status (include/game.h)
+
+
+def travel(run, inputs):
+    """How far (px) the player gets along x while the inputs play, then settles."""
+    e = run.emu
+    x0, best = e.snapshot()["world_x"], 0
+    for b in inputs:
+        run.step(1, b)
+        best = max(best, abs(e.snapshot()["world_x"] - x0))
+    run.step(30)
+    return best
+
+
+@per_character
+def m8b_more_gates(run, ch):
+    """M8b criterion 1 (the other rows of §3): each move needs its relic, for Richter and Maria.
+    The second jump (Leap Stone), climbing (Soul of Bat, with the Leap Stone), the slide (Soul of
+    Wolf), item / guardian crashes (Echo of Bat: hearts spent on △), the blade dash (Skill of
+    Wolf, on R2 with the shortcuts on)."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    mb.set_options(OPT_SHORTCUTS)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)  # room to jump: the zombie hall
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    start = e.save_state()
+
+    def measure(relics, how):
+        e.load_state(start)
+        for r in relics:
+            e.write(STATUS, RELIC_ON, "<B", r)
+        return how()
+
+    if ch == CHAR_RICHTER:  # his backflip: jump again right after leaving the ground; Soul of Bat: again near its top
+        second = ["cross"] * 2 + [""] * 2 + ["cross"] * 2 + [""] * 60
+        climb = (["cross"] * 2 + [""] * 2) * 40 + [""] * 60
+    else:  # her double jump: a full jump, then again at the top; Soul of Bat: again and again
+        second = ["cross"] * 16 + [""] * 2 + ["cross"] * 12 + [""] * 60
+        climb = (["cross"] * 12 + [""] * 2) * 8 + [""] * 60
+    slide = ["down"] * 4 + ["down+cross"] * 3 + ["down"] * 30
+    dash = ["r2"] * 2 + [""] * 40
+
+    def crash():
+        e.write(SUBWEAPON, 1)
+        e.write(HEARTS, 50, "<i")
+        run.step(1, "triangle")
+        run.step(90)
+        return 50 - e.read(HEARTS, "<i")
+
+    rows = [("the second jump", [], [LEAP_STONE],
+             (lambda: travel(run, second)) if ch == CHAR_RICHTER else (lambda: rise(run, second)), 12),
+            ("climbing", [LEAP_STONE], [LEAP_STONE, SOUL_OF_BAT], lambda: rise(run, climb), 24),
+            ("the slide", [], [SOUL_OF_WOLF], lambda: travel(run, slide), 24),
+            ("crashes", [], [ECHO_OF_BAT], crash, 1),
+            ("the blade dash (R2)", [], [SKILL_OF_WOLF], lambda: travel(run, dash), 24)]
+    got = [(what, measure(base, how), measure(more, how), margin) for what, base, more, how, margin in rows]
+    for what, without, with_, margin in got:
+        run.expect(with_ >= without + margin, f"{what} needs its relic", without=without, with_relic=with_,
+                   all=[g[:3] for g in got])
