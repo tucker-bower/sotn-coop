@@ -60,6 +60,12 @@ _Last updated: 2026-10-21_
   - **Left:** the power-curve tuning and the reachability audit (both decisions below); familiars, weapons and gates for Richter/Maria are done and tested (88/88 suite + M8 tests).
 
 ## Next
+- **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
+  1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
+  2. Couch: Continue your playthrough as Maria + Richter (Left/Right on each card). Their moves come with Alucard's relics; Start opens Alucard's equip menu (armor, a weapon in a hand: ○ swings it).
+  3. Developer › Debug starts › Bosses: try a boss as Richter or Maria against Alucard. That's the power-curve check (decision below).
+  4. Alucard: flick the right stick to cast spells you know (Settings › Controls picks which).
+- Then the two decisions below, and merge the M8 PR.
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
 - Follow-ups worth having:
   - UPnP port mapping (rescues some symmetric-router cases)
