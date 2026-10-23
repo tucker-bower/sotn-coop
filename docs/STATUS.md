@@ -46,27 +46,19 @@ _Last updated: 2026-10-22_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **M9 Android (design `docs/design/M9-android.md`, D93), branch `coop-m9-android`.** Resumed 2026-10-22 after a cut-off session.
-  - Criterion 1: `android/build.sh` builds arm64-v8a + x86_64 (39 MB, no game data). Fixed: pyjnius needed `wheel` without build isolation.
-  - Criterion 2: `android_pair` **passes** (74 s); criterion 3: `android_pc` **passes** (60 s). Both now run with sound on.
-  - Fixed on the way: on Android (plain pygame) the SDL audio callback deadlocked on the GIL as soon as an online session started (the earlier pass had sound off). Sound now goes through SDL_mixer, queued from the main thread.
-  - **Open:** sound on the emulator underruns often (1138 of 1728 chunks); frames take about 16 ms (games 4–6 + draw 11), right at the 60 fps limit. Criterion 5 work: measure, then tune (bigger queue, cheaper draw).
-  - Criterion 4 (setup on the device): **simpler install (D94).** The player picks the folder their disc is in (one tap), and the app copies just the disc (`.cue` + `.bin` files, or a `.zip`) with a progress bar. Checked live on an emulator through Android's real picker (`.env/out/android_setup/`, about 30 s to "Co-op disc ready"); `launcher/test_android_disc.py` passes. README has Android install steps. `release.py` attaches `SOTN-Coop.apk`.
-  - Left for criterion 4: wrong files on Android should show the PC's errors (test them through the picker). The DXC `.iso` copy for Maria has no progress bar yet.
-  - Criterion 5 (frame times): not started.
-- **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
-  - **Done, with passing tests:**
-    - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
-    - `char_select_session`: all 9 pairs from one save, re-picked at each load, disc unchanged. `mixed_party_shared_room` (+`_am`, `_rm`): puppets both ways, the guest's hits count. `mixed_party_progression` (R+M, M+R, R+A), `mixed_party_boss`, `mixed_party_cutscene`.
-    - M8b for Richter and Maria: relic gates, L2/R2 shortcuts, growth (levels, STR/INT scaling, Fire of Bat), Mist Step; Life/Heart Max Up give +5 for everyone.
-    - Alucard's spells on the right stick (`m8b_spell_shortcuts`, all 6 castable spells).
-    - Launcher: Game files screen (`uxdriver.py characters`: wrong files refused in plain words, then Maria), lobby (Maria locked until her disc, Triangle/Y shortcuts per player), Settings › Controls. `test_characters.py` (Maria from the USA DXC disc).
-    - **Patch hygiene fix:** COOPRIC.BIN had put Richter's retail art into the patch as literal bytes. Now copied from the player's RIC.BIN, and changed sectors' EDC/ECC are computed on the player's PC; `test_patcher.py` proves the patch holds no retail data or checksums.
-    - Criterion 3: `mixed_soak_10min` against two Alucards (D92). §5 HUDs: the footage's cut was a 16:9 recording of an ultrawide window (D91); `uxdriver.py hud` 144/144 on Windows.
-    - Off-hand weapons (D88): every class swings its own sprite and hits with the hand's attack; potions and food heal; a shield adds DEF. Equipping a weapon no longer turns Richter/Maria magenta (a palette clash, fixed).
-  - **Built, being tested (uncommitted until it passes):** Richter's and Maria's code moved to expansion RAM so familiars fit (D89), familiars for them, poison water + Holy Symbol, Force of Echo / Gas Cloud for them.
-  - **Left:** the power-curve tuning and the reachability audit (both decisions below); familiars, weapons and gates for Richter/Maria are done and tested (88/88 suite + M8 tests).
-
+- **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
+  - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
+  - Cross-play, all three ways passing: `android_pair` (100 s), `android_pc` (PC hosts, 66 s), `android_pc_join` (Android hosts, 50 s), with sound on.
+  - Disc setup (D94): pick the folder; the rip is found up to 4 folders deep, and its `.bin` files anywhere by name. There's a "Pick the files instead" fallback, plain errors, and a failed disc's copy is deleted. Checked through Android's real picker; `launcher/test_android_disc.py` passes.
+  - Fixed:
+    - a sound deadlock that froze online sessions
+    - a stalled sound channel
+    - Back closed the app (it now pauses)
+    - pyjnius arm64 build
+  - Confirmed: the screen stays on (`KEEP_SCREEN_ON`); frames take about 13 ms on the emulator.
+  - Progress screens show a vial of blood filling up.
+  - `android/device.py`: install, disc and log over USB through Windows adb (`Emulators\android-tools`).
+  - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
   1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
