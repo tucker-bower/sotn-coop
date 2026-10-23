@@ -27,7 +27,7 @@ STUN_SERVERS = (("stun.l.google.com", 19302), ("stun.cloudflare.com", 3478))
 STUN_WAIT_S = 1.5
 PUNCH_EVERY_S = 0.1
 REPUBLISH_S = 20.0
-TIMEOUT_S = 30.0
+TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
 
 
 def room_topic(code):
@@ -158,8 +158,9 @@ class Connector:
         self._resolved = out
 
     def status(self):
+        left = None if self._t0 is None else max(0, int(self.timeout - (self.t.clock() - self._t0)))
         return {"state": self.state, "reason": self.reason, "nat": self.nat, "their_nat": self.their_nat,
-                "mine": self.mine, "theirs": self.theirs}
+                "mine": self.mine, "theirs": self.theirs, "left_s": left}
 
     def tick(self):
         if self.state in ("connected", "failed"):

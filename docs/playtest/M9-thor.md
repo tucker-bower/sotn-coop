@@ -2,7 +2,7 @@
 
 **Builds (same code, so they connect):**
 - Thor: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64, about 39 MB)
-- PC: `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`. Install it over 0.8.0-dev: older PC builds can't play the Thor.
+- PC: `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`. Install it over the older one: older PC builds (0.7.1, 0.8.0-dev) can't play the Thor, and 0.7.1's lobby never starts with some controllers.
 
 ## Before: the Thor, once (2 minutes)
 1. On the Thor: **Settings › About device**, tap **Build number** 7 times. Then **Settings › System › Developer options**, turn on **USB debugging**.

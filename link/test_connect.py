@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from link.connect import Connector  # noqa: E402
+from link.connect import TIMEOUT_S, Connector  # noqa: E402
 from link.host import Host  # noqa: E402
 from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, Internet, MemoryRelay, StunServer  # noqa: E402
 from link.transport import TAG_PRESENCE, UdpTransport  # noqa: E402
@@ -91,9 +91,9 @@ def main():
             failures.append(what)
 
     for ka, kb in itertools.product(KINDS, KINDS):
-        a, b = session(ka, kb)
-        sa, sb = a.host.connector.status(), b.host.connector.status()
         want = expect_connects(ka, kb)
+        a, b = session(ka, kb, seconds=35 if want else TIMEOUT_S + 5)
+        sa, sb = a.host.connector.status(), b.host.connector.status()
         if want:
             ok = sa["state"] == sb["state"] == "connected" and exchanged(a, b)
             check(ok, f"{ka} host + {kb} joiner: connected, presences flow ({sa['state']}/{sb['state']})")

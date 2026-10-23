@@ -496,7 +496,9 @@ def _online_join(pg, code_file):
             *[("key", pg.K_BACKSPACE)] * 24,  # the box starts with the clipboard (here: the host's code)
             ("type_file", code_file), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("shot", "join-lobby"),
-            ("pad", 200, A), ("pad", 200, A),
+            # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
+            # controller (id 0)
+            ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
             *_android_picture("join-playing"),

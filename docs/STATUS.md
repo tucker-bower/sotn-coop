@@ -58,6 +58,11 @@ _Last updated: 2026-10-22_
   - Confirmed: the screen stays on (`KEEP_SCREEN_ON`); frames take about 13 ms on the emulator.
   - Progress screens show a vial of blood filling up.
   - `android/device.py`: install, disc and log over USB through Windows adb (`Emulators\android-tools`).
+  - **Thor playtest, round 1 (2026-10-22):** installed over USB (`device.py` now runs Windows adb on its own port, 5038: the default port reached WSL's adb server, which can't see USB). Thor hosting, PC joining, didn't connect: the PC still ran **0.7.1** (Oct 20), whose lobby can't start with controller id 0 and which can't talk to 0.9.0-dev. Fixed since:
+    - room-code connect waits **5 minutes** (was 30 s), with a "Still looking: m:ss left" countdown on the partner card (`link/test_connect.py` passes);
+    - `uxdriver online` joins with Tucker's presses (controller id 0: A, then Start): passes;
+    - the vial's cork is centred (M10: a metal bat in its place, in ROADMAP).
+    New APK reinstalled on the Thor; Tucker installs `SOTN-Coop-setup-0.9.0-dev.exe` on the PC.
   - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):

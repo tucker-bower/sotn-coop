@@ -1099,6 +1099,8 @@ class Launcher:
             return f"Connected!\n{ping}", True
         if c.get("state") == "failed":
             raise ConnectFailed(c.get("reason") or "")
+        if c.get("left_s") is not None:
+            waiting += f"\nStill looking: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 
     def host_online(self, playthrough, fresh=False):
