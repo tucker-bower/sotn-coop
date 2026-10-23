@@ -77,9 +77,10 @@ def _copy(uri, target, progress=None):
     return target
 
 
-def pick_files(title, folder):
+def pick_files(title, folder, run=None):
     """The system's picker (ACTION_OPEN_DOCUMENT, several files): each chosen file is copied
-    into folder, under its own name. [] if the player backs out."""
+    into folder, under its own name. [] if the player backs out. run(task): runs task(progress)
+    with a progress screen (a disc image takes a while)."""
     from jnius import autoclass
 
     Intent = autoclass("android.content.Intent")
@@ -101,44 +102,73 @@ def pick_files(title, folder):
     resolver = _activity().getContentResolver()
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    out = []
+    chosen = []  # (uri, name, size)
     for uri in uris:
-        name = "file"
+        name, size = "file", 0
         cursor = resolver.query(uri, None, None, None, None)
         if cursor is not None and cursor.moveToFirst():
             name = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)) or name
+            size = cursor.getLong(cursor.getColumnIndex(OpenableColumns.SIZE))
             cursor.close()
-        out.append(_copy(uri, folder / Path(name).name))
-    return out
+        chosen.append((uri, Path(name).name, size))
+
+    def copy_all(progress):
+        total, done, out = sum(c[2] for c in chosen) or 1, 0, []
+        for uri, name, size in chosen:
+            out.append(_copy(uri, folder / name, lambda n: progress(done + n, total)))
+            done += size
+        return out
+    return (run or (lambda task: task(lambda done, total: None)))(copy_all)
 
 
-def disc_files(names, read_text):
-    """Which of a folder's files make the SOTN disc image: a .cue and the files it names (the
-    .cue most likely to be SOTN's when there are several), else a lone .bin, else a .zip.
-    names: the folder's file names; read_text(name): a .cue's text. [(file, name to save it
-    as: the one the .cue uses, as Android's names are case-sensitive)], [] if there's nothing."""
+def disc_files(paths, read_text):
+    """Which of a folder's files make the SOTN disc image, searching the folders inside it too
+    (players put rips in a folder of their own, or unzip into one): a .cue and the files it
+    names, next to it or else anywhere (a SOTN-named rip first, then the one nearest the top);
+    else a lone .bin;
+    else a .zip. paths: every file's path in the folder ("a/b/x.cue"); read_text(path): a .cue's
+    text. [(path, name to save it as: the one the .cue uses, as Android's names are
+    case-sensitive)], [] if there's nothing."""
     import patcher
-    by_lower = {n.lower(): n for n in names}
+    by_lower = {p.lower(): p for p in paths}
+    by_name = {}  # a file's name, anywhere: a .cue and its .bin files that ended up in different folders
+    for p in paths:
+        by_name.setdefault(p.rsplit("/", 1)[-1].lower(), []).append(p)
+
+    def find(here, f):
+        f = f.replace("\\", "/")
+        anywhere = by_name.get(f.rsplit("/", 1)[-1].lower(), [])
+        return by_lower.get((here + f).lower()) or (anywhere[0] if len(anywhere) == 1 else None)
+
+    def sotn_first(*names):  # SOTN's name in the path or the files it names, then nearest the top
+        return (not any(k in " ".join(names).lower() for k in ("symphony", "sotn", "castlevania", "slus-00067", "slus_000.67")),
+                names[0].count("/"), names[0])
     complete = []
-    for cue in sorted(n for n in names if n.lower().endswith(".cue")):
+    for cue in (p for p in paths if p.lower().endswith(".cue")):
+        here = cue.rsplit("/", 1)[0] + "/" if "/" in cue else ""
         listed = patcher.cue_files(read_text(cue))
-        if listed and all(f.lower() in by_lower for f in listed):
-            complete.append([(cue, cue)] + [(by_lower[f.lower()], f) for f in listed])
+        found = [find(here, f) for f in listed]
+        if listed and all(found):
+            complete.append([(cue, cue.rsplit("/", 1)[-1])] + [(src, Path(f.replace("\\", "/")).name) for src, f in zip(found, listed)])
     if complete:
-        complete.sort(key=lambda files: not any(k in files[0][0].lower() for k in ("symphony", "sotn", "slus-00067")))
-        return complete[0]
-    bins = [n for n in names if n.lower().endswith(".bin")]
+        return min(complete, key=lambda files: sotn_first(*(src for src, _ in files)))
+    bins = [p for p in paths if p.lower().endswith(".bin") and not p.lower().endswith(("bios.bin", "scph1001.bin"))]
     if len(bins) == 1:
-        return [(bins[0], bins[0])]
-    zips = [n for n in names if n.lower().endswith(".zip")]
-    return [(z, z) for z in zips[:1]]
+        return [(bins[0], bins[0].rsplit("/", 1)[-1])]
+    zips = sorted((p for p in paths if p.lower().endswith(".zip")), key=sotn_first)
+    return [(zips[0], zips[0].rsplit("/", 1)[-1])] if zips else []
+
+
+NO_DISC = ("No Symphony of the Night disc image in that folder, or in the folders inside it.\n"
+           "Pick the folder you copied your .cue and .bin files (or their .zip) into.")
 
 
 def pick_disc(title, folder, run=None):
     """The system's folder picker (ACTION_OPEN_DOCUMENT_TREE): the disc image in the chosen
-    folder is copied into folder (a .zip is unpacked). Its .cue (or .bin), or None if the player
-    backed out; a folder with no disc image in it gives back the folder's name, for a plain error.
+    folder, or in a folder inside it, is copied into folder (a .zip is unpacked). Its .cue (or
+    .bin), or None if the player backed out; patcher.DiscError if there's no disc image there.
     run(task): runs task(progress) with a progress screen (the copy takes a while)."""
+    import patcher
     from jnius import autoclass
 
     Intent = autoclass("android.content.Intent")
@@ -150,25 +180,32 @@ def pick_disc(title, folder, run=None):
     if data is None or data.getData() is None:
         return None
     tree = data.getData()
-    children = Docs.buildChildDocumentsUriUsingTree(tree, Docs.getTreeDocumentId(tree))
-    cursor = _activity().getContentResolver().query(
-        children, [Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_SIZE],
-        None, None, None)
+    resolver = _activity().getContentResolver()
+    columns = [Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_SIZE,
+               Document.COLUMN_MIME_TYPE]
     uris, sizes = {}, {}
-    while cursor is not None and cursor.moveToNext():
-        name = cursor.getString(1)
-        uris[name] = Docs.buildDocumentUriUsingTree(tree, cursor.getString(0))
-        sizes[name] = cursor.getLong(2)
-    if cursor is not None:
-        cursor.close()
+    todo = [(Docs.getTreeDocumentId(tree), "")]
+    while todo and len(uris) < 5000:  # breadth first, 4 folders deep at most
+        doc, prefix = todo.pop(0)
+        cursor = resolver.query(Docs.buildChildDocumentsUriUsingTree(tree, doc), columns, None, None, None)
+        while cursor is not None and cursor.moveToNext():
+            child, name = cursor.getString(0), prefix + cursor.getString(1)
+            if cursor.getString(3) == Document.MIME_TYPE_DIR:
+                if name.count("/") < 4:
+                    todo.append((child, name + "/"))
+            else:
+                uris[name] = Docs.buildDocumentUriUsingTree(tree, child)
+                sizes[name] = cursor.getLong(2)
+        if cursor is not None:
+            cursor.close()
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
 
-    def read_text(name):
-        return _copy(uris[name], folder / name).read_text(errors="replace")
+    def read_text(path):
+        return _copy(uris[path], folder / path.rsplit("/", 1)[-1]).read_text(errors="replace")
     files = disc_files(list(uris), read_text)
     if not files:
-        return folder / "no disc image in that folder.cue"  # the patcher says "Can't find ..."
+        raise patcher.DiscError(NO_DISC)
     big = [(src, dst) for src, dst in files if src.lower().endswith((".bin", ".zip"))]
 
     def copy_all(progress):
@@ -179,6 +216,21 @@ def pick_disc(title, folder, run=None):
         first = folder / files[0][1]
         return unzip_disc(first, folder) if first.suffix.lower() == ".zip" else first
     return (run or (lambda task: task(lambda done, total: None)))(copy_all)
+
+
+def pick_disc_files(title, folder, run=None):
+    """The disc's files picked one by one (for files that aren't in a folder of their own, as in
+    Download itself, which Android won't give an app): copied into folder, then as pick_disc."""
+    import patcher
+    got = pick_files(title, folder, run)
+    if not got:
+        return None
+    files = disc_files([p.name for p in got], lambda name: (Path(folder) / name).read_text(errors="replace"))
+    if not files:
+        raise patcher.DiscError("Those files aren't a Symphony of the Night disc image.\n"
+                                "Pick its .cue and .bin files together (press and hold to pick several), or its .zip.")
+    first = Path(folder) / files[0][0]
+    return unzip_disc(first, Path(folder)) if first.suffix.lower() == ".zip" else first
 
 
 def unzip_disc(zip_path, folder):

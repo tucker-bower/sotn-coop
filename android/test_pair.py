@@ -5,6 +5,7 @@ the lobby, and play with the partner connected.
 
     python android/test_pair.py [apk]        (default: the newest .env/android/*.apk)
     python android/test_pair.py --pc [apk]   criterion 3: the PC launcher hosts, an emulator joins
+    python android/test_pair.py --pc-join [apk]   criterion 3: an emulator hosts, the PC launcher joins
 
 The emulators can't reach each other directly (each is behind its own NAT on this PC), so the
 joiner types the host's address as 10.0.2.2:PORT (this PC, from inside an emulator), which the
@@ -44,9 +45,9 @@ TMP = "/data/local/tmp/coop"
 SETTINGS = {"scaling": os.environ.get("COOP_TEST_SCALING", "smooth")}
 
 
-def as_app(serial, command):
+def as_app(serial, command, check=True):
     """A shell command run as the app (its own files: run-as, as the build is debuggable)."""
-    return adb(serial, "shell", f"run-as {PKG} sh -c '{command}'")
+    return adb(serial, "shell", f"run-as {PKG} sh -c '{command}'", check=check)
 
 
 def put(serial, local, remote):
@@ -106,43 +107,55 @@ def script_on(serial, who, script, port):
     adb(serial, "logcat", "-c")
 
 
+def pc_launcher(script, out, port, code_file, **env):
+    """The PC's own launcher (headless) playing one uxdriver script, from a fresh data folder."""
+    import shutil
+    shutil.rmtree(out.parent / "pc-data", ignore_errors=True)  # a fresh install, as the device's
+    env = dict(os.environ, COOP_PORT=str(port), COOP_UX_CODE=str(code_file), SDL_VIDEODRIVER="dummy",
+               SDL_AUDIODRIVER="dummy", COOP_UX_NO_AUDIO="1", COOP_DATA=str(out.parent / "pc-data"), **env)
+    pc_python = Path(os.environ.get("COOP_PYTHON", ROOT.parent / "sotn-decomp-coop" / ".venv" / "bin" / "python"))
+    return subprocess.Popen([str(pc_python), str(ROOT / "launcher" / "uxdriver.py"), script, "--out", str(out)],
+                            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    pc = "--pc" in sys.argv  # A is the PC launcher (criterion 3), not a second emulator
+    # --pc: the PC hosts, emulator B joins; --pc-join: emulator A hosts, the PC joins (criterion 3)
+    mode = "pc" if "--pc" in sys.argv else "pc_join" if "--pc-join" in sys.argv else "pair"
+    name = {"pair": "android_pair", "pc": "android_pc", "pc_join": "android_pc_join"}[mode]
     apk = Path(args[0]) if args else max((ROOT / ".env" / "android").glob("*.apk"), key=os.path.getmtime)
     track = {b: DISC / b for b in BINS}  # the retail files (disks/ also holds a patched copy)
     global OUT, PORT
-    OUT = OUT.with_name("android_pc" if pc else "android_pair")
-    if pc:
-        PORT += 1  # emulator A's redirect (adb emu redir) may hold PORT on this PC
+    OUT = OUT.with_name(name)
+    PORT += {"pair": 0, "pc": 1, "pc_join": 2}[mode]  # a redirect (adb emu redir) may hold another's port
     OUT.mkdir(parents=True, exist_ok=True)
-    serials = {k: boot(*v) for k, v in DEVICES.items() if not (pc and k == "A")}
+    devices = {"pair": "AB", "pc": "B", "pc_join": "A"}[mode]
+    serials = {k: boot(*v) for k, v in DEVICES.items() if k in devices}
     print("booted", serials, flush=True)
     for who, serial in serials.items():
         install(serial, apk, track)
         print(who, "installed, disc pushed", flush=True)
-    b = serials["B"]
-    code = OUT / "code.txt"
-    code.write_text(f"10.0.2.2:{PORT}")  # this PC, seen from inside an emulator
-    put(b, code, f"{PRIV}/code.txt")
-    script_on(b, "B", "online_join", 0)
-    pc_proc = None
-    if pc:  # the PC's own launcher hosts (headless), on the port the emulator's 10.0.2.2 reaches
-        import shutil
-        shutil.rmtree(OUT / "pc-data", ignore_errors=True)  # a fresh install, as the device's
-        env = dict(os.environ, COOP_PORT=str(PORT), COOP_UX_CODE=str(OUT / "code-host.txt"),
-                   SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy", COOP_UX_NO_AUDIO="1",
-                   COOP_DATA=str(OUT / "pc-data"))
-        pc_python = Path(os.environ.get("COOP_PYTHON", ROOT.parent / "sotn-decomp-coop" / ".venv" / "bin" / "python"))
-        pc_proc = subprocess.Popen([str(pc_python), str(ROOT / "launcher" / "uxdriver.py"), "online_host",
-                                    "--out", str(OUT / "A")], env=env, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, text=True)
-    else:
-        a = serials["A"]
-        adb(a, "emu", "redir", "add", f"udp:{PORT}:{PORT}")
-        script_on(a, "A", "online_host", PORT)
+    if "B" in serials:  # emulator B joins this PC's port, as 10.0.2.2 (this PC, from inside an emulator)
+        code = OUT / "code.txt"
+        code.write_text(f"10.0.2.2:{PORT}")
+        put(serials["B"], code, f"{PRIV}/code.txt")
+        script_on(serials["B"], "B", "online_join", 0)
+    if "A" in serials:  # emulator A hosts; this PC's PORT is redirected to it
+        adb(serials["A"], "emu", "redir", "add", f"udp:{PORT}:{PORT}")
+        script_on(serials["A"], "A", "online_host", PORT)
+    pc_proc = pc_who = None
+    if mode == "pc":
+        pc_who, pc_proc = "A", pc_launcher("online_host", OUT / "A", PORT, OUT / "code-host.txt")
     for serial in serials.values():
         adb(serial, "shell", "am", "start", "-n", f"{PKG}/org.kivy.android.PythonActivity")
+    if mode == "pc_join":  # once the device hosts (its room code written), the PC joins at the redirect
+        for _ in range(360):
+            if as_app(serials["A"], f"cat {PRIV}/code-host.txt", check=False).strip():
+                break
+            time.sleep(1)
+        code = OUT / "code.txt"
+        code.write_text(f"127.0.0.1:{PORT}")
+        pc_who, pc_proc = "B", pc_launcher("online_join", OUT / "B", 0, code)
     results, t0 = {}, time.time()
     while len(results) < 2 and time.time() - t0 < 1800:
         for who, serial in serials.items():
@@ -154,10 +167,10 @@ def main():
                     results[who] = json.loads(line.split("COOP-UX-DONE", 1)[1])
                 elif "Python for android ended" in line and who not in results:
                     results[who] = {"passed": False, "error": "the app ended:\n" + "\n".join(log.splitlines()[-30:])}
-        if pc_proc and "A" not in results and pc_proc.poll() is not None:
+        if pc_proc and pc_who not in results and pc_proc.poll() is not None:
             out = pc_proc.stdout.read()
             (OUT / "pc.txt").write_text(out)
-            results["A"] = {"passed": pc_proc.returncode == 0, "error": None if pc_proc.returncode == 0 else out[-1500:]}
+            results[pc_who] = {"passed": pc_proc.returncode == 0, "error": None if pc_proc.returncode == 0 else out[-1500:]}
         time.sleep(5)
     for who, serial in serials.items():
         script = "online_host" if who == "A" else "online_join"
@@ -167,7 +180,6 @@ def main():
         subprocess.run(["tar", "x", "-C", str(OUT / who)], input=tar, check=False)
         (OUT / f"logcat-{who}.txt").write_text(adb(serial, "logcat", "-d", "-s", "python:*", check=False))
     print(json.dumps(results, indent=1)[:3000])
-    name = "android_pc" if pc else "android_pair"
     ok = len(results) == 2 and all(r.get("passed") for r in results.values())
     print(f"PASSED {name}" if ok else f"FAILED {name}", f"({time.time() - t0:.0f} s)")
     return 0 if ok else 1

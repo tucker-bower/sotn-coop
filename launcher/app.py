@@ -13,8 +13,10 @@ stacked, or in two windows (launcher/display.py).
 """
 
 import logging
+import math
 import multiprocessing
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -144,7 +146,7 @@ class UI:
                     raise Navigate(ev.action)
             elif ev.type == pygame.KEYDOWN:
                 a = {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
-                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back"}.get(ev.key)
+                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back"}.get(ev.key)
                 if a:
                     out.append(a)
             elif ev.type == pygame.CONTROLLERBUTTONDOWN:
@@ -251,10 +253,34 @@ class UI:
         t = self.mono.render(text, True, DIM)
         self.screen.blit(t, ((SIZE[0] - t.get_width()) // 2, SIZE[1] - 30))
 
-    def bar(self, done, total, y=300):
-        w = SIZE[0] - 300
-        pygame.draw.rect(self.screen, DIM, (150, y, w, 18), 1)
-        pygame.draw.rect(self.screen, BLOOD, (152, y + 2, int((w - 4) * done / max(total, 1)), 14))
+    def bar(self, done, total, y=280):
+        """Progress: a vial of blood filling up, with the percentage beside it."""
+        s, frac = self.screen, max(0.0, min(1.0, done / max(total, 1)))
+        t = pygame.time.get_ticks() / 1000
+        cx, bw, bh = SIZE[0] // 2, 78, 168
+        body = pygame.Rect(cx - bw // 2, y + 30, bw, bh)
+        # the blood, clipped to the body below its level, with a gently moving surface
+        level = body.bottom - 4 - int((bh - 8) * frac)
+        if frac > 0:
+            s.set_clip(body.inflate(-8, -8))
+            pygame.draw.rect(s, BLOOD, body.inflate(-8, -8), border_radius=24)
+            wave = [(x, level + 3 * math.sin(x / 9 + t * 3)) for x in range(body.left, body.right + 1, 4)]
+            pygame.draw.polygon(s, BG, [(body.left, body.top)] + wave + [(body.right, body.top)])
+            pygame.draw.lines(s, (200, 40, 50), False, wave, 2)  # the surface catches the light
+            for i in range(4):  # bubbles rising through it
+                by = body.bottom - 8 - ((t * 22 + i * 37) % max(1, body.bottom - 8 - level))
+                pygame.draw.circle(s, (190, 50, 60), (body.left + 16 + i * 11 % (bw - 28), int(by)), 2)
+            s.set_clip(None)
+        # the glass: body, neck and cork, and a highlight down its side
+        pygame.draw.rect(s, DIM, body, 2, border_radius=28)
+        neck = pygame.Rect(cx - 13, y + 12, 26, 20)
+        pygame.draw.rect(s, BG, neck.inflate(-4, 4))
+        pygame.draw.line(s, DIM, neck.topleft, (neck.left, neck.bottom + 1), 2)
+        pygame.draw.line(s, DIM, neck.topright, (neck.right, neck.bottom + 1), 2)
+        pygame.draw.rect(s, (110, 72, 44), (cx - 17, y, 34, 14), border_radius=3)
+        pygame.draw.line(s, (235, 230, 225), (body.left + 12, body.top + 18), (body.left + 12, body.bottom - 26), 2)
+        pct = self.small.render(f"{int(frac * 100)}%", True, DIM)
+        s.blit(pct, (body.right + 18, body.centery - pct.get_height() // 2))
 
     def menu(self, heading, items, subtitle="", footer="", hero=False, sel=0):
         """Returns the chosen index, or None (back)."""
@@ -361,18 +387,24 @@ def _pick_file_windows(title, types):
     return None
 
 
-def pick_file(title, types, ui=None):
+def pick_file(title, types, ui=None, android_disc=None):
     """The system's file picker: Windows' own dialog, or tkinter elsewhere. On Android, ui shows
-    the disc's copy into the app."""
+    the copy into the app, and android_disc picks SOTN's disc: "folder" (the folder it's in) or
+    "files" (its files one by one)."""
     if os.environ.get("COOP_PICK_FILE"):  # tests (launcher/uxdriver.py)
         return Path(os.environ["COOP_PICK_FILE"])
     if ANDROID:  # the system's picker: the files are copied into the app's folder (design/M9)
+        import patcher
         import platform_android
         try:
-            if any("*.cue" in t[1] for t in types):  # SOTN: the folder it's in (one tap, any rip)
-                run = ui and (lambda task: ui.wait_for("Copying your disc", "Into the app, once. This takes a minute.", task))
+            run = ui and (lambda task: ui.wait_for("Copying your disc", "Into the app, once. This takes a minute.", task))
+            if android_disc == "files":
+                return platform_android.pick_disc_files(title, paths.data_dir() / "discs", run)
+            if android_disc == "folder":  # one tap, any rip, in folders inside it too
                 return platform_android.pick_disc(title, paths.data_dir() / "discs", run)
-            got = platform_android.pick_files(title, paths.data_dir() / "discs")
+            got = platform_android.pick_files(title, paths.data_dir() / "discs", run)
+        except (patcher.DiscError, OSError):  # said to the player
+            raise
         except Exception:  # noqa: BLE001
             log.exception("file picker")
             return None
@@ -554,8 +586,13 @@ class Launcher:
     def add_dxc(self):
         """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
         import characters
-        path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
-                         [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")])
+        try:
+            path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                             [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")], self.ui)
+        except OSError as e:  # copying it into the app (Android): most likely a full phone
+            log.exception("copying the DXC disc")
+            self.ui.message("Couldn't copy your disc", f"{e.strerror or e}.\nThe app needs about 2 GB free for it.")
+            return
         if not path:
             return
         try:
@@ -613,6 +650,7 @@ class Launcher:
         while not self.disc():
             if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
                 choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
+                                             ("Pick the files instead", "Not in a folder of their own? Pick the .cue and .bin files together, or the .zip"),
                                              ("Quit", "")],
                                  "Co-op is made from your own copy of the game: a disc image of\n"
                                  "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
@@ -623,16 +661,27 @@ class Launcher:
                                  "Co-op is made from your own copy of the game: a disc image of\n"
                                  "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
                                  "Your file is never changed: the co-op disc is made next to it.")
-            if choice != 0:
+            if choice not in ((0, 1) if ANDROID else (0,)):
                 raise SystemExit
-            path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")], ui)
+            import patcher
+            try:
+                path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")],
+                                 ui, android_disc=("folder", "files")[choice])
+            except patcher.DiscError as e:
+                ui.message("No disc image there", str(e))
+                continue
+            except OSError as e:  # copying it into the app (Android): most likely a full phone
+                log.exception("copying the disc")
+                ui.message("Couldn't copy your disc", f"{e.strerror or e}.\nThe app needs about 1.3 GB free for your disc and its co-op version.")
+                continue
             if not path:
                 continue
-            import patcher
             try:
                 cue = ui.wait_for("Making the co-op disc", f"From {path.name}\nThis takes a few seconds.",
                                   lambda progress: patcher.apply(path, PATCH, progress=progress))
             except (patcher.DiscError, patcher.bps.PatchError) as e:
+                if ANDROID:  # the copy we made of it: no use, and it's big
+                    shutil.rmtree(paths.data_dir() / "discs", ignore_errors=True)
                 ui.message("That disc won't work", str(e))
                 continue
             self.settings["disc"] = str(cue)
@@ -691,7 +740,7 @@ class Launcher:
                            pygame.CONTROLLER_BUTTON_Y: "shortcuts"}.get(ev.button, "any")
                 elif ev.type == pygame.KEYDOWN and not ev.mod & pygame.KMOD_ALT:
                     dev = "kb"
-                    key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back",
+                    key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back",
                            pygame.K_LEFT: "left", pygame.K_RIGHT: "right", pygame.K_s: "shortcuts"}.get(ev.key)
                     if key is None:
                         continue
@@ -969,7 +1018,7 @@ class Launcher:
                     if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
                             return text.strip()
-                        if ev.key == pygame.K_ESCAPE:
+                        if ev.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                             return None
                         if ev.key == pygame.K_BACKSPACE:
                             text = text[:-1]

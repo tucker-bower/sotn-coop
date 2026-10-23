@@ -4,7 +4,7 @@
 
 - disc_files picks the SOTN .cue and the files it names, whatever the folder holds (other
   games' rips, a .cue whose .bin is missing, names in another case: saved as the .cue names
-  them), else a lone .bin, else a .zip;
+  them, a rip in a folder inside the one picked), else a lone .bin, else a .zip;
 - unzip_disc unpacks a .zip of a rip and gives back its .cue.
 No game data: the files are tiny fakes in a temporary folder."""
 
@@ -34,6 +34,24 @@ FOLDERS = {
     "a .cue whose .bin is missing, and a lone .bin": ({f"{SOTN}.cue": CUE, "sotn.bin": ""}, [("sotn.bin", "sotn.bin")]),
     "a .zip": ({"sotn.zip": ""}, [("sotn.zip", "sotn.zip")]),
     "nothing": ({"photo.jpg": "", "readme.txt": ""}, []),
+    # a rip in a folder inside the one picked (unzipped into its own folder, or a "PS1" folder)
+    "one folder down": ({f"{SOTN}/{SOTN}.cue": CUE, f"{SOTN}/{SOTN} (Track 1).bin": "", f"{SOTN}/{SOTN} (Track 2).bin": ""},
+                        [(f"{SOTN}/{SOTN}.cue", f"{SOTN}.cue"), (f"{SOTN}/{SOTN} (Track 1).bin", f"{SOTN} (Track 1).bin"),
+                         (f"{SOTN}/{SOTN} (Track 2).bin", f"{SOTN} (Track 2).bin")]),
+    "three folders down, next to another game": (
+        {"PS1/Metal Gear Solid/mgs.cue": 'FILE "mgs.bin" BINARY\n', "PS1/Metal Gear Solid/mgs.bin": "",
+         "PS1/Castlevania/rip/game.cue": CUE, f"PS1/Castlevania/rip/{SOTN} (Track 1).bin": "",
+         f"PS1/Castlevania/rip/{SOTN} (Track 2).bin": "", "PS1/readme.txt": ""},
+        [("PS1/Castlevania/rip/game.cue", "game.cue"), (f"PS1/Castlevania/rip/{SOTN} (Track 1).bin", f"{SOTN} (Track 1).bin"),
+         (f"PS1/Castlevania/rip/{SOTN} (Track 2).bin", f"{SOTN} (Track 2).bin")]),
+    "a .cue and its .bin files in different folders": (
+        {"sotn/sotn.cue": CUE, f"{SOTN} (Track 1).bin": "", f"bins/{SOTN} (Track 2).bin": ""},
+        [("sotn/sotn.cue", "sotn.cue"), (f"{SOTN} (Track 1).bin", f"{SOTN} (Track 1).bin"),
+         (f"bins/{SOTN} (Track 2).bin", f"{SOTN} (Track 2).bin")]),
+    "a .zip in a folder": ({"downloads/sotn.zip": ""}, [("downloads/sotn.zip", "sotn.zip")]),
+    "a .cue naming its files with Windows slashes": (
+        {"a/sotn.cue": 'FILE "bins\\track1.bin" BINARY\n', "a/bins/track1.bin": ""},
+        [("a/sotn.cue", "sotn.cue"), ("a/bins/track1.bin", "track1.bin")]),
 }
 
 

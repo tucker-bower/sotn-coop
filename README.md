@@ -42,7 +42,7 @@ Click **Choose my disc image** and pick your game's `.cue` file. In a few second
 We never distribute game data: the launcher builds everything from your own disc.
 
 ## Play it on Android (preview)
-The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. The app arrives with the next release; until then the link below won't work.
+The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. **It's in testing and not released yet,** so the link below doesn't work yet.
 
 ### What you need
 - An **Android 7 or newer** phone or handheld (AYN, Retroid, Odin and the like work), with about **1.3 GB free**.
@@ -60,7 +60,9 @@ Copy your disc image into **its own folder** on the phone, for example `Download
 - **Or from your own cloud storage:** download the files (or the `.zip`) into a folder on the phone with your Files app.
 
 ### 3. First start: your disc
-Tap **Choose my disc's folder**, then open the folder (`Download`, then `SOTN`), tap **Use this folder**, then **Allow**. The app copies your disc in (about a minute) and makes its co-op version. It only asks once. You can then delete your copy from the folder.
+Tap **Choose my disc's folder**, then open the folder (`Download`, then `SOTN`), tap **Use this folder**, then **Allow**. The app finds your disc even in folders inside that one, copies it in (about a minute) and makes its co-op version. It only asks once. You can then delete your copy from the folder.
+
+Files not in a folder of their own (say, straight in `Download`)? Tap **Pick the files instead**, then press and hold to pick the `.cue` and `.bin` files together (or just the `.zip`).
 
 ### 4. Play online
 Pair your controller, then play as on Windows: **Online co-op**, then **Host: new game** (send the room code to your friend) or **Join your partner** (type their code). A friend on a PC joins the same way.

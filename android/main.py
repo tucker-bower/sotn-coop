@@ -26,6 +26,8 @@ os.environ["TMPDIR"] = str(platform_android.cache_dir())  # tempfile's default, 
 os.environ.setdefault("COOP_BIOS", str(HERE / "bios" / "openbios.bin"))
 # SDL sets the activity's orientation when it makes the window, over the manifest's: landscape.
 os.environ["SDL_IOS_ORIENTATIONS"] = "LandscapeLeft LandscapeRight"
+# Android's Back button comes to us (as Esc: pause, back) instead of closing the app mid-game.
+os.environ["SDL_ANDROID_TRAP_BACK_BUTTON"] = "1"
 
 # This device's core: the env manifest the harness reads (coop_env) names it.
 ABI = platform_android.abi()
