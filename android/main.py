@@ -29,6 +29,27 @@ os.environ["SDL_IOS_ORIENTATIONS"] = "LandscapeLeft LandscapeRight"
 # Android's Back button comes to us (as Esc: pause, back) instead of closing the app mid-game.
 os.environ["SDL_ANDROID_TRAP_BACK_BUTTON"] = "1"
 
+
+def ca_bundle():
+    """Python's HTTPS (the room-code relay, ntfy.sh) checks certificates against a CA file that
+    Android doesn't have: one is made from Android's own trusted CAs (each a PEM file, with text
+    around it that OpenSSL skips), and SSL_CERT_FILE names it (link/connect.py passes it on)."""
+    out = platform_android.cache_dir() / "cacerts.pem"
+    if not out.exists():
+        pems = []
+        for d in ("/apex/com.android.conscrypt/cacerts", "/system/etc/security/cacerts"):  # 14+, older
+            try:
+                pems += [f.read_text(errors="replace") for f in sorted(Path(d).iterdir()) if f.is_file()]
+            except OSError:
+                continue
+            if pems:
+                break
+        out.write_text("\n".join(pems))
+    os.environ.setdefault("SSL_CERT_FILE", str(out))
+
+
+ca_bundle()
+
 # This device's core: the env manifest the harness reads (coop_env) names it.
 ABI = platform_android.abi()
 (HERE / "env.toml").write_text(f"""# Written by android/main.py at start: this device's CPU is {ABI}.

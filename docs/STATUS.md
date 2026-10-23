@@ -64,6 +64,7 @@ _Last updated: 2026-10-22_
     - the vial's cork is centred (M10: a metal bat in its place, in ROADMAP).
   - **Round 2:** same symptom: the 0.9.0-dev installer had never been run (Windows still listed 0.7.1). The agent installed it silently. Also found and fixed:
     - **after an update, the co-op disc stayed the old version** (0.7's), while HELO claimed the new patch CRC. The launcher now remakes it once from the player's own disc ("Updating the co-op disc"), and asks for the disc again if it moved. Checked with the real 0.7.0 → 0.9.0 patches.
+  - **Round 3:** both sides "Still looking". **Android couldn't reach the room-code relay at all:** its Python has no CA certificates, so every HTTPS request to ntfy.sh failed, silently. The Android tests had always joined by ip:port, so they never caught it. Fixed: android/main.py makes a CA file from Android's own trusted CAs, and the relay uses it; relay errors are now logged. New `android/test_pair.py --room` (an emulator hosts, the PC types the room code, over the real ntfy.sh): **PASSED android_room (67 s)**.
     - **different versions now say so within seconds**, by name ("Your partner has an older SOTN Co-op…"), through the room-code relay, instead of waiting (`link/test_connect.py`).
   - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
 ## Next

@@ -15,8 +15,11 @@ The relay only ever sees the room's hashed topic and the two candidate lists."""
 
 import hashlib
 import json
+import logging
+import os
 import re
 import socket
+import ssl
 import threading
 import time
 import urllib.request
@@ -27,6 +30,7 @@ STUN_SERVERS = (("stun.l.google.com", 19302), ("stun.cloudflare.com", 3478))
 STUN_WAIT_S = 1.5
 PUNCH_EVERY_S = 0.1
 REPUBLISH_S = 20.0
+log = logging.getLogger(__name__)
 TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
 
 
@@ -48,6 +52,9 @@ class NtfyRelay:
     URL = "https://ntfy.sh"
 
     def __init__(self):
+        # Android: the CA file android/main.py makes from the system's (its Python doesn't read
+        # SSL_CERT_FILE itself); elsewhere, the system's
+        self._tls = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or None)
         self._msgs = {}
         self._subs = set()
         self._lock = threading.Lock()
@@ -56,9 +63,9 @@ class NtfyRelay:
         def post():
             try:
                 req = urllib.request.Request(f"{self.URL}/{topic}", data=json.dumps(msg).encode(), method="POST")
-                urllib.request.urlopen(req, timeout=5).read()
-            except Exception:  # noqa: BLE001 - offline or blocked: the connector times out with a reason
-                pass
+                urllib.request.urlopen(req, timeout=5, context=self._tls).read()
+            except Exception as e:  # noqa: BLE001 - offline or blocked: the connector times out with a reason
+                log.warning("relay: posting failed: %r", e)
         threading.Thread(target=post, daemon=True).start()
 
     def poll(self, topic):
@@ -74,7 +81,7 @@ class NtfyRelay:
         since = "10m"
         while True:
             try:
-                with urllib.request.urlopen(f"{self.URL}/{topic}/json?since={since}", timeout=60) as resp:
+                with urllib.request.urlopen(f"{self.URL}/{topic}/json?since={since}", timeout=60, context=self._tls) as resp:
                     for line in resp:
                         outer = json.loads(line)
                         if outer.get("event") == "message":
@@ -85,7 +92,9 @@ class NtfyRelay:
                                 continue
                             with self._lock:
                                 self._msgs[topic].append(msg)
-            except Exception:  # noqa: BLE001 - dropped or timed out: reconnect
+            except Exception as e:  # noqa: BLE001 - dropped or timed out: reconnect
+                if not isinstance(e, TimeoutError):
+                    log.warning("relay: reading failed: %r", e)
                 time.sleep(2)
 
 

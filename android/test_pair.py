@@ -6,6 +6,8 @@ the lobby, and play with the partner connected.
     python android/test_pair.py [apk]        (default: the newest .env/android/*.apk)
     python android/test_pair.py --pc [apk]   criterion 3: the PC launcher hosts, an emulator joins
     python android/test_pair.py --pc-join [apk]   criterion 3: an emulator hosts, the PC launcher joins
+    python android/test_pair.py --room [apk]      as --pc-join, but the PC types the room code: they
+                                                  meet on the real ntfy.sh (Tucker's Thor playtest)
 
 The emulators can't reach each other directly (each is behind its own NAT on this PC), so the
 joiner types the host's address as 10.0.2.2:PORT (this PC, from inside an emulator), which the
@@ -121,15 +123,16 @@ def pc_launcher(script, out, port, code_file, **env):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     # --pc: the PC hosts, emulator B joins; --pc-join: emulator A hosts, the PC joins (criterion 3)
-    mode = "pc" if "--pc" in sys.argv else "pc_join" if "--pc-join" in sys.argv else "pair"
-    name = {"pair": "android_pair", "pc": "android_pc", "pc_join": "android_pc_join"}[mode]
+    mode = ("pc" if "--pc" in sys.argv else "pc_join" if "--pc-join" in sys.argv
+            else "room" if "--room" in sys.argv else "pair")
+    name = {"pair": "android_pair", "pc": "android_pc", "pc_join": "android_pc_join", "room": "android_room"}[mode]
     apk = Path(args[0]) if args else max((ROOT / ".env" / "android").glob("*.apk"), key=os.path.getmtime)
     track = {b: DISC / b for b in BINS}  # the retail files (disks/ also holds a patched copy)
     global OUT, PORT
     OUT = OUT.with_name(name)
-    PORT += {"pair": 0, "pc": 1, "pc_join": 2}[mode]  # a redirect (adb emu redir) may hold another's port
+    PORT += {"pair": 0, "pc": 1, "pc_join": 2, "room": 3}[mode]  # a redirect (adb emu redir) may hold another's port
     OUT.mkdir(parents=True, exist_ok=True)
-    devices = {"pair": "AB", "pc": "B", "pc_join": "A"}[mode]
+    devices = {"pair": "AB", "pc": "B", "pc_join": "A", "room": "A"}[mode]
     serials = {k: boot(*v) for k, v in DEVICES.items() if k in devices}
     print("booted", serials, flush=True)
     for who, serial in serials.items():
@@ -148,13 +151,15 @@ def main():
         pc_who, pc_proc = "A", pc_launcher("online_host", OUT / "A", PORT, OUT / "code-host.txt")
     for serial in serials.values():
         adb(serial, "shell", "am", "start", "-n", f"{PKG}/org.kivy.android.PythonActivity")
-    if mode == "pc_join":  # once the device hosts (its room code written), the PC joins at the redirect
+    if mode in ("pc_join", "room"):  # once the device hosts (its room code written), the PC joins:
+        # at the redirect, or by the room code (through ntfy.sh, as players do)
         for _ in range(360):
-            if as_app(serials["A"], f"cat {PRIV}/code-host.txt", check=False).strip():
+            room = as_app(serials["A"], f"cat {PRIV}/code-host.txt", check=False).strip()
+            if room:
                 break
             time.sleep(1)
         code = OUT / "code.txt"
-        code.write_text(f"127.0.0.1:{PORT}")
+        code.write_text(room if mode == "room" else f"127.0.0.1:{PORT}")
         pc_who, pc_proc = "B", pc_launcher("online_join", OUT / "B", 0, code)
     results, t0 = {}, time.time()
     while len(results) < 2 and time.time() - t0 < 1800:
