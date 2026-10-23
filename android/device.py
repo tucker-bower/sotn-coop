@@ -42,12 +42,17 @@ def windows_path(p):
     return str(p)
 
 
+# Its own adb server port: from WSL, the Windows adb on the default port reaches the Linux adb
+# server (WSL forwards localhost), which can't see USB devices
+PORT = ["-P", "5038"]
+
+
 def adb(*args, **kw):
-    return subprocess.run([adb_path(), "-d", *args], text=True, **kw)
+    return subprocess.run([adb_path(), *PORT, "-d", *args], text=True, **kw)
 
 
 def device():
-    out = subprocess.run([adb_path(), "devices", "-l"], capture_output=True, text=True).stdout
+    out = subprocess.run([adb_path(), *PORT, "devices", "-l"], capture_output=True, text=True).stdout
     usb = [line for line in out.splitlines()[1:] if line.strip() and "emulator-" not in line]
     if not usb:
         raise SystemExit("No device: plug it in with USB debugging on (see python android/device.py --help).")
