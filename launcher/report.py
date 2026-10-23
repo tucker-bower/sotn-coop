@@ -9,6 +9,7 @@ Everything needed to see, and replay, what happened:
     about.json    versions (launcher, patch, link, core), disc and BIOS, OS, settings, controllers,
                   presences, the player's note
     launcher.log  the launcher's log
+    session.log   the game processes' log (connecting, the relay)
 harness/replay.py opens these zips.
 """
 
@@ -77,7 +78,8 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
         }
         about.update(extra or {})
         z.writestr("about.json", json.dumps(about, indent=1, default=str))
-        log = data_dir() / "launcher.log"
-        if log.exists():
-            z.write(log, "launcher.log")
+        for name in ("launcher.log", "session.log"):
+            log = data_dir() / name
+            if log.exists():
+                z.write(log, name)
     return path

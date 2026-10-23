@@ -1131,7 +1131,10 @@ class Launcher:
         if c.get("state") == "failed":
             raise ConnectFailed(c.get("reason") or "")
         if c.get("left_s") is not None:
-            waiting += f"\nStill looking: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
+            # which step it's on: says at once which side is stuck (Tucker's Thor test, 2026-10-23)
+            step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
+                    "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
+            waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 
     def host_online(self, playthrough, fresh=False):
@@ -1323,7 +1326,10 @@ class Launcher:
 def main():
     logging.basicConfig(filename=paths.data_dir() / "launcher.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    log.info("start")
+    if ANDROID:  # and to logcat too, where android/device.py log reads it
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stderr))
+    os.environ["COOP_WORKER_LOG"] = str(paths.data_dir() / "session.log")  # the game processes' log
+    log.info("start %s", VERSION)
     app = None
     try:
         app = Launcher()

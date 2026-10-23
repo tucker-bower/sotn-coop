@@ -182,6 +182,7 @@ class Connector:
             self._t0 = now
         if self.t.peer is not None and self.t.peer_confirmed:
             self.state = "connected"
+            log.info("connect %s: connected to %s after %.1f s", self.role, self.t.peer, now - self._t0)
             return self.state
         # 1. candidates
         if self._stun_sent is None and self._resolved is not None:
@@ -201,6 +202,8 @@ class Connector:
                 lan = (ip, self.t.port)
                 self.mine = [list(lan)] + [list(p) for p in public if p != lan]
                 self.state = "waiting"
+                log.info("connect %s: my addresses %s (router: %s); waiting for the partner on the relay",
+                         self.role, self.mine, self.nat)
         # 2. rendezvous
         if self.state in ("waiting", "punching"):
             if self._published is None or now - self._published > REPUBLISH_S:
@@ -215,6 +218,7 @@ class Connector:
                 theirs = newest.get("ver") or {}  # none: a version from before 0.9.0
                 if self.version.get("link") is not None and theirs.get("link") != self.version["link"]:
                     self.state = "failed"
+                    log.warning("connect %s: partner's version %s, mine %s", self.role, theirs, self.version)
                     self.reason = (f"Your partner has {'SOTN Co-op ' + theirs['app'] if theirs.get('app') else 'an older SOTN Co-op'}, "
                                    f"and you have {self.version.get('app') or 'another version'}. Both of you need the "
                                    "same version: whoever has the older one, install the newer one, then try again.")
@@ -222,6 +226,8 @@ class Connector:
                 cands = [tuple(c) for c in newest.get("cands", []) if len(c) == 2]
                 if cands != self.theirs:
                     self.theirs, self.their_nat = cands, newest.get("nat")
+                    log.info("connect %s: partner's addresses %s (router: %s, version %s); punching",
+                             self.role, cands, self.their_nat, theirs.get("app"))
                 self.state = "punching"
         # 3. punching
         if self.state == "punching" and now - self._punched >= PUNCH_EVERY_S:
@@ -231,6 +237,7 @@ class Connector:
         if now - self._t0 > self.timeout:
             self.state = "failed"
             self.reason = self._why()
+            log.warning("connect %s: gave up (%s): %s", self.role, self.state, self.reason)
         return self.state
 
     def _why(self):

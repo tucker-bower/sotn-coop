@@ -11,6 +11,7 @@ One libretro core per process, so each game is a worker process driven over a pi
 """
 
 import multiprocessing as mp
+import os
 import sys
 import traceback
 
@@ -114,6 +115,10 @@ class _Worker:
 
 def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
             port=0, patch_crc=None, learn_peer=False):
+    if os.environ.get("COOP_WORKER_LOG"):  # the launcher's: a worker's warnings (connect, relay) kept
+        import logging
+        logging.basicConfig(filename=os.environ["COOP_WORKER_LOG"], level=logging.INFO,
+                            format="%(asctime)s %(levelname)s %(name)s %(message)s")
     try:
         w = _Worker(disc, start, rank, audio, shm_name, bind_host, port, patch_crc, learn_peer)
         conn.send(("ok", w.transport.port))

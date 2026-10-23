@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-22_
+_Last updated: 2026-10-23_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -66,6 +66,10 @@ _Last updated: 2026-10-22_
     - **after an update, the co-op disc stayed the old version** (0.7's), while HELO claimed the new patch CRC. The launcher now remakes it once from the player's own disc ("Updating the co-op disc"), and asks for the disc again if it moved. Checked with the real 0.7.0 → 0.9.0 patches.
   - **Round 3:** both sides "Still looking". **Android couldn't reach the room-code relay at all:** its Python has no CA certificates, so every HTTPS request to ntfy.sh failed, silently. The Android tests had always joined by ip:port, so they never caught it. Fixed: android/main.py makes a CA file from Android's own trusted CAs, and the relay uses it; relay errors are now logged. New `android/test_pair.py --room` (an emulator hosts, the PC types the room code, over the real ntfy.sh): **PASSED android_room (67 s)**.
     - **different versions now say so within seconds**, by name ("Your partner has an older SOTN Co-op…"), through the room-code relay, instead of waiting (`link/test_connect.py`).
+  - **Round 4 (2026-10-23):** Tucker: still both sides waiting, either one hosting. Checked on the PC: 0.9.0-dev installed, the relay works from its Python, LAN address right (10.0.0.177), no firewall rules either way (network: Public). Unknown whether the Thor ever got round 3's APK (not plugged in). Added, so the next try says where it stops:
+    - the lobby names the step instead of "Still looking": *Finding my address* / *Waiting for your partner's game* (the relay never brought the partner) / *Found your partner: reaching them* (packets blocked);
+    - the connector logs each step (addresses, router kind, partner's version, connected or why not): on the PC to `Documents\SOTN Co-op\session.log` (the game process's log had been thrown away), in F9 reports; on Android to logcat (`device.py log`).
+    - Rebuilt both (installer 11:32, APK 11:32); `test_connect`, `android_room` (61 s) pass. Next: install on the Thor (`device.py install`) and the PC, one try each way, read both logs.
   - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
