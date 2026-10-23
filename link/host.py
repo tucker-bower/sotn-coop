@@ -83,7 +83,9 @@ class Host:
         from .connect import Connector, default_relay, room_token
         self.hello["room"] = room_token(room)
         self.transport.learn_peer = True
-        self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes, **kw)
+        version = {"link": self.hello.get("link"), "app": kw.pop("app", None)}
+        self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes,
+                                   version=version, **kw)
         return True
 
     def connect_status(self):

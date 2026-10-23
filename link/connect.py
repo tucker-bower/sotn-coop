@@ -123,12 +123,15 @@ class Connector:
     """Run by the host every frame (tick) until the partner is found."""
 
     def __init__(self, transport, room, role, relay, hello, stun_servers=STUN_SERVERS,
-                 lan_ip=None, timeout=TIMEOUT_S, resolve=True):
-        """role: "host" or "join". hello: () -> the HELO payload to punch with."""
+                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None):
+        """role: "host" or "join". hello: () -> the HELO payload to punch with. version: {"link":
+        wire version, "app": the launcher's}, posted with the candidates, so that two different
+        versions are told so at once, instead of waiting for packets that can't be understood."""
         self.t, self.room, self.role, self.relay, self.hello = transport, room, role, relay, hello
         self.topic = room_topic(room)
         self.lan_ip = lan_ip
         self.timeout = timeout
+        self.version = version or {}
         self.state = "starting"
         self.reason = None
         self.nonce = transport.clock()  # this attempt (the newest message of each side wins)
@@ -193,13 +196,20 @@ class Connector:
         if self.state in ("waiting", "punching"):
             if self._published is None or now - self._published > REPUBLISH_S:
                 self.relay.publish(self.topic, {"role": self.role, "nonce": self.nonce, "cands": self.mine,
-                                                "nat": self.nat, "token": room_token(self.room)})
+                                                "nat": self.nat, "token": room_token(self.room), "ver": self.version})
                 self._published = now
             other = "join" if self.role == "host" else "host"
             msgs = [m for m in self.relay.poll(self.topic)
                     if m.get("role") == other and m.get("token") == room_token(self.room)]
             if msgs:
                 newest = max(msgs, key=lambda m: m.get("nonce", 0))
+                theirs = newest.get("ver") or {}  # none: a version from before 0.9.0
+                if self.version.get("link") is not None and theirs.get("link") != self.version["link"]:
+                    self.state = "failed"
+                    self.reason = (f"Your partner has {'SOTN Co-op ' + theirs['app'] if theirs.get('app') else 'an older SOTN Co-op'}, "
+                                   f"and you have {self.version.get('app') or 'another version'}. Both of you need the "
+                                   "same version: whoever has the older one, install the newer one, then try again.")
+                    return self.state
                 cands = [tuple(c) for c in newest.get("cands", []) if len(c) == 2]
                 if cands != self.theirs:
                     self.theirs, self.their_nat = cands, newest.get("nat")

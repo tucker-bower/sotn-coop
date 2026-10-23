@@ -22,7 +22,7 @@ from pathlib import Path
 
 from paths import data_dir, load_settings, reports_dir
 
-VERSION = "0.8.0"  # the launcher's
+VERSION = "0.9.0-dev"  # the launcher's
 
 
 def _png(surface_or_image):

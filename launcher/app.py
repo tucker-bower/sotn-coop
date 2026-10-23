@@ -47,6 +47,7 @@ import pygame  # noqa: E402
 
 from display import CANVAS, LAYOUT_NAMES, Display  # noqa: E402
 from paths import human, load_settings, save_settings  # noqa: E402
+from report import VERSION  # noqa: E402
 from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
@@ -1108,7 +1109,7 @@ class Launcher:
         with self.online_session(None, playthrough, rank=0) as s:
             room = make_room_code()
             self._clip_put(room)
-            s.local.host("start_connect", room, "host")
+            s.local.host("start_connect", room, "host", app=VERSION)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them."),
@@ -1146,7 +1147,7 @@ class Launcher:
             playthrough = pts[0] if pts else Playthrough.new("Online co-op")
             with self.online_session(None, playthrough, rank=1) as s:
                 if kind == "room":
-                    s.local.host("start_connect", target, "join")
+                    s.local.host("start_connect", target, "join", app=VERSION)
                     waiting = f"Room\n{target}\nlooking for your partner…"
                 else:
                     s.connect(target)

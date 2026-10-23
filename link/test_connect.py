@@ -32,19 +32,23 @@ class NoGame:
 
 
 class Player:
-    def __init__(self, net, router, room, role, relay, stuns, clock):
+    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0"):
         self.sock = net.socket(router)
         self.t = UdpTransport(sock=self.sock, bind_host="0.0.0.0")
         self.t.clock = clock
         self.host = Host(NoGame(), self.t, rank=0 if role == "host" else 1)
+        if link is not None:
+            self.host.hello["link"] = link
         self.host.start_connect(room, role, relay=relay, stun_servers=stuns, resolve=False,
-                                lan_ip=self.sock.addr[0])
+                                lan_ip=self.sock.addr[0], app=app)
+        if app is None:  # a launcher from before 0.9.0: its candidates carry no version
+            self.host.connector.version = {}
 
     def tick(self):
         self.host.handshake_tick()
 
 
-def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35):
+def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35, b_version=None):
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
     relay = MemoryRelay()
@@ -53,7 +57,7 @@ def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", s
     ra = net.router(a_kind)
     rb = ra if same_house else net.router(b_kind)
     a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock)
-    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock)
+    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, **(b_version or {}))
     if forward == "a":  # the host's router forwards the game's port to it
         ra.forward(a.t.port, a.sock.addr)
         ra.out[a.sock.addr] = a.t.port
@@ -63,7 +67,8 @@ def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", s
         b.tick()
         for s in stuns:
             s.tick()
-        if a.host.connector.state == b.host.connector.state == "connected":
+        if a.host.connector.state == b.host.connector.state == "connected" or {
+                a.host.connector.state, b.host.connector.state} <= {"connected", "failed"}:
             break
     return a, b
 
@@ -114,6 +119,14 @@ def main():
     a, b = session(CONE, CONE, room_b="FOG-2222", seconds=5)
     check(a.t.peer is None and b.t.peer is None and a.host.connector.state != "connected",
           "a player with another room code is never accepted")
+
+    # Different versions (Tucker's Thor on 0.9.0-dev, his PC still on 0.7.1): told at once, by name.
+    for what, ver in (("a newer joiner", {"link": 99, "app": "1.0.0"}), ("a joiner from before 0.9.0", {"link": 8, "app": None})):
+        a, b = session(CONE, CONE, b_version=ver, seconds=10)
+        sa, sb = a.host.connector.status(), b.host.connector.status()
+        old = ver["app"] is None  # an old joiner can't tell: only our side must
+        check(sa["state"] == "failed" and (old or sb["state"] == "failed") and "same version" in sa["reason"] and (ver["app"] or "older") in sa["reason"],
+              f"{what}: {'the host is' if old else 'both are'} told within 10 s ({sa['reason']!r:.70})")
 
     sym = Connector.__init__  # noqa: F841 - (the connector module imports cleanly)
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
