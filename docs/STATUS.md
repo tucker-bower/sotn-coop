@@ -51,7 +51,9 @@ _Last updated: 2026-10-22_
   - Criterion 2: `android_pair` **passes** (74 s); criterion 3: `android_pc` **passes** (60 s). Both now run with sound on.
   - Fixed on the way: on Android (plain pygame) the SDL audio callback deadlocked on the GIL as soon as an online session started (the earlier pass had sound off). Sound now goes through SDL_mixer, queued from the main thread.
   - **Open:** sound on the emulator underruns often (1138 of 1728 chunks); frames take about 16 ms (games 4–6 + draw 11), right at the 60 fps limit. Criterion 5 work: measure, then tune (bigger queue, cheaper draw).
-  - Criteria 4 (device setup errors) and 5 (frame times): not started.
+  - Criterion 4 (setup on the device): **simpler install (D94).** The player picks the folder their disc is in (one tap), and the app copies just the disc (`.cue` + `.bin` files, or a `.zip`) with a progress bar. Checked live on an emulator through Android's real picker (`.env/out/android_setup/`, about 30 s to "Co-op disc ready"); `launcher/test_android_disc.py` passes. README has Android install steps. `release.py` attaches `SOTN-Coop.apk`.
+  - Left for criterion 4: wrong files on Android should show the PC's errors (test them through the picker). The DXC `.iso` copy for Maria has no progress bar yet.
+  - Criterion 5 (frame times): not started.
 - **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
   - **Done, with passing tests:**
     - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
@@ -83,6 +85,7 @@ _Last updated: 2026-10-22_
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
+- **Android signing key (before the first public Android release, D95):** the APK is signed with this PC's debug key. An update signed with any other key won't install over it without an uninstall, and the uninstall deletes the player's saves. Options: (a) **a release keystore, backed up in your password manager (recommended)**; (b) keep the debug key and back up `~/.android/debug.keystore`.
 - **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
   - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
   - **(b) Per-boss bots** (approach and dodge patterns for each of the 12), then automatic tuning: about 2–3 usage windows.

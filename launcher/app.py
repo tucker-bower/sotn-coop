@@ -361,13 +361,17 @@ def _pick_file_windows(title, types):
     return None
 
 
-def pick_file(title, types):
-    """The system's file picker: Windows' own dialog, or tkinter elsewhere."""
+def pick_file(title, types, ui=None):
+    """The system's file picker: Windows' own dialog, or tkinter elsewhere. On Android, ui shows
+    the disc's copy into the app."""
     if os.environ.get("COOP_PICK_FILE"):  # tests (launcher/uxdriver.py)
         return Path(os.environ["COOP_PICK_FILE"])
     if ANDROID:  # the system's picker: the files are copied into the app's folder (design/M9)
         import platform_android
         try:
+            if any("*.cue" in t[1] for t in types):  # SOTN: the folder it's in (one tap, any rip)
+                run = ui and (lambda task: ui.wait_for("Copying your disc", "Into the app, once. This takes a minute.", task))
+                return platform_android.pick_disc(title, paths.data_dir() / "discs", run)
             got = platform_android.pick_files(title, paths.data_dir() / "discs")
         except Exception:  # noqa: BLE001
             log.exception("file picker")
@@ -607,14 +611,21 @@ class Launcher:
     def wizard(self):
         ui = self.ui
         while not self.disc():
-            choice = ui.menu("Welcome", [("Choose my disc image", "Your own Symphony of the Night (USA) rip: the .cue file"),
-                                         ("Quit", "")],
-                             "Co-op is made from your own copy of the game: a disc image of\n"
-                             "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
-                             "Your file is never changed: the co-op disc is made next to it.")
+            if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
+                choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
+                                             ("Quit", "")],
+                                 "Co-op is made from your own copy of the game: a disc image of\n"
+                                 "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
+                                 "Pick the folder it's in, then Use this folder. It's copied into the app.")
+            else:
+                choice = ui.menu("Welcome", [("Choose my disc image", "Your own Symphony of the Night (USA) rip: the .cue file"),
+                                             ("Quit", "")],
+                                 "Co-op is made from your own copy of the game: a disc image of\n"
+                                 "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
+                                 "Your file is never changed: the co-op disc is made next to it.")
             if choice != 0:
                 raise SystemExit
-            path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")])
+            path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")], ui)
             if not path:
                 continue
             import patcher
@@ -626,7 +637,8 @@ class Launcher:
                 continue
             self.settings["disc"] = str(cue)
             save_settings(self.settings)
-            ui.message("Co-op disc ready", f"Made {cue.name}\nnext to your disc image.")
+            ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
+                       if ANDROID else f"Made {cue.name}\nnext to your disc image.")
 
     def make_debug_starts(self):
         import debugstarts

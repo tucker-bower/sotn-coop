@@ -465,3 +465,13 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Why:** one implementation of the link protocol, so Android ↔ Android and Android ↔ PC play by construction, already tested by the harness.
 - Options considered: a native Kotlin app (a protocol port to keep in sync forever); RetroArch plus a companion app (two apps, no per-frame RAM mailbox).
 - Online only; touch controls go on the backlog (controller-first, as the roadmap says).
+
+**D94: On Android the player picks their disc's folder** (agent-default, 2026-10-22; design/M9 criterion 4)
+- The first-start button opens Android's folder picker (one tap on "Use this folder"). The app copies the SOTN `.cue` and the `.bin` files it names (or a lone `.bin`, or a `.zip` of them, unpacked), saved under the names the `.cue` uses, with a progress bar. `platform_android.disc_files` picks the files; `launcher/test_android_disc.py` tests it.
+- **Why:** Android won't let an app see the files next to a picked `.cue`, so a file picker made players long-press to multi-select every file. Picking the `.cue` alone, the natural move, couldn't work.
+- Options considered: multi-select (as before); a single `.bin` (loses the audio track); `.zip` only (most rips aren't zipped).
+- Android refuses the `Download` folder itself as a tree, so the README says to use a folder of its own (`Download/SOTN`).
+
+**D95: The Android app ships debug-signed for now** (agent-default, 2026-10-22)
+- `release.py` attaches `android/build.sh`'s APK as `SOTN-Coop.apk`, signed with this PC's debug key (`~/.android/debug.keystore`).
+- **Why:** no key to manage while M9 is in preview. But an update only installs over an app with the same key: a build from another PC would need an uninstall, which deletes the app's saves. Before the first public Android release, decide on a release keystore and where it's backed up (Decisions needed, STATUS).

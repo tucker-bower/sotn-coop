@@ -41,6 +41,32 @@ Click **Choose my disc image** and pick your game's `.cue` file. In a few second
 
 We never distribute game data: the launcher builds everything from your own disc.
 
+## Play it on Android (preview)
+The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. The app arrives with the next release; until then the link below won't work.
+
+### What you need
+- An **Android 7 or newer** phone or handheld (AYN, Retroid, Odin and the like work), with about **1.3 GB free**.
+- **A controller:** Bluetooth or USB, or your handheld's built-in controls. There are no touch controls yet.
+- **Your own disc image**, as for Windows: the `.cue` and `.bin` files of the USA disc (or a `.zip` of them).
+
+### 1. Install the app
+On your phone, download **[SOTN-Coop.apk](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop.apk)** (about 40 MB) and open it.
+- Android asks whether your browser may **install unknown apps**. Tap **Settings**, turn on **Allow from this source**, then go back and tap **Install**.
+- If **Play Protect** warns about an unknown app, tap **More details**, then **Install anyway**. The app isn't on the Play Store; everything in it is built from this repository.
+
+### 2. Put your disc on the phone
+Copy your disc image into **its own folder** on the phone, for example `Download/SOTN`. Android doesn't let apps open the `Download` folder itself, so it needs a folder of its own.
+- **From a PC, with a USB cable:** on the phone, pick *File transfer* in the USB notification. On the PC, open the phone in File Explorer, open `Download`, make a folder called `SOTN`, and copy the `.cue` and `.bin` files into it.
+- **Or from your own cloud storage:** download the files (or the `.zip`) into a folder on the phone with your Files app.
+
+### 3. First start: your disc
+Tap **Choose my disc's folder**, then open the folder (`Download`, then `SOTN`), tap **Use this folder**, then **Allow**. The app copies your disc in (about a minute) and makes its co-op version. It only asks once. You can then delete your copy from the folder.
+
+### 4. Play online
+Pair your controller, then play as on Windows: **Online co-op**, then **Host: new game** (send the room code to your friend) or **Join your partner** (type their code). A friend on a PC joins the same way.
+
+Maria: under **Settings › Game files**, pick your *Dracula X Chronicles* `.iso` file, as on Windows.
+
 ## About the project
 A two-player co-op mod for *Castlevania: Symphony of the Night* (PS1, US / SLUS-00067), built on [sotn-decomp](https://github.com/Xeeynamo/sotn-decomp).
 
