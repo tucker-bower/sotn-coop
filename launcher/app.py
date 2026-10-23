@@ -647,8 +647,38 @@ class Launcher:
 
     # --- first run
 
+    def update_disc(self):
+        """After an update, remakes the co-op disc from the player's own disc for this version's
+        patch, once. An old one would play a different game from the partner's, who'd be told
+        it's the same (HELO carries this version's patch CRC)."""
+        want = self.patch_crc()
+        if not self.disc() or want is None or self.settings.get("disc_patch") == want:
+            return
+        import patcher
+        src = self.settings.get("disc_source")
+        if not src:  # made before 0.9.0: the player's disc is next to it, named as it was
+            coop = self.disc()
+            stem = coop.name.replace(" (Co-op).cue", "")
+            src = next((p for p in (coop.with_name(stem + ".cue"), coop.with_name(stem + ".bin"),
+                                    coop.with_name(stem + " (Track 1).bin")) if p.exists()), coop.with_name(stem + ".cue"))
+        src = Path(src)
+        try:
+            cue = self.ui.wait_for("Updating the co-op disc",
+                                   f"This version of SOTN Co-op changes the co-op disc: it's remade\nfrom {src.name}, once.",
+                                   lambda progress: patcher.apply(src, PATCH, progress=progress))
+        except (patcher.DiscError, patcher.bps.PatchError, OSError) as e:
+            log.warning("updating the co-op disc from %s: %s", src, e)
+            self.settings["disc"] = None
+            save_settings(self.settings)
+            self.ui.message("Your disc again, please", f"This version of SOTN Co-op remakes the co-op disc, and couldn't\n"
+                            f"from {src.name}: {e}\nChoose your disc image again.")
+            return
+        self.settings.update(disc=str(cue), disc_source=str(src), disc_patch=want)
+        save_settings(self.settings)
+
     def wizard(self):
         ui = self.ui
+        self.update_disc()
         while not self.disc():
             if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
                 choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
@@ -686,7 +716,7 @@ class Launcher:
                     shutil.rmtree(paths.data_dir() / "discs", ignore_errors=True)
                 ui.message("That disc won't work", str(e))
                 continue
-            self.settings["disc"] = str(cue)
+            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.patch_crc())
             save_settings(self.settings)
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
