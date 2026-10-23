@@ -3,6 +3,8 @@
     python android/device.py install [apk]   the newest .env/android/*.apk onto the device
     python android/device.py disc            the retail disc into Download/SOTN on the device,
                                              ready for the app's "Choose my disc's folder"
+    python android/device.py dxc             the Dracula X Chronicles .iso there too (Maria:
+                                             Settings > Game files)
     python android/device.py log [file]      the app's log since it started (default
                                              .env/out/device-log.txt), for a playtest's bugs
 
@@ -63,7 +65,7 @@ def device():
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "--help"
-    if cmd not in ("install", "disc", "log"):
+    if cmd not in ("install", "disc", "dxc", "log"):
         print(__doc__)
         return 0
     print("device:", device())
@@ -86,6 +88,14 @@ def main():
             print("copying", f.name)
             adb("push", windows_path(f), f"{folder}/{f.name}", check=True)
         print("Done: in the app, Choose my disc's folder > Download > SOTN > Use this folder > Allow.")
+        return 0
+    if cmd == "dxc":
+        from coop_env import DISKS
+        iso = DISKS / "sotn.pspus.iso"
+        adb("shell", "mkdir", "-p", "/sdcard/Download/SOTN", check=True)
+        print("copying", iso.name)
+        adb("push", windows_path(iso), f"/sdcard/Download/SOTN/{iso.name}", check=True)
+        print("Done: in the app, Settings > Game files > pick it in Download > SOTN.")
         return 0
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / ".env" / "out" / "device-log.txt"
     log = adb("logcat", "-d", "-s", "python:*", "SDL:*", "AndroidRuntime:*", "DEBUG:*",

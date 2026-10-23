@@ -99,6 +99,7 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 
 ### M10: AYN Thor dual-screen & widescreen (D75)
 - **Curated AYN Thor dual-screen mode:** on the AYN Thor clamshell handheld, the top 6.0" 16:9 AMOLED screen renders your game while the bottom 3.92" screen displays your partner's screen live.
+- **A bat-capped blood vial (Tucker, 2026-10-22):** the progress vial (`UI.bar` in `launcher/app.py`) gets a little metal bat in place of the cork, as if it were a vampire elite's custom vial: wings folded over the neck, centred on it. The cork's off-centre look was fixed in M9 (`odd widths`), and the bat must stay centred too, checked by a pixel test of the render.
 - **True widescreen on the top screen:** expanded horizontal FOV (not stretched 4:3) on the 16:9 top display, widening the draw/clip viewport, room scroll bounds, and entity layout spawn window so rooms and enemies render naturally across the 16:9 frame.
 
 ## Backlog (Tucker, 2026-10-21)

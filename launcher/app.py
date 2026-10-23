@@ -257,7 +257,7 @@ class UI:
         """Progress: a vial of blood filling up, with the percentage beside it."""
         s, frac = self.screen, max(0.0, min(1.0, done / max(total, 1)))
         t = pygame.time.get_ticks() / 1000
-        cx, bw, bh = SIZE[0] // 2, 78, 168
+        cx, bw, bh = SIZE[0] // 2, 79, 168  # odd widths: centred on column cx
         body = pygame.Rect(cx - bw // 2, y + 30, bw, bh)
         # the blood, clipped to the body below its level, with a gently moving surface
         level = body.bottom - 4 - int((bh - 8) * frac)
@@ -276,8 +276,9 @@ class UI:
         neck = pygame.Rect(cx - 13, y + 12, 26, 20)
         pygame.draw.rect(s, BG, neck.inflate(-4, 4))
         pygame.draw.line(s, DIM, neck.topleft, (neck.left, neck.bottom + 1), 2)
-        pygame.draw.line(s, DIM, neck.topright, (neck.right, neck.bottom + 1), 2)
-        pygame.draw.rect(s, (110, 72, 44), (cx - 17, y, 34, 14), border_radius=3)
+        # a 2-px line draws right of its x: the right side at right - 1 keeps the neck centred
+        pygame.draw.line(s, DIM, (neck.right - 1, neck.top), (neck.right - 1, neck.bottom + 1), 2)
+        pygame.draw.rect(s, (110, 72, 44), (cx - 17, y, 35, 14), border_radius=3)
         pygame.draw.line(s, (235, 230, 225), (body.left + 12, body.top + 18), (body.left + 12, body.bottom - 26), 2)
         pct = self.small.render(f"{int(frac * 100)}%", True, DIM)
         s.blit(pct, (body.right + 18, body.centery - pct.get_height() // 2))
