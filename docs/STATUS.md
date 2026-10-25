@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-24_
+_Last updated: 2026-10-25_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -76,6 +76,7 @@ _Last updated: 2026-10-24_
     - relay retries after 5 s; relay reader threads stop after each attempt.
     - `test_connect` (26 checks, including no-relay same-house and a stranger's broadcast), 6 online harness scenarios, and `android_room` (55 s) pass. Next: Tucker tries both ways; then read `device.py log` and `session.log`.
   - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
+- **M11 castles: design written** (`docs/design/M11-castles.md`, branch `coop-m11-castles`), from Tucker's brainstorm picks (2026-10-25): shared level at half XP in duo, the host's castle with a copy for the joiner, no merging, no player names, `Tucker_2026-10-25-21:40` names, no conversion of old saves. Waiting for approval.
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
   1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
@@ -94,6 +95,9 @@ _Last updated: 2026-10-24_
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
+- **Approve M11** (`docs/design/M11-castles.md`). Agent-defaults in it, all reversible:
+  - the copy rule: a copy is updated in place only if not played since, else a `(2)` entry;
+  - slot 2 cloned from slot 1 for a solo-only castle.
 - **Android signing key (before the first public Android release, D95):** the APK is signed with this PC's debug key. An update signed with any other key won't install over it without an uninstall, and the uninstall deletes the player's saves. Options: (a) **a release keystore, backed up in your password manager (recommended)**; (b) keep the debug key and back up `~/.android/debug.keystore`.
 - **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
   - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.

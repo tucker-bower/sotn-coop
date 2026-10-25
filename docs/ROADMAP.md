@@ -28,6 +28,7 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M8 | Playable Maria & Richter from the start + DXC alternate dialogue/voices (D75) | post-month | — |
 | M9 | Android port of the launcher and session engine (D36, D75) | post-month | — |
 | M10 | AYN Thor curated dual-screen (top = you, bottom = partner) + true widescreen FOV (D75) | post-month | — |
+| M11 | Castles: drop-in saves (any partner continues any castle, the joiner keeps a copy), solo mode, shared level at half XP in duo (`docs/design/M11-castles.md`) | post-month, ~2 windows | — |
 | Last | **3–4 players** (D48) | post-month | — |
 
 **Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
