@@ -5,6 +5,7 @@ which run by name). Exit code 0 = all passed."""
 import sys
 
 import scenarios  # noqa: F401  (registers scenarios)
+import scenarios_m8  # noqa: F401
 import session_scenarios  # noqa: F401
 import session_progress  # noqa: F401
 import session_travel  # noqa: F401
@@ -12,6 +13,7 @@ import session_saverooms  # noqa: F401
 import session_shared  # noqa: F401
 import session_m4b  # noqa: F401
 import session_m5  # noqa: F401
+import session_m8  # noqa: F401
 import session_online  # noqa: F401
 import spec_test  # noqa: F401
 from scenario import SCENARIOS, run_scenario

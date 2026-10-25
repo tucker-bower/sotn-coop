@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 8
+LINK_VERSION = 9
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -24,6 +24,17 @@ _COMMAND = struct.Struct("<IHHHhhH")
 SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
 SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
 CONTROL = 0x21448
+CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
+CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
+OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
+OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
+SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
+
+
+def spell_options(spells):
+    """OPT_* bits for four spell ids (or None) on the right stick: up, right, down, left."""
+    return sum(((s + 1) if s is not None else 0) << (OPT_SPELL_SHIFT + 4 * k) for k, s in enumerate(spells))
+CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80400000, 0x52414843  # CharBlob (module/link.h)
 CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
@@ -76,6 +87,9 @@ class Mailbox:
 
     def __init__(self, adapter, address):
         self.adapter, self.address = adapter, address
+        emu = getattr(adapter, "emu", None)
+        if emu is not None and hasattr(emu, "pad_extra_addr"):  # the harness: pads carry rs_* too
+            emu.pad_extra_addr = address + PAD_EXTRA
 
     def header(self):
         return _HEADER.unpack(self.adapter.read_bytes(self.address, _HEADER.size))
@@ -167,6 +181,18 @@ class Mailbox:
 
     def control(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + CONTROL, 4))[0]
+
+    # --- characters and per-player settings (design/M8, M8b)
+
+    def set_character(self, character):
+        """CHAR_*: the character this game's player plays, from the game's next load."""
+        self.adapter.write_bytes(self.address + CHARACTER, struct.pack("<I", character))
+
+    def set_options(self, bits):
+        self.adapter.write_bytes(self.address + OPTIONS, struct.pack("<I", bits))
+
+    def set_pad_extra(self, bits):
+        self.adapter.write_bytes(self.address + PAD_EXTRA, struct.pack("<I", bits))
 
     def set_rank(self, rank):
         self.adapter.write_bytes(self.address + RANK, struct.pack("<I", rank))

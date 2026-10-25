@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-21_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -46,11 +46,27 @@ _Last updated: 2026-10-20_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **Draft release v0.7.1** (rebuilt with the fixes and boss starts) for Tucker to test and publish, after merging `coop-fix-dualsense`.
+- **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
+  - **Done, with passing tests:**
+    - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
+    - `char_select_session`: all 9 pairs from one save, re-picked at each load, disc unchanged. `mixed_party_shared_room` (+`_am`, `_rm`): puppets both ways, the guest's hits count. `mixed_party_progression` (R+M, M+R, R+A), `mixed_party_boss`, `mixed_party_cutscene`.
+    - M8b for Richter and Maria: relic gates, L2/R2 shortcuts, growth (levels, STR/INT scaling, Fire of Bat), Mist Step; Life/Heart Max Up give +5 for everyone.
+    - Alucard's spells on the right stick (`m8b_spell_shortcuts`, all 6 castable spells).
+    - Launcher: Game files screen (`uxdriver.py characters`: wrong files refused in plain words, then Maria), lobby (Maria locked until her disc, Triangle/Y shortcuts per player), Settings › Controls. `test_characters.py` (Maria from the USA DXC disc).
+    - **Patch hygiene fix:** COOPRIC.BIN had put Richter's retail art into the patch as literal bytes. Now copied from the player's RIC.BIN, and changed sectors' EDC/ECC are computed on the player's PC; `test_patcher.py` proves the patch holds no retail data or checksums.
+    - Criterion 3: `mixed_soak_10min` against two Alucards (D92). §5 HUDs: the footage's cut was a 16:9 recording of an ultrawide window (D91); `uxdriver.py hud` 144/144 on Windows.
+    - Off-hand weapons (D88): every class swings its own sprite and hits with the hand's attack; potions and food heal; a shield adds DEF. Equipping a weapon no longer turns Richter/Maria magenta (a palette clash, fixed).
+  - **Built, being tested (uncommitted until it passes):** Richter's and Maria's code moved to expansion RAM so familiars fit (D89), familiars for them, poison water + Holy Symbol, Force of Echo / Gas Cloud for them.
+  - **Left:** the power-curve tuning and the reachability audit (both decisions below); familiars, weapons and gates for Richter/Maria are done and tested (88/88 suite + M8 tests).
 
 ## Next
+- **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
+  1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
+  2. Couch: Continue your playthrough as Maria + Richter (Left/Right on each card). Their moves come with Alucard's relics; Start opens Alucard's equip menu (armor, a weapon in a hand: ○ swings it).
+  3. Developer › Debug starts › Bosses: try a boss as Richter or Maria against Alucard. That's the power-curve check (decision below).
+  4. Alucard: flick the right stick to cast spells you know (Settings › Controls picks which).
+- Then the two decisions below, and merge the M8 PR.
 - Tucker: test the draft release (couch, and online with a friend from another home), then publish it.
-- **M8 design revised** (`docs/design/M8-maria-and-richter.md`, D84) with Tucker's answers, plus a new **M8b** (`docs/design/M8b-character-balance.md`): what each character can do (from the decomp), what the castle requires, a relic → Richter/Maria mapping, Mist Step, power scaling and a balance method using the boss debug starts. Waiting on Tucker's review of M8b §7.
 - Follow-ups worth having:
   - UPnP port mapping (rescues some symmetric-router cases)
   - accept `.chd` disc images
@@ -58,18 +74,20 @@ _Last updated: 2026-10-20_
 
 ## Budget
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
+- Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **Publish v0.7.1:** Tucker is testing couch and online on 2026-10-20. PR #1 is merged and the draft now targets `main`. Publishing is one click on GitHub, or `gh release edit v0.7.1 --draft=false -R tucker-bower/sotn-coop`.
+- **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
+  - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
+  - **(b) Per-boss bots** (approach and dodge patterns for each of the 12), then automatic tuning: about 2–3 usage windows.
+- **M8b reachability audit (criterion 3): full route bot, or gate audit + playtest?** As designed, a bot walks each character room by room from every boss start, proving every relic, boss and save room is reachable with exactly the relics a player has. That's a pathfinding bot for the whole first castle, three times over: about 2–3 more usage windows, and brittle. Options:
+  - **(a) Gate audit + your playtest (recommended):** a test per gate type from M8b §2 for Richter and Maria: high ledges (Gravity Boots / chained backflips / Maria's wings), low gaps (slide), mist grates (Mist Step, done), poison water (done), blue doors and the ferryman (they read the relic: character-neutral), and the worn-item gates (Spike Breaker, the rings, Holy Glasses), which work because they wear Alucard's gear now. Then a Richter + Maria couch playthrough by you finds what a gate list can't. The safety net (an Alucard player, D85) covers anything missed. About 0.5 window.
+  - **(b) The full route bot**, as written: 2–3 windows.
 - **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
   - keep it as is (the launcher explains the failure)
   - UPnP (free, partial)
   - a small TURN server (about $5/month)
-- **M8 / M8b approval** (M8b §7):
-  - the relic → move mapping table
-  - crashes gated by Echo of Bat, or from the start
-  - Alucard's equip menu for Richter/Maria, or auto-equip
-  - carried weapons raise attack only
 
 ## Environment notes
+- **The decomp's `mods/co-op/module` is a link to this repo's `module/`** (2026-10-21). `.env` here points into the old fork (`/home/tucker/sotn-decomp-coop/mods/co-op/.env`), whose `mods/co-op` folder was an Oct 19 copy: DRA was being built against its stale `coop_api.h`. The stale folder is kept as `module.stale-2026-10-19`.
 - Standalone repository cloned and verified at `/home/tucker/sotn-coop` (remote: `https://github.com/tucker-bower/sotn-coop`).

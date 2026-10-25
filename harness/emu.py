@@ -40,6 +40,9 @@ BUTTONS = {
     "cross": 0, "square": 1, "select": 2, "start": 3, "up": 4, "down": 5, "left": 6, "right": 7,
     "circle": 8, "triangle": 9, "l1": 10, "r1": 11, "l2": 12, "r2": 13, "l3": 14, "r3": 15,
 }
+# Buttons a PlayStation pad lacks (design/M8b §3.2): the game gets them through its mailbox
+# (CoopLink.padExtra, PADX_* in module/link.h), written right before the frame like the pad.
+EXTRA = {"rs_up": 1, "rs_right": 2, "rs_down": 4, "rs_left": 8}
 _JOYPAD_MASK = 256
 ENTITY_SIZE = 0xBC
 
@@ -50,7 +53,16 @@ def pad(buttons):
         return buttons
     if isinstance(buttons, str):
         buttons = [b for b in buttons.split("+") if b]
-    return sum(1 << BUTTONS[b] for b in buttons)
+    return sum(1 << BUTTONS[b] for b in buttons if b not in EXTRA)
+
+
+def pad_extra(buttons):
+    """The EXTRA bits in a pad ('up+rs_left' -> 8)."""
+    if isinstance(buttons, int):
+        return 0
+    if isinstance(buttons, str):
+        buttons = buttons.split("+")
+    return sum(EXTRA.get(b, 0) for b in buttons)
 
 
 class _PadDriver(IterableInputDriver):
@@ -121,6 +133,8 @@ class Emu:
                                     assets=self._tmp.name, playlist=self._tmp.name),
         )
         self.frame = 0
+        self.pad_extra_addr = None  # CoopLink.padExtra, once the co-op module is known (Mailbox)
+        self._extra = 0
 
     def __enter__(self):
         self._session.__enter__()
@@ -136,6 +150,10 @@ class Emu:
     def step(self, n=1, p1=0, p2=0):
         """Runs n frames holding the given buttons on each port."""
         self._input.pads = [pad(p1), pad(p2)]
+        extra = pad_extra(p1)
+        if self.pad_extra_addr and (extra or self._extra):
+            self.write(self.pad_extra_addr, extra)
+        self._extra = extra
         for _ in range(n):
             self._session.run()
             self.frame += 1

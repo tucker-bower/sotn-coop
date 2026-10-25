@@ -16,6 +16,7 @@
 #include "boss.h"
 #include "progress.h"
 #include "shared.h"
+#include "character.h"
 #include "solid.h"
 #include "vram.h"
 
@@ -208,7 +209,7 @@ static bool PartnerShareable(void) {
     s32 dx, dy;
 
     if (g_CoopLink.partnerAge > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
-        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) || p->character != g_PlayableCharacter) {
+        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) || !SAME_WORLD(p)) {
         return false;
     }
     if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep != Engine_Normal) {
