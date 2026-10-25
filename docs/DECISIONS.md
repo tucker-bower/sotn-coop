@@ -459,3 +459,52 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D92: Performance is measured against two Alucards** (agent-default, 2026-10-21; design/M8 criterion 3)
 - In the 10-minute shared fight, the game's main loop misses about 1% of frames with **two Alucards** too (686 of 72,000), in that busy room. "No dropped frames" can't be absolute.
 - The criterion became "a mixed team misses no more frames than two Alucards with the same inputs (within 0.5% of play), and costs no more scanlines per frame (p99 within 5%)". Richter + Maria: 821 missed, p99 200 scanlines (two Alucards: 686, 202). Host p99 0.20 ms.
+
+**D93: Android runs the same Python** (agent-default, 2026-10-21; Tucker delegated M9's design)
+- python-for-android packages CPython, pygame (SDL2) and our `harness`/`link` code. The game runs in the app's own process (no worker processes on Android), loading the SwanStation Android core through ctypes, as the PC does.
+- **Why:** one implementation of the link protocol, so Android ↔ Android and Android ↔ PC play by construction, already tested by the harness.
+- Options considered: a native Kotlin app (a protocol port to keep in sync forever); RetroArch plus a companion app (two apps, no per-frame RAM mailbox).
+- Online only; touch controls go on the backlog (controller-first, as the roadmap says).
+
+**D94: On Android the player picks their disc's folder** (agent-default, 2026-10-22; design/M9 criterion 4)
+- The first-start button opens Android's folder picker (one tap on "Use this folder"). The app copies the SOTN `.cue` and the `.bin` files it names (or a lone `.bin`, or a `.zip` of them, unpacked), saved under the names the `.cue` uses, with a progress bar. `platform_android.disc_files` picks the files; `launcher/test_android_disc.py` tests it.
+- **Why:** Android won't let an app see the files next to a picked `.cue`, so a file picker made players long-press to multi-select every file. Picking the `.cue` alone, the natural move, couldn't work.
+- Options considered: multi-select (as before); a single `.bin` (loses the audio track); `.zip` only (most rips aren't zipped).
+- Android refuses the `Download` folder itself as a tree, so the README says to use a folder of its own (`Download/SOTN`).
+
+**D95: The Android app ships debug-signed for now** (agent-default, 2026-10-22)
+- `release.py` attaches `android/build.sh`'s APK as `SOTN-Coop.apk`, signed with this PC's debug key (`~/.android/debug.keystore`).
+- **Why:** no key to manage while M9 is in preview. But an update only installs over an app with the same key: a build from another PC would need an uninstall, which deletes the app's saves. Before the first public Android release, decide on a release keystore and where it's backed up (Decisions needed, STATUS).
+
+**D96: Same-network games find each other without the relay** (agent-default, 2026-10-24)
+- The game's socket asks for UDP port 47811 first (any port if it's taken), and while looking for the partner it broadcasts the room's `HELO` on the LAN to that port, twice a second, beside the relay's hole punching (`link/connect.py`, `docs/link-protocol.md`).
+- **Why:** in the Thor tests (rounds 3–4) the relay was unreachable from Android, and nothing could connect at all, though both devices were on one Wi-Fi. Same-network play is common (a phone and a PC at home), and it now needs neither ntfy.sh nor STUN. A fixed port also makes a hand-made port forward or an ip:port join predictable.
+- The lobby says at once when the relay can't be reached ("Can't reach the room-code server · Looking on this Wi-Fi") and the five-minute failure names it, instead of "Waiting for your partner's game". A failed relay post is retried after 5 s (was 20 s), and the relay's reader stops when a connect attempt ends (each retry had left one streaming forever).
+- Options considered: LAN only by typing ip:port (as before: no help to a player who doesn't know their address); multicast/mDNS (needs Android's MulticastLock and more code, for the same result); a second relay service (keeps the internet dependency).
+- Windows Firewall lets the partner's unicast answer back in after our broadcast (its default "unicast response to broadcast" rule), so no firewall rule is needed. The per-user installer couldn't add one anyway.
+
+**D97: Castles: any partner continues any save; solo; one shared level** (Tucker, 2026-10-25; `docs/design/M11-castles.md`)
+- A castle is the only save concept: the shared world and two slots. Slot 1 is always the player on this machine, slot 2 whoever plays with them. There are no player names or seats.
+- The host picks the castle. The joiner keeps a copy at every joint save, and can play it solo or host it later. No merging. Old playthroughs aren't converted.
+- Level is shared: a kill's XP is halved while a partner is linked, and the gain goes to both games. Solo turns off the duo balancing (2× boss HP, aggro switching, the XP cut).
+- Names: `<typed name>_<created>`, e.g. `Tucker_2026-10-25-21:40`.
+
+**D98: M11's implementation defaults** (agent-default, 2026-10-25)
+- **The joiner's copy:** it's updated in place while it has only ever received. Once played here (solo, couch, hosting), the next copy from a host is a new entry, `… (2)`. Nothing played is overwritten.
+- **The host names its castle in its HELO** (`Host.set_castle`), so the joiner knows it in the lobby, before any save. That's no wire change: old hosts simply don't send it.
+- **A save with no linked partner** (solo, or a partner gone for 10 s), or one whose partner never answers within 5 s, writes slot 1 alone and keeps slot 2.
+- **On load,** a missing slot 2 is a copy of slot 1, and both slots get the higher XP. The game then levels the behind one up the normal way.
+- **The castle list** is skipped when there are no castles: New castle, at once. The list shows the newest 7.
+- **The folder** takes the castle's name after the session that gave it one (e.g. `Tucker_2026-10-25-21-40`), because Windows can't rename it while files are open.
+- **Single-game sessions** (solo, online) use card `A`: slot 1 is this player on every machine.
+- **Home order:** Solo, Couch co-op, Online co-op. Solo is the big button.
+
+**D99: M11 finish: Solo's status bar, its tests, version 0.11.0-dev** (agent-default, 2026-10-25)
+- **Solo's status bar says "Solo"** (no partner, ping or Together/Apart). It had said "Partner connected · ping ? ms" for a solo game: the online status line read a partner age that starts at 0.
+- **The playtest build is 0.11.0-dev**, after the milestone (as 0.9.0-dev was M9's). Its patch differs from 0.9.0's (`EV_EXP`), so a 0.9.0 partner is refused by name.
+- **Criterion 4 and 5's tests:** `m11_copy` covers both halves of criterion 4 (B hosts its copy, C joins). Criterion 5's rule (a played copy is never overwritten; `(2)`) is tested on the castle files in `launcher/test_castles.py`, without games: the games only decide when a save happens, which `m11_copy` covers.
+- **Criterion 8 on Android:** the online join script (used by the Android pair tests) checks the joiner keeps a copy of the host's castle at connect; the save into it is `m11_copy`'s (the same `OnlineSession` code, in-process on Android).
+
+**D100: A joiner with a room code only takes a HELO with that room's token** (agent, 2026-10-25)
+- Found by `android_room` while the harness ran on the same PC: the PC joiner's LAN broadcast (D96) was answered by one of the harness's games (no room code), and the joiner took it as its partner. The Android host was left waiting. A real house could do the same with any game joined by ip:port.
+- `Host._check_hello`: with a room code, a HELO with no room token is accepted only by a host (its partner typed our ip:port, the fallback). A joiner requires the room's token. `link/test_connect.py` covers both.

@@ -68,6 +68,8 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 - It relays nothing more (the games play on alone), keeps sending `HELO`, and reports why ("Your partner's co-op version is different…").
 - A later matching `HELO` lifts the refusal.
 
+**Finding the partner (room codes, `link/connect.py`):** the game's socket binds UDP port 47811 when it's free (any port otherwise). While looking, each side sends `HELO` to the partner's candidates from the relay ten times a second, and broadcasts it to `255.255.255.255:47811` and its /24's `.255:47811` twice a second. The broadcast needs no relay, so two games on the same network find each other even when the relay or STUN can't be reached. A host joined by ip:port (no `room`) ignores `HELO`s with a `room` from anyone but its peer.
+
 ## Presence (0x2C bytes)
 | offset | type | field |
 |---|---|---|

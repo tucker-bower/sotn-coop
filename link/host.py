@@ -78,12 +78,20 @@ class Host:
             self.hello["link"] = link_version
         return self.hello
 
+    def set_castle(self, meta):
+        """The castle this host plays (design/M11: {"id", "name", "created"}), told to the
+        partner in every HELO: the joiner keeps a copy of it."""
+        self.hello["castle"] = meta
+        return True
+
     def start_connect(self, room, role, relay=None, **kw):
         """Find the partner for a room code (role "host" or "join"): link/connect.py."""
         from .connect import Connector, default_relay, room_token
         self.hello["room"] = room_token(room)
         self.transport.learn_peer = True
-        self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes, **kw)
+        version = {"link": self.hello.get("link"), "app": kw.pop("app", None)}
+        self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes,
+                                   version=version, **kw)
         return True
 
     def connect_status(self):
@@ -140,9 +148,17 @@ class Host:
         except ValueError:
             return
         if self.hello.get("room") and theirs.get("room") != self.hello["room"]:
-            return  # someone without our room code: not our partner
+            # Someone in another room: not our partner. No room at all is a partner who typed our
+            # ip:port (the fallback when room codes can't connect: design/M7b, M9), so only a host
+            # takes one: a joiner with a room code would take any game on the network that answers
+            # its LAN broadcast (an ip:port game in the same house; the harness's games, D100).
+            if theirs.get("room") is not None or not self.connector or self.connector.role != "host":
+                return
         if theirs.get("sid") == self.hello["sid"]:
-            return  # our own HELO, come back to us (a candidate that was this PC)
+            return  # our own HELO, come back to us (a candidate that was this PC, or a LAN broadcast)
+        if (not self.hello.get("room") and theirs.get("room") and self.transport.peer
+                and addr is not None and tuple(addr) != tuple(self.transport.peer)):
+            return  # joined by ip:port: another room's LAN broadcast (link/connect.py) isn't our partner
         clock = theirs.pop("clock", None)
         if isinstance(clock, list) and len(clock) == 3:
             self.transport.clock_heard(*clock)

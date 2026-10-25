@@ -181,7 +181,8 @@ def online_joint_save(run):
             if path0.exists() and path1.exists() and s1.local.mailbox("card_result"):
                 break
         run.expect(path0.exists() and path1.exists(), "both PCs wrote session.coop over the network link")
-        run.expect(path0.read_bytes() == path1.read_bytes(), "both PCs have byte-identical session.coop files")
+        # Each PC's slot 1 is its own player (design/M11): the same two saves, mirrored
+        run.expect(read_session(path0) == read_session(path1)[::-1], "both PCs have the same two saves, each with itself in slot 1")
         run.expect(s1.local.mailbox("card_result") == CARD_OK, "remote PC also wrote its memory card save")
         blobs = read_session(path0)
         run.expect(save_room(blobs[0]) == save_room(blobs[1]), "both saves resume in the coffin's save room")

@@ -4,6 +4,8 @@
 // Detection: shadow copies of the castle flags, the map and the gold, diffed every frame;
 // plus wrappers on the two g_api entries every in-world find goes through (AddToInventory,
 // func_800FE044). Applying an event updates the shadows, so nothing echoes back.
+// Level is shared too (design/M11): a kill's XP is halved while a partner is linked, and what
+// was gained goes to the partner, whose game levels up the normal way (CheckAndDoLevelUp).
 #define COOP_MODULE
 #include <game.h>
 #include "flag_gated.h"
@@ -16,6 +18,7 @@ s32 func_800FE044(s32 amount, s32 type);                     // DRA: life/heart 
 void func_800F1B08(s32 tileX, s32 tileY, s32 arg2);          // DRA: draws one map cell
 void RevealSecretPassageOnMap(s32 tileX, s32 tileY, s32 flag); // DRA
 void DestroyEntity(Entity* entity);                          // DRA
+extern s32 g_ExpNext[];                                      // DRA: XP for each level
 
 #define GRANT_LIFE_UP 0x8000
 #define GRANT_HEART_UP 0x4000
@@ -89,11 +92,25 @@ static void AddToInventoryWrap(u16 id, EquipKind kind) {
     }
 }
 
+// Duo balancing, like 2x boss HP (boss.c): a partner's game was heard from in the last 10 s
+static bool PartnerLinked(void) { return g_CoopLink.partnerAge < 600; }
+
 static s32 GrantWrap(s32 amount, s32 type) {
-    s32 ret = s_Grant(amount, type);
+    // anything else with an amount is a kill's XP (type: the enemy's level)
+    bool kill = amount != 0 && type != GRANT_LIFE_UP && type != GRANT_HEART_UP && type != GRANT_RELIC;
+    s32 exp = g_Status.exp;
+    s32 ret;
+
+    if (kill && !s_Applying && PartnerLinked()) {
+        amount = amount > 1 ? amount / 2 : 1; // before the game scales it by the level gap
+    }
+    ret = s_Grant(amount, type);
     if (!s_Applying && ret == 0 &&
         (type == GRANT_LIFE_UP || type == GRANT_HEART_UP || type == GRANT_RELIC)) {
         Emit(EV_GRANT, type, amount);
+    }
+    if (kill && !s_Applying && (s32)g_Status.exp > exp) {
+        Emit(EV_EXP, 0, g_Status.exp - exp);
     }
     return ret;
 }
@@ -282,6 +299,14 @@ static void Apply(const CoopEvent* ev) {
         } else if (ev->a < TIMEATTACK_EVENT_END && !g_Settings.timeAttackRecords[ev->a]) {
             g_Settings.timeAttackRecords[ev->a] = ev->b;
             s_Records[ev->a] = ev->b;
+        }
+        break;
+    case EV_EXP: // the game's own level-up check sees it next frame
+        if (g_Status.level < 99) {
+            g_Status.exp += ev->b;
+            if ((s32)g_Status.exp > g_ExpNext[99]) {
+                g_Status.exp = g_ExpNext[99];
+            }
         }
         break;
     case EV_GOLD:

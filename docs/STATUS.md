@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-21_
+_Last updated: 2026-10-25 (M11 built)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -46,19 +46,47 @@ _Last updated: 2026-10-21_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **M8 + M8b (approved 2026-10-21, D85/D86), branch `coop-m8-maria-richter`.** Resumed 2026-10-21 after a PC restart cut the previous session off (nothing lost: everything but the launcher's game-files screen was pushed; that's committed now).
-  - **Done, with passing tests:**
-    - The world stays Alucard's whoever plays; each game's character is picked in the lobby, applied at the next load; our Richter (`COOPRIC.BIN`) and Maria (built from the player's DXC disc) in any pairing.
-    - `char_select_session`: all 9 pairs from one save, re-picked at each load, disc unchanged. `mixed_party_shared_room` (+`_am`, `_rm`): puppets both ways, the guest's hits count. `mixed_party_progression` (R+M, M+R, R+A), `mixed_party_boss`, `mixed_party_cutscene`.
-    - M8b for Richter and Maria: relic gates, L2/R2 shortcuts, growth (levels, STR/INT scaling, Fire of Bat), Mist Step; Life/Heart Max Up give +5 for everyone.
-    - Alucard's spells on the right stick (`m8b_spell_shortcuts`, all 6 castable spells).
-    - Launcher: Game files screen (`uxdriver.py characters`: wrong files refused in plain words, then Maria), lobby (Maria locked until her disc, Triangle/Y shortcuts per player), Settings › Controls. `test_characters.py` (Maria from the USA DXC disc).
-    - **Patch hygiene fix:** COOPRIC.BIN had put Richter's retail art into the patch as literal bytes. Now copied from the player's RIC.BIN, and changed sectors' EDC/ECC are computed on the player's PC; `test_patcher.py` proves the patch holds no retail data or checksums.
-    - Criterion 3: `mixed_soak_10min` against two Alucards (D92). §5 HUDs: the footage's cut was a 16:9 recording of an ultrawide window (D91); `uxdriver.py hud` 144/144 on Windows.
-    - Off-hand weapons (D88): every class swings its own sprite and hits with the hand's attack; potions and food heal; a shield adds DEF. Equipping a weapon no longer turns Richter/Maria magenta (a palette clash, fixed).
-  - **Built, being tested (uncommitted until it passes):** Richter's and Maria's code moved to expansion RAM so familiars fit (D89), familiars for them, poison water + Holy Symbol, Force of Echo / Gas Cloud for them.
-  - **Left:** the power-curve tuning and the reachability audit (both decisions below); familiars, weapons and gates for Richter/Maria are done and tested (88/88 suite + M8 tests).
-
+- **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
+  - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
+  - Cross-play, all three ways passing: `android_pair` (100 s), `android_pc` (PC hosts, 66 s), `android_pc_join` (Android hosts, 50 s), with sound on.
+  - Disc setup (D94): pick the folder; the rip is found up to 4 folders deep, and its `.bin` files anywhere by name. There's a "Pick the files instead" fallback, plain errors, and a failed disc's copy is deleted. Checked through Android's real picker; `launcher/test_android_disc.py` passes.
+  - Fixed:
+    - a sound deadlock that froze online sessions
+    - a stalled sound channel
+    - Back closed the app (it now pauses)
+    - pyjnius arm64 build
+  - Confirmed: the screen stays on (`KEEP_SCREEN_ON`); frames take about 13 ms on the emulator.
+  - Progress screens show a vial of blood filling up.
+  - `android/device.py`: install, disc and log over USB through Windows adb (`Emulators\android-tools`).
+  - **Thor playtest, round 1 (2026-10-22):** installed over USB (`device.py` now runs Windows adb on its own port, 5038: the default port reached WSL's adb server, which can't see USB). Thor hosting, PC joining, didn't connect: the PC still ran **0.7.1** (Oct 20), whose lobby can't start with controller id 0 and which can't talk to 0.9.0-dev. Fixed since:
+    - room-code connect waits **5 minutes** (was 30 s), with a "Still looking: m:ss left" countdown on the partner card (`link/test_connect.py` passes);
+    - `uxdriver online` joins with Tucker's presses (controller id 0: A, then Start): passes;
+    - the vial's cork is centred (M10: a metal bat in its place, in ROADMAP).
+  - **Round 2:** same symptom: the 0.9.0-dev installer had never been run (Windows still listed 0.7.1). The agent installed it silently. Also found and fixed:
+    - **after an update, the co-op disc stayed the old version** (0.7's), while HELO claimed the new patch CRC. The launcher now remakes it once from the player's own disc ("Updating the co-op disc"), and asks for the disc again if it moved. Checked with the real 0.7.0 → 0.9.0 patches.
+  - **Round 3:** both sides "Still looking". **Android couldn't reach the room-code relay at all:** its Python has no CA certificates, so every HTTPS request to ntfy.sh failed, silently. The Android tests had always joined by ip:port, so they never caught it. Fixed: android/main.py makes a CA file from Android's own trusted CAs, and the relay uses it; relay errors are now logged. New `android/test_pair.py --room` (an emulator hosts, the PC types the room code, over the real ntfy.sh): **PASSED android_room (67 s)**.
+    - **different versions now say so within seconds**, by name ("Your partner has an older SOTN Co-op…"), through the room-code relay, instead of waiting (`link/test_connect.py`).
+  - **Round 4 (2026-10-23):** Tucker: still both sides waiting, either one hosting. Checked on the PC: 0.9.0-dev installed, the relay works from its Python, LAN address right (10.0.0.177), no firewall rules either way (network: Public). Unknown whether the Thor ever got round 3's APK (not plugged in). Added, so the next try says where it stops:
+    - the lobby names the step instead of "Still looking": *Finding my address* / *Waiting for your partner's game* (the relay never brought the partner) / *Found your partner: reaching them* (packets blocked);
+    - the connector logs each step (addresses, router kind, partner's version, connected or why not): on the PC to `Documents\SOTN Co-op\session.log` (the game process's log had been thrown away), in F9 reports; on Android to logcat (`device.py log`).
+    - Rebuilt both (installer 11:32, APK 11:32); `test_connect`, `android_room` (61 s) pass. Next: install on the Thor (`device.py install`) and the PC, one try each way, read both logs.
+  - **Round 5 prep (2026-10-24):** the Thor's APK turned out to be from **Oct 22 20:05**, before round 3's CA fix, so in rounds 3–4 it never reached the relay. That explains both sides waiting. Now installed on both: the Thor (APK 23:46) and the PC (installer 23:46, silent). Also, from a review of the connect code (D96):
+    - **same-network games find each other without the relay:** a fixed port (47811, any if taken) and a LAN broadcast HELO;
+    - the lobby says "Can't reach the room-code server" at once, and the timeout names it;
+    - relay retries after 5 s; relay reader threads stop after each attempt.
+    - `test_connect` (26 checks, including no-relay same-house and a stranger's broadcast), 6 online harness scenarios, and `android_room` (55 s) pass. Next: Tucker tries both ways; then read `device.py log` and `session.log`.
+  - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
+- **M11 castles (design approved 2026-10-25, D97–D99), branch `coop-m11-castles` (stacked on M9). Built; playtest build 0.11.0-dev.**
+  - Castles replace playthroughs: Solo / Couch / Host each pick a castle (skipped when there's none); the joiner keeps a copy of the host's castle (updated in place until played, then a `(2)` entry); slot 1 is always this machine's player.
+  - One shared level: a kill's XP is halved while a partner is linked and the gain goes to both games (`EV_EXP`); Richter and Maria level up from it too. Solo: 1× boss HP, full XP, status bar says "Solo".
+  - Tests: `m11_shared_xp`, `m11_shared_xp_richter`, `m11_solo`, `m11_copy` (criteria 3 and 4), `m11_slot2_clone`; `launcher/test_castles.py` (14 checks: names, copies, criterion 5's rule, slots); uxdriver `solo`, `couch`, `online` (the joiner keeps the host's castle) pass.
+  - Builds: `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.11.0-dev.exe`, `.env/android/SOTN-Coop-0.11.0-dev.apk`.
+  - Old playthroughs aren't listed (not converted, D97): a 0.9 save is still on disk but doesn't show up.
+  - Full harness 97/97, smoke 17/17, `test_connect` (with D100's fix: a room-code joiner took a roomless game answering its LAN broadcast), uxdriver solo/couch/online, `android_pc` (60 s) pass.
+  - **Installed on both (2026-10-25 13:05):** PC (silent install) and the Thor (`device.py install`). Ready for Tucker's playtest.
+  - **Test environment broke after the PC crash:** since WSL restarted, nothing from outside reaches the Android test emulators (their STUN fails too). `android_room` and `android_pc_join` fail the same way with yesterday's 0.9.0 code and APK, which passed then, so it isn't the code. The real Thor and PC don't use this path. Next: fix the emulator networking (likely a restart of the emulators/WSL), then re-run both.
+  - **PR #6** (`coop-m11-castles` → main): M8, M9 and M11 together; merging it also merges #4 and #5.
+  - **Release draft v0.11.0** (the v0.9.0 draft, retagged; 2026-10-25 15:14): `SOTN-Coop-setup.exe` (0.11.0, sha256 6469…4013) and `SOTN-Coop.apk` (e7c8…f949), notes `docs/releases/v0.11.0.md`. Includes the launcher's off-screen window fix (Tucker's saved position was x = −3267, on no monitor). Not yet installed on the PC or the Thor.
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
   1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
@@ -77,6 +105,7 @@ _Last updated: 2026-10-21_
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
+- **Android signing key (before the first public Android release, D95):** the APK is signed with this PC's debug key. An update signed with any other key won't install over it without an uninstall, and the uninstall deletes the player's saves. Options: (a) **a release keystore, backed up in your password manager (recommended)**; (b) keep the debug key and back up `~/.android/debug.keystore`.
 - **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
   - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
   - **(b) Per-boss bots** (approach and dodge patterns for each of the 12), then automatic tuning: about 2–3 usage windows.

@@ -66,6 +66,11 @@ class Router:
         return f"{self.lan}.{next(self._hosts)}"
 
     def outbound(self, src, dst, data):
+        if dst[0] in ("255.255.255.255", self.lan + ".255"):  # a LAN broadcast: every PC in the house
+            for addr, sock in list(self.net.sockets.items()):
+                if sock.router is self and addr[1] == dst[1] and addr != src:
+                    sock.queue.append((data, src))
+            return
         if dst[0].startswith(self.lan + "."):  # same house: straight across the LAN
             if dst in self.net.sockets:
                 self.net.sockets[dst].queue.append((data, src))
@@ -163,6 +168,18 @@ class StunServer:
             ip = struct.unpack(">I", socket.inet_aton(src[0]))[0] ^ MAGIC_COOKIE
             attr = struct.pack(">HHBBHI", 0x0020, 8, 0, 1, src[1] ^ (MAGIC_COOKIE >> 16), ip)
             self.sock.sendto(struct.pack(">HHI12s", 0x0101, len(attr), MAGIC_COOKIE, tx) + attr, src)
+
+
+class DeadRelay:
+    """A relay that can't be reached (Android without CA certificates, ntfy.sh down or blocked)."""
+
+    error = post_error = "URLError(no route)"
+
+    def publish(self, topic, msg):
+        pass
+
+    def poll(self, topic):
+        return []
 
 
 class MemoryRelay:

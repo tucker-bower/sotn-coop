@@ -277,6 +277,8 @@ class Driver:
 def run(script, out, retail_cue=None):
     """Runs one scripted session of the real launcher in this process."""
     out.mkdir(parents=True, exist_ok=True)
+    import logging  # the connector's steps (link/connect.py), into the test's output and logcat
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(name)s %(message)s")
     for f in out.glob("*.png"):
         f.unlink()
     if "COOP_DATA" not in os.environ:
@@ -320,6 +322,8 @@ def run(script, out, retail_cue=None):
     try:
         launcher = app.Launcher()
         if os.environ.get("COOP_UX_NO_AUDIO"):
+            if launcher.audio is not None:
+                launcher.audio.close()  # no device left open either (its thread)
             launcher.audio = None
         try:
             launcher.wizard()
@@ -358,7 +362,7 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_RETURN),                                # Choose my disc image (picker: COOP_PICK_FILE)
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
-        ("screen", "Home"), ("key", pg.K_RETURN),            # Couch co-op
+        ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op (Solo is first)
         ("screen", "Press a button"), ("shot", "lobby-empty"),
         ("pad", 0, A),                                      # player 1 joins (id 0, like the first real controller)
         ("pad", 101, A),                                      # player 2 joins
@@ -376,7 +380,7 @@ def _couch(pg, quit_at_end=True):
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
-        ("until", in_game), ("expect", lambda d: d.inputs <= 13, "home to playing in 13 inputs or fewer (10, plus the detours to Game files and shortcuts)"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 14, "home to playing in 14 inputs or fewer (11, plus the detours to Game files and shortcuts)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
@@ -393,6 +397,34 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back to the menu
         ("screen", "Home"), ("shot", "home-again"),
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
+
+
+def _solo(pg):
+    """M11 criterion 1, from the launcher: Home > Solo plays a new castle at once (no castles
+    yet); back on Home, Solo lists it."""
+    A = pg.CONTROLLER_BUTTON_A
+    in_game = lambda d: d.heading == "Game"
+
+    def castles():
+        from archive import Castle
+        return Castle.all()
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN),
+        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("count_inputs",),
+        ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 4, "home to playing solo in 4 inputs"),
+        ("expect", lambda d: len(castles()) == 1, "a new castle"),
+        ("game_frames", 900), ("shot", "solo-game"),
+        ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
+        ("game_frames", 3000), ("shot", "solo-game-later"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("shot", "castle-list"),
+        ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "it lists the castle played (the list is New castle and it)"),
+        ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
 
 
 def _window(pg):
@@ -437,6 +469,32 @@ def _menus(pg):
     return steps
 
 
+def _to_online(pg):
+    """Home to Online co-op: after Solo and Couch, or after Solo on Android (no couch there: design/M9)."""
+    from platform_android import ANDROID
+    return [("key", pg.K_DOWN)] * (1 if ANDROID else 2)
+
+
+def _picture_lit(d):
+    """The game's picture isn't black (its last frame: some pixels lit)."""
+    import pygame
+    games = d.launcher.display.games
+    f = games[0]._last if games else None
+    if f is None:
+        return False
+    small = pygame.transform.scale(f, (64, 48))
+    return sum(1 for x in range(64) for y in range(48) if sum(small.get_at((x, y))[:3]) > 60) > 100
+
+
+def _android_picture(name):
+    """On Android, play on to the title and check the game draws (design/M9)."""
+    from platform_android import ANDROID
+    if not ANDROID:
+        return []
+    return [("game_frames", 2400), ("shot", name + "-later"),
+            ("expect", _picture_lit, "the game draws (the picture isn't black)")]
+
+
 def _online_host(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
 
@@ -445,12 +503,15 @@ def _online_host(pg, code_file):
         Path(code_file).write_text(room)
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
-            ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host: new game
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            *_android_picture("host-playing"),
+            # The host stays until its partner leaves (a slower partner, a phone, checks later).
+            ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
@@ -459,17 +520,28 @@ def _online_join(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
-            ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+            ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Join your partner
             ("screen", "Join your partner"),
             *[("key", pg.K_BACKSPACE)] * 24,  # the box starts with the clipboard (here: the host's code)
             ("type_file", code_file), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("shot", "join-lobby"),
-            ("pad", 200, A), ("pad", 200, A),
+            # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
+            # controller (id 0)
+            ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            ("expect", lambda d: _received_castle(), "the joiner keeps a copy of the host's castle (design/M11)"),
+            *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+
+
+def _received_castle():
+    """The joiner's copy of the host's castle (Castle.receive, at connect): its name and id."""
+    from archive import Castle
+    got = [c for c in Castle.all() if c.info.get("received") and c.info.get("id")]
+    return got and got[0].name
 
 
 def _perf(pg):
@@ -513,7 +585,7 @@ def _characters(pg):
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
-             ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+             ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
              ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
@@ -527,7 +599,7 @@ def _characters(pg):
               ("screen", "Game files"), ("shot", "game-files-done"),
               ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
               ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
-              ("key", pg.K_RETURN),  # Couch co-op
+              ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
@@ -618,7 +690,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

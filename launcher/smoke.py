@@ -56,7 +56,7 @@ def main():
         check(pa.stage == pb.stage == 0x01 and all(q.flags & IN_PLAY for q in (pa, pb)),
               "a boss start plays in both games, outside the boss", a=str(pa.room), b=str(pb.room))
 
-    p = archive.Playthrough.new("Smoke test")
+    p = archive.Castle.new(name="Smoke test")
     file = str(launcher.starts_dir() / starts["Entrance hall"]["file"])
     from gameview import GameView
     with launcher.session((file, file), p) as s:
@@ -94,7 +94,7 @@ def main():
 def check_online(launcher, starts):
     """M7: single-game OnlineSession in GameView (1 screen, local music unmuted, savestates, F9)."""
     from gameview import GameView
-    p = archive.Playthrough.new("Online smoke test")
+    p = archive.Castle.new(name="Online smoke test")
     file = str(launcher.starts_dir() / starts["Entrance hall"]["file"])
     with launcher.online_session(file, p, rank=0) as s0, \
          launcher.online_session(file, None, rank=1) as s1:
@@ -120,7 +120,7 @@ def check_continue(launcher, starts):
     from session import SessionRun
     from session_saverooms import save_in_coffin
     from link.mailbox import BUSY, IN_PLAY
-    p = archive.Playthrough.new("Continue test")
+    p = archive.Castle.new(name="Continue test")
     file = str(launcher.starts_dir() / starts["Alchemy Lab: save room"]["file"])
     with launcher.session((file, file), p) as s:
         save_in_coffin(SessionRun(s, "continue"), s, s.a, s.b, p.joint_save)

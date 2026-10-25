@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Builds the Windows installer and a DRAFT GitHub release of it (design/M7b-polish.md part 1).
+"""Builds the Windows installer and the Android app, and a DRAFT GitHub release of them
+(design/M7b-polish.md part 1, design/M9-android.md).
 
-    python3 scripts/release.py 0.7.1 [--notes docs/releases/v0.7.1.md] [--no-build] [--target BRANCH]
+    python3 scripts/release.py 0.7.1 [--notes docs/releases/v0.7.1.md] [--no-build] [--android] [--target BRANCH]
 
 1. scripts/build_release.sh: the patch (from your disc and our build), the staged app, the
    installer (SOTN-Coop-setup-<version>.exe, in Emulators\\SOTN-Coop-release).
@@ -11,6 +12,8 @@
 3. gh release create v<version> --draft, with the installer uploaded as SOTN-Coop-setup.exe (a
    fixed name, so the README's .../releases/latest/download/SOTN-Coop-setup.exe always works),
    and SHA256SUMS.txt.
+4. With --android (not yet: Tucker playtests it first): android/build.sh (it checks the app holds
+   no game data), the APK uploaded as SOTN-Coop.apk (a fixed name too) and in SHA256SUMS.txt.
 The release stays a draft: Tucker tests it and publishes it (D76). Publishing is one click on
 GitHub, or: gh release edit v<version> --draft=false"""
 
@@ -76,6 +79,7 @@ def main():
     ap.add_argument("version")
     ap.add_argument("--notes", help="release notes (markdown); default docs/releases/v<version>.md")
     ap.add_argument("--no-build", action="store_true", help="use the installer already built")
+    ap.add_argument("--android", action="store_true", help="the Android app too")
     ap.add_argument("--target", default=None, help="the branch or commit the tag will point at")
     ap.add_argument("--published", action="store_true", help="allow replacing the installer of a published release")
     args = ap.parse_args()
@@ -93,8 +97,17 @@ def main():
     tmp = Path(tempfile.mkdtemp(prefix="coop-release-"))
     fixed = tmp / "SOTN-Coop-setup.exe"
     shutil.copyfile(exe, fixed)
+    assets = [fixed]
+    if args.android:
+        apk = MOD / ".env" / "android" / f"SOTN-Coop-{v}.apk"
+        if not args.no_build:
+            sh(MOD / "android" / "build.sh", v)
+        if not apk.exists():
+            raise SystemExit(f"no Android app: {apk} (android/build.sh {v})")
+        assets.append(tmp / "SOTN-Coop.apk")
+        shutil.copyfile(apk, assets[-1])
     sums = tmp / "SHA256SUMS.txt"
-    sums.write_text(f"{sha256(fixed)}  SOTN-Coop-setup.exe\n")
+    sums.write_text("".join(f"{sha256(a)}  {a.name}\n" for a in assets))
     print(sums.read_text().strip())
     existing = subprocess.run(["gh", "release", "view", f"v{v}", "-R", REPO, "--json", "isDraft", "--jq", ".isDraft"],
                               capture_output=True, text=True)
@@ -102,10 +115,10 @@ def main():
         raise SystemExit(f"v{v} is published: refusing to replace what players download. "
                          "Use a new version, or --published if Tucker asked for it.")
     if existing.returncode == 0:
-        sh("gh", "release", "upload", f"v{v}", fixed, sums, "--clobber", "-R", REPO)
+        sh("gh", "release", "upload", f"v{v}", *assets, sums, "--clobber", "-R", REPO)
         sh("gh", "release", "edit", f"v{v}", "--notes-file", notes, "-R", REPO)
     else:
-        cmd = ["gh", "release", "create", f"v{v}", fixed, sums, "--draft", "--title", f"SOTN Co-op {v}",
+        cmd = ["gh", "release", "create", f"v{v}", *assets, sums, "--draft", "--title", f"SOTN Co-op {v}",
                "--notes-file", notes, "-R", REPO]
         if args.target:
             cmd += ["--target", args.target]

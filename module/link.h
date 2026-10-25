@@ -60,6 +60,7 @@ typedef struct {
 #define EV_SPAWN2 9 // a: params, b: world x | world y << 16
 #define EV_RECORD 11 // a: time attack event (0xFFFF: b is D_8003CB00's bits), b: record
 #define EV_TAKEN 12  // a: slot | entityId << 8: the guest collected that drop; remove it, no reward
+#define EV_EXP 13    // b: XP this game gained from a kill (one shared level, design/M11)
 #define EV_SPAWN3 10 // a: slot range (0: 160-191, 1: 224-255) | velocityY >> 14 << 8, b: castleFlag
 
 typedef struct {

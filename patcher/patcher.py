@@ -55,6 +55,16 @@ def parse_cue(cue):
     return tracks
 
 
+def cue_files(text):
+    """The file names a .cue's text lists, in order, each once."""
+    names = []
+    for line in text.splitlines():
+        m = re.match(r'\s*FILE\s+"(.+)"\s+\w+', line) or re.match(r"\s*FILE\s+(\S+)\s+\w+", line)
+        if m and m[1] not in names:
+            names.append(m[1])
+    return names
+
+
 def boot_file(track1):
     """The boot executable SYSTEM.CNF names (e.g. SLUS_000.67), or None. Reads the ISO 9660
     root directory from the raw MODE2/2352 image."""

@@ -15,6 +15,8 @@ from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AG
 STAGE_ST0 = 0x1F  # the prologue
 from winmenu import MENU_EVENT
 
+BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (pauses, never quits the app)
+
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
 
@@ -87,10 +89,54 @@ class Audio:
         self.buf, self.lock = bytearray(), threading.Lock()
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
-        self.dev = sdl_audio.AudioDevice(devicename=None, iscapture=False, frequency=44100,
-                                         audioformat=sdl_audio.AUDIO_S16, numchannels=2, chunksize=1024,
-                                         allowed_changes=0, callback=self._pull)
+        self.dev = self.chan = None
+        if not getattr(pygame, "IS_CE", False):
+            # pygame (not -ce: Android, design/M9): its AudioDevice's Python callback deadlocks on
+            # the GIL there, so the sound goes through SDL_mixer, queued from the main thread.
+            if pygame.mixer.get_init() != (44100, -16, 2):
+                pygame.mixer.quit()
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+            self.chan = pygame.mixer.Channel(0)
+            self.fed_at = 0.0
+            return
+        kw = dict(iscapture=False, frequency=44100, audioformat=sdl_audio.AUDIO_S16, numchannels=2,
+                  chunksize=1024, allowed_changes=0, callback=self._pull)
+        self.dev = sdl_audio.AudioDevice(devicename=None, **kw)  # the default output
         self.dev.pause(0)
+
+    def _feed(self):
+        """SDL_mixer: one sound playing and one queued behind it, each all the sound buffered when
+        it's made (a frame or more). After running dry it waits for about 50 ms of sound first,
+        so a slow frame costs one short gap, not a crackle. A channel that stops taking sound
+        (seen on an emulator: idle, or stuck with one queued) is restarted."""
+        frame = 44100 * 4 // 60
+        now = time.monotonic()
+        with self.lock:
+            busy = self.chan.get_busy()
+            stuck = busy and now - self.fed_at > 0.5  # nothing taken for longer than a queue lasts
+            if stuck:
+                self.chan.stop()
+                busy = False
+            if busy and (self.chan.get_queue() is not None or len(self.buf) < frame):
+                return
+            if not busy and len(self.buf) < 3 * frame:
+                return
+            n = len(self.buf) // 4 * 4  # whole stereo samples
+            sound = pygame.mixer.Sound(buffer=bytes(self.buf[:n]))
+            del self.buf[:n]
+            self.pulls += 1
+            self.fed_at = now
+            if busy:
+                self.chan.queue(sound)
+            else:
+                self.underruns += self.pulls > 1  # it ran dry (the first start isn't)
+                self.chan.play(sound)
+
+    def close(self):
+        if self.dev is not None:
+            self.dev.close()
+        elif self.chan is not None:
+            self.chan.stop()
 
     def _pull(self, dev, mem):
         with self.lock:
@@ -114,6 +160,8 @@ class Audio:
             if len(self.buf) > 44100 * 4 // 5:  # over 0.2 s behind: drop the oldest
                 self.dropped_bytes += len(self.buf) - 44100 * 4 // 10
                 del self.buf[:len(self.buf) - 44100 * 4 // 10]
+        if self.chan is not None:
+            self._feed()
 
     def clear(self):
         with self.lock:
@@ -292,7 +340,7 @@ class GameView:
                     elif ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
                             return text
-                        if ev.key == pygame.K_ESCAPE:
+                        if ev.key in BACK_KEYS:
                             return ""
                         if ev.key == pygame.K_BACKSPACE:
                             text = text[:-1]
@@ -373,7 +421,7 @@ class GameView:
                 move = None
                 if ev.type == pygame.KEYDOWN:
                     move = {pygame.K_UP: -1, pygame.K_DOWN: 1}.get(ev.key)
-                    if ev.key == pygame.K_ESCAPE:
+                    if ev.key in BACK_KEYS:
                         return "resume"
                     if ev.key in (pygame.K_RETURN, pygame.K_z):
                         move = "ok"
@@ -431,7 +479,7 @@ class GameView:
                     self.pads.assign[player] = ev.instance_id
                     self.pads.refresh()
                     return "resume"
-                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                elif ev.type == pygame.KEYDOWN and ev.key in BACK_KEYS:
                     r = self.pause_menu(f"Player {player + 1}: controller disconnected.")
                     if r != "resume":
                         return r
@@ -443,6 +491,8 @@ class GameView:
     def status_line(self, clock):
         s = self.s
         fps = f"{clock.get_fps():.0f} fps"
+        if getattr(s, "solo", False):  # no partner to report on (design/M11)
+            return f"Solo   ·   F9: report a problem   ·   Esc: pause   ·   {fps}", (self.games[0].mailbox("self_presence"),)
         if self.online:
             g = self.games[0]
             hst = g.host("status")
@@ -485,7 +535,7 @@ class GameView:
                     leave = "quit"
                 elif ev.type == MENU_EVENT:
                     todo = self.menu_action(ev.action)
-                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                elif ev.type == pygame.KEYDOWN and ev.key in BACK_KEYS:
                     todo = "pause"
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_F1:
                     self.music_mode = {"auto": "left", "left": "right", "right": "auto"}[self.music_mode]
@@ -524,7 +574,9 @@ class GameView:
                 if picture:
                     w, h, fmt, pitch, n = picture
                     raw[i] = frame_surface(raw[i], fmt, pitch, h)
-                    raw[i].get_buffer().write(bytes(g.shm.buf[:n]), 0)
+                    # Through shared memory from a worker process; an in-process game (Android)
+                    # hands the bytes over as they are.
+                    raw[i].get_buffer().write(bytes(g.shm.buf[:n]) if g.shm is not None else n, 0)
                     frames.append(raw[i].subsurface((0, 0, w, h)))
                 else:
                     frames.append(None)

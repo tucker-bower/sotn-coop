@@ -2,10 +2,11 @@
 
     python launcher/app.py
 
-First run: your disc image, once. Then: Couch co-op or Online co-op.
+First run: your disc image, once. Then: Solo, Couch co-op or Online co-op, each on a castle
+(design/M11: a playthrough anyone can continue; a joiner keeps a copy of the host's).
 - Couch: one lobby screen where each player presses a button on their controller to join and
-  picks a character, then Continue or New game.
-- Online: Host (you get a room code to give your partner) or Join (you type theirs).
+  picks a character, then the castle.
+- Online: Host (pick a castle; you get a room code to give your partner) or Join (you type theirs).
 Menus work with a controller (d-pad, cross/A = OK, circle/B = back), the keyboard (arrows,
 Enter, Esc) or the mouse. On Windows the window also has a menu bar (launcher/winmenu.py), and
 it can be resized, maximized and made fullscreen (F11), with the games laid out side by side,
@@ -13,8 +14,10 @@ stacked, or in two windows (launcher/display.py).
 """
 
 import logging
+import math
 import multiprocessing
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -25,6 +28,7 @@ for sub in ("launcher", "harness", "patcher", ""):
     sys.path.insert(0, str(APP / sub) if sub else str(APP))
 
 import paths  # noqa: E402
+from platform_android import ANDROID  # noqa: E402
 
 if sys.platform == "win32":
     # pygame's DLLs (libpng: the icon) are loaded by name, later. Windows looks through PATH,
@@ -44,6 +48,7 @@ import pygame  # noqa: E402
 
 from display import CANVAS, LAYOUT_NAMES, Display  # noqa: E402
 from paths import human, load_settings, save_settings  # noqa: E402
+from report import VERSION  # noqa: E402
 from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
@@ -71,6 +76,12 @@ Meet in the same room to fight the same enemies. Bosses pull you both in.
 Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
 Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
 Save at a coffin: it saves both games. Continue loads both.
+
+Castles: every game is a castle, named after the name you typed and when it began
+(Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
+Whoever joins you online keeps a copy of your castle, to play solo or host later.
+Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
+their normal HP.
 
 Characters: pick Alucard, Richter or Maria in the lobby (Maria needs your Dracula X Chronicles
 disc: Settings › Game files). Richter and Maria learn their moves from Alucard's relics: Leap Stone
@@ -143,7 +154,7 @@ class UI:
                     raise Navigate(ev.action)
             elif ev.type == pygame.KEYDOWN:
                 a = {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
-                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back"}.get(ev.key)
+                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back"}.get(ev.key)
                 if a:
                     out.append(a)
             elif ev.type == pygame.CONTROLLERBUTTONDOWN:
@@ -250,10 +261,35 @@ class UI:
         t = self.mono.render(text, True, DIM)
         self.screen.blit(t, ((SIZE[0] - t.get_width()) // 2, SIZE[1] - 30))
 
-    def bar(self, done, total, y=300):
-        w = SIZE[0] - 300
-        pygame.draw.rect(self.screen, DIM, (150, y, w, 18), 1)
-        pygame.draw.rect(self.screen, BLOOD, (152, y + 2, int((w - 4) * done / max(total, 1)), 14))
+    def bar(self, done, total, y=280):
+        """Progress: a vial of blood filling up, with the percentage beside it."""
+        s, frac = self.screen, max(0.0, min(1.0, done / max(total, 1)))
+        t = pygame.time.get_ticks() / 1000
+        cx, bw, bh = SIZE[0] // 2, 79, 168  # odd widths: centred on column cx
+        body = pygame.Rect(cx - bw // 2, y + 30, bw, bh)
+        # the blood, clipped to the body below its level, with a gently moving surface
+        level = body.bottom - 4 - int((bh - 8) * frac)
+        if frac > 0:
+            s.set_clip(body.inflate(-8, -8))
+            pygame.draw.rect(s, BLOOD, body.inflate(-8, -8), border_radius=24)
+            wave = [(x, level + 3 * math.sin(x / 9 + t * 3)) for x in range(body.left, body.right + 1, 4)]
+            pygame.draw.polygon(s, BG, [(body.left, body.top)] + wave + [(body.right, body.top)])
+            pygame.draw.lines(s, (200, 40, 50), False, wave, 2)  # the surface catches the light
+            for i in range(4):  # bubbles rising through it
+                by = body.bottom - 8 - ((t * 22 + i * 37) % max(1, body.bottom - 8 - level))
+                pygame.draw.circle(s, (190, 50, 60), (body.left + 16 + i * 11 % (bw - 28), int(by)), 2)
+            s.set_clip(None)
+        # the glass: body, neck and cork, and a highlight down its side
+        pygame.draw.rect(s, DIM, body, 2, border_radius=28)
+        neck = pygame.Rect(cx - 13, y + 12, 26, 20)
+        pygame.draw.rect(s, BG, neck.inflate(-4, 4))
+        pygame.draw.line(s, DIM, neck.topleft, (neck.left, neck.bottom + 1), 2)
+        # a 2-px line draws right of its x: the right side at right - 1 keeps the neck centred
+        pygame.draw.line(s, DIM, (neck.right - 1, neck.top), (neck.right - 1, neck.bottom + 1), 2)
+        pygame.draw.rect(s, (110, 72, 44), (cx - 17, y, 35, 14), border_radius=3)
+        pygame.draw.line(s, (235, 230, 225), (body.left + 12, body.top + 18), (body.left + 12, body.bottom - 26), 2)
+        pct = self.small.render(f"{int(frac * 100)}%", True, DIM)
+        s.blit(pct, (body.right + 18, body.centery - pct.get_height() // 2))
 
     def menu(self, heading, items, subtitle="", footer="", hero=False, sel=0):
         """Returns the chosen index, or None (back)."""
@@ -360,10 +396,29 @@ def _pick_file_windows(title, types):
     return None
 
 
-def pick_file(title, types):
-    """The system's file picker: Windows' own dialog, or tkinter elsewhere."""
+def pick_file(title, types, ui=None, android_disc=None):
+    """The system's file picker: Windows' own dialog, or tkinter elsewhere. On Android, ui shows
+    the copy into the app, and android_disc picks SOTN's disc: "folder" (the folder it's in) or
+    "files" (its files one by one)."""
     if os.environ.get("COOP_PICK_FILE"):  # tests (launcher/uxdriver.py)
         return Path(os.environ["COOP_PICK_FILE"])
+    if ANDROID:  # the system's picker: the files are copied into the app's folder (design/M9)
+        import patcher
+        import platform_android
+        try:
+            run = ui and (lambda task: ui.wait_for("Copying your disc", "Into the app, once. This takes a minute.", task))
+            if android_disc == "files":
+                return platform_android.pick_disc_files(title, paths.data_dir() / "discs", run)
+            if android_disc == "folder":  # one tap, any rip, in folders inside it too
+                return platform_android.pick_disc(title, paths.data_dir() / "discs", run)
+            got = platform_android.pick_files(title, paths.data_dir() / "discs", run)
+        except (patcher.DiscError, OSError):  # said to the player
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("file picker")
+            return None
+        cues = [p for p in got if p.suffix.lower() == ".cue"]
+        return (cues or got or [None])[0]
     if sys.platform == "win32":
         try:
             return _pick_file_windows(title, types)
@@ -540,8 +595,13 @@ class Launcher:
     def add_dxc(self):
         """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
         import characters
-        path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
-                         [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")])
+        try:
+            path = pick_file("Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                             [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")], self.ui)
+        except OSError as e:  # copying it into the app (Android): most likely a full phone
+            log.exception("copying the DXC disc")
+            self.ui.message("Couldn't copy your disc", f"{e.strerror or e}.\nThe app needs about 2 GB free for it.")
+            return
         if not path:
             return
         try:
@@ -594,29 +654,79 @@ class Launcher:
 
     # --- first run
 
+    def update_disc(self):
+        """After an update, remakes the co-op disc from the player's own disc for this version's
+        patch, once. An old one would play a different game from the partner's, who'd be told
+        it's the same (HELO carries this version's patch CRC)."""
+        want = self.patch_crc()
+        if not self.disc() or want is None or self.settings.get("disc_patch") == want:
+            return
+        import patcher
+        src = self.settings.get("disc_source")
+        if not src:  # made before 0.9.0: the player's disc is next to it, named as it was
+            coop = self.disc()
+            stem = coop.name.replace(" (Co-op).cue", "")
+            src = next((p for p in (coop.with_name(stem + ".cue"), coop.with_name(stem + ".bin"),
+                                    coop.with_name(stem + " (Track 1).bin")) if p.exists()), coop.with_name(stem + ".cue"))
+        src = Path(src)
+        try:
+            cue = self.ui.wait_for("Updating the co-op disc",
+                                   f"This version of SOTN Co-op changes the co-op disc: it's remade\nfrom {src.name}, once.",
+                                   lambda progress: patcher.apply(src, PATCH, progress=progress))
+        except (patcher.DiscError, patcher.bps.PatchError, OSError) as e:
+            log.warning("updating the co-op disc from %s: %s", src, e)
+            self.settings["disc"] = None
+            save_settings(self.settings)
+            self.ui.message("Your disc again, please", f"This version of SOTN Co-op remakes the co-op disc, and couldn't\n"
+                            f"from {src.name}: {e}\nChoose your disc image again.")
+            return
+        self.settings.update(disc=str(cue), disc_source=str(src), disc_patch=want)
+        save_settings(self.settings)
+
     def wizard(self):
         ui = self.ui
+        self.update_disc()
         while not self.disc():
-            choice = ui.menu("Welcome", [("Choose my disc image", "Your own Symphony of the Night (USA) rip: the .cue file"),
-                                         ("Quit", "")],
-                             "Co-op is made from your own copy of the game: a disc image of\n"
-                             "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
-                             "Your file is never changed: the co-op disc is made next to it.")
-            if choice != 0:
+            if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
+                choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
+                                             ("Pick the files instead", "Not in a folder of their own? Pick the .cue and .bin files together, or the .zip"),
+                                             ("Quit", "")],
+                                 "Co-op is made from your own copy of the game: a disc image of\n"
+                                 "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
+                                 "Pick the folder it's in, then Use this folder. It's copied into the app.")
+            else:
+                choice = ui.menu("Welcome", [("Choose my disc image", "Your own Symphony of the Night (USA) rip: the .cue file"),
+                                             ("Quit", "")],
+                                 "Co-op is made from your own copy of the game: a disc image of\n"
+                                 "Castlevania: Symphony of the Night, USA version (SLUS-00067), as .cue + .bin.\n"
+                                 "Your file is never changed: the co-op disc is made next to it.")
+            if choice not in ((0, 1) if ANDROID else (0,)):
                 raise SystemExit
-            path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")])
+            import patcher
+            try:
+                path = pick_file("Your Symphony of the Night disc image (.cue)", [("Disc image", "*.cue *.bin"), ("All", "*.*")],
+                                 ui, android_disc=("folder", "files")[choice])
+            except patcher.DiscError as e:
+                ui.message("No disc image there", str(e))
+                continue
+            except OSError as e:  # copying it into the app (Android): most likely a full phone
+                log.exception("copying the disc")
+                ui.message("Couldn't copy your disc", f"{e.strerror or e}.\nThe app needs about 1.3 GB free for your disc and its co-op version.")
+                continue
             if not path:
                 continue
-            import patcher
             try:
                 cue = ui.wait_for("Making the co-op disc", f"From {path.name}\nThis takes a few seconds.",
                                   lambda progress: patcher.apply(path, PATCH, progress=progress))
             except (patcher.DiscError, patcher.bps.PatchError) as e:
+                if ANDROID:  # the copy we made of it: no use, and it's big
+                    shutil.rmtree(paths.data_dir() / "discs", ignore_errors=True)
                 ui.message("That disc won't work", str(e))
                 continue
-            self.settings["disc"] = str(cue)
+            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.patch_crc())
             save_settings(self.settings)
-            ui.message("Co-op disc ready", f"Made {cue.name}\nnext to your disc image.")
+            ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
+                       if ANDROID else f"Made {cue.name}\nnext to your disc image.")
 
     def make_debug_starts(self):
         import debugstarts
@@ -669,7 +779,7 @@ class Launcher:
                            pygame.CONTROLLER_BUTTON_Y: "shortcuts"}.get(ev.button, "any")
                 elif ev.type == pygame.KEYDOWN and not ev.mod & pygame.KMOD_ALT:
                     dev = "kb"
-                    key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back",
+                    key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back",
                            pygame.K_LEFT: "left", pygame.K_RIGHT: "right", pygame.K_s: "shortcuts"}.get(ev.key)
                     if key is None:
                         continue
@@ -796,14 +906,18 @@ class Launcher:
                     act, pending = pending, None
                     self.go(act)
                     continue
-                choice = self.ui.menu("", [("Couch co-op", "Two players on this PC, each with a controller"),
-                                           ("Online co-op", "Play with a friend on their own PC"),
-                                           ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls"),
-                                           ("Quit", "")], footer=self.storage_line(), hero=True)
-                if choice == 3:
-                    return
+                items = [("Solo", "Play a castle by yourself: any castle, any time", "solo"),
+                         ("Couch co-op", "Two players on this PC, each with a controller", "couch"),
+                         ("Online co-op", "Play with a friend on their own PC or phone", "online"),
+                         ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls", "settings"),
+                         ("Quit", "", "quit")]
+                if ANDROID:  # one game per device on Android (design/M9)
+                    items = [i for i in items if i[2] != "couch"]
+                choice = self.ui.menu("", [i[:2] for i in items], footer=self.storage_line(), hero=True)
                 if choice is not None:
-                    self.go(("couch", "online", "settings")[choice])
+                    if items[choice][2] == "quit":
+                        return
+                    self.go(items[choice][2])
             except Navigate as n:
                 pending = n.action
 
@@ -811,6 +925,8 @@ class Launcher:
         """Where a home choice or a menu-bar item leads."""
         if act in ("couch", "new", "continue"):
             self.couch(act)
+        elif act == "solo":
+            self.solo()
         elif act == "online":
             self.online_menu()
         elif act == "settings":
@@ -824,28 +940,58 @@ class Launcher:
         elif act == "quit":
             raise SystemExit
 
+    def pick_castle(self, heading, subtitle):
+        """The castle list (design/M11): New castle, then castles by last played. Returns
+        (castle, fresh), or None (back)."""
+        from archive import Castle
+        castles = Castle.all()[:7]
+        if not castles:  # nothing to pick from: a new one
+            return Castle.new(), True
+        items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
+        k = self.ui.menu(heading, items, subtitle)
+        if k is None:
+            return None
+        return (Castle.new(), True) if k == 0 else (castles[k - 1], False)
+
     def couch(self, act="couch"):
-        from archive import Playthrough
+        from archive import Castle
         if self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is None:
             return
-        pts = Playthrough.all()
-        if act == "new" or not pts:
-            choice = "new"
+        castles = Castle.all()
+        if act == "new" or (act == "continue" and not castles):
+            picked = (Castle.new(), True)
         elif act == "continue":
-            choice = "continue"
+            picked = (castles[0], False)
         else:
-            k = self.ui.menu("", [(f"Continue: {pts[0].name}", "Both games load your last joint save"),
-                                  ("New game", "Both players start a new game (each picks a name)"),
-                                  ("Savestates", "Go back to a moment of a playthrough")], hero=True)
-            if k is None:
-                return
-            choice = ("continue", "new", "savestates")[k]
-        if choice == "new":
-            self.play(Playthrough.new(), fresh=True)
-        elif choice == "continue":
-            self.play(pts[0])
-        else:
-            self.savestates()
+            picked = self.pick_castle("Couch co-op: which castle?", "Player 1 is slot 1 of the castle, player 2 slot 2.")
+        if picked:
+            self.play(*picked)
+
+    def solo(self):
+        """One game, no partner: 1× boss HP, full XP (the game's duo balancing waits for a
+        partner it never hears from). The castle's slot 2 stays as it was."""
+        picked = self.pick_castle("Solo: which castle?", "Any castle: yours, or one you joined.")
+        if not picked or self.lobby(1, subtitle="Playing solo.") is None:
+            return
+        castle, fresh = picked
+        castle.played_here()
+        try:
+            with self.online_session(None, castle, rank=0) as s:
+                s.solo = True
+                s.joint.on_write = castle.saved
+                self.continue_castle(s, castle, fresh)
+                self.run_view(s, castle)
+        finally:
+            castle.tidy()
+
+    def continue_castle(self, s, castle, fresh):
+        """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
+        if fresh:
+            return
+        self.load_cards(s, castle)
+        if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
+            self.apply_players(s)
+            s.joint.resume()
 
     # --- playing
 
@@ -865,14 +1011,13 @@ class Launcher:
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
         self.apply_players(s)
-        if len(s.games) == 1:
-            who = "A" if getattr(s, "rank", 0) == 0 else "B"
-            cards = (playthrough.card(who),) if playthrough else None
+        if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
+            cards = (playthrough.card("A"),) if playthrough else None
         else:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
-                        launcher=self)
+                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self)
         result = view.run()
         if result == "quit":
             raise SystemExit
@@ -881,8 +1026,7 @@ class Launcher:
 
     def load_cards(self, s, playthrough):
         if len(s.games) == 1:
-            who = "A" if getattr(s, "rank", 0) == 0 else "B"
-            card = playthrough.card(who)
+            card = playthrough.card("A")
             if card.exists():
                 s.local.load_card(card.read_bytes())
             return
@@ -904,15 +1048,15 @@ class Launcher:
             self.ui.flip()
         return False
 
-    def play(self, playthrough, fresh=False):
-        with self.session((None, None), playthrough) as s:
-            if not fresh:
-                self.load_cards(s, playthrough)
-            if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
-                self.apply_players(s)
-                s.joint.resume()
-            playthrough.save_info()
-            self.run_view(s, playthrough)
+    def play(self, castle, fresh=False):
+        castle.played_here()
+        try:
+            with self.session((None, None), castle) as s:
+                s.joint.on_write = castle.saved
+                self.continue_castle(s, castle, fresh)
+                self.run_view(s, castle)
+        finally:
+            castle.tidy()
 
     # --- online co-op (design/M7, design/M7b-netcode.md)
 
@@ -944,7 +1088,7 @@ class Launcher:
                     if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
                             return text.strip()
-                        if ev.key == pygame.K_ESCAPE:
+                        if ev.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                             return None
                         if ev.key == pygame.K_BACKSPACE:
                             text = text[:-1]
@@ -977,38 +1121,33 @@ class Launcher:
             pygame.key.stop_text_input()
 
     def online_menu(self):
-        from archive import Playthrough
         while True:
-            pts = Playthrough.all()
-            items, actions = [], []
-            if pts:
-                items.append((f"Host: continue {pts[0].name}", "Resume your last joint save, with your partner"))
-                actions.append(("host_continue", pts[0]))
-            items.append(("Host: new game", "You get a room code to give your partner"))
-            actions.append(("host_new", None))
-            items.append(("Join your partner", "Type the room code your partner gives you"))
-            actions.append(("join", None))
-            items.append(("Back", ""))
-            actions.append(("back", None))
+            items = [("Host", "Pick a castle; you get a room code to give your partner"),
+                     ("Join your partner", "Type their room code: you play their castle, and keep a copy"),
+                     ("Back", "")]
             choice = self.ui.menu("Online co-op", items,
-                                  "Each of you plays on your own PC, with the same version of SOTN Co-op.")
-            if choice is None or actions[choice][0] == "back":
+                                  "Each of you plays on your own PC or phone, with the same version of SOTN Co-op.")
+            if choice is None or choice == 2:
                 return
-            act, arg = actions[choice]
-            if act == "host_new":
-                self.host_online(Playthrough.new(), fresh=True)
-            elif act == "host_continue":
-                self.host_online(arg, fresh=False)
-            elif act == "join":
+            if choice == 0:
+                picked = self.pick_castle("Host: which castle?", "Your partner joins it, and keeps a copy.")
+                if picked:
+                    self.host_online(*picked)
+            else:
                 self.join_online()
 
     def online_session(self, start, playthrough, rank=0, peer=None):
+        from link.connect import GAME_PORT
         from session import OnlineSession
         self.apply_bios()
         return OnlineSession(
-            self.disc(), start=start, rank=rank, peer=peer, audio=True,
+            self.disc(), start=start, rank=rank, peer=peer, audio=True, joint=True,
             session_file=playthrough.joint_save if playthrough else None,
             patch_crc=self.patch_crc(), blob=self.blob(),
+            # tests: a fixed port (Android emulators: design/M9); else the usual one, which the LAN
+            # broadcast finds (link/connect.py), or any free one
+            port=int(os.environ["COOP_PORT"]) if os.environ.get("COOP_PORT") else (GAME_PORT, 0),
+            in_process=ANDROID,  # Android can't start worker processes
         )
 
     def partner_line(self, s, waiting):
@@ -1022,14 +1161,30 @@ class Launcher:
             return f"Connected!\n{ping}", True
         if c.get("state") == "failed":
             raise ConnectFailed(c.get("reason") or "")
+        if c.get("left_s") is not None:
+            # which step it's on: says at once which side is stuck (Tucker's Thor test, 2026-10-23)
+            step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
+                    "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
+            if c.get("relay_error") and c.get("state") == "waiting":  # say so now, not in five minutes
+                step = "Can't reach the room-code server\nLooking on this Wi-Fi"
+            waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 
-    def host_online(self, playthrough, fresh=False):
+    def host_online(self, castle, fresh=False):
+        castle.played_here()
+        try:
+            self._host_online(castle, fresh)
+        finally:
+            castle.tidy()
+
+    def _host_online(self, playthrough, fresh):
         from link.rendezvous import make_room_code
         with self.online_session(None, playthrough, rank=0) as s:
+            s.joint.on_write = playthrough.saved
+            s.local.host("set_castle", playthrough.meta())  # the joiner keeps a copy (design/M11)
             room = make_room_code()
             self._clip_put(room)
-            s.local.host("start_connect", room, "host")
+            s.local.host("start_connect", room, "host", app=VERSION)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them."),
@@ -1040,16 +1195,11 @@ class Launcher:
                 return
             finally:
                 self.room_info = ""
-            if not fresh:
-                self.load_cards(s, playthrough)
-            if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
-                self.apply_players(s)
-                s.joint.resume()
-            playthrough.save_info()
+            self.continue_castle(s, playthrough, fresh)
             self.run_view(s, playthrough)
 
     def join_online(self):
-        from archive import Playthrough
+        from archive import Castle
         from link.rendezvous import ConnectError, parse_connect_input
         code = ""
         while True:
@@ -1063,11 +1213,9 @@ class Launcher:
             except ConnectError as e:
                 self.ui.message("Check that code", str(e))
                 continue
-            pts = Playthrough.all()
-            playthrough = pts[0] if pts else Playthrough.new("Online co-op")
-            with self.online_session(None, playthrough, rank=1) as s:
+            with self.online_session(None, None, rank=1) as s:
                 if kind == "room":
-                    s.local.host("start_connect", target, "join")
+                    s.local.host("start_connect", target, "join", app=VERSION)
                     waiting = f"Room\n{target}\nlooking for your partner…"
                 else:
                     s.connect(target)
@@ -1078,20 +1226,28 @@ class Launcher:
                 except ConnectFailed as e:
                     self.ui.message("Couldn't reach your partner", str(e))
                     continue
-                self.load_cards(s, playthrough)
-                playthrough.save_info()
-                self.run_view(s, playthrough)
+                # The host's castle: this player's copy of it (design/M11)
+                meta = (s.local.host("status").get("partner_hello") or {}).get("castle")
+                castle = Castle.receive(meta) if meta else Castle.new(received=True)
+                s.joint.path = castle.joint_save
+                s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
+                self.load_cards(s, castle)
+                try:
+                    self.run_view(s, castle)
+                finally:
+                    s.joint.on_write = None
+                castle.tidy()
                 return
 
     # --- the rest
 
     def savestates(self):
-        from archive import Playthrough, load_pair
+        from archive import Castle, load_pair
         ui = self.ui
         while True:
-            pts = Playthrough.all()
+            pts = Castle.all()
             if not pts:
-                ui.message("Savestates", "No playthroughs yet.")
+                ui.message("Savestates", "No castles yet.")
                 return
             choice = ui.menu("Savestates", [(f"{p.name}  —  {human(p.savestates_size())}", f"{len(p.savestate_pairs())} moments")
                                             for p in pts],
@@ -1117,6 +1273,7 @@ class Launcher:
                     (Path(tmp) / "A.state").write_bytes(a)
                     (Path(tmp) / "B.state").write_bytes(b)
                     with self.session((str(Path(tmp) / "A.state"), str(Path(tmp) / "B.state")), p) as s:
+                        s.joint.on_write = p.saved
                         self.load_cards(s, p)
                         self.run_view(s, p)
             elif act == 1:
@@ -1213,7 +1370,10 @@ class Launcher:
 def main():
     logging.basicConfig(filename=paths.data_dir() / "launcher.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    log.info("start")
+    if ANDROID:  # and to logcat too, where android/device.py log reads it
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stderr))
+    os.environ["COOP_WORKER_LOG"] = str(paths.data_dir() / "session.log")  # the game processes' log
+    log.info("start %s", VERSION)
     app = None
     try:
         app = Launcher()

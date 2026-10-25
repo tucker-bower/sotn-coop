@@ -11,6 +11,7 @@ One libretro core per process, so each game is a worker process driven over a pi
 """
 
 import multiprocessing as mp
+import os
 import sys
 import traceback
 
@@ -19,92 +20,118 @@ from coop_env import COOP, TOOLS, savestate
 sys.path.insert(0, str(COOP))  # for `link`
 
 
+class _Worker:
+    """One game: its SwanStation core, Mailbox, Host and UDP transport, driven by commands
+    (handle). A worker process runs one (_worker); Android, which can't start processes, runs one
+    in its own process (InProcessGame, design/M9)."""
+
+    def __init__(self, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
+                 port=0, patch_crc=None, learn_peer=False):
+        import collections
+        from emu import Emu
+        from link.adapter import HarnessAdapter
+        from link.host import Host
+        from link.mailbox import Mailbox
+        from link.transport import UdpTransport
+        from module import symbols
+
+        self.shm = None
+        if shm_name:
+            from multiprocessing import shared_memory
+            self.shm = shared_memory.SharedMemory(name=shm_name)
+        self.emu = emu = Emu(disc, audio=audio)
+        emu.__enter__()
+        if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
+            emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
+        self.mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
+        self.transport = UdpTransport(port=port, host="127.0.0.1", bind_host=bind_host)
+        self.transport.learn_peer = learn_peer
+        # Virtual time for the simulated internet (link/netsim.py): this game's frames / 60,
+        # with the second game half a frame behind (the driver steps them alternately).
+        # Real-time play (audio) keeps the wall clock.
+        self.clock = {"t": rank / 120, "dt": 1 / 60}
+        if not audio:
+            self.transport.clock = lambda: self.clock["t"]
+        self.host = Host(self.mailbox, self.transport, rank, patch_crc=patch_crc, playout=learn_peer)
+        self.linked = True
+        self.host_ms = collections.deque(maxlen=3600)  # the host's time per frame (never waits)
+
+    def handle(self, cmd, args):
+        import time
+        emu, host = self.emu, self.host
+        if cmd == "step":
+            n, p1 = args
+            for _ in range(n):
+                emu.step(1, p1)
+                self.clock["t"] += self.clock["dt"]
+                if self.linked:
+                    t0 = time.perf_counter()
+                    host.after_frame()
+                    self.host_ms.append((time.perf_counter() - t0) * 1000)
+            return emu.snapshot()
+        if cmd == "host_ms":
+            out = list(self.host_ms)
+            self.host_ms.clear()
+            return out
+        if cmd == "rate":  # this PC's frame rate (its clock drifts against the other's)
+            self.clock["dt"] = 1 / args
+        elif cmd == "stall":  # this PC hitches: time passes, the game doesn't run
+            self.clock["t"] += args / 60
+        elif cmd == "connect":
+            self.transport.connect(args)
+        elif cmd == "partition":  # the network drops everything, both ways
+            self.transport.partitioned = args
+        elif cmd == "unlink":  # stop the host: as if the partner's side vanished
+            self.linked = False
+        elif cmd == "link":
+            self.linked = True
+        elif cmd == "call":  # any Emu, Mailbox, Host, or UdpTransport method
+            target, name, a, kw = args
+            obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport}[target]
+            return getattr(obj, name)(*a, **kw)
+        elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
+            emu.step(1, args)
+            if self.linked:
+                host.after_frame()
+            picture = emu.raw_frame()
+            if picture and self.shm is not None:  # the pixels go through shared memory
+                w, h, fmt, pitch, data = picture
+                self.shm.buf[:len(data)] = data
+                picture = (w, h, fmt, pitch, len(data))
+            return picture, emu.take_audio()
+        elif cmd == "screenshot":
+            img = emu.screenshot()
+            return None if img is None else (img.size, img.tobytes())
+        elif cmd == "quit":
+            self.close()
+        else:
+            raise ValueError(f"unknown command {cmd}")
+        return None
+
+    def close(self):
+        self.transport.close()
+        self.emu.__exit__(None, None, None)
+
+
 def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
             port=0, patch_crc=None, learn_peer=False):
-    from emu import Emu
-    from link.adapter import HarnessAdapter
-    from link.host import Host
-    from link.mailbox import Mailbox
-    from link.transport import UdpTransport
-    from module import symbols
-
-    shm = None
-    if shm_name:
-        from multiprocessing import shared_memory
-        shm = shared_memory.SharedMemory(name=shm_name)
+    if os.environ.get("COOP_WORKER_LOG"):  # the launcher's: a worker's warnings (connect, relay) kept
+        import logging
+        logging.basicConfig(filename=os.environ["COOP_WORKER_LOG"], level=logging.INFO,
+                            format="%(asctime)s %(levelname)s %(name)s %(message)s")
     try:
-        with Emu(disc, audio=audio) as emu:
-            if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
-                emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
-            mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
-            transport = UdpTransport(port=port, host="127.0.0.1", bind_host=bind_host)
-            transport.learn_peer = learn_peer
-            # Virtual time for the simulated internet (link/netsim.py): this game's frames / 60,
-            # with the second game half a frame behind (the driver steps them alternately).
-            # Real-time play (audio) keeps the wall clock.
-            clock = {"t": rank / 120, "dt": 1 / 60}
-            if not audio:
-                transport.clock = lambda: clock["t"]
-            host = Host(mailbox, transport, rank, patch_crc=patch_crc, playout=learn_peer)
-            linked = True
-            import collections
-            import time
-            host_ms = collections.deque(maxlen=3600)  # the host's time per frame (never waits)
-            conn.send(("ok", transport.port))
-            while True:
-                cmd, args = conn.recv()
-                if cmd == "step":
-                    n, p1 = args
-                    for _ in range(n):
-                        emu.step(1, p1)
-                        clock["t"] += clock["dt"]
-                        if linked:
-                            t0 = time.perf_counter()
-                            host.after_frame()
-                            host_ms.append((time.perf_counter() - t0) * 1000)
-                    conn.send(("ok", emu.snapshot()))
-                elif cmd == "host_ms":
-                    conn.send(("ok", list(host_ms)))
-                    host_ms.clear()
-                elif cmd == "rate":  # this PC's frame rate (its clock drifts against the other's)
-                    clock["dt"] = 1 / args
-                    conn.send(("ok", None))
-                elif cmd == "stall":  # this PC hitches: time passes, the game doesn't run
-                    clock["t"] += args / 60
-                    conn.send(("ok", None))
-                elif cmd == "connect":
-                    transport.connect(args)
-                    conn.send(("ok", None))
-                elif cmd == "partition":  # the network drops everything, both ways
-                    transport.partitioned = args
-                    conn.send(("ok", None))
-                elif cmd == "unlink":  # stop the host: as if the partner's side vanished
-                    linked = False
-                    conn.send(("ok", None))
-                elif cmd == "link":
-                    linked = True
-                    conn.send(("ok", None))
-                elif cmd == "call":  # any Emu, Mailbox, Host, or UdpTransport method
-                    target, name, a, kw = args
-                    obj = {"emu": emu, "mailbox": mailbox, "host": host, "transport": transport}[target]
-                    conn.send(("ok", getattr(obj, name)(*a, **kw)))
-                elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
-                    emu.step(1, args)
-                    if linked:
-                        host.after_frame()
-                    picture = emu.raw_frame()
-                    if picture and shm is not None:  # the pixels go through shared memory
-                        w, h, fmt, pitch, data = picture
-                        shm.buf[:len(data)] = data
-                        picture = (w, h, fmt, pitch, len(data))
-                    conn.send(("ok", (picture, emu.take_audio())))
-                elif cmd == "screenshot":
-                    img = emu.screenshot()
-                    conn.send(("ok", None if img is None else (img.size, img.tobytes())))
-                elif cmd == "quit":
-                    transport.close()
-                    conn.send(("ok", None))
-                    return
+        w = _Worker(disc, start, rank, audio, shm_name, bind_host, port, patch_crc, learn_peer)
+        conn.send(("ok", w.transport.port))
+        while True:
+            cmd, args = conn.recv()
+            try:
+                value = w.handle(cmd, args)
+            except Exception:
+                conn.send(("error", traceback.format_exc()))
+                continue
+            conn.send(("ok", value))
+            if cmd == "quit":
+                return
     except Exception:
         conn.send(("error", traceback.format_exc()))
 
@@ -175,6 +202,24 @@ class Game:
 
     def __getattr__(self, name):  # Emu methods: read, write, snapshot, save_state, ...
         return lambda *a, **kw: self._ask("call", ("emu", name, a, kw))
+
+
+class InProcessGame(Game):
+    """A Game whose worker runs here, in this process (Android: design/M9)."""
+
+    def __init__(self, name, worker):
+        self.name, self.w, self.proc, self.shm = name, worker, None, None
+        self._pending = None
+
+    def _ask(self, cmd, args=None):
+        return self.w.handle(cmd, args)
+
+    def frame_start(self, pad=0):
+        self._pending = self.w.handle("frame", pad)
+
+    def frame_end(self):
+        value, self._pending = self._pending, None
+        return value
 
 
 class MailboxProxy:
@@ -286,17 +331,26 @@ class OnlineSession:
     """One local game instance per player (design/M7, D74), connected to a remote partner over UDP."""
 
     def __init__(self, disc, start=None, rank=0, peer=None, session_file=None, audio=False,
-                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True, character=0, blob=None):
+                 bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True, character=0, blob=None,
+                 in_process=False, joint=False):
+        """in_process: run the game here, not in a worker process (Android: design/M9). joint:
+        joint saves even before the castle's file is known (an online joiner: design/M11)."""
         self.disc, self.start, self.rank, self.character, self.blob = disc, start, rank, character, blob
+        self.in_process = in_process
         self.peer, self.session_file, self.audio = peer, session_file, audio
         self.bind_host, self.req_port = bind_host, port
         self.patch_crc, self.learn_peer = patch_crc, learn_peer
         self.joint = None
+        self.want_joint = joint
         self.port = None
 
     def __enter__(self):
-        ctx = mp.get_context("spawn")
         self._shms = []
+        if self.in_process:
+            w = _Worker(str(self.disc), self.start, self.rank, self.audio, None, self.bind_host,
+                        self.req_port, self.patch_crc, self.learn_peer)
+            return self._started(InProcessGame("AB"[self.rank], w), w.transport.port)
+        ctx = mp.get_context("spawn")
         shm_name = None
         if self.audio:
             from multiprocessing import shared_memory
@@ -315,14 +369,17 @@ class OnlineSession:
         status, value = game.conn.recv()
         if status != "ok":
             raise RuntimeError(f"online game failed to start: {value}")
-        self.port = value
+        return self._started(game, value)
+
+    def _started(self, game, port):
+        self.port = port
         self.games = [game]
         self.local = self.a = game
         self.b = None
         game.host("set_player", character=self.character, blob=self.blob)
         if self.peer is not None:
             self.connect(self.peer)
-        if self.session_file:
+        if self.session_file or self.want_joint:
             from link.jointsave import JointSave
             self.joint = JointSave([MailboxProxy(game)], self.session_file,
                                    host=HostProxy(game), rank=self.rank)
@@ -344,6 +401,9 @@ class OnlineSession:
         return s
 
     def __exit__(self, *exc):
+        if self.in_process:
+            self.local.w.close()
+            return
         Session.__exit__(self, *exc)
 
 
