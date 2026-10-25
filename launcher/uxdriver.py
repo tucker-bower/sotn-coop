@@ -277,6 +277,8 @@ class Driver:
 def run(script, out, retail_cue=None):
     """Runs one scripted session of the real launcher in this process."""
     out.mkdir(parents=True, exist_ok=True)
+    import logging  # the connector's steps (link/connect.py), into the test's output and logcat
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(name)s %(message)s")
     for f in out.glob("*.png"):
         f.unlink()
     if "COOP_DATA" not in os.environ:
