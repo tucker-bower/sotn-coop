@@ -143,6 +143,15 @@ def main():
     check(a.t.peer is None and b.t.peer is None and a.host.connector.state != "connected",
           "a player with another room code is never accepted")
 
+    # A game with no room code (joined by ip:port) answers our LAN broadcast: only a host takes it
+    # (its partner typed our ip:port); a joiner with a room code never does (D100).
+    net, clock = Internet(), (lambda: 0.0)
+    for role, want in (("host", True), ("join", False)):
+        p = Player(net, net.router(CONE), "BAT-7K2Q", role, MemoryRelay(), [], clock)
+        p.host._check_hello(b'{"link": %d, "sid": "0badf00d"}' % p.host.hello["link"], ("10.0.0.9", GAME_PORT))
+        check(bool(p.host.partner_hello) == want,
+              f"a roomless HELO: the {role} {'takes it (ip:port)' if want else 'ignores it'}")
+
     # Different versions (Tucker's Thor on 0.9.0-dev, his PC still on 0.7.1): told at once, by name.
     for what, ver in (("a newer joiner", {"link": 99, "app": "1.0.0"}), ("a joiner from before 0.9.0", {"link": 8, "app": None})):
         a, b = session(CONE, CONE, b_version=ver, seconds=10)

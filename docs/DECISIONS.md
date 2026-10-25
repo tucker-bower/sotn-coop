@@ -504,3 +504,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **The playtest build is 0.11.0-dev**, after the milestone (as 0.9.0-dev was M9's). Its patch differs from 0.9.0's (`EV_EXP`), so a 0.9.0 partner is refused by name.
 - **Criterion 4 and 5's tests:** `m11_copy` covers both halves of criterion 4 (B hosts its copy, C joins). Criterion 5's rule (a played copy is never overwritten; `(2)`) is tested on the castle files in `launcher/test_castles.py`, without games: the games only decide when a save happens, which `m11_copy` covers.
 - **Criterion 8 on Android:** the online join script (used by the Android pair tests) checks the joiner keeps a copy of the host's castle at connect; the save into it is `m11_copy`'s (the same `OnlineSession` code, in-process on Android).
+
+**D100: A joiner with a room code only takes a HELO with that room's token** (agent, 2026-10-25)
+- Found by `android_room` while the harness ran on the same PC: the PC joiner's LAN broadcast (D96) was answered by one of the harness's games (no room code), and the joiner took it as its partner. The Android host was left waiting. A real house could do the same with any game joined by ip:port.
+- `Host._check_hello`: with a room code, a HELO with no room token is accepted only by a host (its partner typed our ip:port, the fallback). A joiner requires the room's token. `link/test_connect.py` covers both.

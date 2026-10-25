@@ -147,9 +147,13 @@ class Host:
             theirs = json.loads(payload)
         except ValueError:
             return
-        if self.hello.get("room") and theirs.get("room") not in (None, self.hello["room"]):
-            return  # someone in another room: not our partner. (No room at all: a partner who
-            # typed our ip:port, the fallback when room codes can't connect: design/M7b, M9.)
+        if self.hello.get("room") and theirs.get("room") != self.hello["room"]:
+            # Someone in another room: not our partner. No room at all is a partner who typed our
+            # ip:port (the fallback when room codes can't connect: design/M7b, M9), so only a host
+            # takes one: a joiner with a room code would take any game on the network that answers
+            # its LAN broadcast (an ip:port game in the same house; the harness's games, D100).
+            if theirs.get("room") is not None or not self.connector or self.connector.role != "host":
+                return
         if theirs.get("sid") == self.hello["sid"]:
             return  # our own HELO, come back to us (a candidate that was this PC, or a LAN broadcast)
         if (not self.hello.get("room") and theirs.get("room") and self.transport.peer
