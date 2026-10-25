@@ -82,6 +82,10 @@ _Last updated: 2026-10-25 (M11 built)_
   - Tests: `m11_shared_xp`, `m11_shared_xp_richter`, `m11_solo`, `m11_copy` (criteria 3 and 4), `m11_slot2_clone`; `launcher/test_castles.py` (14 checks: names, copies, criterion 5's rule, slots); uxdriver `solo`, `couch`, `online` (the joiner keeps the host's castle) pass.
   - Builds: `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.11.0-dev.exe`, `.env/android/SOTN-Coop-0.11.0-dev.apk`.
   - Old playthroughs aren't listed (not converted, D97): a 0.9 save is still on disk but doesn't show up.
+  - Full harness 97/97, smoke 17/17, `test_connect` (with D100's fix: a room-code joiner took a roomless game answering its LAN broadcast), uxdriver solo/couch/online, `android_pc` (60 s) pass.
+  - **Installed on both (2026-10-25 13:05):** PC (silent install) and the Thor (`device.py install`). Ready for Tucker's playtest.
+  - **Test environment broke after the PC crash:** since WSL restarted, nothing from outside reaches the Android test emulators (their STUN fails too). `android_room` and `android_pc_join` fail the same way with yesterday's 0.9.0 code and APK, which passed then, so it isn't the code. The real Thor and PC don't use this path. Next: fix the emulator networking (likely a restart of the emulators/WSL), then re-run both.
+  - Not done yet: the M11 PR.
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
   1. Settings › Game files: choose your Dracula X Chronicles .iso (`SOTN\discs\Castlevania - The Dracula X Chronicles (USA).iso`). Maria appears in the lobby.
