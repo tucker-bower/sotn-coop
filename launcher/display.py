@@ -16,6 +16,21 @@ import os
 import pygame
 from pygame._sdl2.video import Renderer, Texture, Window
 
+
+def _on_a_monitor(pos):
+    """Whether a saved window position is still on a connected monitor (Windows; elsewhere assume so).
+    SDL places a window off-screen without complaint, so a monitor unplugged since hides the launcher."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+        point = wintypes.POINT(int(pos[0]) + 100, int(pos[1]) + 10)  # a grabbable spot near the top-left
+        return bool(ctypes.windll.user32.MonitorFromPoint(point, 0))  # 0: MONITOR_DEFAULTTONULL
+    except Exception:  # noqa: BLE001
+        return True
+
+
 CANVAS = (1032, 532)
 BAR = 26               # the status bar under the games (window pixels)
 GAP = 8
@@ -128,7 +143,7 @@ class Display:
         self.icon = pygame.image.load(icon) if os.path.exists(icon) else None
         if self.icon:
             self.window.set_icon(self.icon)
-        if settings.get("window_pos"):
+        if settings.get("window_pos") and _on_a_monitor(settings["window_pos"]):
             try:
                 self.window.position = tuple(settings["window_pos"])
             except Exception:  # noqa: BLE001 - that monitor is gone
