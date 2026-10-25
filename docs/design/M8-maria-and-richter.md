@@ -1,6 +1,6 @@
 # M8 design: playable Maria and Richter
 
-**Status:** revised 2026-10-20 after Tucker's feedback (D84). Awaiting approval. Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
+**Status:** approved by Tucker 2026-10-21 (D85, D86). Every recommended option (1A–4A), plus §5 (both HUDs visible). Built on `coop-m8-maria-richter`; every criterion has a passing test (the PR lists them). Character balance and the ability mapping have their own design: `docs/design/M8b-character-balance.md`.
 **Context:** D27 (character choice), D75 (M8 scope), D84 (Tucker's M8 decisions).
 
 ## Goal
@@ -10,6 +10,7 @@
 2. **Every character gets the full Alucard castle:** all bosses, relics, items, cutscenes and switches, and progression for Richter and Maria that keeps them as strong as Alucard at every point (M8b).
 3. **Maria comes from the player's own *Dracula X Chronicles* (USA PSP) disc image**, which is optional. Without it, Maria shows as locked in the lobby, as now.
 4. **Setting up the game files is clear to a first-time player:** the SOTN disc (required), the DXC disc (optional, adds Maria), and the BIOS (included, replaceable).
+5. **Both players always see their own health, MP and hearts** (§5).
 
 ## Spike findings (`disks/sotn.pspus.iso`, 2026-10-19)
 - **Richter is entirely on the US PS1 disc:** `BIN/RIC.BIN` and `VAB/SD_RIH.VH/.VB`, decompiled in `src/ric/`.
@@ -65,7 +66,7 @@
 |---|---|---|
 | **A. Optional DXC disc in the launcher; Maria extracted from it locally** | The player points the launcher at their DXC `.iso`. Maria's overlay, graphics and voice/SFX are extracted into the data folder once. Nothing is distributed. | ✅ **Recommended (Tucker: option A).** |
 
-**DXC dialogue and voice acting:** Tucker said "whatever is easiest; most users won't care". Swapping the 2007 script and voices means converting ATRAC3 audio and replacing cutscene scripts in 8 stages, which is weeks of work for an option few will use. **Dropped from M8; on the backlog** (agent-default, D84). Maria's own voice clips come with her either way.
+**DXC dialogue and voice acting:** Tucker said "whatever is easiest; most users won't care". Swapping the 2007 script and voices means converting ATRAC3 audio and replacing cutscene scripts in 8 stages, which is weeks of work for an option few will use. **Dropped from M8, and on the roadmap's backlog** (D84, D85). Maria's own voice clips come with her either way.
 
 **The game-files screen** (first run, and Settings › Game files), one row per file:
 
@@ -86,10 +87,27 @@
 - **The lobby explains a locked Maria:** "Maria: add your *Dracula X Chronicles* disc in Settings › Game files". Pressing a button there opens that screen.
 - **Only the SOTN disc blocks playing.** The DXC disc can be added at any time, and nothing is rebuilt.
 
+## 5. Both HUDs fully visible
+**The problem:** in footage of the 2026-10-20 couch playtest, Player 1's health and hearts readout (top left of the game picture) may be cut off.
+
+**The suspects, in order:**
+1. **The Windows menu bar** (`winmenu.py`) is attached after SDL creates the window. If SDL doesn't account for the smaller client area, the top rows of the window sit under the menu bar. That hits only the game drawn at the top, which is P1 in the stacked layout.
+2. **The core's overscan crop:** SwanStation's crop mode can trim the top lines of the picture.
+3. **Our own drawing over the game:** notices, or the partner markers.
+
+**Fix:** find the cause, fix it in the launcher, and add a check for it, below.
+
+**Found (2026-10-21):** none of the three. The launcher was maximized on Tucker's 3440×1440 ultrawide (its `settings.json`: 3440×1349, maximized), and the recording (`Videos/2026-10-20 20-49-30.mp4`) is 1280×720, a 16:9 view of that 21:9 window. That cuts both outer sides: P1's HP, hearts and name on the left, the right edge of P2's picture on the right. The status bar's text is cut at its left too. On the monitor itself, both HUDs were whole.
+- Ruled out with evidence: the menu bar doesn't take rows from what we draw (the client area equals the size we render at, on Windows); the core's overscan crop leaves the HUD whole (the HP orb starts about 3 rows down in its 256×240 frame); our notices draw in the status bar, not over the games.
+- **Check:** `uxdriver.py hud` on Windows: both games in play, then every layout (two windows too) × both pixel modes × 3 window sizes. Each game's top rows on screen (PrintWindow of the client area) match what we render, and match the core's own frame (144/144 checks).
+- **Hardening:** a remembered window size is clamped to the biggest screen there is now, so a size from another monitor can't hang off the edges.
+
 ## Tucker's answers to the open questions (2026-10-20)
 1. Every character gets the full Alucard castle.
 2. Characters are picked in the launcher's lobby, as now.
 3. DXC dialogue and voices: whatever is easiest. That means not in M8 (above).
+4. **2026-10-21:** every recommended option (1A, 2A, 3A, 4A) is approved. The DXC voice and dialogue swap goes on the roadmap's backlog. New: §5 here, plus one-button moves and off-hand weapons in M8b.
+5. **2026-10-21, final:** sending F9 reports moves to the backlog (D86, `docs/design/backlog-report-sending.md`). Off-hand weapons use option A with existing art only. Alucard's spell shortcuts are in M8, and every button shortcut is an option each player sets in the launcher.
 
 ## Acceptance criteria
 1. **Maria from the USA DXC disc** (`test_pspus_extract`): her overlay, graphics, palettes and SFX are built from `disks/sotn.pspus.iso` alone, into the data folder.
@@ -105,3 +123,7 @@
    - Everything they get is shared with the partner, as with Alucard, in every combination.
 5. **Game files screen** (`ux_game_files`): a stranger following only the screen sets up both discs. Each wrong file (EU PSP disc, PS1 disc of another region, a random file) gets a plain error that says what's needed.
 6. **M8b's criteria** (character balance) pass.
+7. **Both HUDs visible** (`ux_hud_visible`):
+   - Every layout (side by side, stacked, two windows, fullscreen), every scaling and three window sizes are covered.
+   - In each, both games' HP, MP and hearts readout appears in full in the window, compared with the core's own frame.
+   - The cause found is named in the PR.

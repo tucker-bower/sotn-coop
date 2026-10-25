@@ -9,7 +9,8 @@ Us, for a release:
     python patcher.py make <retail track 1 .bin> <co-op .bin from build_disc.sh> --out dist/
 
 The patch holds only what differs from the retail disc (our code and the hook bytes, bps.py):
-never game data.
+never game data. Our Richter's art is copied from the player's own RIC.BIN, and the checksums
+(EDC/ECC) of every sector we changed are computed on the player's PC (sectors.py).
 """
 
 import argparse
@@ -22,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bps  # noqa: E402
+import sectors  # noqa: E402
 
 SECTOR = 2352
 GAME_IDS = {                   # SYSTEM.CNF's boot file -> what to tell the player
@@ -129,6 +131,9 @@ def apply(disc, patch_path=DEFAULT_PATCH, out_dir=None, progress=None):
     track1, others = find_track1(disc)
     combined = check_disc(track1, patch)
     src_size, dst_size, meta, _, dst_crc = bps.info(patch)
+    about = json.loads(meta or b"{}")
+    if "disc_crc32" in about:  # the disc as made, once its checksums are computed (sectors.py)
+        dst_crc = int(about["disc_crc32"], 16)
     out_dir = Path(out_dir) if out_dir else track1.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(disc).stem.replace(" (Track 1)", "")
@@ -147,6 +152,8 @@ def apply(disc, patch_path=DEFAULT_PATCH, out_dir=None, progress=None):
         tmp.unlink()
     else:
         bps.apply_file(track1, patch, out_bin, progress)
+    if not _same(out_bin, dst_size, dst_crc):
+        seal(out_bin, about.get("seal", []), dst_crc)
     lines = [f'FILE "{out_bin.name}" BINARY', "  TRACK 01 MODE2/2352", "    INDEX 01 00:00:00"]
     audio = list(others)
     if combined:  # the audio track after track 1, inside the same file: copy it out
@@ -167,6 +174,21 @@ def apply(disc, patch_path=DEFAULT_PATCH, out_dir=None, progress=None):
     return cue
 
 
+def seal(path, ranges, crc):
+    """Computes the checksums of the sectors the patch left neutral, then checks the whole disc."""
+    with open(path, "r+b") as f:
+        for first, count in ranges:
+            f.seek(first * SECTOR)
+            data = bytearray(f.read(count * SECTOR))
+            for k in range(count):
+                s = bytearray(data[k * SECTOR:(k + 1) * SECTOR])
+                data[k * SECTOR:(k + 1) * SECTOR] = sectors.seal(s)
+            f.seek(first * SECTOR)
+            f.write(data)
+    if not _same(path, path.stat().st_size, crc):
+        raise DiscError("The co-op disc came out wrong (the patch or the disc is damaged).")
+
+
 def _same(path, size, crc):
     """path already holds exactly the patch's target (size and CRC-32)."""
     if not path.exists() or path.stat().st_size != size:
@@ -178,18 +200,73 @@ def _same(path, size, crc):
     return c == crc
 
 
+def find_file(image, path):
+    """(first sector, size) of a file in a raw MODE2/2352 image (ISO 9660), or None."""
+    def sector(n):
+        return image[n * SECTOR + 24:n * SECTOR + 24 + 2048]
+    record = sector(16)[156:156 + 34]
+    for part in path.split("/"):
+        lba, size = int.from_bytes(record[2:6], "little"), int.from_bytes(record[10:14], "little")
+        data = b"".join(sector(lba + k) for k in range((size + 2047) // 2048))
+        i, found = 0, None
+        while i < len(data):
+            n = data[i]
+            if n == 0:
+                i = (i // 2048 + 1) * 2048
+                continue
+            name = data[i + 33:i + 33 + data[i + 32]].decode("ascii", "replace").split(";")[0]
+            if name.upper() == part.upper():
+                found = data[i:i + n]
+                break
+            i += n
+        if found is None:
+            return None
+        record = found
+    return int.from_bytes(record[2:6], "little"), int.from_bytes(record[10:14], "little")
+
+
+def _span(place):
+    lba, size = place
+    return lba * SECTOR, (lba + (size + 2047) // 2048) * SECTOR
+
+
+def _ranges(indexes):
+    out = []
+    for i in indexes:
+        if out and out[-1][0] + out[-1][1] == i:
+            out[-1][1] += 1
+        else:
+            out.append([i, 1])
+    return out
+
+
 def make(retail_track1, coop_bin, out_dir, version):
     retail = Path(retail_track1).read_bytes()
     coop = Path(coop_bin).read_bytes()
-    meta = json.dumps({"game": "SLUS-00067", "mod": "sotn-coop", "version": version}).encode()
-    patch = bps.create(retail, coop, meta)
+    # Every sector we changed goes in with its checksums zeroed: the patcher computes them.
+    target, sealed = bytearray(coop), []
+    for i in range(len(coop) // SECTOR):
+        a, b = i * SECTOR, (i + 1) * SECTOR
+        if coop[a:b] != retail[a:b]:
+            n = sectors.neutral(coop[a:b])
+            if n != coop[a:b]:
+                target[a:b] = n
+                sealed.append(i)
+    # Our Richter (COOPRIC.BIN) is built from the decomp with the retail one's art: copied from it.
+    moving = []
+    ours, theirs = find_file(coop, "COOPRIC.BIN"), find_file(retail, "BIN/RIC.BIN")
+    if ours and theirs:
+        moving.append(_span(ours) + _span(theirs))
+    meta = json.dumps({"game": "SLUS-00067", "mod": "sotn-coop", "version": version,
+                       "seal": _ranges(sealed), "disc_crc32": f"{zlib.crc32(coop):08x}"}).encode()
+    patch = bps.create(retail, bytes(target), meta, moving=moving)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "sotn-coop.bps").write_bytes(patch)
     info = bps.info(patch)
     (out / "manifest.json").write_text(json.dumps({
         "version": version, "game": "SLUS-00067", "source_size": info[0], "target_size": info[1],
-        "source_crc32": f"{info[3]:08x}", "target_crc32": f"{info[4]:08x}", "patch_bytes": len(patch),
+        "source_crc32": f"{info[3]:08x}", "target_crc32": f"{zlib.crc32(coop):08x}", "patch_bytes": len(patch),
     }, indent=1))
     return out / "sotn-coop.bps"
 

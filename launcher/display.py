@@ -119,6 +119,10 @@ class Display:
         settings["_fullscreen"] = False
         w, h = settings.get("window_size") or (CANVAS[0], CANVAS[1] + 60)
         pygame.display.init()
+        # Never bigger than the biggest screen there is now (a size remembered from another
+        # monitor, e.g. an ultrawide, would hang off the edges: design/M8 §5).
+        sizes = pygame.display.get_desktop_sizes() or [(w, h)]
+        w, h = min(w, max(s[0] for s in sizes) - 16), min(h, max(s[1] for s in sizes) - 80)
         self.window = Window(title, size=(max(640, w), max(360, h)), resizable=True)
         icon = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
         self.icon = pygame.image.load(icon) if os.path.exists(icon) else None

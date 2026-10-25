@@ -2,7 +2,7 @@
 
 *What is a man? A co-operative little pile of friendship.*
 
-**Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two player adventure: each hunter roams the cursed corridors on their own screen. Explore independently, fight bosses together, share relic and equipment pickups. See your partner's location on the map and teleport to them at will. This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, communicating with each other over a python api. 
+**Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two player adventure: each hunter roams the cursed corridors on their own screen. Explore independently, fight bosses together, share progression. See your partner's location on the map and teleport to them at will. This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, communicating with each other over a python api. 
 
 ## Getting started
 **[Download the latest release](https://github.com/tucker-bower/sotn-coop/releases/latest)**: pick the PC or the Android download, then follow its four steps below. Every release is on the [releases page](https://github.com/tucker-bower/sotn-coop/releases).
@@ -23,11 +23,10 @@
 
 ### What you need
 - **Your own copy of the game:** *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image: a `.cue` file plus its `.bin` file(s). Rip your own disc with a disc-imaging tool (for example ImgBurn: *Create image file from disc*, then pick *BIN/CUE*). We can't give you the game.
-- **A controller per player** (Xbox, PlayStation, Switch Pro and most USB controllers work). No controller? The keyboard works too.
-- For online play: a friend with their own copy, and the same version of SOTN Co-op.
+- **OPTIONAL** *Castlevania: The Dracula X Chronicles* PSP .iso file
 
 ### 1. Download
-Download **[SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)** (about 25 MB) from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest).
+Download co-op launcher**[SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)** (about 25 MB).
 
 Your browser and Windows will probably warn you. The installer isn't code-signed, because signing costs money every year; everything it installs is built from the source in this repository.
 - **Edge:** "SOTN-Coop-setup.exe isn't commonly downloaded". Click **…**, then **Keep**, then **Show more**, then **Keep anyway**.
@@ -51,6 +50,7 @@ Click **Choose my disc image** and pick your game's `.cue` file. In a few second
 - The first time, **Windows Firewall** may ask whether to let *Python* communicate. Click **Allow** (SOTN Co-op runs on Python).
 - On the same Wi-Fi, the two games find each other directly. Over the internet, they get through most home routers without any setup.
 - If it can't connect, the lobby says which step it's stuck on, and why. *Help › Online troubleshooting* has what to try.
+
 
 ### While you play
 - **The window:** resize it, maximize it, or press **F11** for fullscreen. *View* in the menu bar lays the two games out side by side, stacked (for a vertical monitor), or with player 2 in its own window (a second monitor or TV). Pixels are sharp, and the picture is always the game's true 4:3 shape.
@@ -92,7 +92,7 @@ A two-player co-op mod for *Castlevania: Symphony of the Night* (PS1, US / SLUS-
 
 ### Goal
 
-Two players explore Dracula's castle **independently**, each on their own screen, with **shared progression**. A relic, item, unlocked area or explored room found by one player counts for both, live. Players meet up to fight the same enemies, take on bosses together, and watch cutscenes together. They can also teleport to each other at any time. The aim is co-op that's still fun after tens of hours and repeat playthroughs, including co-op speedruns. See `docs/DECISIONS.md` D19–D31.
+Two players explore Dracula's castle **independently**, each on their own screen, with **shared progression**. A relic, item, unlocked area or explored room found by one player counts for both, live. Players meet up to fight the same enemies, take on bosses together, and watch cutscenes together. They can also teleport to each other at any time. The aim is to create a frictionless way for two friends to enjoy SOTN together.
 
 ## How it works
 Each player runs their **own copy of the game** in an emulator. A **co-op link** connects them. Each game has an in-game module in the 8MB expansion RAM, and a host program per player that relays shared state between the two games.
@@ -105,27 +105,20 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 
 ## Scope
 
-**Month target: "explore together"** (Alucard + Alucard)
 - Each player sees their partner on the map, and as a tinted puppet when the two are in the same room.
 - **Shared, live:** relics, castle flags, the explored map, items and consumables (each player gets a copy), max-HP/MP/Hearts upgrades, pooled gold, and boss kills.
 - **Separate:** level, XP, hearts and subweapon, and the equipped loadout.
 - Teleport to the partner from the map (✕). A player who dies respawns at the partner's location, except during a boss fight, where the survivor has to finish the boss alone first. Each player can pause on their own, unless both are in the same room.
 - **Same room means the same enemies:** both players fight them, and enemies can target either player.
 - **Bosses together:** the partner is teleported in automatically, and bosses get 2× HP. Cutscenes are seen together.
-- **Joint save:** saving at a save room's coffin saves both games, and both resume from the title's Load menu.
+- **Shared Castles** : any partner can continue any save, the joiner keeps a copy, and a solo mode.
 
-**Since then**
-- Each player picks Alucard, Richter or Maria (M8). Maria needs your own *Dracula X Chronicles* `.iso`.
-- Android (M9, preview): online co-op on phones and handhelds, against PCs too.
-
-**Later**
-- Castles (M11): any partner can continue any save, the joiner keeps a copy, and a solo mode.
-- Full inverted castle coverage.
-- Speedrun features.
+## Coming Soon
+- Richter and Maria full playable with custom balancing and can progress through the entire castle and use Alucard's equipment
+- Full end to end play testing including inverted castle coverage.
 
 ## Non-goals
 - Real PS1 hardware. The mod is emulator-only.
-- Two players inside a single game instance (D20).
 - Distributing any copyrighted game data.
 
 ## Constraints
@@ -136,7 +129,7 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 ## Testing approach
 - A frame-stepped headless harness with savestates, scripted and bot inputs, and RAM assertions.
 - **Multi-instance session tests:** two games plus the host, with scripted inputs on both and assertions across both games (for example, "P1 picks up a relic, and P2 has it within N frames").
-- Human playtests on PC.
+- Human playtests
 
 ## Docs
 - [`AGENTS.md`](AGENTS.md): how AI agents work on this project
