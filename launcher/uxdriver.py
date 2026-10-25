@@ -397,6 +397,34 @@ def _couch(pg, quit_at_end=True):
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
 
 
+def _solo(pg):
+    """M11 criterion 1, from the launcher: Home > Solo plays a new castle at once (no castles
+    yet); back on Home, Solo lists it."""
+    A = pg.CONTROLLER_BUTTON_A
+    in_game = lambda d: d.heading == "Game"
+
+    def castles():
+        from archive import Castle
+        return Castle.all()
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN),
+        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("count_inputs",),
+        ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 4, "home to playing solo in 4 inputs"),
+        ("expect", lambda d: len(castles()) == 1, "a new castle"),
+        ("game_frames", 900), ("shot", "solo-game"),
+        ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
+        ("game_frames", 3000), ("shot", "solo-game-later"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("shot", "castle-list"),
+        ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "it lists the castle played (the list is New castle and it)"),
+        ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
+
+
 def _window(pg):
     steps = _couch(pg, quit_at_end=False)[:-2]
     i = next(k for k, s in enumerate(steps) if s[0] == "unplug")
@@ -501,9 +529,17 @@ def _online_join(pg, code_file):
             ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            ("expect", lambda d: _received_castle(), "the joiner keeps a copy of the host's castle (design/M11)"),
             *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+
+
+def _received_castle():
+    """The joiner's copy of the host's castle (Castle.receive, at connect): its name and id."""
+    from archive import Castle
+    got = [c for c in Castle.all() if c.info.get("received") and c.info.get("id")]
+    return got and got[0].name
 
 
 def _perf(pg):
@@ -652,7 +688,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

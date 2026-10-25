@@ -491,6 +491,8 @@ class GameView:
     def status_line(self, clock):
         s = self.s
         fps = f"{clock.get_fps():.0f} fps"
+        if getattr(s, "solo", False):  # no partner to report on (design/M11)
+            return f"Solo   ·   F9: report a problem   ·   Esc: pause   ·   {fps}", (self.games[0].mailbox("self_presence"),)
         if self.online:
             g = self.games[0]
             hst = g.host("status")

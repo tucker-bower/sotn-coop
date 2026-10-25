@@ -8,6 +8,7 @@ games' enemy table first, so that half of it is told apart from all of it."""
 from session import session_scenario  # first: puts `link` on the path
 
 from bots import walker
+from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER
 from module import stage_symbol
 from session_progress import EXP, LEVEL, STATUS, status
 from session_shared import HALL, stage_entities
@@ -61,6 +62,21 @@ def fight_until_xp(run, frames=1200):
 def m11_shared_xp(run):
     """M11 criterion 2: A's kill gives A half the XP (a partner is linked), and B gains exactly
     what A gained. Then, from just short of the next level, A's kill levels up both games."""
+    shared_xp(run)
+
+
+@session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER))
+def m11_shared_xp_richter(run):
+    """M11 risk: a Richter partner levels up from Alucard's kills too (character.c's Growth:
+    only Alucard's own code checks EXP)."""
+    from session_m8 import reload_game
+    run.expect(reload_game(run, run.s.b), "B loads as Richter")
+    run.expect(run.s.b.mailbox("self_presence").character == CHAR_RICHTER, "B plays Richter",
+               b=run.s.b.mailbox("self_presence").character)
+    shared_xp(run)
+
+
+def shared_xp(run):
     a, b = run.s.a, run.s.b
     walk_into_hall(run)
     run.expect(a.snapshot()["room"] != b.snapshot()["room"], "A and B are in different rooms",

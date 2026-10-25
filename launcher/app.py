@@ -977,6 +977,7 @@ class Launcher:
         castle.played_here()
         try:
             with self.online_session(None, castle, rank=0) as s:
+                s.solo = True
                 s.joint.on_write = castle.saved
                 self.continue_castle(s, castle, fresh)
                 self.run_view(s, castle)

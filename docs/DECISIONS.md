@@ -498,3 +498,9 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **The folder** takes the castle's name after the session that gave it one (e.g. `Tucker_2026-10-25-21-40`), because Windows can't rename it while files are open.
 - **Single-game sessions** (solo, online) use card `A`: slot 1 is this player on every machine.
 - **Home order:** Solo, Couch co-op, Online co-op. Solo is the big button.
+
+**D99: M11 finish: Solo's status bar, its tests, version 0.11.0-dev** (agent-default, 2026-10-25)
+- **Solo's status bar says "Solo"** (no partner, ping or Together/Apart). It had said "Partner connected · ping ? ms" for a solo game: the online status line read a partner age that starts at 0.
+- **The playtest build is 0.11.0-dev**, after the milestone (as 0.9.0-dev was M9's). Its patch differs from 0.9.0's (`EV_EXP`), so a 0.9.0 partner is refused by name.
+- **Criterion 4 and 5's tests:** `m11_copy` covers both halves of criterion 4 (B hosts its copy, C joins). Criterion 5's rule (a played copy is never overwritten; `(2)`) is tested on the castle files in `launcher/test_castles.py`, without games: the games only decide when a save happens, which `m11_copy` covers.
+- **Criterion 8 on Android:** the online join script (used by the Android pair tests) checks the joiner keeps a copy of the host's castle at connect; the save into it is `m11_copy`'s (the same `OnlineSession` code, in-process on Android).
