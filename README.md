@@ -4,7 +4,22 @@
 
 **Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two player adventure: each hunter roams the cursed corridors on their own screen. Explore independently, fight bosses together, share relic and equipment pickups. See your partner's location on the map and teleport to them at will. This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, communicating with each other over a python api. 
 
-## Play it (Windows 10 or 11)
+## Getting started
+**[Download the latest release](https://github.com/tucker-bower/sotn-coop/releases/latest)**: pick the PC or the Android download, then follow its four steps below. Every release is on the [releases page](https://github.com/tucker-bower/sotn-coop/releases).
+
+**You need your own copy of the game** in both cases: *Castlevania: Symphony of the Night*, the USA PlayStation version, as a disc image (`.cue` + `.bin`). We can't give you the game.
+
+| | On a PC (Windows 10 or 11) | On Android (preview) |
+|---|---|---|
+| **1. Download** | [SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe) (25 MB) | [SOTN-Coop.apk](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop.apk) (40 MB), on the phone |
+| **2. Install** | Run it: **Next**, **Next**, **Finish** (no admin rights needed) | Open it, allow your browser to **install unknown apps**, tap **Install** |
+| **3. Your disc** | **Choose my disc image**, pick your `.cue` | Copy the disc into a folder like `Download/SOTN`, then **Choose my disc's folder** |
+| **4. Play** | **Couch co-op** (two controllers) or **Online co-op** | **Online co-op**, with a controller |
+| | [Details](#play-it-on-windows) | [Details](#play-it-on-android-preview) |
+
+**Playing online:** one of you picks **Host: new game** and sends the room code (like `BAT-7K2Q`) to the other, who picks **Join your partner** and types it. PCs and phones play each other. Both of you need the same version.
+
+## Play it on Windows
 
 ### What you need
 - **Your own copy of the game:** *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image: a `.cue` file plus its `.bin` file(s). Rip your own disc with a disc-imaging tool (for example ImgBurn: *Create image file from disc*, then pick *BIN/CUE*). We can't give you the game.
@@ -12,7 +27,7 @@
 - For online play: a friend with their own copy, and the same version of SOTN Co-op.
 
 ### 1. Download
-Download **[SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)** (about 25 MB).
+Download **[SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)** (about 25 MB) from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest).
 
 Your browser and Windows will probably warn you. The installer isn't code-signed, because signing costs money every year; everything it installs is built from the source in this repository.
 - **Edge:** "SOTN-Coop-setup.exe isn't commonly downloaded". Click **…**, then **Keep**, then **Show more**, then **Keep anyway**.
@@ -26,13 +41,16 @@ Click **Next**, **Next**, then **Finish**. It doesn't need administrator rights,
 Click **Choose my disc image** and pick your game's `.cue` file. In a few seconds SOTN Co-op makes its co-op version of the disc next to yours (your files are never changed). It only asks once.
 
 ### 4. Play on one PC (couch co-op)
-**Couch co-op**, then each player presses a button on their own controller (or Enter for the keyboard) and presses **Cross / A** when ready. Then **New game**, or **Continue** your last save. Player 1 is the left screen, player 2 the right one.
+**Couch co-op**, then each player presses a button on their own controller (or Enter for the keyboard), picks Alucard, Richter or Maria with Left/Right, and presses **Cross / A** when ready. Then **New game**, or **Continue** your last save. Player 1 is the left screen, player 2 the right one.
+
+**Maria:** under **Settings › Game files**, pick your own *Castlevania: The Dracula X Chronicles* (PSP) `.iso`. She then appears in the lobby.
 
 ### 5. Play online
 - **One of you hosts:** **Online co-op**, then **Host: new game**. You get a room code like `BAT-7K2Q`; it's on your clipboard. Send it to your friend.
 - **The other joins:** **Online co-op**, then **Join your partner**. Type or paste the code.
 - The first time, **Windows Firewall** may ask whether to let *Python* communicate. Click **Allow** (SOTN Co-op runs on Python).
-- If it can't connect, the launcher says why. *Help › Online troubleshooting* has what to try.
+- On the same Wi-Fi, the two games find each other directly. Over the internet, they get through most home routers without any setup.
+- If it can't connect, the lobby says which step it's stuck on, and why. *Help › Online troubleshooting* has what to try.
 
 ### While you play
 - **The window:** resize it, maximize it, or press **F11** for fullscreen. *View* in the menu bar lays the two games out side by side, stacked (for a vertical monitor), or with player 2 in its own window (a second monitor or TV). Pixels are sharp, and the picture is always the game's true 4:3 shape.
@@ -42,7 +60,7 @@ Click **Choose my disc image** and pick your game's `.cue` file. In a few second
 We never distribute game data: the launcher builds everything from your own disc.
 
 ## Play it on Android (preview)
-The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. **It's in testing and not released yet,** so the link below doesn't work yet.
+The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. It's a preview: sound can crackle on slower devices.
 
 ### What you need
 - An **Android 7 or newer** phone or handheld (AYN, Retroid, Odin and the like work), with about **1.3 GB free**.
@@ -50,7 +68,7 @@ The Android app plays **online co-op**, against another Android device or a PC. 
 - **Your own disc image**, as for Windows: the `.cue` and `.bin` files of the USA disc (or a `.zip` of them).
 
 ### 1. Install the app
-On your phone, download **[SOTN-Coop.apk](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop.apk)** (about 40 MB) and open it.
+On your phone, download **[SOTN-Coop.apk](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop.apk)** (about 40 MB) from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest) and open it.
 - Android asks whether your browser may **install unknown apps**. Tap **Settings**, turn on **Allow from this source**, then go back and tap **Install**.
 - If **Play Protect** warns about an unknown app, tap **More details**, then **Install anyway**. The app isn't on the Play Store; everything in it is built from this repository.
 
@@ -96,8 +114,12 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 - **Bosses together:** the partner is teleported in automatically, and bosses get 2× HP. Cutscenes are seen together.
 - **Joint save:** saving at a save room's coffin saves both games, and both resume from the title's Load menu.
 
+**Since then**
+- Each player picks Alucard, Richter or Maria (M8). Maria needs your own *Dracula X Chronicles* `.iso`.
+- Android (M9, preview): online co-op on phones and handhelds, against PCs too.
+
 **Later**
-- Each player picks Alucard, Richter or Maria (M8, being designed).
+- Castles (M11): any partner can continue any save, the joiner keeps a copy, and a solo mode.
 - Full inverted castle coverage.
 - Speedrun features.
 
