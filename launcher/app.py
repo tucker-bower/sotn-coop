@@ -899,12 +899,13 @@ class Launcher:
                     act, pending = pending, None
                     self.go(act)
                     continue
-                items = [("Couch co-op", "Two players on this PC, each with a controller", "couch"),
+                items = [("Solo", "Play a castle by yourself: any castle, any time", "solo"),
+                         ("Couch co-op", "Two players on this PC, each with a controller", "couch"),
                          ("Online co-op", "Play with a friend on their own PC or phone", "online"),
                          ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls", "settings"),
                          ("Quit", "", "quit")]
                 if ANDROID:  # one game per device on Android (design/M9)
-                    items = items[1:]
+                    items = [i for i in items if i[2] != "couch"]
                 choice = self.ui.menu("", [i[:2] for i in items], footer=self.storage_line(), hero=True)
                 if choice is not None:
                     if items[choice][2] == "quit":
@@ -917,6 +918,8 @@ class Launcher:
         """Where a home choice or a menu-bar item leads."""
         if act in ("couch", "new", "continue"):
             self.couch(act)
+        elif act == "solo":
+            self.solo()
         elif act == "online":
             self.online_menu()
         elif act == "settings":
@@ -930,28 +933,55 @@ class Launcher:
         elif act == "quit":
             raise SystemExit
 
+    def pick_castle(self, heading, subtitle):
+        """The castle list (design/M11): New castle, then castles by last played. Returns
+        (castle, fresh), or None (back)."""
+        from archive import Castle
+        castles = Castle.all()[:7]
+        items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
+        k = self.ui.menu(heading, items, subtitle)
+        if k is None:
+            return None
+        return (Castle.new(), True) if k == 0 else (castles[k - 1], False)
+
     def couch(self, act="couch"):
-        from archive import Playthrough
+        from archive import Castle
         if self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is None:
             return
-        pts = Playthrough.all()
-        if act == "new" or not pts:
-            choice = "new"
+        castles = Castle.all()
+        if act == "new" or (act == "continue" and not castles):
+            picked = (Castle.new(), True)
         elif act == "continue":
-            choice = "continue"
+            picked = (castles[0], False)
         else:
-            k = self.ui.menu("", [(f"Continue: {pts[0].name}", "Both games load your last joint save"),
-                                  ("New game", "Both players start a new game (each picks a name)"),
-                                  ("Savestates", "Go back to a moment of a playthrough")], hero=True)
-            if k is None:
-                return
-            choice = ("continue", "new", "savestates")[k]
-        if choice == "new":
-            self.play(Playthrough.new(), fresh=True)
-        elif choice == "continue":
-            self.play(pts[0])
-        else:
-            self.savestates()
+            picked = self.pick_castle("Couch co-op: which castle?", "Player 1 is slot 1 of the castle, player 2 slot 2.")
+        if picked:
+            self.play(*picked)
+
+    def solo(self):
+        """One game, no partner: 1× boss HP, full XP (the game's duo balancing waits for a
+        partner it never hears from). The castle's slot 2 stays as it was."""
+        picked = self.pick_castle("Solo: which castle?", "Any castle: yours, or one you joined.")
+        if not picked or self.lobby(1, subtitle="Playing solo.") is None:
+            return
+        castle, fresh = picked
+        castle.played_here()
+        try:
+            with self.online_session(None, castle, rank=0) as s:
+                s.joint.on_write = castle.saved
+                self.continue_castle(s, castle, fresh)
+                self.run_view(s, castle)
+        finally:
+            castle.tidy()
+
+    def continue_castle(self, s, castle, fresh):
+        """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
+        if fresh:
+            return
+        self.load_cards(s, castle)
+        if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
+            self.apply_players(s)
+            s.joint.resume()
 
     # --- playing
 
@@ -971,9 +1001,8 @@ class Launcher:
     def run_view(self, s, playthrough, goal=""):
         from gameview import GameView
         self.apply_players(s)
-        if len(s.games) == 1:
-            who = "A" if getattr(s, "rank", 0) == 0 else "B"
-            cards = (playthrough.card(who),) if playthrough else None
+        if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
+            cards = (playthrough.card("A"),) if playthrough else None
         else:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
@@ -987,8 +1016,7 @@ class Launcher:
 
     def load_cards(self, s, playthrough):
         if len(s.games) == 1:
-            who = "A" if getattr(s, "rank", 0) == 0 else "B"
-            card = playthrough.card(who)
+            card = playthrough.card("A")
             if card.exists():
                 s.local.load_card(card.read_bytes())
             return
@@ -1010,15 +1038,15 @@ class Launcher:
             self.ui.flip()
         return False
 
-    def play(self, playthrough, fresh=False):
-        with self.session((None, None), playthrough) as s:
-            if not fresh:
-                self.load_cards(s, playthrough)
-            if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
-                self.apply_players(s)
-                s.joint.resume()
-            playthrough.save_info()
-            self.run_view(s, playthrough)
+    def play(self, castle, fresh=False):
+        castle.played_here()
+        try:
+            with self.session((None, None), castle) as s:
+                s.joint.on_write = castle.saved
+                self.continue_castle(s, castle, fresh)
+                self.run_view(s, castle)
+        finally:
+            castle.tidy()
 
     # --- online co-op (design/M7, design/M7b-netcode.md)
 
@@ -1083,29 +1111,19 @@ class Launcher:
             pygame.key.stop_text_input()
 
     def online_menu(self):
-        from archive import Playthrough
         while True:
-            pts = Playthrough.all()
-            items, actions = [], []
-            if pts:
-                items.append((f"Host: continue {pts[0].name}", "Resume your last joint save, with your partner"))
-                actions.append(("host_continue", pts[0]))
-            items.append(("Host: new game", "You get a room code to give your partner"))
-            actions.append(("host_new", None))
-            items.append(("Join your partner", "Type the room code your partner gives you"))
-            actions.append(("join", None))
-            items.append(("Back", ""))
-            actions.append(("back", None))
+            items = [("Host", "Pick a castle; you get a room code to give your partner"),
+                     ("Join your partner", "Type their room code: you play their castle, and keep a copy"),
+                     ("Back", "")]
             choice = self.ui.menu("Online co-op", items,
-                                  "Each of you plays on your own PC, with the same version of SOTN Co-op.")
-            if choice is None or actions[choice][0] == "back":
+                                  "Each of you plays on your own PC or phone, with the same version of SOTN Co-op.")
+            if choice is None or choice == 2:
                 return
-            act, arg = actions[choice]
-            if act == "host_new":
-                self.host_online(Playthrough.new(), fresh=True)
-            elif act == "host_continue":
-                self.host_online(arg, fresh=False)
-            elif act == "join":
+            if choice == 0:
+                picked = self.pick_castle("Host: which castle?", "Your partner joins it, and keeps a copy.")
+                if picked:
+                    self.host_online(*picked)
+            else:
                 self.join_online()
 
     def online_session(self, start, playthrough, rank=0, peer=None):
@@ -1113,7 +1131,7 @@ class Launcher:
         from session import OnlineSession
         self.apply_bios()
         return OnlineSession(
-            self.disc(), start=start, rank=rank, peer=peer, audio=True,
+            self.disc(), start=start, rank=rank, peer=peer, audio=True, joint=True,
             session_file=playthrough.joint_save if playthrough else None,
             patch_crc=self.patch_crc(), blob=self.blob(),
             # tests: a fixed port (Android emulators: design/M9); else the usual one, which the LAN
@@ -1142,9 +1160,18 @@ class Launcher:
             waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 
-    def host_online(self, playthrough, fresh=False):
+    def host_online(self, castle, fresh=False):
+        castle.played_here()
+        try:
+            self._host_online(castle, fresh)
+        finally:
+            castle.tidy()
+
+    def _host_online(self, playthrough, fresh):
         from link.rendezvous import make_room_code
         with self.online_session(None, playthrough, rank=0) as s:
+            s.joint.on_write = playthrough.saved
+            s.local.host("set_castle", playthrough.meta())  # the joiner keeps a copy (design/M11)
             room = make_room_code()
             self._clip_put(room)
             s.local.host("start_connect", room, "host", app=VERSION)
@@ -1158,16 +1185,11 @@ class Launcher:
                 return
             finally:
                 self.room_info = ""
-            if not fresh:
-                self.load_cards(s, playthrough)
-            if not fresh and playthrough.joint_save.exists() and self.boot_to_title(s, f"Continuing {playthrough.name}"):
-                self.apply_players(s)
-                s.joint.resume()
-            playthrough.save_info()
+            self.continue_castle(s, playthrough, fresh)
             self.run_view(s, playthrough)
 
     def join_online(self):
-        from archive import Playthrough
+        from archive import Castle
         from link.rendezvous import ConnectError, parse_connect_input
         code = ""
         while True:
@@ -1181,9 +1203,7 @@ class Launcher:
             except ConnectError as e:
                 self.ui.message("Check that code", str(e))
                 continue
-            pts = Playthrough.all()
-            playthrough = pts[0] if pts else Playthrough.new("Online co-op")
-            with self.online_session(None, playthrough, rank=1) as s:
+            with self.online_session(None, None, rank=1) as s:
                 if kind == "room":
                     s.local.host("start_connect", target, "join", app=VERSION)
                     waiting = f"Room\n{target}\nlooking for your partner…"
@@ -1196,20 +1216,28 @@ class Launcher:
                 except ConnectFailed as e:
                     self.ui.message("Couldn't reach your partner", str(e))
                     continue
-                self.load_cards(s, playthrough)
-                playthrough.save_info()
-                self.run_view(s, playthrough)
+                # The host's castle: this player's copy of it (design/M11)
+                meta = (s.local.host("status").get("partner_hello") or {}).get("castle")
+                castle = Castle.receive(meta) if meta else Castle.new(received=True)
+                s.joint.path = castle.joint_save
+                s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
+                self.load_cards(s, castle)
+                try:
+                    self.run_view(s, castle)
+                finally:
+                    s.joint.on_write = None
+                castle.tidy()
                 return
 
     # --- the rest
 
     def savestates(self):
-        from archive import Playthrough, load_pair
+        from archive import Castle, load_pair
         ui = self.ui
         while True:
-            pts = Playthrough.all()
+            pts = Castle.all()
             if not pts:
-                ui.message("Savestates", "No playthroughs yet.")
+                ui.message("Savestates", "No castles yet.")
                 return
             choice = ui.menu("Savestates", [(f"{p.name}  —  {human(p.savestates_size())}", f"{len(p.savestate_pairs())} moments")
                                             for p in pts],

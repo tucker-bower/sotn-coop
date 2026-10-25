@@ -2,7 +2,8 @@
 
     Documents/SOTN Co-op/
         settings.json
-        playthroughs/<id>/         A.mcd, B.mcd, session.coop, playthrough.json, savestates/
+        castles/<name>/            A.mcd, B.mcd, castle.coop, castle.json, savestates/ (design/M11)
+        playthroughs/              from before 0.10: kept, not listed
         reports/                   F9 bug reports (zips)
         debug-starts/              savestates made from the player's own disc, to start anywhere
         characters/maria.blob      Maria, made from the player's own Dracula X Chronicles disc (M8)
@@ -26,8 +27,8 @@ def data_dir():
     return d
 
 
-def playthroughs_dir():
-    d = data_dir() / "playthroughs"
+def castles_dir():
+    d = data_dir() / "castles"
     d.mkdir(exist_ok=True)
     return d
 

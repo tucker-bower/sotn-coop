@@ -332,14 +332,16 @@ class OnlineSession:
 
     def __init__(self, disc, start=None, rank=0, peer=None, session_file=None, audio=False,
                  bind_host="0.0.0.0", port=0, patch_crc=None, learn_peer=True, character=0, blob=None,
-                 in_process=False):
-        """in_process: run the game here, not in a worker process (Android: design/M9)."""
+                 in_process=False, joint=False):
+        """in_process: run the game here, not in a worker process (Android: design/M9). joint:
+        joint saves even before the castle's file is known (an online joiner: design/M11)."""
         self.disc, self.start, self.rank, self.character, self.blob = disc, start, rank, character, blob
         self.in_process = in_process
         self.peer, self.session_file, self.audio = peer, session_file, audio
         self.bind_host, self.req_port = bind_host, port
         self.patch_crc, self.learn_peer = patch_crc, learn_peer
         self.joint = None
+        self.want_joint = joint
         self.port = None
 
     def __enter__(self):
@@ -377,7 +379,7 @@ class OnlineSession:
         game.host("set_player", character=self.character, blob=self.blob)
         if self.peer is not None:
             self.connect(self.peer)
-        if self.session_file:
+        if self.session_file or self.want_joint:
             from link.jointsave import JointSave
             self.joint = JointSave([MailboxProxy(game)], self.session_file,
                                    host=HostProxy(game), rank=self.rank)

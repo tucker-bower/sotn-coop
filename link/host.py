@@ -78,6 +78,12 @@ class Host:
             self.hello["link"] = link_version
         return self.hello
 
+    def set_castle(self, meta):
+        """The castle this host plays (design/M11: {"id", "name", "created"}), told to the
+        partner in every HELO: the joiner keeps a copy of it."""
+        self.hello["castle"] = meta
+        return True
+
     def start_connect(self, room, role, relay=None, **kw):
         """Find the partner for a room code (role "host" or "join"): link/connect.py."""
         from .connect import Connector, default_relay, room_token

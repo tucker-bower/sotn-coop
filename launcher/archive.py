@@ -1,7 +1,10 @@
-"""Playthroughs and their savestates (D69).
+"""Castles and their savestates (D69, design/M11-castles.md).
 
-A playthrough is a folder: both memory cards, the joint save, and the savestates the launcher
-made along the way. Savestates are made only at moments worth going back to (the first time
+A castle is a playthrough anyone can continue: solo, on the couch, or hosted online with any
+partner. It's a folder: the memory cards, the joint save (castle.coop: slot 1 is always the
+player on this machine, slot 2 whoever plays with them), castle.json, and the savestates the
+launcher made along the way. The joiner of an online session keeps a copy of the host's castle
+(receive()): the same id and name, with its own state in slot 1. Savestates are made only at moments worth going back to (the first time
 either player reaches a stage, a boss fight starting, quitting), never on a timer; a joint save
 is its own restore point already. B's state is stored compressed against A's (the two games
 are mostly alike): about 2 MB a moment, some 200 MB for a whole playthrough.
@@ -10,11 +13,14 @@ The player can delete a playthrough's savestates from the Savestates screen (it 
 """
 
 import json
+import re
 import time
+import uuid
 import zlib
 from pathlib import Path
 
-from paths import folder_size, playthroughs_dir
+from link.jointsave import save_fields
+from paths import castles_dir, folder_size
 
 try:  # Python 3.14: zstd is in the standard library; it's smaller and faster than zlib
     from compression import zstd
@@ -62,31 +68,79 @@ def stage_name(stage):
     return STAGE_NAMES.get(stage & ~0x20 if inverted else stage, f"stage {stage:#04x}") + inverted
 
 
-class Playthrough:
+def safe(text):
+    """A folder name Windows and Android accept."""
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", text).strip(" .") or "castle"
+
+
+class Castle:
+    """info (castle.json): id, created, name (typed at SOTN's name entry; None until the first
+    save), played, saves, stages, received (a copy from a host, not played here since)."""
+
     def __init__(self, folder):
         self.dir = Path(folder)
         self.states = self.dir / "savestates"
         self.states.mkdir(parents=True, exist_ok=True)
-        self.info_path = self.dir / "playthrough.json"
+        self.info_path = self.dir / "castle.json"
         self.info = json.loads(self.info_path.read_text()) if self.info_path.exists() else {}
 
     @classmethod
-    def new(cls, name=None):
-        stamp = time.strftime("%Y-%m-%d %H.%M")
-        folder = playthroughs_dir() / stamp
+    def new(cls, cid=None, created=None, name=None, received=False):
+        created = created or time.time()
+        stamp = time.strftime("%Y-%m-%d-%H-%M", time.localtime(created))
+        folder = castles_dir() / safe(f"{name or 'New castle'}_{stamp}")
         k = 2
         while folder.exists():  # never reuse a folder
-            folder = playthroughs_dir() / f"{stamp} ({k})"
+            folder = castles_dir() / safe(f"{name or 'New castle'}_{stamp} ({k})")
             k += 1
-        p = cls(folder)
-        p.info = {"name": name or f"Playthrough of {stamp}", "created": time.time(), "stages": []}
-        p.save_info()
-        return p
+        c = cls(folder)
+        c.info = {"id": cid or uuid.uuid4().hex[:16], "created": created, "name": name, "saves": 0,
+                  "stages": [], "received": received}
+        c.save_info()
+        return c
 
     @classmethod
     def all(cls):
-        out = [cls(d) for d in playthroughs_dir().iterdir() if d.is_dir()]
-        return sorted(out, key=lambda p: p.info.get("played", p.info.get("created", 0)), reverse=True)
+        out = [cls(d) for d in castles_dir().iterdir() if d.is_dir() and (d / "castle.json").exists()]
+        return sorted(out, key=lambda c: c.info.get("played", c.info.get("created", 0)), reverse=True)
+
+    @classmethod
+    def receive(cls, meta):
+        """The joiner's copy of the host's castle (meta: its id, name, created). The copy that
+        only ever received is brought up to date; one this player has played since (solo, or
+        hosting it) is never touched: a new copy then, "… (2)" (design/M11: nothing a player
+        played is overwritten)."""
+        same = [c for c in cls.all() if c.info.get("id") == meta["id"]]
+        for c in same:
+            if c.info.get("received"):
+                if meta.get("name") and not c.info.get("name"):
+                    c.info["name"] = meta["name"]
+                return c
+        c = cls.new(meta["id"], meta.get("created"), meta.get("name"), received=True)
+        if same:
+            c.info["copy"] = len(same) + 1
+            c.save_info()
+        return c
+
+    def meta(self):
+        """What a host tells its partner about this castle (in its HELO)."""
+        return {"id": self.info["id"], "name": self.info.get("name"), "created": self.info["created"]}
+
+    def played_here(self):
+        """This player is playing it as their own (solo, couch, hosting): copies from a host go
+        to another entry from now on."""
+        self.info["received"] = False
+        self.save_info()
+
+    def saved(self, blobs, theirs=False):
+        """A joint save was written (link/jointsave.py on_write). theirs: the castle is the
+        partner's (this is the joiner's copy): its name comes from the host's save, slot 2."""
+        name, stage, level, _ = save_fields(blobs[1] if theirs and len(blobs) > 1 else blobs[0])
+        if name and not self.info.get("name"):
+            self.info["name"] = name
+        self.info["saves"] = self.info.get("saves", 0) + 1
+        self.info["where"], self.info["level"] = stage_name(stage), level
+        self.save_info()
 
     def save_info(self):
         self.info["played"] = time.time()
@@ -94,16 +148,36 @@ class Playthrough:
         tmp.write_text(json.dumps(self.info, indent=1))
         tmp.replace(self.info_path)
 
+    def tidy(self):
+        """After a session: the folder takes the castle's name once it has one (Windows can't
+        rename a folder while the game has files in it open)."""
+        want = castles_dir() / safe(self.name.replace(":", "-"))
+        if want != self.dir and not want.exists() and self.info.get("name"):
+            try:
+                self.dir.rename(want)
+                self.__init__(want)
+            except OSError:
+                pass
+
     @property
     def name(self):
-        return self.info.get("name", self.dir.name)
+        """Tucker_2026-10-25-21:40 (the creation time: a castle never renames itself)."""
+        stamp = time.strftime("%Y-%m-%d-%H:%M", time.localtime(self.info.get("created", 0)))
+        copy = f" ({self.info['copy']})" if self.info.get("copy") else ""
+        return f"{self.info.get('name') or 'New castle'}_{stamp}{copy}"
+
+    def summary(self):
+        """For the castle list: where, level, last played."""
+        bits = [self.info.get("where"), f"Lv {self.info['level']}" if self.info.get("level") else None,
+                "played " + time.strftime("%b %d, %H:%M", time.localtime(self.info.get("played", 0)))]
+        return "  ·  ".join(b for b in bits if b)
 
     def card(self, who):
         return self.dir / f"{who}.mcd"
 
     @property
     def joint_save(self):
-        return self.dir / "session.coop"
+        return self.dir / "castle.coop"
 
     def savestate(self, event, games, where=""):
         """Both games' states (or one game's state online), now. Returns the files written."""
@@ -146,13 +220,13 @@ class Playthrough:
 
 
 def total_savestates_size():
-    return sum(p.savestates_size() for p in Playthrough.all())
+    return sum(p.savestates_size() for p in Castle.all())
 
 
 class Moments:
     """Watches both games for moments worth a savestate (checked a few times a second)."""
 
-    def __init__(self, playthrough):
+    def __init__(self, playthrough):  # a Castle
         self.p = playthrough
         self.seen = set(playthrough.info.get("stages", []))
         self.boss = False
