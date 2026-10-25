@@ -1109,13 +1109,16 @@ class Launcher:
                 self.join_online()
 
     def online_session(self, start, playthrough, rank=0, peer=None):
+        from link.connect import GAME_PORT
         from session import OnlineSession
         self.apply_bios()
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True,
             session_file=playthrough.joint_save if playthrough else None,
             patch_crc=self.patch_crc(), blob=self.blob(),
-            port=int(os.environ.get("COOP_PORT", 0)),  # tests: a fixed port (Android emulators: design/M9)
+            # tests: a fixed port (Android emulators: design/M9); else the usual one, which the LAN
+            # broadcast finds (link/connect.py), or any free one
+            port=int(os.environ["COOP_PORT"]) if os.environ.get("COOP_PORT") else (GAME_PORT, 0),
             in_process=ANDROID,  # Android can't start worker processes
         )
 
@@ -1134,6 +1137,8 @@ class Launcher:
             # which step it's on: says at once which side is stuck (Tucker's Thor test, 2026-10-23)
             step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
                     "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
+            if c.get("relay_error") and c.get("state") == "waiting":  # say so now, not in five minutes
+                step = "Can't reach the room-code server\nLooking on this Wi-Fi"
             waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 

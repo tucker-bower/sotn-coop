@@ -145,7 +145,10 @@ class Host:
             return  # someone in another room: not our partner. (No room at all: a partner who
             # typed our ip:port, the fallback when room codes can't connect: design/M7b, M9.)
         if theirs.get("sid") == self.hello["sid"]:
-            return  # our own HELO, come back to us (a candidate that was this PC)
+            return  # our own HELO, come back to us (a candidate that was this PC, or a LAN broadcast)
+        if (not self.hello.get("room") and theirs.get("room") and self.transport.peer
+                and addr is not None and tuple(addr) != tuple(self.transport.peer)):
+            return  # joined by ip:port: another room's LAN broadcast (link/connect.py) isn't our partner
         clock = theirs.pop("clock", None)
         if isinstance(clock, list) and len(clock) == 3:
             self.transport.clock_heard(*clock)

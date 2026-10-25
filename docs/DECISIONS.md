@@ -475,3 +475,10 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D95: The Android app ships debug-signed for now** (agent-default, 2026-10-22)
 - `release.py` attaches `android/build.sh`'s APK as `SOTN-Coop.apk`, signed with this PC's debug key (`~/.android/debug.keystore`).
 - **Why:** no key to manage while M9 is in preview. But an update only installs over an app with the same key: a build from another PC would need an uninstall, which deletes the app's saves. Before the first public Android release, decide on a release keystore and where it's backed up (Decisions needed, STATUS).
+
+**D96: Same-network games find each other without the relay** (agent-default, 2026-10-24)
+- The game's socket asks for UDP port 47811 first (any port if it's taken), and while looking for the partner it broadcasts the room's `HELO` on the LAN to that port, twice a second, beside the relay's hole punching (`link/connect.py`, `docs/link-protocol.md`).
+- **Why:** in the Thor tests (rounds 3–4) the relay was unreachable from Android, and nothing could connect at all, though both devices were on one Wi-Fi. Same-network play is common (a phone and a PC at home), and it now needs neither ntfy.sh nor STUN. A fixed port also makes a hand-made port forward or an ip:port join predictable.
+- The lobby says at once when the relay can't be reached ("Can't reach the room-code server · Looking on this Wi-Fi") and the five-minute failure names it, instead of "Waiting for your partner's game". A failed relay post is retried after 5 s (was 20 s), and the relay's reader stops when a connect attempt ends (each retry had left one streaming forever).
+- Options considered: LAN only by typing ip:port (as before: no help to a player who doesn't know their address); multicast/mDNS (needs Android's MulticastLock and more code, for the same result); a second relay service (keeps the internet dependency).
+- Windows Firewall lets the partner's unicast answer back in after our broadcast (its default "unicast response to broadcast" rule), so no firewall rule is needed. The per-user installer couldn't add one anyway.

@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from link.connect import TIMEOUT_S, Connector  # noqa: E402
+from link.connect import GAME_PORT, TIMEOUT_S, Connector  # noqa: E402
 from link.host import Host  # noqa: E402
-from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, Internet, MemoryRelay, StunServer  # noqa: E402
+from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, DeadRelay, Internet, MemoryRelay, StunServer  # noqa: E402
 from link.transport import TAG_PRESENCE, UdpTransport  # noqa: E402
 
 
@@ -32,9 +32,9 @@ class NoGame:
 
 
 class Player:
-    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0"):
+    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0", port=0):
         self.sock = net.socket(router)
-        self.t = UdpTransport(sock=self.sock, bind_host="0.0.0.0")
+        self.t = UdpTransport(port=port, sock=self.sock, bind_host="0.0.0.0")
         self.t.clock = clock
         self.host = Host(NoGame(), self.t, rank=0 if role == "host" else 1)
         if link is not None:
@@ -48,16 +48,17 @@ class Player:
         self.host.handshake_tick()
 
 
-def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35, b_version=None):
+def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35, b_version=None,
+            relay=None, port=0):
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
-    relay = MemoryRelay()
+    relay = relay or MemoryRelay()
     clock_t = [0.0]
     clock = lambda: clock_t[0]
     ra = net.router(a_kind)
     rb = ra if same_house else net.router(b_kind)
-    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock)
-    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, **(b_version or {}))
+    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock, port=port)
+    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, port=port, **(b_version or {}))
     if forward == "a":  # the host's router forwards the game's port to it
         ra.forward(a.t.port, a.sock.addr)
         ra.out[a.sock.addr] = a.t.port
@@ -110,6 +111,28 @@ def main():
     lan = b.t.peer and b.t.peer[0].startswith("192.168.")
     check(a.host.connector.state == b.host.connector.state == "connected" and lan,
           f"same house: connected over the LAN (joiner's peer {b.t.peer})")
+
+    # Same house, and the relay can't be reached (Tucker's Thor, 2026-10-23: no CA certificates):
+    # the LAN broadcast to the usual port finds the partner anyway
+    a, b = session(PORT_RESTRICTED, PORT_RESTRICTED, same_house=True, relay=DeadRelay(), port=GAME_PORT, seconds=5)
+    check(a.host.connector.state == b.host.connector.state == "connected" and b.t.peer and b.t.peer[0].startswith("192.168."),
+          f"same house, no relay: connected by the LAN broadcast within 5 s (joiner's peer {b.t.peer})")
+    a, b = session(PORT_RESTRICTED, PORT_RESTRICTED, same_house=True, room_b="FOG-2222", port=GAME_PORT, seconds=5)
+    check(a.t.peer is None and b.t.peer is None, "same house: another room's LAN broadcast is never accepted")
+
+    # Apart, and the relay can't be reached: the lobby says so at once; the failure names it
+    a, b = session(CONE, CONE, relay=DeadRelay(), seconds=3)
+    st = a.host.connector.status()
+    check(st["state"] == "waiting" and st["relay_error"], f"no relay: the lobby is told within 3 s ({st['relay_error']!r})")
+    a.host.connector.timeout = 0
+    a.tick()
+    check("room-code server" in (a.host.connector.reason or ""), f"no relay: the failure says why ({a.host.connector.reason!r:.60})")
+
+    # The usual port taken (two games on one PC): the next one
+    s1 = UdpTransport(port=(0,), bind_host="127.0.0.1")
+    s2 = UdpTransport(port=(s1.port, 0), bind_host="127.0.0.1")
+    check(s2.port not in (0, s1.port), f"the usual port taken: another one ({s1.port} -> {s2.port})")
+    s1.close(); s2.close()
 
     a, b = session(SYMMETRIC, PORT_RESTRICTED, forward="a")
     check(a.host.connector.state == b.host.connector.state == "connected",

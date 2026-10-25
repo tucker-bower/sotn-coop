@@ -78,7 +78,8 @@ class RttEstimator:
 
 
 class UdpTransport:
-    """port 0 binds any free port (see .port); the peer can be set later with connect()."""
+    """port 0 binds any free port (see .port); a tuple of ports tries each in turn (the game's
+    usual port, then any: link/connect.py GAME_PORT). The peer can be set later with connect()."""
 
     def __init__(self, port=0, peer_port=None, host="127.0.0.1", bind_host=None, sock=None):
         """sock: a socket to use instead of a new UDP one (link/natsim.py's virtual ones)."""
@@ -88,7 +89,14 @@ class UdpTransport:
         if peer_port is not None:
             self.connect(peer_port)
         self.sock = sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((bind_host or host, port))
+        ports = tuple(port) if isinstance(port, (tuple, list)) else (port,)
+        for i, p in enumerate(ports):
+            try:
+                self.sock.bind((bind_host or host, p))
+                break
+            except OSError:  # taken (another game on this PC): the next one
+                if i == len(ports) - 1:
+                    raise
         self.sock.setblocking(False)
         self.port = self.sock.getsockname()[1]
         self.seq = 0

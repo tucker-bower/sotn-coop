@@ -11,6 +11,9 @@ own PC opened by sending out first, to that same address. So:
 3. Punching: both send HELO to every candidate of the other, ten times a second. The first
    HELO that comes back with the room's token is the partner (link/host.py accepts it), and
    from then on only that address is listened to.
+4. On the same Wi-Fi, without the relay: both also broadcast HELO to the game's usual port
+   (GAME_PORT, which every game tries first), so two games in one house find each other even
+   when the relay or STUN can't be reached (Tucker's Thor test, 2026-10-24).
 The relay only ever sees the room's hashed topic and the two candidate lists."""
 
 import hashlib
@@ -30,6 +33,9 @@ STUN_SERVERS = (("stun.l.google.com", 19302), ("stun.cloudflare.com", 3478))
 STUN_WAIT_S = 1.5
 PUNCH_EVERY_S = 0.1
 REPUBLISH_S = 20.0
+RETRY_S = 5.0   # republishing while the relay is failing (ntfy.sh allows one request per 5 s)
+GAME_PORT = 47811  # the game's port when it's free (the launcher asks for it first), for the LAN broadcast
+BROADCAST_EVERY_S = 0.5
 log = logging.getLogger(__name__)
 TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
 
@@ -58,13 +64,26 @@ class NtfyRelay:
         self._msgs = {}
         self._subs = set()
         self._lock = threading.Lock()
+        self._closed = False
+        self.post_error = self.read_error = None  # the last failure, until a request works again
+
+    @property
+    def error(self):
+        """Why the relay can't be reached right now, or None."""
+        return self.post_error or self.read_error
+
+    def close(self):
+        """Stops reading (the connector found the partner, or gave up)."""
+        self._closed = True
 
     def publish(self, topic, msg):
         def post():
             try:
                 req = urllib.request.Request(f"{self.URL}/{topic}", data=json.dumps(msg).encode(), method="POST")
                 urllib.request.urlopen(req, timeout=5, context=self._tls).read()
-            except Exception as e:  # noqa: BLE001 - offline or blocked: the connector times out with a reason
+                self.post_error = None
+            except Exception as e:  # noqa: BLE001 - offline or blocked: the lobby says so, the connector retries
+                self.post_error = repr(e)
                 log.warning("relay: posting failed: %r", e)
         threading.Thread(target=post, daemon=True).start()
 
@@ -79,10 +98,13 @@ class NtfyRelay:
     def _stream(self, topic):
         """One long-lived streaming request (one, not one a second: ntfy.sh limits requests)."""
         since = "10m"
-        while True:
+        while not self._closed:
             try:
                 with urllib.request.urlopen(f"{self.URL}/{topic}/json?since={since}", timeout=60, context=self._tls) as resp:
+                    self.read_error = None
                     for line in resp:
+                        if self._closed:
+                            return
                         outer = json.loads(line)
                         if outer.get("event") == "message":
                             since = outer.get("id", since)
@@ -94,6 +116,7 @@ class NtfyRelay:
                                 self._msgs[topic].append(msg)
             except Exception as e:  # noqa: BLE001 - dropped or timed out: reconnect
                 if not isinstance(e, TimeoutError):
+                    self.read_error = repr(e)
                     log.warning("relay: reading failed: %r", e)
                 time.sleep(2)
 
@@ -152,6 +175,8 @@ class Connector:
         self._stun_sent = None
         self._published = None
         self._punched = 0.0
+        self._broadcast_at = None
+        self._broadcasts = []
         self._resolve = resolve
         self._servers = list(stun_servers)
         self._resolved = None
@@ -172,7 +197,15 @@ class Connector:
     def status(self):
         left = None if self._t0 is None else max(0, int(self.timeout - (self.t.clock() - self._t0)))
         return {"state": self.state, "reason": self.reason, "nat": self.nat, "their_nat": self.their_nat,
-                "mine": self.mine, "theirs": self.theirs, "left_s": left}
+                "mine": self.mine, "theirs": self.theirs, "left_s": left,
+                "relay_error": getattr(self.relay, "error", None)}
+
+    def _done(self, state):
+        self.state = state
+        close = getattr(self.relay, "close", None)
+        if close:
+            close()
+        return state
 
     def tick(self):
         if self.state in ("connected", "failed"):
@@ -181,9 +214,8 @@ class Connector:
         if self._t0 is None:
             self._t0 = now
         if self.t.peer is not None and self.t.peer_confirmed:
-            self.state = "connected"
             log.info("connect %s: connected to %s after %.1f s", self.role, self.t.peer, now - self._t0)
-            return self.state
+            return self._done("connected")
         # 1. candidates
         if self._stun_sent is None and self._resolved is not None:
             for server in self._resolved:
@@ -201,12 +233,20 @@ class Connector:
                     ip = local_ip()
                 lan = (ip, self.t.port)
                 self.mine = [list(lan)] + [list(p) for p in public if p != lan]
+                # the LAN broadcast: everywhere on this network, and this /24's own broadcast address
+                # (some routers don't pass 255.255.255.255 between Wi-Fi and wired)
+                self._broadcasts = [("255.255.255.255", GAME_PORT), (ip.rsplit(".", 1)[0] + ".255", GAME_PORT)]
+                try:
+                    self.t.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                except OSError:
+                    self._broadcasts = []
                 self.state = "waiting"
                 log.info("connect %s: my addresses %s (router: %s); waiting for the partner on the relay",
                          self.role, self.mine, self.nat)
         # 2. rendezvous
         if self.state in ("waiting", "punching"):
-            if self._published is None or now - self._published > REPUBLISH_S:
+            every = RETRY_S if getattr(self.relay, "post_error", None) else REPUBLISH_S
+            if self._published is None or now - self._published > every:
                 self.relay.publish(self.topic, {"role": self.role, "nonce": self.nonce, "cands": self.mine,
                                                 "nat": self.nat, "token": room_token(self.room), "ver": self.version})
                 self._published = now
@@ -217,7 +257,7 @@ class Connector:
                 newest = max(msgs, key=lambda m: m.get("nonce", 0))
                 theirs = newest.get("ver") or {}  # none: a version from before 0.9.0
                 if self.version.get("link") is not None and theirs.get("link") != self.version["link"]:
-                    self.state = "failed"
+                    self._done("failed")
                     log.warning("connect %s: partner's version %s, mine %s", self.role, theirs, self.version)
                     self.reason = (f"Your partner has {'SOTN Co-op ' + theirs['app'] if theirs.get('app') else 'an older SOTN Co-op'}, "
                                    f"and you have {self.version.get('app') or 'another version'}. Both of you need the "
@@ -234,13 +274,22 @@ class Connector:
             self._punched = now
             for c in self.theirs:
                 self.t.probe(c, TAG_HELLO, self.hello())
+        # 4. the LAN broadcast (needs no relay)
+        if self._broadcasts and (self._broadcast_at is None or now - self._broadcast_at >= BROADCAST_EVERY_S):
+            self._broadcast_at = now
+            for c in self._broadcasts:
+                self.t.probe(c, TAG_HELLO, self.hello())
         if now - self._t0 > self.timeout:
-            self.state = "failed"
             self.reason = self._why()
+            self._done("failed")
             log.warning("connect %s: gave up (%s): %s", self.role, self.state, self.reason)
         return self.state
 
     def _why(self):
+        if not self.theirs and getattr(self.relay, "error", None):
+            return ("Couldn't reach the room-code server (ntfy.sh), so your partner's game couldn't be "
+                    "found. Check this device's internet connection. On the same Wi-Fi, ask your "
+                    "partner to host and join with the ip:port it shows in Help ▸ About.")
         if not self.theirs:
             return ("Your partner's game never showed up for this room code. Check the code, and that "
                     "both of you are online.")
