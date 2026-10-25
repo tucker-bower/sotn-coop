@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-10-24_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -70,6 +70,11 @@ _Last updated: 2026-10-23_
     - the lobby names the step instead of "Still looking": *Finding my address* / *Waiting for your partner's game* (the relay never brought the partner) / *Found your partner: reaching them* (packets blocked);
     - the connector logs each step (addresses, router kind, partner's version, connected or why not): on the PC to `Documents\SOTN Co-op\session.log` (the game process's log had been thrown away), in F9 reports; on Android to logcat (`device.py log`).
     - Rebuilt both (installer 11:32, APK 11:32); `test_connect`, `android_room` (61 s) pass. Next: install on the Thor (`device.py install`) and the PC, one try each way, read both logs.
+  - **Round 5 prep (2026-10-24):** the Thor's APK turned out to be from **Oct 22 20:05**, before round 3's CA fix, so in rounds 3–4 it never reached the relay. That explains both sides waiting. Now installed on both: the Thor (APK 23:46) and the PC (installer 23:46, silent). Also, from a review of the connect code (D96):
+    - **same-network games find each other without the relay:** a fixed port (47811, any if taken) and a LAN broadcast HELO;
+    - the lobby says "Can't reach the room-code server" at once, and the timeout names it;
+    - relay retries after 5 s; relay reader threads stop after each attempt.
+    - `test_connect` (26 checks, including no-relay same-house and a stranger's broadcast), 6 online harness scenarios, and `android_room` (55 s) pass. Next: Tucker tries both ways; then read `device.py log` and `session.log`.
   - **Open:** sound underruns on the emulators (7–38%, CPU-bound; check on the Thor). The Android release waits for the playtest (`release.py --android` is opt-in).
 ## Next
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
