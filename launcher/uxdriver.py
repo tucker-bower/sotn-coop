@@ -360,7 +360,7 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_RETURN),                                # Choose my disc image (picker: COOP_PICK_FILE)
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
-        ("screen", "Home"), ("key", pg.K_RETURN),            # Couch co-op
+        ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op (Solo is first)
         ("screen", "Press a button"), ("shot", "lobby-empty"),
         ("pad", 0, A),                                      # player 1 joins (id 0, like the first real controller)
         ("pad", 101, A),                                      # player 2 joins
@@ -378,7 +378,7 @@ def _couch(pg, quit_at_end=True):
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
-        ("until", in_game), ("expect", lambda d: d.inputs <= 13, "home to playing in 13 inputs or fewer (10, plus the detours to Game files and shortcuts)"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 14, "home to playing in 14 inputs or fewer (11, plus the detours to Game files and shortcuts)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
@@ -440,9 +440,9 @@ def _menus(pg):
 
 
 def _to_online(pg):
-    """Home to Online co-op: the second item, or the first on Android (no couch there: design/M9)."""
+    """Home to Online co-op: after Solo and Couch, or after Solo on Android (no couch there: design/M9)."""
     from platform_android import ANDROID
-    return [] if ANDROID else [("key", pg.K_DOWN)]
+    return [("key", pg.K_DOWN)] * (1 if ANDROID else 2)
 
 
 def _picture_lit(d):
@@ -547,7 +547,7 @@ def _characters(pg):
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
-             ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
+             ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
              ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
@@ -561,7 +561,7 @@ def _characters(pg):
               ("screen", "Game files"), ("shot", "game-files-done"),
               ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
               ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
-              ("key", pg.K_RETURN),  # Couch co-op
+              ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),

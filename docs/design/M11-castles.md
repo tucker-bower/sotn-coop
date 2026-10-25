@@ -1,6 +1,6 @@
 # M11 design: castles (drop-in saves, solo, shared level)
 
-**Status:** proposal, for Tucker's approval. The brainstorm (2026-10-25) settled the shape; this doc pins it down. Branch `coop-m11-castles`, stacked on M9.
+**Status:** approved by Tucker (2026-10-25), built on branch `coop-m11-castles` (stacked on M9). Implementation defaults: D98.
 
 ## Goal
 Players can finish a playthrough with whoever is around. One night solo, the next with a friend, a week later with another friend. The friend who joined keeps a copy of that castle and can play it solo or host it for someone else.

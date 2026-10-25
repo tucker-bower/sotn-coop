@@ -2,10 +2,11 @@
 
     python launcher/app.py
 
-First run: your disc image, once. Then: Couch co-op or Online co-op.
+First run: your disc image, once. Then: Solo, Couch co-op or Online co-op, each on a castle
+(design/M11: a playthrough anyone can continue; a joiner keeps a copy of the host's).
 - Couch: one lobby screen where each player presses a button on their controller to join and
-  picks a character, then Continue or New game.
-- Online: Host (you get a room code to give your partner) or Join (you type theirs).
+  picks a character, then the castle.
+- Online: Host (pick a castle; you get a room code to give your partner) or Join (you type theirs).
 Menus work with a controller (d-pad, cross/A = OK, circle/B = back), the keyboard (arrows,
 Enter, Esc) or the mouse. On Windows the window also has a menu bar (launcher/winmenu.py), and
 it can be resized, maximized and made fullscreen (F11), with the games laid out side by side,
@@ -75,6 +76,12 @@ Meet in the same room to fight the same enemies. Bosses pull you both in.
 Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
 Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
 Save at a coffin: it saves both games. Continue loads both.
+
+Castles: every game is a castle, named after the name you typed and when it began
+(Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
+Whoever joins you online keeps a copy of your castle, to play solo or host later.
+Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
+their normal HP.
 
 Characters: pick Alucard, Richter or Maria in the lobby (Maria needs your Dracula X Chronicles
 disc: Settings › Game files). Richter and Maria learn their moves from Alucard's relics: Leap Stone
@@ -938,6 +945,8 @@ class Launcher:
         (castle, fresh), or None (back)."""
         from archive import Castle
         castles = Castle.all()[:7]
+        if not castles:  # nothing to pick from: a new one
+            return Castle.new(), True
         items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
         k = self.ui.menu(heading, items, subtitle)
         if k is None:
@@ -1263,6 +1272,7 @@ class Launcher:
                     (Path(tmp) / "A.state").write_bytes(a)
                     (Path(tmp) / "B.state").write_bytes(b)
                     with self.session((str(Path(tmp) / "A.state"), str(Path(tmp) / "B.state")), p) as s:
+                        s.joint.on_write = p.saved
                         self.load_cards(s, p)
                         self.run_view(s, p)
             elif act == 1:

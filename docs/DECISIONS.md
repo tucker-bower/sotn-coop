@@ -482,3 +482,19 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - The lobby says at once when the relay can't be reached ("Can't reach the room-code server · Looking on this Wi-Fi") and the five-minute failure names it, instead of "Waiting for your partner's game". A failed relay post is retried after 5 s (was 20 s), and the relay's reader stops when a connect attempt ends (each retry had left one streaming forever).
 - Options considered: LAN only by typing ip:port (as before: no help to a player who doesn't know their address); multicast/mDNS (needs Android's MulticastLock and more code, for the same result); a second relay service (keeps the internet dependency).
 - Windows Firewall lets the partner's unicast answer back in after our broadcast (its default "unicast response to broadcast" rule), so no firewall rule is needed. The per-user installer couldn't add one anyway.
+
+**D97: Castles: any partner continues any save; solo; one shared level** (Tucker, 2026-10-25; `docs/design/M11-castles.md`)
+- A castle is the only save concept: the shared world and two slots. Slot 1 is always the player on this machine, slot 2 whoever plays with them. There are no player names or seats.
+- The host picks the castle. The joiner keeps a copy at every joint save, and can play it solo or host it later. No merging. Old playthroughs aren't converted.
+- Level is shared: a kill's XP is halved while a partner is linked, and the gain goes to both games. Solo turns off the duo balancing (2× boss HP, aggro switching, the XP cut).
+- Names: `<typed name>_<created>`, e.g. `Tucker_2026-10-25-21:40`.
+
+**D98: M11's implementation defaults** (agent-default, 2026-10-25)
+- **The joiner's copy:** it's updated in place while it has only ever received. Once played here (solo, couch, hosting), the next copy from a host is a new entry, `… (2)`. Nothing played is overwritten.
+- **The host names its castle in its HELO** (`Host.set_castle`), so the joiner knows it in the lobby, before any save. That's no wire change: old hosts simply don't send it.
+- **A save with no linked partner** (solo, or a partner gone for 10 s), or one whose partner never answers within 5 s, writes slot 1 alone and keeps slot 2.
+- **On load,** a missing slot 2 is a copy of slot 1, and both slots get the higher XP. The game then levels the behind one up the normal way.
+- **The castle list** is skipped when there are no castles: New castle, at once. The list shows the newest 7.
+- **The folder** takes the castle's name after the session that gave it one (e.g. `Tucker_2026-10-25-21-40`), because Windows can't rename it while files are open.
+- **Single-game sessions** (solo, online) use card `A`: slot 1 is this player on every machine.
+- **Home order:** Solo, Couch co-op, Online co-op. Solo is the big button.
