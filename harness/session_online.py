@@ -210,3 +210,22 @@ def online_joint_save(run):
                 reloaded = True
                 break
         run.expect(reloaded, "both PCs reloaded the joint save into the save room over UDP", frames=i)
+
+
+@session_scenario()
+def online_partner_leaves(run):
+    """Playtest 2026-10-25: closing one player's app must tell the other at once (BYE), not leave
+    it waiting in silence. The launcher then says "Your partner left the game"."""
+    with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1") as s0:
+        s1 = OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1",
+                           peer=("127.0.0.1", s0.port)).__enter__()
+        s0.connect(("127.0.0.1", s1.port))
+        step_pair(s0, s1, 120)
+        run.expect(s0.local.mailbox("partner_age") == 0 and not s0.local.host("status")["partner_left"],
+                   "linked, partner present")
+        s1.__exit__(None, None, None)  # the partner's app closes
+        for i in range(30):
+            s0.step(1)
+            if s0.local.host("status")["partner_left"]:
+                break
+        run.expect(s0.local.host("status")["partner_left"], "told within half a second", frames=i)

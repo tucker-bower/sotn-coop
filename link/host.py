@@ -8,7 +8,7 @@ import time
 
 from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
 from .playout import Playout
-from .transport import (TAG_ACK, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+from .transport import (TAG_ACK, TAG_BYE, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
@@ -41,6 +41,7 @@ class Host:
         self.restarts = 0
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
+        self.partner_left = False  # the partner said goodbye (its app closed or went back to its menu)
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
@@ -104,6 +105,7 @@ class Host:
     def _partner_restarted(self):
         """The partner's host is a new one (it restarted): numbering starts again both ways."""
         self.restarts += 1
+        self.partner_left = False  # back again
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
@@ -126,6 +128,7 @@ class Host:
             "peer": self.transport.peer,
             "partner_hello": self.partner_hello,
             "mismatch": self.mismatch,
+            "partner_left": self.partner_left,
             "rx_age": age,
             "sent": self.sent,
             "received": self.received,
@@ -135,6 +138,23 @@ class Host:
         """Sends a reliable control/save JSON dict to the partner host (online joint saves)."""
         self.ctrl.send(json.dumps(msg).encode())
         self._note("out", f"ctrl {msg.get('op')}")
+
+    def goodbye(self):
+        """Tells the partner this game is leaving, so it can say so at once instead of waiting
+        for silence (playtest 2026-10-25). Unacknowledged: sent a few times, as the app is closing."""
+        if self.partner_hello and not self.mismatch:
+            for _ in range(3):
+                self.transport.send(TAG_BYE, json.dumps({"sid": self.hello["sid"]}).encode())
+            self._note("out", "bye")
+
+    def _check_bye(self, payload):
+        try:
+            sid = json.loads(payload).get("sid")
+        except (ValueError, AttributeError):
+            return
+        if self.partner_hello and sid == self.partner_hello.get("sid") and not self.partner_left:
+            self.partner_left = True
+            self._note("in", "bye")
 
     def take_control(self):
         """Returns and clears received control/save JSON dicts."""
@@ -189,6 +209,8 @@ class Host:
         for tag, _, _, payload, addr in self.transport.receive():
             if tag == TAG_HELLO:
                 self._check_hello(payload, addr)
+            elif tag == TAG_BYE:
+                self._check_bye(payload)
         return self.status()
 
     def after_frame(self):
@@ -203,11 +225,15 @@ class Host:
             for tag, _, _, payload, addr in self.transport.receive():
                 if tag == TAG_HELLO:
                     self._check_hello(payload, addr)
+                elif tag == TAG_BYE:
+                    self._check_bye(payload)
             return
         if self.mismatch:  # refused: still say hello (the partner may update), relay nothing
             for tag, _, _, payload, addr in self.transport.receive():
                 if tag == TAG_HELLO:
                     self._check_hello(payload, addr)
+                elif tag == TAG_BYE:
+                    self._check_bye(payload)
             return
         self.mailbox.set_rank(self.rank)
         self.mailbox.set_character(self.character)
@@ -243,6 +269,8 @@ class Host:
                 reliable.append(dgram)
             elif tag in (TAG_CTRL, TAG_CACK):
                 ctrl_dgrams.append(dgram)
+            elif tag == TAG_BYE:
+                self._check_bye(payload)
             elif tag == TAG_HELLO:
                 self._check_hello(payload, addr)
                 if self.mismatch:

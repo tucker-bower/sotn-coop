@@ -109,6 +109,8 @@ class _Worker:
         return None
 
     def close(self):
+        if self.linked:
+            self.host.goodbye()
         self.transport.close()
         self.emu.__exit__(None, None, None)
 

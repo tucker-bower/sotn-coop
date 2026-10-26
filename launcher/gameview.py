@@ -19,6 +19,7 @@ BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (paus
 
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
+PARTNER_LOST_S = 10   # online: seconds of silence before telling the player their partner is gone
 
 PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harness/emu.py)
     pygame.CONTROLLER_BUTTON_A: "cross", pygame.CONTROLLER_BUTTON_B: "circle",
@@ -462,6 +463,20 @@ class GameView:
             self._rects = self.overlay("Paused", lines, items, sel)
             pygame.time.wait(16)
 
+    def partner_gone(self):
+        """Online: what to tell the player, once, when the partner leaves or goes silent
+        (playtest 2026-10-25: closing one app left the other saying nothing)."""
+        state = getattr(self, "partner_state", None)
+        if state == getattr(self, "_told", None):
+            return None
+        self._told = state if state in ("left", "lost") else None
+        if state == "left":
+            return "Your partner left the game. You can keep playing alone."
+        if state == "lost":
+            return (f"Lost contact with your partner (nothing for {PARTNER_LOST_S} s). Keep playing: "
+                    "they come back if the connection does.")
+        return None
+
     def wait_for_controller(self, player):
         """A player's controller was unplugged: that game waits until any controller's button is
         pressed (it becomes that player's), or Esc."""
@@ -500,8 +515,13 @@ class GameView:
             age = g.mailbox("partner_age")
             pa, pb = g.mailbox("self_presence"), g.mailbox("partner_presence")
             together = age <= 30 and {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
+            self.partner_state = ("left" if hst.get("partner_left") else
+                                  "lost" if hst.get("partner_hello") and (hst.get("rx_age") or 0) > PARTNER_LOST_S
+                                  else "here" if age <= 30 else getattr(self, "partner_state", None))
             if self.mismatch:
                 link = self.mismatch
+            elif self.partner_state == "left":
+                link = "Your partner left the game"
             elif age > 180:
                 link = "Waiting for your partner…"
             else:
@@ -556,6 +576,10 @@ class GameView:
                 if not leave and self.pads.missing(player):
                     r = self.wait_for_controller(player)
                     leave = None if r == "resume" else r
+            gone = self.partner_gone()
+            if not leave and gone:
+                r = self.pause_menu(gone)
+                leave = None if r == "resume" else r
             if leave:
                 result = leave
                 break

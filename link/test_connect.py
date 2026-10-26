@@ -160,6 +160,21 @@ def main():
         check(sa["state"] == "failed" and (old or sb["state"] == "failed") and "same version" in sa["reason"] and (ver["app"] or "older") in sa["reason"],
               f"{what}: {'the host is' if old else 'both are'} told within 10 s ({sa['reason']!r:.70})")
 
+    # Leaving (playtest 2026-10-25: closing the PC app left the Thor saying nothing): the partner
+    # is told at once, and it's forgotten when the partner comes back (a new host, a new sid).
+    a, b = session(CONE, CONE, seconds=10)
+    b.host.goodbye()
+    for _ in range(5):
+        a.tick()
+    check(a.host.status()["partner_left"], "a partner who closes the app: told at once (BYE)")
+    b.host.hello["sid"] = "0newb0b0"  # its app started again
+    for _ in range(120):
+        a.tick()
+        b.tick()
+    check(not a.host.status()["partner_left"], "the partner comes back: no longer 'left'")
+    a.host._check_bye(b'{"sid": "someone"}')
+    check(not a.host.partner_left, "a BYE from anyone else is ignored")
+
     sym = Connector.__init__  # noqa: F841 - (the connector module imports cleanly)
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
