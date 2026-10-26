@@ -508,3 +508,22 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D100: A joiner with a room code only takes a HELO with that room's token** (agent, 2026-10-25)
 - Found by `android_room` while the harness ran on the same PC: the PC joiner's LAN broadcast (D96) was answered by one of the harness's games (no room code), and the joiner took it as its partner. The Android host was left waiting. A real house could do the same with any game joined by ip:port.
 - `Host._check_hello`: with a room code, a HELO with no room token is accepted only by a host (its partner typed our ip:port, the fallback). A joiner requires the room's token. `link/test_connect.py` covers both.
+
+**D101: Leaving says goodbye** (agent-default, 2026-10-26; playtest 2026-10-25 note 5)
+- A closing app (or one going back to its menu) sends `BYE` three times, unacknowledged: it's closing. The partner's launcher pauses once with "Your partner left the game. You can keep playing alone." Silence for 10 s without a goodbye: "Lost contact with your partner…", once. Both clear when the partner comes back (a new host sid).
+- Considered: a reliable control message (needs acks from an app that's already closing); only the status bar (what failed on the Thor: nobody reads it mid-game).
+
+**D102: The prologue is co-op, and scenes are held for each other** (agent-default, 2026-10-26; playtest 2026-10-25 note 1)
+- The prologue is a shared room (one Dracula): both fall into its ending together. No teleports in or out of it.
+- A scene pulls the partner in from the same room too (not only from another room), and waits up to 60 s (not 10) for a partner still on its way: loading, in the opening video, or still in the prologue.
+- End barrier: whoever's scene ends first waits up to 5 s, so both get control back on the same frame.
+- Considered: leaving the prologue solo (what playtest 3 hit); holding only the start (scenes driven by where each player stands drift apart).
+
+**D103: Where a partner arrives, and no shared room while the game steers the player** (agent, 2026-10-26)
+- The presence's ground spot resets on entering a room (by the tilemap's cell: the room id lags) and stays put during a scene. A pulled-in partner arrives where the scene started. Before, the partner was sent to the previous room's coordinates, or to where the scene had walked the leader, and Death's scene walked it out of the room, again and again.
+- A shared room doesn't form while the game steers the player (`demo_timer`), though one already shared stays shared. As a guest, the partner's Death was the leader's copy and never took the partner's gear.
+
+**D104: Maria's guardians are re-uploaded after a hand weapon loads** (agent-default, 2026-10-26; playtest 2026-10-25 note 4)
+- DRA loads a hand weapon's graphics where Maria's PS1 layout puts four guardians (owl, cardinal, dragon, doll). After every weapon load in her game, the module calls her `MARIA_Load` (exported at 0x8013C1F4; her palettes move to 0x8013C1F8).
+- Cost: her off-hand weapon is then drawn from her guardians' tiles. That's part of the off-hand decision (note 3), which the fix for drawing it waits on.
+- Considered: moving her guardians, or the weapons, to free VRAM. A survey (`harness/vram_survey.py`, VRAM read out of savestates) found no 64×32 block that's unused in every stage, so there's no known-safe spot yet.

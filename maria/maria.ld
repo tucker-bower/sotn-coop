@@ -9,7 +9,8 @@ SECTIONS {
         *(.data.MARIA_override)
         *(.data.maria_sprites)
         *(.data.CoopMarBanks)  /* 0x8013C1F0: module/puppet.c reads her frame tables from here */
-        *(.data.maria_pal)     /* 0x8013C1F4: ...and her palettes */
+        *(.data.CoopMarHooks)  /* 0x8013C1F4: the module calls her guardians' graphics upload */
+        *(.data.maria_pal)     /* 0x8013C1F8: ...and her palettes */
         *(.data*)
         *(.rodata*)
         *(.sdata*)

@@ -134,6 +134,14 @@ u16 CurrentRoomId(void) {
 
 bool ArriveBusy(void) { return s_State != ARRIVE_IDLE; }
 
+// A scene just ended here and the game still steers the player (its last part, after the
+// dialogue: Death takes the gear then). No shared room forms meanwhile: as a guest, the partner's
+// Death was the leader's copy and never took the partner's gear (M12). Only after a scene: a door
+// steers the player for a moment too, and a guest must become one before its own enemies spawn.
+bool SceneAftermath(void) {
+    return s_CsCooldown && g_Player.demo_timer && SharedRole() == ROLE_NONE;
+}
+
 static const char* s_ArriveText; // shown once arrived (with a flash: Richter's Cross Crash fade)
 
 void Arrive(u16 stage, u16 roomId, s16 x, s16 y) {
@@ -555,8 +563,8 @@ void ArrivePresence(CoopPresence* p) {
         (g_GameEngineStep == Engine_10 || (g_Player.status & PLAYER_STATUS_DEAD) || s_WaitingForHost)) {
         p->flags |= PRESENCE_DEAD;
     }
-    if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl ||
-        (g_Player.demo_timer && SharedRole() == ROLE_NONE) || !(g_GameEngineStep == Engine_Normal || IsPausedEngine(g_GameEngineStep))) {
+    if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl || SceneAftermath() ||
+        !(g_GameEngineStep == Engine_Normal || IsPausedEngine(g_GameEngineStep))) {
         p->flags |= PRESENCE_BUSY;
     }
 }

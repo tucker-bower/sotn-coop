@@ -195,3 +195,110 @@ def m12_death_waits_for_partner(run):
     run.expect(None not in moved and abs(moved[0] - moved[1]) <= 3,
                "both players get control back within 3 frames of each other", moved=moved, ends=w.ends,
                starts=w.starts, log=w.log)
+
+
+# --- the cutscene catalogue (design/M12 part 1) ----------------------------------------------
+# name: (A's start: a fixture or a debug start, A's pad to walk into the scene, frames allowed).
+# B starts at the castle entrance: it's pulled in, and both must play the scene together.
+STARTS = TOOLS["out"].parent / "fixtures" / "debug-starts"
+SCENES = {
+    "succubus": (STARTS / "Boss - Succubus.state", "right", 6000),
+    "richter_castle_keep": (STARTS / "Boss - Richter.state", "left", 6000),
+}
+
+
+DECOMP = TOOLS["out"].parent / "src" / "sotn-decomp"
+STAGE_IDS = {"nz0": 0x0C, "lib": 0x02, "dai": 0x06, "cen": 0x08, "top": 0x0B, "dre": 0x12}
+# Scenes reached by sending A to the scene's room (its entity's layout in the decomp's
+# assets/st/<stage>/entity_layouts.json), from the debug start nearest before it in the story.
+# name: (base start, stage, entity layout, entity x, y, which side A comes from, the castle flag
+# that marks the scene seen: include/castle_flags.h; it's cleared in both games first)
+ROOM_SCENES = {
+    "maria_alchemy_lab": ("Alchemy Laboratory", "nz0", 15, 128, 128, "left", 0x85),  # MET_MARIA_IN_NZ0
+    "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN: talk (Up)
+    "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
+    "maria_center": ("Boss - Granfaloon", "cen", 1, 384, 544, "left", 0xD8),       # MET_MARIA_IN_CEN
+    "castle_keep": ("Boss - Cerberus", "top", 1, 896, 896, "left", None),
+}
+
+
+def scene_room(stage, layout):
+    """(room id: its offset in the stage's room table, its map cell) of the room using this entity
+    layout."""
+    import json
+    lists = json.loads((DECOMP / "assets" / "st" / stage / "entity_layouts.json").read_text())["indices"]
+    rooms = json.loads((DECOMP / "assets" / "st" / stage / "rooms.json").read_text())
+    for i, r in enumerate(rooms):  # a room's entityLayoutId picks an entity list through "indices"
+        if lists[r["entityLayoutId"]] == layout:
+            return i * 8, (r["left"], r["top"])
+    raise KeyError((stage, layout))
+
+
+def arrive_in(run, g, stage, room, cell, x, y, limit=900):
+    """Sends g there; done once it's in play in that map cell (a scene may start at once)."""
+    from link.mailbox import CMD_ARRIVE, IN_PLAY
+    g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
+    for _ in range(limit):
+        run.step(1)
+        p = g.mailbox("self_presence")
+        if p.stage == stage and (p.room_left, p.room_top) == cell and p.flags & IN_PLAY:
+            return True
+    run.expect(False, f"A arrives in room {cell} of stage {stage:#x}", presence=str(p))
+
+
+def scene_together(run, pad, limit, flags0=None):
+    """A walks (pad) until its scene starts; B, elsewhere, is pulled in. Both play it once, and
+    both get control back together; the castle flags match after."""
+    a, b = run.s.a, run.s.b
+    w = SceneWatch(run)
+    w.flags0 = flags0 or [g.read_bytes("g_CastleFlags", 0x300) for g in (a, b)]
+    if a.read("g_CutsceneHasControl"):  # it started as A arrived
+        w.on[0], w.starts[0] = True, [0]
+    w.until(lambda: w.starts[0], limit, pad if callable(pad) else (pad, ""))
+    run.expect(w.starts[0], "A's scene starts", at=a.snapshot())
+    w.until(lambda: w.starts[1], 1200)
+    run.expect(w.starts[1], "B is pulled in and plays it too", starts=w.starts, log=w.log)
+    w.until(lambda: len(w.ends[0]) >= len(w.starts[0]) and len(w.ends[1]) >= len(w.starts[1])
+            and not any(w.on), 12000, lambda i: ("cross", "cross") if i % 60 < 2 else ("", ""))
+    run.expect(not any(w.on), "both end it", ends=w.ends, starts=w.starts)
+    w.step(120)
+    run.expect(len(w.starts[0]) == 1 and len(w.starts[1]) == 1, "once each", starts=w.starts, log=w.log)
+    flags = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, b)]
+    # what either game's scene changed, the other has too
+    diff = [i for i in range(0x300) if (flags[0][i] != w.flags0[0][i] or flags[1][i] != w.flags0[1][i])
+            and flags[0][i] != flags[1][i]]
+    run.expect(not diff, "the castle flags the scene set match", diff=diff[:10])
+
+
+def _scene_test(name, start, pad, limit):
+    def test(run):
+        scene_together(run, pad, limit)
+    test.__name__ = f"m12_scene_{name}"
+    test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
+    session_scenario(starts=(str(start), "entrance"))(test)
+
+
+for _name, (_start, _pad, _limit) in SCENES.items():
+    _scene_test(_name, _start, _pad, _limit)
+
+
+def _room_scene_test(name, base, stage, layout, x, y, side, flag):
+    def test(run):
+        if flag is not None:
+            for g in (run.s.a, run.s.b):
+                g.write("g_CastleFlags", 0, "<B", flag)
+        flags0 = [g.read_bytes("g_CastleFlags", 0x300) for g in (run.s.a, run.s.b)]
+        room, cell = scene_room(stage, layout)
+        ax = x - 72 if side == "left" else x + 72
+        arrive_in(run, run.s.a, STAGE_IDS[stage], room, cell, max(ax, 8), y)
+        walk = "right" if side == "left" else "left"
+        pad = (lambda i: (walk if i < 60 else ("up" if i % 20 < 2 else ""), "")) if name == "librarian" else walk
+        scene_together(run, pad, 1800, flags0)
+    test.__name__ = f"m12_scene_{name}"
+    test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
+    # both from the same progress (their shared flags), B elsewhere in it: B is pulled in
+    session_scenario(starts=(str(STARTS / f"{base}.state"),) * 2)(test)
+
+
+for _name, _args in ROOM_SCENES.items():
+    _room_scene_test(_name, *_args)

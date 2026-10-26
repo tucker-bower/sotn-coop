@@ -14,6 +14,11 @@
 extern s16* maria_spr[];
 s16** CoopMarBanks[1] = {maria_spr};
 
+// ...and, next (0x8013C1F4), her guardians' graphics upload: the module calls it when a hand
+// weapon's graphics have loaded over them (module/character.c).
+void MARIA_Load(void);
+void (*CoopMarHooks[1])(void) = {MARIA_Load};
+
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
     if (subweapon == COOP_MAR_BASIC) {
         attack += g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;

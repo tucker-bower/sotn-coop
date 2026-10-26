@@ -46,7 +46,14 @@ _Last updated: 2026-10-25 (M11 built)_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **M12: the agent plays the game (coverage) + playtest 3 fixes** (2026-10-26, branch `coop-m12-coverage`). Design `docs/design/M12-coverage.md` awaits approval; playtest notes and triage in `docs/playtest/2026-10-25-tucker-thor-pc.md`. Fixes in progress (they don't wait for the design): prologue/cutscene sync, graceful exit, Maria's special weapon, partner's weapons drawn; the off-hand spike.
+- **M12: the agent plays the game (coverage) + playtest 3 fixes** (2026-10-26, branch `coop-m12-coverage`). Design `docs/design/M12-coverage.md` awaits approval; notes and triage in `docs/playtest/2026-10-25-tucker-thor-pc.md`.
+  - **Note 5 (graceful exit): fixed** (D101). `online_partner_leaves`, `test_connect` pass.
+  - **Note 1 (cutscenes): fixed for the prologue, Death, and the scenes tested so far** (D102, D103). Found on the way: the partner kept Alucard's gear after Death's scene (it was a shared-room guest when Death took it), and a pulled-in partner could be sent out of the scene's room.
+    - Passing: `m12_prologue_opening`, `m12_prologue_fight`, `m12_death_waits_for_partner`, and the catalogue (`session_m12.SCENES`/`ROOM_SCENES`): Succubus, Richter (Castle Keep), the Castle Keep scene, Maria in the Alchemy Lab. Maria in the Marble Gallery: `cutscene_pulls_partner_in` (M5).
+    - Not yet triggering in the harness: the Librarian, Maria in the chapel and in the Center (that one starts in both games but doesn't end within 200 s: to investigate), and the inverted castle (Shaft, Dracula, the ending).
+  - **Note 4 (Maria's guardians): cause found, fix built, not yet tested** (D104). A hand weapon's graphics load over four of her guardians (owl, cardinal, dragon, doll). `m12_maria_guardians_keep_their_graphics` reproduces it. Her birds stopping altogether isn't explained yet.
+  - **Notes 2 and 3 (partner's weapons drawn; off-hands like Alucard's):** not started. Both need VRAM, and the survey (`vram_survey.py`) found no 64×32 block that every stage leaves free.
+  - Tools: `fixtures_m12.py` (prologue and castle-start fixtures), the debug and boss starts built by the harness (`.env/fixtures/debug-starts`), `vram_survey.py` (VRAM read out of savestates).
 - **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
   - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
   - Cross-play, all three ways passing: `android_pair` (100 s), `android_pc` (PC hosts, 66 s), `android_pc_join` (Android hosts, 50 s), with sound on.
