@@ -221,6 +221,13 @@ static bool PartnerShareable(void) {
     if (g_CutsceneHasControl) {
         return false;
     }
+    // Nor forming one while the game steers the player (a scene's last part, after its dialogue:
+    // Death takes the gear then. As a guest, this game's Death was the partner's copy, and never
+    // took this player's gear: M12). A room already shared stays shared (Dracula's fall in the
+    // prologue steers Richter, and the guest's ending is the authority's).
+    if (g_Player.demo_timer && s_Role == ROLE_NONE) {
+        return false;
+    }
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
