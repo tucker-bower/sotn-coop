@@ -302,3 +302,63 @@ def _room_scene_test(name, base, stage, layout, x, y, side, flag):
 
 for _name, _args in ROOM_SCENES.items():
     _room_scene_test(_name, *_args)
+
+
+# --- every boss (design/M12 part 2) -----------------------------------------------------------
+def _bossstarts():
+    import sys
+    sys.path.insert(0, str(TOOLS["out"].parent.parent / "launcher"))
+    import bossstarts
+    return bossstarts.B
+
+
+def boss_flow(run, b, limit=24000):
+    """A walks into the boss; B, at the door, is pulled in; the boss has twice its HP; both fight it
+    (worn down: this tests the flow, not the fight); it falls once, both are fine after, and what
+    the fight set in the castle flags is the same in both."""
+    from link.mailbox import BOSS, DEAD, IN_PLAY, ROLE_AUTHORITY
+    a, g2 = run.s.a, run.s.b
+    flags0 = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
+    w = SceneWatch(run)
+    walk = b["walk"]
+    boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
+    run.expect(boss(a), "A walks into the boss's room", at=a.snapshot())
+    w.until(lambda: boss(g2), 900)
+    run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
+    hp_seen = {}
+    fought = 0
+    for t in range(limit):
+        auth = a if a.mailbox("self_presence").role == ROLE_AUTHORITY else g2
+        if t % 30 == 0:
+            for slot, (eid, _, _, hp) in enemies(auth).items():
+                hp_seen.setdefault(slot, hp)
+                if hp > 8:
+                    auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+        w.step(1, (fight_pad(a, t=t), fight_pad(g2, t=t + 6)))
+        fought = 0 if (boss(a) or boss(g2)) else fought + 1
+        if fought > 300:
+            break
+    run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:])
+    w.step(300)
+    for g, n in ((a, "A"), (g2, "B")):
+        p = g.mailbox("self_presence")
+        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, f"{n} is in play and alive after", flags=p.flags)
+    flags = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
+    diff = [i for i in range(0x300) if (flags[0][i] != flags0[0][i] or flags[1][i] != flags0[1][i])
+            and flags[0][i] != flags[1][i]]
+    run.expect(not diff, "what the fight set in the castle flags is the same in both", diff=diff[:10])
+
+
+def _boss_test(b):
+    name = b["name"].replace(" & ", " and ")
+    def test(run):
+        boss_flow(run, b)
+    test.__name__ = "m12_boss_" + name.lower().replace(" ", "_")
+    test.__doc__ = f"Every boss, together: {b['name']} ({b['area']})."
+    start = str(STARTS / f"Boss - {name}.state")
+    session_scenario(starts=(start, start))(test)
+
+
+for _b in _bossstarts():
+    _boss_test(_b)

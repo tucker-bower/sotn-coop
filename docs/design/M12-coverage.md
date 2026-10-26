@@ -1,6 +1,6 @@
 # M12 design: the agent plays the game (coverage), and playtest 3 fixes
 
-**Status:** proposal, awaiting Tucker's approval. Playtest fixes (`docs/playtest/2026-10-25-tucker-thor-pc.md`) are built meanwhile on `coop-m12-coverage`.
+**Status:** Tucker asked for this coverage directly (2026-10-25), so parts 1–3 are being built on `coop-m12-coverage`, together with the playtest fixes (`docs/playtest/2026-10-25-tucker-thor-pc.md`). Approval is needed only for part 4's scope and budget.
 
 ## Goal
 Playtesters are scarce and the major features are done, so the agent becomes the playtester. Every cutscene and every boss, played as co-op, with every character; every character past every obstacle on the way; every hand item in every character's hands; both screens checked. The ideal is a full end-to-end playthrough by the agent. M12 builds the pieces that make that possible and runs them, within budget.
