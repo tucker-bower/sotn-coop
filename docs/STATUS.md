@@ -46,6 +46,7 @@ _Last updated: 2026-10-25 (M11 built)_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
+- **M12: the agent plays the game (coverage) + playtest 3 fixes** (2026-10-26, branch `coop-m12-coverage`). Design `docs/design/M12-coverage.md` awaits approval; playtest notes and triage in `docs/playtest/2026-10-25-tucker-thor-pc.md`. Fixes in progress (they don't wait for the design): prologue/cutscene sync, graceful exit, Maria's special weapon, partner's weapons drawn; the off-hand spike.
 - **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
   - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
   - Cross-play, all three ways passing: `android_pair` (100 s), `android_pc` (PC hosts, 66 s), `android_pc_join` (Android hosts, 50 s), with sound on.
@@ -105,6 +106,8 @@ _Last updated: 2026-10-25 (M11 built)_
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
+- **Approve M12** (`docs/design/M12-coverage.md`): cutscene, boss, obstacle and hand-item coverage, then a chained end-to-end playthrough as far as the budget goes. About 6–8 usage windows plus 3 for the fixes.
+- **Off-hand weapons (playtest note 3):** coming with spike results: keep version 1 and polish it (attack delay, better poses), or run Alucard's real weapon code for Richter and Maria.
 - **Android signing key (before the first public Android release, D95):** the APK is signed with this PC's debug key. An update signed with any other key won't install over it without an uninstall, and the uninstall deletes the player's saves. Options: (a) **a release keystore, backed up in your password manager (recommended)**; (b) keep the debug key and back up `~/.android/debug.keystore`.
 - **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
   - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
