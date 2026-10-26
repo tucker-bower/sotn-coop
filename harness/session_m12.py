@@ -215,10 +215,17 @@ STAGE_IDS = {"nz0": 0x0C, "lib": 0x02, "dai": 0x06, "cen": 0x08, "top": 0x0B, "d
 # that marks the scene seen: include/castle_flags.h; it's cleared in both games first)
 ROOM_SCENES = {
     "maria_alchemy_lab": ("Alchemy Laboratory", "nz0", 15, 128, 128, "left", 0x85),  # MET_MARIA_IN_NZ0
-    "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN: talk (Up)
-    "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
-    "maria_center": ("Boss - Granfaloon", "cen", 1, 384, 544, "left", 0xD8),       # MET_MARIA_IN_CEN
     "castle_keep": ("Boss - Cerberus", "top", 1, 896, 896, "left", None),
+}
+# Not yet triggered by the harness (docs/STATUS.md), so not registered:
+OPEN_SCENES = {
+    # talking to him (Up next to his chair) didn't start it yet
+    "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN
+    # started once on arrival, then not when both games share the start: what else it needs is open
+    "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
+    # starts as soon as one enters the room and steers Alucard to Maria: the harness's arrival
+    # spots are on the wrong floor (the real way in is a door at her height)
+    "maria_center": ("Boss - Granfaloon", "cen", 1, 384, 544, "left", 0xD8),       # MET_MARIA_IN_CEN
 }
 
 
@@ -322,6 +329,11 @@ def boss_flow(run, b, limit=24000):
     w = SceneWatch(run)
     walk = b["walk"]
     boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    if b.get("check"):  # the way in needs something a bot can't do (mist through bars): start past it
+        from session_progress import arrive
+        room, x, y = b["check"]
+        for g in (a, g2):
+            arrive(run, g, a.mailbox("self_presence").stage, room, x, y)
     w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
     run.expect(boss(a), "A walks into the boss's room", at=a.snapshot())
     w.until(lambda: boss(g2), 900)
@@ -339,7 +351,10 @@ def boss_flow(run, b, limit=24000):
         fought = 0 if (boss(a) or boss(g2)) else fought + 1
         if fought > 300:
             break
-    run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:])
+    run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:],
+               boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
+               left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
+               cs=[g.read("g_CutsceneHasControl") for g in (a, g2)])
     w.step(300)
     for g, n in ((a, "A"), (g2, "B")):
         p = g.mailbox("self_presence")
