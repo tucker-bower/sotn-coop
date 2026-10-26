@@ -34,3 +34,37 @@ def m12_maria_guardians_keep_their_graphics(run):
         after = vram(e)
         changed = [n for n, (x, y) in GUARDIANS.items() if block(before, x, y) != block(after, x, y)]
         run.expect(not changed, f"{what} in her hands: her guardians' graphics are intact", changed=changed)
+
+
+AXE = 2  # Richter's subweapon ids; Maria's code turns the axe into her cardinal
+ANIMSET_WPN_CARDINAL = 0x8014  # ANIMSET_OVL(20), src/maria/maria.h
+SUBWEAPON, HEARTS = 0x80097BFC, 0x80097BA8  # g_Status.subWeapon, .hearts
+
+
+def cardinals(e):
+    import struct
+    raw = e.read_bytes("g_Entities", 0xBC * 256)
+    return sum(1 for s in range(256) if struct.unpack_from("<H", raw, s * 0xBC + 0x54)[0] == ANIMSET_WPN_CARDINAL)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m12_maria_keeps_throwing(run):
+    """Playtest 2026-10-25 note 4: after a while, Maria stopped throwing anything. Her cardinal,
+    thrown again and again (hearts kept up), with weapons in and out of her other hand between
+    rounds: every round's throws make birds."""
+    e, mb = run.emu, mailbox(run)
+    e.write(SUBWEAPON, AXE, "<i")
+    reload_as(run, mb, CHAR_MARIA)
+    rounds = []
+    for r, item in enumerate((0, SHORT_SWORD, 0, LEATHER_SHIELD, SHORT_SWORD, 0, 0, 0)):
+        e.write(EQUIPMENT, item)
+        e.write(SUBWEAPON, AXE, "<i")
+        reload_as(run, mb, CHAR_MARIA)
+        seen = 0
+        for i in range(600):
+            e.write(HEARTS, 99, "<i")
+            run.step(1, "up+square" if i % 30 < 2 else ("left" if (i // 150) % 2 else "right"))
+            seen += cardinals(e) > 0
+        rounds.append(seen)
+    # frames (of 600) with a bird on screen: about the same in every round
+    run.expect(min(rounds) > max(rounds) // 2, "every round's throws make birds, weapon in hand or not", rounds=rounds)
