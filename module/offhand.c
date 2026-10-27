@@ -291,6 +291,54 @@ static void AluAnimate(void) {
     }
 }
 
+// --- Maria: the weapon's tile sheet beside her guardians (D106, design/M12b) -------------------
+// DRA loads a hand weapon's sheet at 0x240,0x100 (right hand) or 0x240,0x180 (left), over her
+// guardians (D104), whose graphics are then put back. Before that, the sheet is copied to the
+// 8MB, and the one ○ will swing goes back at 0x240,0x180: that area holds her owl and doll, which
+// she can't select in our port (maria.c's ConvertSubweaponRicToMaria maps no subweapon to them).
+#define SHEET_W 0x40 // 16-bit words: 256 4bpp pixels
+#define SHEET_H 0x80
+#define SHEET_Y(hand) ((hand) ? 0x180 : 0x100)
+#define SHEET(hand) ((u_long*)(WEAPON_SHEET_ADDR + (hand) * SHEET_W * SHEET_H * 2))
+static s8 s_SheetHand = -1; // the hand whose sheet is at 0x240,0x180 in Maria's game
+
+void OffhandKeepSheet(s32 hand) {
+    RECT r;
+
+    r.x = 0x240;
+    r.y = SHEET_Y(hand);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    DrawSync(0);
+    StoreImage(&r, SHEET(hand));
+    DrawSync(0);
+}
+
+// Her guardians' upload (MARIA_Load) is queued and runs over the next frames: the weapon's sheet
+// goes in after it.
+#define SHEET_DELAY 8
+static s8 s_PlaceIn;
+
+void OffhandPlaceSheet(void) { s_PlaceIn = SHEET_DELAY; }
+
+static void PlaceSheet(void) {
+    RECT r;
+    s32 hand;
+
+    for (hand = 0; hand < 2 && !(IsWeapon(Category(hand)) && Loaded(hand)); hand++) {
+    }
+    if (hand == 2) {
+        s_SheetHand = -1;
+        return;
+    }
+    r.x = 0x240;
+    r.y = SHEET_Y(1);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    LoadImage(&r, SHEET(hand));
+    s_SheetHand = hand;
+}
+
 void CoopWeaponEntity(Entity* self) {
     s32 hand = self->entityId >= 0xF0;
     PfnEntityUpdate fn = ((PfnEntityUpdate*)WEAPON_PRG(hand))[self->entityId - (hand ? 0xF0 : 0xE0)];
@@ -322,6 +370,9 @@ void CoopWeaponEntity(Entity* self) {
     if (self->entityId && (self->animSet & ANIMSET_OVL_FLAG) && set >= 0x10 && set < 0x14) {
         banks[WBANK] = banks[set]; // the overlay put its sprites in a body bank: ours instead
         self->animSet = ANIMSET_OVL(WBANK);
+    }
+    if (self->entityId && CharacterLoaded() == CHAR_MARIA && hand == s_SheetHand) {
+        self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
     }
     if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
         self->palette < PAL_WEAPONS + N_PAL && s_Slot[hand] >= 0) {
@@ -360,6 +411,9 @@ void OffhandUpdate(void) {
     s_PrevEngine = g_GameEngineStep;
     LoadWeapons();
     AluAnimate();
+    if (s_PlaceIn && !--s_PlaceIn) {
+        PlaceSheet();
+    }
     if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging) {
         return;
     }

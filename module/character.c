@@ -283,7 +283,9 @@ void CharacterFrame(void) {
     if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
         g_LoadFile != s_PrevLoadFile && s_Loaded == CHAR_MARIA && g_StageId != STAGE_ST0 &&
         (b = Blob(CHAR_MARIA)) != NULL) {
+        OffhandKeepSheet(s_PrevLoadFile == CdFile_Weapon1);
         (*(void (**)(void))MAR_GUARDIANS_HOOK)();
+        OffhandPlaceSheet();
     }
     s_PrevLoadFile = g_LoadFile;
     Familiar();

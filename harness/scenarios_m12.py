@@ -10,8 +10,10 @@ SHORT_SWORD = 19
 # Maria's guardians in VRAM (src/maria/ovl_load.c, the PS1 layout): x, y in 16-bit words, 32x128
 # each. A hand weapon's graphics load at x 0x240-0x27F, y 0x100-0x17F (right hand) and 0x180-0x1FF
 # (left hand: src/dra/cd.c), over four of them.
-GUARDIANS = {"owl": (0x240, 0x180), "cardinal": (0x260, 0x100), "dragon": (0x240, 0x100),
-             "doll": (0x260, 0x180), "turtle": (0x2E0, 0x100), "cat": (0x2C0, 0x180)}
+# The owl and doll (0x240/0x260, 0x180) can't be selected in our port (no subweapon maps to them),
+# and their area holds her off-hand weapon's sheet (D106): the four she uses are checked.
+GUARDIANS = {"cardinal": (0x260, 0x100), "dragon": (0x240, 0x100), "turtle": (0x2E0, 0x100),
+             "cat": (0x2C0, 0x180)}
 
 
 def block(v, x, y, w=0x20, h=0x80):
@@ -163,11 +165,10 @@ def offhand_like_alucard(run, ch, button="circle"):
             if w:
                 spawned = True
                 lasted += 1
-                if not shot and i % 40 == 8:
-                    e.screenshot(out / f"{NAMES.get(ch, 'Alucard').lower()}-{what.split(' ')[0]}.png")
-                    shot = True
             now = enemies_hp(e)
             if any(s in now and now[s] < hp == 999 for s, hp in before.items()):
+                if not hit:  # the first hit: the same moment for every character
+                    e.screenshot(out / f"{NAMES.get(ch, 'Alucard').lower()}-{what.split(' ')[0]}.png")
                 hit = True
             if spawned and hit and i % 40 == 39 and not w:
                 ended = True
@@ -187,3 +188,10 @@ def m12b_offhand_like_alucard_richter(run):
 def m12b_alucard_baseline(run):
     """The same weapons in Alucard's own hands (□): what the off-hand must match."""
     offhand_like_alucard(run, 0, "square")
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m12b_offhand_like_alucard_maria(run):
+    """D105 for Maria: the weapon's own overlay with Alucard's swing; its sheet beside her guardians."""
+    from link.mailbox import CHAR_MARIA
+    offhand_like_alucard(run, CHAR_MARIA)
