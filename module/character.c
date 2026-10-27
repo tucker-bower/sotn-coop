@@ -16,6 +16,7 @@
 #include "coop_api.h"
 #include "link.h"
 #include "character.h"
+#include "weapons.h"
 #include "message.h"
 #include "offhand.h"
 
@@ -280,6 +281,10 @@ void CharacterFrame(void) {
     // (src/dra/cd.c loads them at 0x240,0x100 and 0x240,0x180, where her PS1 layout puts the owl,
     // cardinal, dragon and doll): put hers back (playtest 2026-10-25 note 4: her birds became a
     // skull and a shield).
+    if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
+        g_LoadFile != s_PrevLoadFile && g_StageId != STAGE_ST0) {
+        WeaponLoaded(s_PrevLoadFile == CdFile_Weapon1); // for the partner to draw it (weapons.c)
+    }
     if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
         g_LoadFile != s_PrevLoadFile && s_Loaded == CHAR_MARIA && g_StageId != STAGE_ST0 &&
         (b = Blob(CHAR_MARIA)) != NULL) {

@@ -1,5 +1,6 @@
 """One host per game. Call after_frame() once per emulated frame, while the emulator is paused."""
 
+import base64
 import collections
 import json
 import zlib
@@ -45,6 +46,7 @@ class Host:
         self.partner_left = False  # the partner said goodbye (its app closed or went back to its menu)
         self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
         self._prims_sent, self._prims_seq = False, 0
+        self._weapons_sent = [None, None]  # each hand's weapon copy last sent (module/weapons.c)
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
@@ -110,6 +112,7 @@ class Host:
         self.restarts += 1
         self.partner_left = False  # back again
         self._sprites_seq = self._prims_seq = 0
+        self._weapons_sent = [None, None]
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
@@ -142,6 +145,26 @@ class Host:
         """Sends a reliable control/save JSON dict to the partner host (online joint saves)."""
         self.ctrl.send(json.dumps(msg).encode())
         self._note("out", f"ctrl {msg.get('op')}")
+
+    def _send_weapons(self):
+        """A hand's weapon copy (overlay, tile sheet, palettes: module/weapons.c), once per new
+        copy, so the partner can draw its swings. Reliable: it's sent rarely, and a lost one would
+        leave the swings undrawn."""
+        if not self.partner_hello:
+            return
+        for hand in (0, 1):
+            ok, seq = self.mailbox.self_weapon_seq(hand)
+            if ok and seq != self._weapons_sent[hand]:
+                self._weapons_sent[hand] = seq
+                blob = zlib.compress(self.mailbox.self_weapon(hand), 6)
+                self.send_control({"op": "weapon", "hand": hand, "data": base64.b64encode(blob).decode("ascii")})
+
+    def _take_weapon(self, msg):
+        try:
+            hand, blob = int(msg["hand"]) & 1, zlib.decompress(base64.b64decode(msg["data"]))
+        except (KeyError, TypeError, ValueError, zlib.error):
+            return
+        self.mailbox.write_partner_weapon(hand, blob)
 
     def goodbye(self):
         """Tells the partner this game is leaving, so it can say so at once instead of waiting
@@ -251,6 +274,7 @@ class Host:
         if prims or self._prims_sent:
             self.transport.send(TAG_PRIM, zlib.compress(prims, 1))
         self._prims_sent = bool(prims)
+        self._send_weapons()
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:
             self._snap_sent = seq
@@ -322,7 +346,10 @@ class Host:
             for raw_msg in self.ctrl.tick(ctrl_dgrams):
                 try:
                     msg = json.loads(raw_msg)
-                    self._ctrl_inbox.append(msg)
                     self._note("in", f"ctrl {msg.get('op')}")
+                    if msg.get("op") == "weapon":
+                        self._take_weapon(msg)
+                    else:
+                        self._ctrl_inbox.append(msg)
                 except ValueError:
                     pass

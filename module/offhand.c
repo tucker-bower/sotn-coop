@@ -23,6 +23,7 @@
 #include "link.h"
 #include "character.h"
 #include "offhand.h"
+#include "weapons.h"
 
 // DRA (src/dra/menu.c, 5D5BC.c, 7879C.c)
 bool LoadWeaponPrg(s32 equipIndex);
@@ -143,6 +144,7 @@ static void FixPalettes(s32 hand) {
     if (k == N_WEAPON_PAL * COLORS_PER_PAL) {
         return; // nothing loaded over them
     }
+    WeaponKeepClut(hand, block); // all 24, for the partner to draw this weapon (weapons.c)
     s_Hand = hand;
     if (IsWeapon(Category(hand)) && Loaded(hand) && (frame = Extended(WEAPON_ANIMSET(hand))) != 0) {
         clut = WEAPON_ANIMSET(hand)[frame]->parts[0].clut;
@@ -343,6 +345,27 @@ static void PlaceSheet(void) {
     s_SheetHand = hand;
 }
 
+// Each weapon entity's bank, palette and hand before they're changed below: the partner draws
+// its sprites as Alucard's (weapons.c).
+typedef struct {
+    u8 set, hand;
+    u16 palette;
+} Original;
+static Original s_Original[STAGE_ENTITY_START];
+
+bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand) {
+    s32 i = e - g_Entities;
+    const Original* o = &s_Original[i];
+
+    if (i < 0 || i >= STAGE_ENTITY_START || e->animSet != ANIMSET_OVL(WBANK) || !o->set) {
+        return false;
+    }
+    *set = o->set;
+    *palette = o->palette;
+    *hand = o->hand;
+    return true;
+}
+
 void CoopWeaponEntity(Entity* self) {
     s32 hand = self->entityId >= 0xF0;
     PfnEntityUpdate fn;
@@ -400,12 +423,16 @@ void CoopWeaponEntity(Entity* self) {
     if (self->entityId && (self->animSet & ANIMSET_OVL_FLAG) && set >= 0x10 && set < 0x14) {
         banks[WBANK] = banks[set]; // the overlay put its sprites in a body bank: ours instead
         self->animSet = ANIMSET_OVL(WBANK);
+        s_Original[self - g_Entities].set = set;
+        s_Original[self - g_Entities].hand = hand;
+        s_Original[self - g_Entities].palette = self->palette;
     }
     if (self->entityId && CharacterLoaded() == CHAR_MARIA && hand == s_SheetHand) {
         self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
     }
     if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
         self->palette < PAL_WEAPONS + N_PAL && s_Slot[hand] >= 0) {
+        s_Original[self - g_Entities].palette = self->palette;
         self->palette = PAL_UNK_FLAG | s_Slot[hand]; // the player's own palettes are there
     }
     for (i = 0; i < 4; i++) {

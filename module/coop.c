@@ -14,6 +14,7 @@
 #include "spells.h"
 #include "offhand.h"
 #include "sprites.h"
+#include "weapons.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -108,6 +109,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     CharacterFrame();
     SpellsUpdate();
     OffhandUpdate();
+    WeaponsUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
@@ -138,6 +140,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     SpritesPlace();
     PrimsPlace();
     RenderEntities();
+    WeaponsDraw();
     SpritesRemove();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();

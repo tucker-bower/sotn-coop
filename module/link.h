@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 10
+#define COOP_LINK_VERSION 11
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -33,8 +33,29 @@ typedef struct {
     /* 0x0C */ u16 zPriority;
     /* 0x0E */ u16 drawFlags;
     /* 0x10 */ u16 unk5A;
-    /* 0x12 */ u16 pad;
+    /* 0x12 */ u16 weapon; // a hand weapon's sprite: WEAPON_SPRITE | hand (weapons.c), else 0
 } CoopSprite; // size = 0x14
+#define WEAPON_SPRITE 0x100 // CoopSprite.weapon: animSet is its bank (0x10-0x13), palette its own
+
+// A player's hand weapons, for the partner to draw their swings (weapons.c, M12 note 2 phase 2):
+// each game copies a weapon's overlay, tile sheet and palettes here when it loads; the host sends
+// a hand's copy when its seq changes and writes the partner's at WEAPON_PARTNER_ADDR.
+#define WEAPON_SELF_ADDR 0x80710000
+#define WEAPON_PARTNER_ADDR 0x80720000
+#define WEAPON_HAND_SIZE 0x8000 // per hand, from the address above
+#define WEAPON_MAGIC 0x534E5057 // 'WPNS'
+#define WEAPON_OVL_SIZE 0x3000    // the overlay, as at 0x8017A000 (hand 0) / 0x8017D000 (hand 1)
+#define WEAPON_SHEET_SIZE 0x4000  // its tile sheet: 0x40 x 0x80 VRAM words (256 x 128, 4bpp)
+#define WEAPON_CLUT_SIZE 0x300    // its 24 palettes (0x110 + hand * 24 on)
+typedef struct {
+    /* 0x00 */ u32 magic; // WEAPON_MAGIC once written
+    /* 0x04 */ u32 seq;   // bumped with each new copy (the host sends on a change)
+    /* 0x08 */ u32 item;  // the item in that hand
+    /* 0x0C */ u32 pad[5];
+    /* 0x20 */ u8 ovl[WEAPON_OVL_SIZE];
+    /* 0x3020 */ u16 sheet[WEAPON_SHEET_SIZE / 2];
+    /* 0x7020 */ u16 clut[WEAPON_CLUT_SIZE / 2];
+} CoopWeapon; // size = 0x7320
 
 typedef struct {
     /* 0x00 */ u8 flags;     // PRESENCE_*

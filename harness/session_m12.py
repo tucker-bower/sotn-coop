@@ -566,3 +566,65 @@ def m12_guest_opens_red_door(run):
             break
     run.expect(b.snapshot()["room"] != room, "B walks out through the door", at=b.snapshot(), frames=t)
     run.expect(a.snapshot()["room"] == room, "A stays", at=a.snapshot())
+
+
+# --- the partner's hand-weapon swings (note 2, phase 2: weapons.c) ---------------------------
+def _swing_drawn(run, chars, button, item_index=0):
+    """A swings a hand weapon next to B: B gets the weapon's copy (overlay, sheet, palettes)
+    through the link, and draws the swing (the same frame of B, from the same state, with and
+    without A's sprites, differs; and B drew weapon sprites)."""
+    from link.mailbox import WEAPON_MAGIC, WEAPON_PARTNER
+    from module import symbols
+    from scenarios_m12 import (CATEGORY_OFS, EQUIP_DEFS, EQUIP_SIZE, N_HAND_ITEMS, WEAPON_CATEGORIES)
+    from scenarios_m8 import EQUIPMENT
+    from session_m8 import as_characters
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    raw = a.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
+    items = [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
+    hand = 0  # the right hand (○ swings it for Richter and Maria, as in the hand-item tests)
+    a.write(EQUIPMENT, items[item_index], "<I")
+    as_characters(run, *chars)  # the load loads the weapon
+    into_hall(run)
+    got = False
+    for _ in range(300):
+        run.step(1)
+        if b.read(WEAPON_PARTNER + hand * 0x8000, "<I") == WEAPON_MAGIC:
+            got = True
+            break
+    run.expect(got, "B has A's weapon (its copy came through the link)", item=items[item_index],
+               a_seq=a.mailbox("self_weapon_seq", hand))
+    drawn_at = None
+    drawn_sym = symbols()["g_CoopWeaponsDrawn"]
+    for i in range(240):
+        run.step(1, (button if i % 40 < 2 else "", ""))
+        if b.read(drawn_sym, "<I"):
+            drawn_at = i
+            break
+    run.expect(drawn_at is not None, "B draws A's swing", sprites=b.mailbox("partner_sprite_count"))
+    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
+    state = b.save_state()
+    b.mailbox("write_partner_sprites", b"")
+    run.s.b.step(10)  # the screen shows a frame a few frames late
+    without = b.screenshot()
+    b.load_state(state)
+    run.s.b.step(10)
+    with_swing = b.screenshot()
+    out = TOOLS["out"] / run.name
+    out.mkdir(parents=True, exist_ok=True)
+    with_swing.save(out / "b_with.png")
+    without.save(out / "b_without.png")
+    a.screenshot().save(out / "a.png")
+    run.expect(with_swing.tobytes() != without.tobytes(), "the swing is on B's screen")
+
+
+@session_scenario()
+def m12_partner_swing_drawn(run):
+    """Note 2, phase 2: Alucard swings a sword next to Alucard."""
+    _swing_drawn(run, (0, 0), "square")
+
+
+@session_scenario(characters=(1, 0))
+def m12_partner_swing_drawn_richter(run):
+    """Note 2, phase 2: Richter swings his off-hand sword (D105) next to Alucard."""
+    _swing_drawn(run, (1, 0), "circle")

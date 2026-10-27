@@ -4,12 +4,13 @@
 // player entity slots as inert entities (never updated, never hit), and taken out right after.
 // Phase 1: sprites whose graphics this game has too: DRA's sprite sets (Alucard's subweapons and
 // spell effects), and the overlay's own sets when the partner plays this game's character. Hand
-// weapons (their sheets are only in the partner's VRAM) are phase 2 (D106).
+// weapons (their sheets are only in the partner's VRAM): weapons.c.
 #define COOP_MODULE
 #include <game.h>
 #include "link.h"
 #include "character.h"
 #include "sprites.h"
+#include "weapons.h"
 
 #define SLOT_FIRST 4
 #define SLOT_LAST 63
@@ -23,6 +24,10 @@ u32 g_CoopSpritesWhy;   // why none: 1 not in play, 2 partner not here, 3 none d
 // weapon banks (0x10-0x13 hold this player's hand weapons in Alucard's game; 0x17 its off-hand).
 static bool Drawable(const CoopSprite* s) {
     s32 bank;
+
+    if (s->weapon) {
+        return false; // a hand weapon's: weapons.c draws it
+    }
 
     if (!(s->animSet & ANIMSET_OVL_FLAG)) {
         return s->animSet > 0;
@@ -56,6 +61,8 @@ void SpritesCapture(void) {
         s->zPriority = e->zPriority;
         s->drawFlags = e->drawFlags;
         s->unk5A = e->unk5A;
+        s->weapon = 0;
+        WeaponSprite(e, s); // a hand weapon's: as the partner draws it
     }
     g_CoopLink.selfSpriteCount = n;
 }

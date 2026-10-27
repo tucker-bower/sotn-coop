@@ -4,7 +4,10 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 10
+LINK_VERSION = 11
+# Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
+WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
+WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -138,6 +141,23 @@ class Mailbox:
         if n:
             self.adapter.write_bytes(self.address + PARTNER_SPRITES + 4, data[:n * SPRITE_SIZE])
         self.adapter.write_bytes(self.address + PARTNER_SPRITES, struct.pack("<I", n))
+
+    # --- hand weapons (module/weapons.c): each game's copy, and the partner's -----------------
+    def self_weapon_seq(self, hand):
+        """(magic ok, seq) of this game's copy of that hand's weapon."""
+        magic, seq = struct.unpack("<II", self.adapter.read_bytes(WEAPON_SELF + hand * WEAPON_HAND_SIZE, 8))
+        return magic == WEAPON_MAGIC, seq
+
+    def self_weapon(self, hand):
+        return self.adapter.read_bytes(WEAPON_SELF + hand * WEAPON_HAND_SIZE, WEAPON_SIZE)
+
+    def write_partner_weapon(self, hand, blob):
+        """The partner's copy (header last: the game checks its magic)."""
+        if len(blob) != WEAPON_SIZE:
+            return
+        base = WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
+        self.adapter.write_bytes(base + 0x20, blob[0x20:])
+        self.adapter.write_bytes(base, blob[:0x20])
 
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())
