@@ -636,11 +636,12 @@ class GameView:
             text = self.notice if self.frame < self.notice_until else status
             if self.goal and self.frame < 600:
                 text = self.goal[:150]
-            self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
-            if not self.started:  # the game's boot: say so over the black (Tucker, 2026-10-26)
+            if not self.started:  # the game's boot: say so instead of the black (Tucker, 2026-10-26)
                 self.started = self.frame > 3600 or any(f is not None and _not_black(f) for f in frames)
-                if not self.started:
-                    self.overlay("Starting the game", ["Reading your disc: about 10 seconds."])
+            if self.started:
+                self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
+            else:
+                self.overlay("Starting the game", ["Reading your disc: about 10 seconds."])
             t2 = time.perf_counter()
             self.frame_times.append(round((time.perf_counter() - t0) * 1000, 2))
             if self.profile:
