@@ -34,6 +34,11 @@ bool LoadWeaponPrg(s32 equipIndex);
 void InitWeapon(s32 itemSlot);
 void GetEquipProperties(s32 handId, Equipment* res, s32 equipId);
 void func_80118894(Entity* self);
+Entity* CreateEntFactoryFromEntity(Entity* source, u32 factoryParams, s16 arg2);
+void EntityFactory(Entity* self);
+void PlayAnimation(s8* frameProps, AnimationFrame** frames);
+extern s8 D_800B0130[];              // Alucard's animation frame properties (src/dra/692E8.c)
+extern AnimationFrame* D_800B01B8[]; // ...and his animations
 int ReduceWeapon(s32 hand);
 s32 GetStatusAilmentTimer(s32 statusAilment, s32 timer);
 #define STATUS_AILMENT_POTION 4      // src/dra/dra.h: STATUS_AILMENT_UNK04
@@ -47,6 +52,7 @@ extern s32 g_EquippedWeaponIds[2];
 #define WEAPON_ANIMSET(hand) ((SpriteParts**)(WEAPON_PRG(hand) + 0x40)) // every w0_/w1_ overlay
 #define WEAPON_SIZE 0x3000
 #define BANK 0x16 // stage sprite banks 0x16-0x17 are free in every stage (Richter: 0x10-0x13, familiars 0x14)
+#define WBANK 0x17 // D105: the overlay's sprites (Maria uses 0x10-0x16)
 #define E_OFFHAND 0x7E
 #define SLOT_FIRST 0x18
 #define SLOT_LAST 0x2F
@@ -348,6 +354,102 @@ static bool Busy(void) {
     return false;
 }
 
+// --- D105: the weapon's own overlay, as for Alucard (design/M12b) ----------------------------
+// ○ starts what Alucard's attack starts (src/dra/6E42C.c): the weapon's blueprint through DRA's
+// factory, whose children (0xE0+ / 0xF0+) Richter's and Maria's entity loops send here. Alucard's
+// attack animation runs on a virtual Alucard (s_Alu), advanced by DRA's PlayAnimation; while a
+// weapon entity updates, PLAYER's animation is that one, so the overlay draws, times and hits as
+// in Alucard's hands. Richter's or Maria's own body is untouched.
+static Entity s_Alu;
+static bool s_Swinging;
+static u16 s_Unk46;
+
+static void AluSwing(s32 hand) {
+    u32 item = g_Status.equipment[hand];
+    Equipment* eq = &g_EquipDefs[item];
+    Entity* f;
+    Entity* cur = g_CurrentEntity;
+
+    f = CreateEntFactoryFromEntity(&PLAYER, FACTORY(eq->unk13 + ((hand + 1) << 12),
+                                                    ((eq->unk14 & 0x7F) + (hand << 7))), item);
+    if (!f) {
+        return;
+    }
+    __builtin_memset(&s_Alu, 0, sizeof(s_Alu));
+    s_Alu.ext.player.anim = eq->playerAnim + ((g_Player.vram_flag & 1) ? 0 : 4); // in the air: his jump swing
+    s_Unk46 = eq->unk11 + 0x7FFF + 2;
+    s_Swinging = true;
+    s_Hand = hand;
+    // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's
+    // starts now, so it keeps DRA's update.
+    g_CurrentEntity = f;
+    EntityFactory(f);
+    f->pfnUpdate = EntityFactory;
+    g_CurrentEntity = cur;
+    ReduceWeapon(hand);
+}
+
+static void AluAnimate(void) {
+    Entity* cur = g_CurrentEntity;
+
+    if (!s_Swinging) {
+        return;
+    }
+    g_CurrentEntity = &s_Alu;
+    PlayAnimation(D_800B0130, D_800B01B8);
+    g_CurrentEntity = cur;
+    if (s_Alu.poseTimer < 0) {
+        s_Swinging = false;
+    }
+}
+
+void CoopWeaponEntity(Entity* self) {
+    s32 hand = self->entityId >= 0xF0;
+    PfnEntityUpdate fn = ((PfnEntityUpdate*)WEAPON_PRG(hand))[self->entityId - (hand ? 0xF0 : 0xE0)];
+    SpriteParts** banks = (SpriteParts**)g_api.o.spriteBanks;
+    SpriteParts* own[4];
+    u8 anim = PLAYER.ext.player.anim;
+    u16 pose = PLAYER.pose;
+    s16 timer = PLAYER.poseTimer;
+    u16 unk46 = g_Player.unk46;
+    u16 drawFlags = PLAYER.drawFlags;
+    s16 scaleY = PLAYER.scaleY;
+    s32 i, set;
+
+    for (i = 0; i < 4; i++) {
+        own[i] = banks[0x10 + i];
+    }
+    if (s_Swinging) {
+        PLAYER.ext.player.anim = s_Alu.ext.player.anim;
+        PLAYER.pose = s_Alu.pose;
+        PLAYER.poseTimer = s_Alu.poseTimer;
+        g_Player.unk46 = s_Unk46;
+        PLAYER.drawFlags = 0; // the overlay copies these: Alucard's, not Richter's or Maria's
+        PLAYER.scaleY = 0x100;
+    } else {
+        g_Player.unk46 = 0; // the swing is over: the weapon's entities end themselves
+    }
+    fn(self);
+    set = self->animSet & 0x7FFF;
+    if (self->entityId && (self->animSet & ANIMSET_OVL_FLAG) && set >= 0x10 && set < 0x14) {
+        banks[WBANK] = banks[set]; // the overlay put its sprites in a body bank: ours instead
+        self->animSet = ANIMSET_OVL(WBANK);
+    }
+    if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
+        self->palette < PAL_WEAPONS + N_PAL && s_Slot[hand] >= 0) {
+        self->palette = PAL_UNK_FLAG | s_Slot[hand]; // the player's own palettes are there
+    }
+    for (i = 0; i < 4; i++) {
+        banks[0x10 + i] = own[i];
+    }
+    PLAYER.ext.player.anim = anim;
+    PLAYER.pose = pose;
+    PLAYER.poseTimer = timer;
+    g_Player.unk46 = unk46;
+    PLAYER.drawFlags = drawFlags;
+    PLAYER.scaleY = scaleY;
+}
+
 // Once per frame, before UpdateGame (the pads are this frame's).
 void OffhandUpdate(void) {
     s32 hand;
@@ -369,13 +471,14 @@ void OffhandUpdate(void) {
     }
     s_PrevEngine = g_GameEngineStep;
     LoadWeapons();
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || Busy()) {
+    AluAnimate();
+    if (!(g_pads[0].tapped & PAD_CIRCLE) || Busy() || s_Swinging) {
         return;
     }
     for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○
         c = Category(hand);
         if (IsWeapon(c) && Loaded(hand) && s_Loading < 0) {
-            Swing(hand);
+            AluSwing(hand);
             return;
         }
         if (c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF)) {

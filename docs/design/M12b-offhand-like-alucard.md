@@ -1,6 +1,6 @@
 # M12b: off-hand weapons exactly like Alucard's (D105, D106)
 
-**Status:** decided by Tucker (2026-10-26). Spike in progress on `coop-m12-coverage`.
+**Status:** decided by Tucker (2026-10-26). **Spike passed (2026-10-26)**; building on `coop-m12-coverage`.
 
 ## Goal
 Richter's and Maria's off-hand (○) weapon looks, times and hits exactly as the same weapon does in Alucard's hands: its own swing animation and sprite, Alucard's wind-up and recovery, its hitboxes, its specials (Crissaegrim's multi-hit, Muramasa, Shield Rod...). Their own body keeps its pose.
@@ -25,3 +25,9 @@ Six classes: short sword, sword, two-handed sword, club, spear-like (thrust), fi
 ## Risks
 - Some overlays read more of Alucard's state (MP for specials, his step machine). Mitigation: shadow those fields too, per class, found by the spike.
 - The VRAM window must be free in every stage: the survey (D106) proves it first.
+
+## Spike result (2026-10-26)
+- **Built:** ○ creates the weapon's blueprint through DRA's own factory (`CreateEntFactoryFromEntity` + `EntityFactory`, exactly Alucard's call), and Richter's and Maria's entity loops send the children (0xE0-0xFF) to `CoopWeaponEntity` (module/offhand.c, through `g_CoopWeaponEntity` at 0x80280040). A virtual Alucard's attack animation runs on DRA's `PlayAnimation`; during each weapon entity's update `PLAYER`'s animation, pose, attack flag, draw flags and scale are his. Sprite banks 0x10-0x13 (the overlay's, and Richter's/Maria's body) are restored after; the weapon draws from bank 0x17.
+- **Measured** (`m12b_offhand_like_alucard_richter` against `m12b_alucard_baseline`, the same test in Alucard's hands): all 6 classes (short sword, sword, two-handed sword, club, fist, estoc) spawn, animate, place their hitbox and end exactly as in Alucard's hands: the same slot, attack, hitbox state and hitbox per frame; timing within 1 frame. Hits: the same outcome as Alucard's per class.
+- **The test's target is weak:** in the castle entrance hall neither Alucard's nor Richter's swords register a hit (the zombies rising); the hand-item test needs a better target (a still enemy, a boss).
+- **Left to build:** the weapon's own palettes (it draws with one moved palette now, so multi-palette weapons are off-colour); Maria (her guardians and the weapon's tiles share VRAM: D106's window); the 1-frame timing lag; Alucard's lock-out and cancels; the hand-item test over every item; removing version 1's code.
