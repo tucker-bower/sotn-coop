@@ -32,6 +32,7 @@ void func_80118894(Entity* self);
 Entity* CreateEntFactoryFromEntity(Entity* source, u32 factoryParams, s16 arg2);
 void EntityFactory(Entity* self);
 void PlayAnimation(s8* frameProps, AnimationFrame** frames);
+extern PfnEntityUpdate g_DraEntityTbl[]; // DRA's player entities (src/dra/7879C.c)
 extern s8 D_800B0130[];              // Alucard's animation frame properties (src/dra/692E8.c)
 extern AnimationFrame* D_800B01B8[]; // ...and his animations
 int ReduceWeapon(s32 hand);
@@ -239,6 +240,9 @@ static void Use(s32 hand) {
 // attack animation runs on a virtual Alucard (s_Alu), advanced by DRA's PlayAnimation; while a
 // weapon entity updates, PLAYER's animation is that one, so the overlay draws, times and hits as
 // in Alucard's hands. Richter's or Maria's own body is untouched.
+#define FACTORY_FIRST 8 // DRA's CreateEntFactoryFromEntity takes a free slot in 8-15
+#define FACTORY_SLOTS 8
+#define E_FACTORY 1     // the factory's entity id in every player entity loop (src/dra/7879C.c)
 static Entity s_Alu;
 static bool s_Swinging;
 static u16 s_Unk46;
@@ -341,9 +345,20 @@ static void PlaceSheet(void) {
 
 void CoopWeaponEntity(Entity* self) {
     s32 hand = self->entityId >= 0xF0;
-    PfnEntityUpdate fn = ((PfnEntityUpdate*)WEAPON_PRG(hand))[self->entityId - (hand ? 0xF0 : 0xE0)];
+    PfnEntityUpdate fn;
+    u16 id = self->entityId;
+
+    // As DRA's loop (src/dra/7879C.c): these ids are DRA's own entities, the rest the weapon's
+    if (id == 0xEF || id == 0xFF || id == 0xED || id == 0xFD) {
+        fn = g_DraEntityTbl[E_FACTORY];
+    } else if (id == 0xEE || id == 0xFE) {
+        fn = g_DraEntityTbl[15];
+    } else {
+        fn = ((PfnEntityUpdate*)WEAPON_PRG(hand))[id - (hand ? 0xF0 : 0xE0)];
+    }
     SpriteParts** banks = (SpriteParts**)g_api.o.spriteBanks;
     SpriteParts* own[4];
+    u16 before[FACTORY_SLOTS];
     u8 anim = PLAYER.ext.player.anim;
     u16 pose = PLAYER.pose;
     s16 timer = PLAYER.poseTimer;
@@ -354,6 +369,9 @@ void CoopWeaponEntity(Entity* self) {
 
     for (i = 0; i < 4; i++) {
         own[i] = banks[0x10 + i];
+    }
+    for (i = 0; i < FACTORY_SLOTS; i++) {
+        before[i] = g_Entities[FACTORY_FIRST + i].entityId;
     }
     if (s_Swinging) {
         PLAYER.ext.player.anim = s_Alu.ext.player.anim;
@@ -366,6 +384,18 @@ void CoopWeaponEntity(Entity* self) {
         g_Player.unk46 = 0; // the swing is over: the weapon's entities end themselves
     }
     fn(self);
+    // Factories the weapon's entities start (DRA's CreateEntFactoryFromEntity: slots 8-15) are
+    // DRA's: their loops would run them as their own (entity 1, step 0) with their blueprints, so
+    // DRA's starts now (the katanas' slashes, the brands' trails, the Heaven Sword...).
+    for (i = 0; i < FACTORY_SLOTS; i++) {
+        Entity* f = &g_Entities[FACTORY_FIRST + i];
+        if (f->entityId == E_FACTORY && before[i] != E_FACTORY && f->step == 0) {
+            g_CurrentEntity = f;
+            EntityFactory(f);
+            f->pfnUpdate = EntityFactory;
+        }
+    }
+    g_CurrentEntity = self;
     set = self->animSet & 0x7FFF;
     if (self->entityId && (self->animSet & ANIMSET_OVL_FLAG) && set >= 0x10 && set < 0x14) {
         banks[WBANK] = banks[set]; // the overlay put its sprites in a body bank: ours instead

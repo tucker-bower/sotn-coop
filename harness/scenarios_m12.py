@@ -195,3 +195,88 @@ def m12b_offhand_like_alucard_maria(run):
     """D105 for Maria: the weapon's own overlay with Alucard's swing; its sheet beside her guardians."""
     from link.mailbox import CHAR_MARIA
     offhand_like_alucard(run, CHAR_MARIA)
+
+
+# --- M12 part 3: every hand weapon in every character's hands --------------------------------
+EQUIP_DEFS, EQUIP_SIZE, CATEGORY_OFS, N_HAND_ITEMS = 0x800A4B04, 0x34, 0x0E, 0xA9
+WEAPON_CATEGORIES = (0, 1, 2, 3, 4, 5)  # short sword, sword, thrown, fist, club, two-handed
+
+
+def hand_weapons(e):
+    raw = e.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
+    return [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
+
+
+def try_weapon(run, mb, ch, item, button, frames=400):
+    """Equip, go to the hall, swing at an enemy kept on the live hitbox: (spawned, hit, ended)."""
+    e = run.emu
+    e.write(EQUIPMENT, item)
+    reload_as(run, mb, ch)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    spawned = hit = ended = False
+    for i in range(frames):
+        for slot, hp in enemies_hp(e).items():
+            if 0 < hp < 999:
+                e.write("g_Entities", 999, "<h", slot * 0xBC + 0x3E)
+        before = enemies_hp(e)
+        pin_target(e)
+        run.step(1, button if i % 60 == 0 else "")
+        w = weapon_entities(e)
+        spawned |= bool(w)
+        now = enemies_hp(e)
+        hit |= any(s in now and now[s] < hp == 999 for s, hp in before.items())
+        if spawned and not w and i % 60 > 40:
+            ended = True
+            if hit:
+                break
+    return spawned, hit, ended
+
+
+def hand_items(run, ch, button):
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    items = hand_weapons(e)
+    results = {}
+    for item in items:
+        e.load_state(start)
+        results[item] = try_weapon(run, mb, ch, item, button)
+    import json
+    from coop_env import TOOLS
+    (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
+    (TOOLS["out"] / run.name / "items.json").write_text(json.dumps(results))
+    bad = {i: r for i, r in results.items() if not (r[0] and r[2])}
+    run.expect(not bad, f"every hand weapon ({len(items)}) spawns and ends", bad=bad)
+    return results
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m12_hand_items_alucard(run):
+    """Every hand weapon in Alucard's hands (□): the reference."""
+    hand_items(run, 0, "square")
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m12_hand_items_richter(run):
+    """Every hand weapon in Richter's off hand (○), against Alucard's results (D105)."""
+    _against_alucard(run, hand_items(run, CHAR_RICHTER, "circle"))
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def m12_hand_items_maria(run):
+    """Every hand weapon in Maria's off hand (○), against Alucard's results (D105)."""
+    from link.mailbox import CHAR_MARIA
+    _against_alucard(run, hand_items(run, CHAR_MARIA, "circle"))
+
+
+def _against_alucard(run, results):
+    import json
+    from coop_env import TOOLS
+    ref = TOOLS["out"] / "m12_hand_items_alucard" / "items.json"
+    if not ref.exists():
+        return
+    alu = {int(k): v for k, v in json.loads(ref.read_text()).items()}
+    differ = {i: (alu[i], list(r)) for i, r in results.items() if i in alu and list(r) != alu[i]}
+    run.expect(not differ, "the same as in Alucard's hands, item by item", differ=differ)

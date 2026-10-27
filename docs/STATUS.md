@@ -105,7 +105,7 @@ _Last updated: 2026-10-25 (M11 built)_
   - **Release draft v0.11.0** (the v0.9.0 draft, retagged; 2026-10-25 15:14): `SOTN-Coop-setup.exe` (0.11.0, sha256 6469…4013) and `SOTN-Coop.apk` (e7c8…f949), notes `docs/releases/v0.11.0.md`. Includes the launcher's off-screen window fix (Tucker's saved position was x = −3267, on no monitor). Not yet installed on the PC or the Thor.
 ## Next (M12, in order)
 1. VRAM window survey (D106): "never changes during play" over every boss/debug start.
-2. **M12b: spike passed** (Richter, 6 classes, identical to Alucard's: design/M12b). Building: palettes, Maria through the VRAM window, timing, lock-out, the hand-item test.
+2. **M12b: built.** All 72 hand weapons work in Richter's and Maria's off hand exactly as in Alucard's (`m12_hand_items_*`). Open: some frames' palette (a raised blade blue, not white), thrown items (TNT, Karma Coin).
 3. Succubus intro desync (STATUS above); Maria's missing birds with a weapon in hand (`m12_maria_keeps_throwing`).
 4. Partner's weapons, phase 1.
 5. Boss tests for R+M and A+R pairings; the open scenes (Librarian, chapel, Center, inverted castle); Scylla's walk.
