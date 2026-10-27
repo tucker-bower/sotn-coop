@@ -487,3 +487,38 @@ def m12_partner_dagger_drawn(run):
              if struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0]]
     run.expect(with_prims.tobytes() != without.tobytes(), "B draws them", prims=got, b_entities=b_own,
                b_pad_sub=b.read(SUBWEAPON_ID, "<i"), pool_without=pool_without)
+
+
+# --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------
+PAIRINGS = {"rm": (1, 2), "ar": (0, 1)}  # CHAR_* of A and B
+
+
+def _boss_pair_test(b, tag, chars):
+    name = b["name"].replace(" & ", " and ")
+
+    def test(run):
+        import sys
+        from pathlib import Path
+        from session_m8 import as_characters
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+        import bossstarts
+        from link.mailbox import CMD_ARRIVE
+        as_characters(run, *chars)
+        # the load puts them back at the save's room, not at the boss's door: back to the start's spot
+        stage = bossstarts.STAGES[b["stage"]]
+        room, x, y = b["arrive"]
+        for g in (run.s.a, run.s.b):
+            g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
+        run.step(240)
+        boss_flow(run, b)
+    test.__name__ = f"m12_boss_{tag}_" + name.lower().replace(" ", "_")
+    test.__doc__ = f"{b['name']} together, as {tag.upper()} (Alucard, Richter, Maria)."
+    start = str(STARTS / f"Boss - {name}.state")
+    session_scenario(starts=(start, start), characters=chars)(test)
+
+
+for _b in _bossstarts():
+    if _b["name"] == "Succubus":  # the Nightmare: no saving there, so no character change at her door
+        continue
+    for _tag, _chars in PAIRINGS.items():
+        _boss_pair_test(_b, _tag, _chars)
