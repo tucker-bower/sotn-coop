@@ -63,6 +63,10 @@ static bool s_DownForBoss; // dead while the partner fights a boss: respawn once
 
 // Pulled into the partner's boss fight / cutscene (design/M5): once per fight or cutscene
 static bool s_BossPulled, s_CutscenePulled;
+// After a boss pull, none for a while: a flying boss in a wide arena (the Lesser Demon) leaves one
+// camera's view and comes back, and the two games pulled each other back and forth.
+#define BOSS_PULL_COOLDOWN 600
+static s16 s_BossPullCooldown;
 // Cutscenes together (playtest 2026-10-20): the game whose scene starts holds on its first
 // frame until the partner, pulled in, has its own copy running, so both play at the same time.
 // A pulled-in game is a follower: nobody is pulled into a follower's scene (each copy used to
@@ -351,14 +355,18 @@ static bool CanBePulled(bool sameRoom) {
 static void PullIn(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
+    if (s_BossPullCooldown) {
+        s_BossPullCooldown--;
+    }
     if (!PartnerInBossFight()) {
         s_BossPulled = false;
-    } else if (!s_BossPulled && !(p->flags & PRESENCE_BUSY) && // not mid-intro
+    } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
                (CanBePulled(false) ||
                 // the same room but too far apart to share it (a wide arena: the Succubus's, when
                 // one player walked on through her intro): each game would fight its own boss
                 (CanBePulled(true) && SharedRole() == ROLE_NONE && p->role == ROLE_NONE && FarInRoom()))) {
         s_BossPulled = true;
+        s_BossPullCooldown = BOSS_PULL_COOLDOWN;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
         s_ArriveText = "Partner is fighting a boss!";
         return;
