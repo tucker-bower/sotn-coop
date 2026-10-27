@@ -78,11 +78,10 @@ def m12_maria_keeps_throwing(run):
     run.expect(all(n == 8 for n in rounds), "every standing throw makes a bird, weapon in hand or not", rounds=rounds)
 
 
-# --- M12b spike: off-hand weapons through the weapon's own overlay (D105) --------------------
-from scenarios_m8 import HALL_ROOM, NO3, OFFHAND_ITEMS, enemies_hp, wait  # noqa: E402
+# --- off-hand weapons through the weapon's own overlay (D105): helpers ------------------------
+# (The M12b spike's 6-weapon tests are gone: the hand-item tests below cover all 72, item by item.)
+from scenarios_m8 import HALL_ROOM, NO3, enemies_hp, wait  # noqa: E402
 from link.mailbox import BUSY, CHAR_RICHTER, CMD_ARRIVE, IN_PLAY  # noqa: E402
-
-SPIKE_ITEMS = OFFHAND_ITEMS[:5] + ((97, "spear-like (estoc)"),)
 
 
 def weapon_entities(e):
@@ -119,82 +118,6 @@ def pin_target(e):
     e.write("g_Entities", wx + (-offx if facing else offx) - tox, "<h", t + 2)
     e.write("g_Entities", wy + offy - toy, "<h", t + 6)
     return t // 0xBC
-
-
-def aim(e, i, reach=40, button="circle"):
-    """Walk to the nearest enemy, face it, and swing (○) when it's in reach."""
-    from session_m12 import enemies
-    snap = e.snapshot()
-    foes = enemies(e)
-    if not foes:
-        return "left" if (i // 120) % 2 else "right"
-    x = snap["world_x"]
-    ex = min((v[1] for v in foes.values()), key=lambda fx: abs(fx - x))
-    way = "right" if ex > x else "left"
-    if abs(ex - x) > reach:
-        return way
-    return way if i % 20 < 2 else (button if i % 20 == 4 else "")
-
-
-def offhand_like_alucard(run, ch, button="circle"):
-    from coop_env import TOOLS
-    e, mb = run.emu, mailbox(run)
-    out = TOOLS["out"] / run.name
-    out.mkdir(parents=True, exist_ok=True)
-    start = e.save_state()
-    results = {}
-    for item, what in SPIKE_ITEMS:
-        e.load_state(start)
-        e.write(EQUIPMENT, item)
-        reload_as(run, mb, ch)
-        mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
-        wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
-            mb.self_presence()), 900, "arrived in the hall")
-        run.step(90)
-        spawned = hit = shot = False
-        lasted, ended = 0, None
-        for i in range(1200):
-            for slot, hp in enemies_hp(e).items():  # tough enemies: a hit shows, nobody dies
-                if 0 < hp < 999:
-                    e.write("g_Entities", 999, "<h", slot * 0xBC + 0x3E)
-            before = enemies_hp(e)
-            pad = aim(e, i, button=button)
-            pin_target(e)
-            run.step(1, pad)
-            w = weapon_entities(e)
-            if w:
-                spawned = True
-                lasted += 1
-            now = enemies_hp(e)
-            if any(s in now and now[s] < hp == 999 for s, hp in before.items()):
-                if not hit:  # the first hit: the same moment for every character
-                    e.screenshot(out / f"{NAMES.get(ch, 'Alucard').lower()}-{what.split(' ')[0]}.png")
-                hit = True
-            if spawned and hit and i % 40 == 39 and not w:
-                ended = True
-                break
-        results[what] = dict(spawned=spawned, hit=hit, ended=bool(ended), frames=lasted)
-    ok = sum(1 for r in results.values() if r["spawned"] and r["hit"] and r["ended"])
-    run.expect(ok >= 5, "the weapon's own overlay: spawns, hits, ends (5 of 6 classes)", results=results)
-
-
-@scenario(start="entrance", disc=COOP_DISC)
-def m12b_offhand_like_alucard_richter(run):
-    """D105 spike: Richter's off-hand runs the weapon's own overlay with Alucard's swing."""
-    offhand_like_alucard(run, CHAR_RICHTER)
-
-
-@scenario(start="entrance", disc=COOP_DISC)
-def m12b_alucard_baseline(run):
-    """The same weapons in Alucard's own hands (□): what the off-hand must match."""
-    offhand_like_alucard(run, 0, "square")
-
-
-@scenario(start="entrance", disc=COOP_DISC)
-def m12b_offhand_like_alucard_maria(run):
-    """D105 for Maria: the weapon's own overlay with Alucard's swing; its sheet beside her guardians."""
-    from link.mailbox import CHAR_MARIA
-    offhand_like_alucard(run, CHAR_MARIA)
 
 
 # --- M12 part 3: every hand weapon in every character's hands --------------------------------
@@ -235,10 +158,11 @@ def try_weapon(run, mb, ch, item, button, frames=400):
     return spawned, hit, ended
 
 
-def hand_items(run, ch, button):
+def hand_items(run, ch, button, part):
+    """Half the hand weapons (part 0 or 1: every other one), so the halves run side by side."""
     e, mb = run.emu, mailbox(run)
     start = e.save_state()
-    items = hand_weapons(e)
+    items = hand_weapons(e)[part::2]
     results = {}
     for item in items:
         e.load_state(start)
@@ -252,31 +176,28 @@ def hand_items(run, ch, button):
     return results
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m12_hand_items_alucard(run):
-    """Every hand weapon in Alucard's hands (□): the reference."""
-    hand_items(run, 0, "square")
+def _hand_items_test(ch, name, button, part):
+    def test(run):
+        _against_alucard(run, hand_items(run, ch, button, part))
+    test.__name__ = f"m12_hand_items_{name}_{part + 1}"
+    test.__doc__ = (f"Every other hand weapon (half {part + 1}) in {name.capitalize()}'s hands, against "
+                    "Alucard's results (D105; Alucard's: harness/data/hand_items_alucard.json).")
+    scenario(start="entrance", disc=COOP_DISC)(test)
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def m12_hand_items_richter(run):
-    """Every hand weapon in Richter's off hand (○), against Alucard's results (D105)."""
-    _against_alucard(run, hand_items(run, CHAR_RICHTER, "circle"))
-
-
-@scenario(start="entrance", disc=COOP_DISC)
-def m12_hand_items_maria(run):
-    """Every hand weapon in Maria's off hand (○), against Alucard's results (D105)."""
-    from link.mailbox import CHAR_MARIA
-    _against_alucard(run, hand_items(run, CHAR_MARIA, "circle"))
+for _part in (0, 1):
+    _hand_items_test(0, "alucard", "square", _part)
+    _hand_items_test(CHAR_RICHTER, "richter", "circle", _part)
+    _hand_items_test(2, "maria", "circle", _part)  # CHAR_MARIA
 
 
 def _against_alucard(run, results):
+    """Alucard's own results are the reference (his weapons are the game's own code): kept in
+    harness/data/, so the characters' halves needn't wait for his run. If his change, that file
+    is updated on purpose, after a look at why."""
     import json
-    from coop_env import TOOLS
-    ref = TOOLS["out"] / "m12_hand_items_alucard" / "items.json"
-    if not ref.exists():
-        return
-    alu = {int(k): v for k, v in json.loads(ref.read_text()).items()}
-    differ = {i: (alu[i], list(r)) for i, r in results.items() if i in alu and list(r) != alu[i]}
-    run.expect(not differ, "the same as in Alucard's hands, item by item", differ=differ)
+    from pathlib import Path
+    ref = json.loads((Path(__file__).parent / "data/hand_items_alucard.json").read_text())
+    alu = {int(k): v for k, v in ref.items()}
+    differ = {i: (alu.get(i), list(r)) for i, r in results.items() if list(r) != alu.get(i)}
+    run.expect(not differ, "the same as Alucard's reference, item by item", differ=differ)

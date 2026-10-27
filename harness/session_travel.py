@@ -80,16 +80,15 @@ def teleport_partner_busy(run):
     run.expect(b.mailbox("self_presence").room == room0, "B stayed where it was")
 
 
-@session_scenario(starts=("entrance", "nz0"))
-def teleport_fuzz(run):
-    """M3 criterion 2: 200 teleports (map ✕ and commands alternating) while A wanders at random.
+def _teleport_fuzz(run, count):
+    """M3 criterion 2: teleports (map ✕ and commands alternating) while A wanders at random.
     Every one that starts lands B in play within 5 s; no softlock, no crash."""
     from link.mailbox import CMD_ARRIVE
     from session_scenarios import heal
     a, b = run.s.a, run.s.b
-    inputs = list(random_inputs(5, 200 * 400))
+    inputs = list(random_inputs(5, count * 400))
     t, done, slow, skipped = 0, 0, [], 0
-    for n in range(200):
+    for n in range(count):
         for _ in range(120):  # A wanders
             run.step(1, p1=(inputs[t][0], "")); t += 1
         target = a.mailbox("self_presence")
@@ -109,9 +108,21 @@ def teleport_fuzz(run):
             slow.append((n, str(q)))
         done += 1
         heal(a), heal(b)
-    run.expect(done >= 150 and not slow, "every teleport ends in play within 5 s",
+    run.expect(done >= count * 3 // 4 and not slow, "every teleport ends in play within 5 s",
                teleports=done, skipped=skipped, stuck=slow[:3])
     run.expect(a.snapshot()["game_state"] == GAME_PLAY and b.snapshot()["game_state"] == GAME_PLAY, "both still in play")
+
+
+@session_scenario(starts=("entrance", "nz0"))
+def teleport_fuzz(run):
+    """60 teleports (the everyday suite: about 2 minutes)."""
+    _teleport_fuzz(run, 60)
+
+
+@session_scenario(starts=("entrance", "nz0"))
+def teleport_fuzz_long(run):
+    """M3's 200 teleports (run.py --full)."""
+    _teleport_fuzz(run, 200)
 
 
 def die(run, g, limit=4000):
