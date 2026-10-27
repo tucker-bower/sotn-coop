@@ -74,7 +74,8 @@ static bool s_BossPulled, s_CutscenePulled;
                              // the entrance played for whoever finished the prologue first, alone)
 #define CS_FOLLOW_MAX 300    // frames a pulled-in game waits for its copy of the scene to start
 #define CS_COOLDOWN 300      // frames after a scene before this game can be pulled into another
-#define CS_END_MAX 300       // frames a game whose scene ended waits for the partner's to end too
+#define CS_END_MAX 3600      // frames a game whose scene ended waits for the partner's to end too (60 s: the
+                             // copies drift apart when one player moves and the other doesn't: the Succubus)
 static bool s_CsOn, s_CsFollower;
 static s16 s_CsHold, s_CsFollowAge, s_CsCooldown, s_CsEndHold;
 
