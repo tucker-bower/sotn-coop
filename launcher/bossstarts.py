@@ -171,7 +171,9 @@ def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
     S.append(row)
 
 
-scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (216, 216, 128), "right", "Slogra & Gaibon",
+# From the right: her scene steers Alucard left (from the left he walks straight back out, and
+# walking in again replays it).
+scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (16, 40, 128), "left", "Slogra & Gaibon",
       unset=[0x85])  # MET_MARIA_IN_NZ0
 # In his room, at its right edge: his scene's entity (x 44) spawns as the camera reaches it.
 scene("The Librarian", "Long Library", "LIB", (32, 120, 172), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN

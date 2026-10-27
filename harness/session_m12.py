@@ -218,6 +218,13 @@ ROOM_SCENES = {
     "maria_alchemy_lab": ("Alchemy Laboratory", "nz0", 15, 128, 128, "left", 0x85),  # MET_MARIA_IN_NZ0
     "castle_keep": ("Boss - Cerberus", "top", 1, 896, 896, "left", None),
 }
+# From the scene starts (launcher/bossstarts.S: the room before the scene, that point's progress):
+# both games load it, A walks in, B is pulled in.
+START_SCENES = {
+    "maria_chapel_from_start": ("Scene - Maria in the Royal Chapel", "left"),
+    "maria_alchemy_lab_from_start": ("Scene - Maria in the Alchemy Lab", "left"),  # from the right: her scene steers Alucard left
+    "castle_keep_from_start": ("Scene - The Castle Keep", "right"),
+}
 # Not yet triggered by the harness (docs/STATUS.md), so not registered:
 OPEN_SCENES = {
     # talking to him (Up next to his chair) didn't start it yet
@@ -225,7 +232,8 @@ OPEN_SCENES = {
     # started once on arrival, then not when both games share the start: what else it needs is open
     "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
     # starts as soon as one enters the room and steers Alucard to Maria: the harness's arrival
-    # spots are on the wrong floor (the real way in is a door at her height)
+    # spots (and the scene start's) are on the wrong floor; idle, Alucard drops to the floor below
+    # and the scene never ends, even in one game
     "maria_center": ("Boss - Granfaloon", "cen", 1, 384, 544, "left", 0xD8),       # MET_MARIA_IN_CEN
 }
 
@@ -264,10 +272,13 @@ def scene_together(run, pad, limit, flags0=None):
         w.on[0], w.starts[0] = True, [0]
     w.until(lambda: w.starts[0], limit, pad if callable(pad) else (pad, ""))
     run.expect(w.starts[0], "A's scene starts", at=a.snapshot())
-    w.until(lambda: w.starts[1], 1200)
+    # B, pulled in, walks on as a player would: some scenes start on crossing a spot (Maria in the
+    # Center), not on arriving at it
+    walk = pad if isinstance(pad, str) else ""
+    w.until(lambda: w.starts[1], 1200, ("", walk))
     run.expect(w.starts[1], "B is pulled in and plays it too", starts=w.starts, log=w.log)
     w.until(lambda: len(w.ends[0]) >= len(w.starts[0]) and len(w.ends[1]) >= len(w.starts[1])
-            and not any(w.on), 12000, lambda i: ("cross", "cross") if i % 60 < 2 else ("", ""))
+            and not any(w.on), 12000)  # no input: the dialogue moves on by itself (a jump left a scene unseen)
     run.expect(not any(w.on), "both end it", ends=w.ends, starts=w.starts)
     w.step(120)
     run.expect(len(w.starts[0]) == 1 and len(w.starts[1]) == 1, "once each", starts=w.starts, log=w.log)
@@ -522,3 +533,16 @@ for _b in _bossstarts():
         continue
     for _tag, _chars in PAIRINGS.items():
         _boss_pair_test(_b, _tag, _chars)
+
+
+def _start_scene_test(name, start, walk):
+    def test(run):
+        scene_together(run, walk, 3000)
+    test.__name__ = f"m12_scene_{name}"
+    test.__doc__ = f"Cutscene catalogue, from its scene start: {start}."
+    path = str(STARTS / f"{start}.state")
+    session_scenario(starts=(path, path))(test)
+
+
+for _name, (_start, _walk) in START_SCENES.items():
+    _start_scene_test(_name, _start, _walk)
