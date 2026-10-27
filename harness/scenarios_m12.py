@@ -85,6 +85,34 @@ def weapon_entities(e):
             if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0] >= 0xE0}
 
 
+def pin_target(e):
+    """While a weapon entity's hitbox is live, put an enemy (the toughest) right on it: tests that
+    the weapon deals its damage, whatever the room's enemies are like (the castle entrance's are too
+    low for a sword's stab). Returns the target's slot, or None."""
+    import struct
+    raw = e.read_bytes("g_Entities", 0xBC * 256)
+    weapon = None
+    for s in range(4, 64):
+        o = s * 0xBC
+        if struct.unpack_from("<H", raw, o + 0x26)[0] >= 0xE0 and raw[o + 0x46] and raw[o + 0x47]:
+            weapon = o
+            break
+    if weapon is None:
+        return None
+    foes = [(struct.unpack_from("<h", raw, t * 0xBC + 0x3E)[0], t) for t in range(64, 256)
+            if struct.unpack_from("<H", raw, t * 0xBC + 0x26)[0] and 0 < struct.unpack_from("<h", raw, t * 0xBC + 0x3E)[0] < 32767]
+    if not foes:
+        return None
+    t = max(foes)[1] * 0xBC
+    offx, offy = struct.unpack_from("<hh", raw, weapon + 0x10)
+    facing = raw[weapon + 0x14]
+    wx, wy = struct.unpack_from("<h", raw, weapon + 2)[0], struct.unpack_from("<h", raw, weapon + 6)[0]
+    tox, toy = struct.unpack_from("<hh", raw, t + 0x10)
+    e.write("g_Entities", wx + (-offx if facing else offx) - tox, "<h", t + 2)
+    e.write("g_Entities", wy + offy - toy, "<h", t + 6)
+    return t // 0xBC
+
+
 def aim(e, i, reach=40, button="circle"):
     """Walk to the nearest enemy, face it, and swing (○) when it's in reach."""
     from session_m12 import enemies
@@ -118,8 +146,12 @@ def offhand_like_alucard(run, ch, button="circle"):
         spawned = hit = shot = False
         lasted, ended = 0, None
         for i in range(1200):
+            for slot, hp in enemies_hp(e).items():  # tough enemies: a hit shows, nobody dies
+                if 0 < hp < 999:
+                    e.write("g_Entities", 999, "<h", slot * 0xBC + 0x3E)
             before = enemies_hp(e)
             pad = aim(e, i, button=button)
+            pin_target(e)
             run.step(1, pad)
             w = weapon_entities(e)
             if w:
@@ -129,8 +161,8 @@ def offhand_like_alucard(run, ch, button="circle"):
                     e.screenshot(out / f"{NAMES.get(ch, 'Alucard').lower()}-{what.split(' ')[0]}.png")
                     shot = True
             now = enemies_hp(e)
-            if w and any(hp < 32767 and (s not in now or now[s] < hp) for s, hp in before.items()):
-                hit = True  # hurt, or killed outright (gone), during a swing
+            if any(s in now and now[s] < hp == 999 for s, hp in before.items()):
+                hit = True
             if spawned and hit and i % 40 == 39 and not w:
                 ended = True
                 break

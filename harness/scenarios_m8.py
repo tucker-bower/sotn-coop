@@ -217,7 +217,6 @@ def m8b_spell_shortcuts(run):
 
 EQUIPMENT, ATTACK_HANDS, DEFENSE_EQUIP = 0x80097C00, 0x80097C1C, 0x80097C24
 HP_NOW = STATUS + 0x23C
-E_OFFHAND = 0x7E  # module/offhand.c
 NO3, HALL_ROOM = 0x41, 72  # the castle entrance's zombie hall (room 14,40)
 OFFHAND_ITEMS = ((19, "short sword"), (86, "sword"), (27, "two-handed sword"), (128, "club"),
                  (85, "fist"), (133, "throwing weapon"))
@@ -225,10 +224,10 @@ LEATHER_SHIELD, POTION, APPLE = 5, 159, 30
 
 
 def offhand_entity(e):
-    """(slot, attack) of the off-hand swing, or None."""
-    for slot in range(0x18, 0x30):
+    """(slot, attack) of the off-hand swing: a weapon overlay's entity (0xE0-0xFF, D105), or None."""
+    for slot in range(4, 0x40):
         a = e.entity(slot)
-        if e.read(a, "<H", 0x26) == E_OFFHAND:
+        if e.read(a, "<H", 0x26) >= 0xE0 and e.read(a, "<h", 0x40) > 0:
             return slot, e.read(a, "<h", 0x40)
     return None
 
@@ -261,6 +260,8 @@ def m8b_offhand(run, ch):
             route.heal(e)
             before = enemies_hp(e)
             pad = ("circle" if i % 24 == 0 else "") + ("+left" if (i // 120) % 2 else "+right")
+            from scenarios_m12 import pin_target  # an enemy on the swing's hitbox (D105)
+            pin_target(e)
             run.step(1, pad.strip("+"))
             sw = offhand_entity(e)
             if sw:
