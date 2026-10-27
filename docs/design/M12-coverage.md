@@ -59,3 +59,9 @@ A **session test** (two games plus hosts, in the harness) that ends with RAM ass
 - **Fixtures by RAM can hide bugs that real play hits** (for example, the flags that only a real walk sets). The obstacles and the end-to-end chain play the real route.
 - **The fight bot may not beat many bosses.** A scripted kill keeps the flow tested; the balance is still for humans.
 - **Budget:** parts 1–3 are about 6–8 usage windows, the fixes about 3, and part 4 whatever is left. The heaviest costs are boss and cutscene fixtures. Reports are RAM text; screenshots are reviewed only by exception.
+
+## Note 2, phase 2: the partner's hand-weapon swings (plan, 2026-10-26)
+Phase 1 (built) draws the partner's attacks whose graphics every game has: subweapons, spells, Richter's whip, sprites and primitives (`module/sprites.c`). A hand weapon is different: its sprite table is in the swinger's weapon overlay (0x8017A000/0x8017D000) and its tile sheet in the swinger's VRAM (0x240,0x100/0x180), where this game keeps its own.
+- **Data over the link, once per weapon change:** when a weapon loads, the swinger's module copies its overlay (12 KB) and sheet (16 KB, already done for Maria: D106) to the 8MB; the host sends both reliably (the control channel, zlib) when they change; the partner's host writes them to a "partner weapon" area of its 8MB.
+- **Drawing:** the partner's weapon entities come with the sprite records; the receiver points a free sprite bank at the partner's sprite table (rebased, as the puppet does for another character's file), and uploads the frame's sheet into the VRAM window (D106: 128x224 px free, so the sheet goes in two halves, or each frame's parts are re-mapped).
+- **Cost:** about 1 window. **Risk:** sheets wider than the window's half; the copies' timing (the sheet must be read after the CD's upload, as found for Maria).
