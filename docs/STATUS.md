@@ -51,10 +51,10 @@ _Last updated: 2026-10-25 (M11 built)_
   - **Note 1 (cutscenes): fixed for the prologue, Death, and the scenes tested so far** (D102, D103). Found on the way: the partner kept Alucard's gear after Death's scene (it was a shared-room guest when Death took it), and a pulled-in partner could be sent out of the scene's room.
     - Passing: `m12_prologue_opening`, `m12_prologue_fight`, `m12_death_waits_for_partner`, and the catalogue (`session_m12.SCENES`/`ROOM_SCENES`): Succubus, Richter (Castle Keep), the Castle Keep scene, Maria in the Alchemy Lab. Maria in the Marble Gallery: `cutscene_pulls_partner_in` (M5).
     - Not yet triggering in the harness: the Librarian, Maria in the chapel and in the Center (that one starts in both games but doesn't end within 200 s: to investigate), and the inverted castle (Shaft, Dracula, the ending).
-  - **Bosses (M12 part 2): 9 of 12 first-castle bosses pass** the two-game flow (`m12_boss_*`: pull-in, the fight, both fine after, the same flags). The fight bot can't win alone: the players are kept at full HP, the boss is worn down in the authority, and the last hit is scripted after 50 s.
+  - **Bosses (M12 part 2): 10 of 12 first-castle bosses pass** the two-game flow (`m12_boss_*`: pull-in, the fight, both fine after, the same flags). The fight bot can't win alone: the players are kept at full HP, the boss is worn down in the authority, and the last hit is scripted after 50 s.
     - **Succubus: a real co-op gap, open.** Both start at her door. A walks into her intro scene; B's copy starts 50 s later on its own (not held, not pulled: probably a different room), and ends 15 s before A's. After A's scene, B is pulled into the arena but has no Succubus of its own, and no shared room forms, so A fights alone. The end barrier is now up to 60 s (it was 5), which didn't change this. Next: log rooms and the hold state through her intro, then decide (hold or pull the partner into a nightmare-stage scene).
     - **Scylla:** the harness's walk bounces off her room's doorway (a single game does the same): a test problem.
-    - **Minotaur & Werewolf:** the partner isn't pulled in (it reports another stage). To investigate.
+    - Minotaur & Werewolf: passes. The pulled-in partner first plays the arena's intro scene, which (like the prologue's) steers the player only while a direction is held.
   - **Note 4 (Maria's guardians):**
     - **The wrong sprites: fixed** (D104). A hand weapon's graphics loaded over four of her guardians (owl, cardinal, dragon, doll). `m12_maria_guardians_keep_their_graphics` passes.
     - **No birds at all: reproduced, cause not found yet.** With a weapon (not a shield) in her hand, her cardinal costs hearts but never appears: `m12_maria_keeps_throwing` (77 frames with a bird per round without a weapon, 0 with one). Ruled out: her sprite banks and entity routing, and entity slots before the throw. Next: trace the cardinal's spawn (`MarCreateEntFactoryFromEntity`) with a weapon in hand.
@@ -115,6 +115,7 @@ _Last updated: 2026-10-25 (M11 built)_
   - a small branded `.exe` so the firewall prompt doesn't say "Python"
 
 ## Budget
+- 2026-10-26 (M12 session 1): one long session, the playtest 3 fixes and parts 1–2 of the coverage. Full suite 106 pass (before the boss and scene additions).
 - Day 3 of the month (2026-10-20): M0 through M7b done. M7b took one long session, inside its 4–5 usage-window budget. Still far ahead of the 2026-11-18 target.
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 

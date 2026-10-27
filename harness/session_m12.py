@@ -338,7 +338,9 @@ def boss_flow(run, b, limit=24000):
             arrive(run, g, a.mailbox("self_presence").stage, room, x, y)
     w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
     run.expect(boss(a), "A walks into the boss's room", at=a.snapshot())
-    w.until(lambda: boss(g2), 900)
+    # a pulled-in partner may first play the arena's scene (Minotaur & Werewolf), which steers it
+    # only while a direction is held (like the prologue's)
+    w.until(lambda: boss(g2), 3000, ("", walk))
     run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
     hp_seen = {}
     fought = 0
