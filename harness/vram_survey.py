@@ -83,3 +83,35 @@ if __name__ == "__main__":
     states = [Path(a) for a in sys.argv[1:]] or default_states()
     print(f"{len(states)} states")
     show(survey(states))
+
+
+def window_free(states, rect, frames=120, pad="right"):
+    """D106: is this VRAM rectangle (x, y, w, h in 16-bit words) unused? Each state is played twice
+    for `frames`, once with the rectangle filled with garbage (written into the savestate's copy of
+    VRAM); any difference on screen means something draws from it. Returns {state: frames differing}."""
+    import tempfile
+    x0, y0, w, h = rect
+    out = {}
+    with Emu(COOP_DISC) as e:
+        for s in states:
+            e.load_state_file(s)
+            e.step(1)
+            global _base
+            if _base is None:
+                _base = _find_base(e)
+            st = bytearray(e.save_state())
+            bad = bytearray(st)
+            for y in range(y0, y0 + h):
+                o = _base + 2 * (y * VRAM_W + x0)
+                bad[o:o + 2 * w] = bytes((0x5A, 0x7B)) * w
+            shots = []
+            for state in (st, bad):
+                e.load_state(bytes(state))
+                frames_out = []
+                for i in range(frames):
+                    e.step(1, pad)
+                    if i % 10 == 9:
+                        frames_out.append(e.screenshot().tobytes())
+                shots.append(frames_out)
+            out[str(s)] = sum(1 for a, b in zip(*shots) if a != b)
+    return out
