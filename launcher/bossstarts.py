@@ -128,9 +128,11 @@ boss("Olrox", "Olrox's Quarters", "NO2", (0x58, 56, 132), "left", 26, 17000, (8,
 boss("Succubus", "Underground Caverns (Nightmare)", "DRE", (0, 16, 180), "right", 28, 21000, (9, 7),
      ("holy sword", "shaman shield", "steel helm", "gold plate", "blood cloak", "no accessory", "no accessory"),
      "holy water", R8, A7, F4, D8, keep=("bekatowa", "cutlass", "knight shield"))
-boss("Scylla", "Underground Caverns", "BO3", (24, 128, 160), "right", 30, 24000, (10, 8),
-     ("holy sword", "herald shield", "steel helm", "gold plate", "crystal cloak", "gold ring", "no accessory"),
-     "holy water", R9, A7, F5 + ["scylla wyrm"], D9, keep=("bekatowa", "shaman shield", "blood cloak"))
+# In her arena (room 0), right of her: the Crystal Cloak room (24) is behind her, and walking in
+# from there, a barrier (E_UNK_3E) pushes the player back out until she's beaten.
+boss("Scylla", "Underground Caverns", "BO3", (0, 650, 150), "left", 30, 24000, (10, 8),
+     ("holy sword", "herald shield", "steel helm", "gold plate", "blood cloak", "gold ring", "no accessory"),
+     "holy water", R9, A7, F5 + ["scylla wyrm"], D9, keep=("bekatowa", "shaman shield"))
 boss("Cerberus", "Abandoned Mine", "CHI", (8, 390, 132), "right", 32, 28000, (11, 9),
      ("holy sword", "herald shield", "steel helm", "ice mail", "crystal cloak", "gold ring", "moonstone"),
      "holy water", R10, A8, F6, D10, keep=("bekatowa", "gold plate", "blood cloak"))

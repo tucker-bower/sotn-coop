@@ -546,3 +546,23 @@ def _start_scene_test(name, start, walk):
 
 for _name, (_start, _walk) in START_SCENES.items():
     _start_scene_test(_name, _start, _walk)
+
+
+# --- doors in a shared room (D107) ----------------------------------------------------------
+@session_scenario(starts=("no1", "no1"))
+def m12_guest_opens_red_door(run):
+    """D107: in a shared room, the guest opens a red door itself and walks out through it (it
+    used to get the authority's closed door, and was walled in until the authority went through).
+    The Outer Wall's first room, with a red door at its left edge."""
+    from link.mailbox import ROLE_AUTHORITY, ROLE_GUEST
+    a, b = run.s.a, run.s.b
+    run.step(60)
+    roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
+    run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B its guest", roles=roles)
+    room = b.snapshot()["room"]
+    for t in range(400):
+        run.step(1, ("", "left"))
+        if b.snapshot()["room"] != room:
+            break
+    run.expect(b.snapshot()["room"] != room, "B walks out through the door", at=b.snapshot(), frames=t)
+    run.expect(a.snapshot()["room"] == room, "A stays", at=a.snapshot())
