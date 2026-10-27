@@ -173,11 +173,14 @@ def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
 
 scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (216, 216, 128), "right", "Slogra & Gaibon",
       unset=[0x85])  # MET_MARIA_IN_NZ0
-scene("The Librarian", "Long Library", "LIB", (40, 40, 172), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
+# In his room, at its right edge: his scene's entity (x 44) spawns as the camera reaches it.
+scene("The Librarian", "Long Library", "LIB", (32, 120, 172), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
 scene("Maria in the Royal Chapel", "Royal Chapel", "DAI", (8, 40, 128), "left", "Minotaur & Werewolf",
       unset=[0x63])  # MET_MARIA_IN_DAI
-scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (0, 128, 400), "", "Richter",
-      unset=[0xD8], note="drop down the shaft")  # MET_MARIA_IN_CEN
+# In the Center, at its right edge on Maria's floor (the way in is a door there), out of the
+# camera's reach of the scene (x 384).
+scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (8, 728, 455), "left", "Richter",
+      unset=[0xD8])  # MET_MARIA_IN_CEN
 scene("The Castle Keep", "Castle Keep", "TOP", (16, 496, 896), "right", "Richter")
 
 
