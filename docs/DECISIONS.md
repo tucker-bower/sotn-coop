@@ -527,3 +527,12 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - DRA loads a hand weapon's graphics where Maria's PS1 layout puts four guardians (owl, cardinal, dragon, doll). After every weapon load in her game, the module calls her `MARIA_Load` (exported at 0x8013C1F4; her palettes move to 0x8013C1F8).
 - Cost: her off-hand weapon is then drawn from her guardians' tiles. That's part of the off-hand decision (note 3), which the fix for drawing it waits on.
 - Considered: moving her guardians, or the weapons, to free VRAM. A survey (`harness/vram_survey.py`, VRAM read out of savestates) found no 64×32 block that's unused in every stage, so there's no known-safe spot yet.
+
+**D105: Off-hand weapons work exactly like Alucard's** (Tucker, 2026-10-26; playtest 2026-10-25 note 3)
+- Richter's and Maria's off-hand runs the weapon's own overlay code (option B of design/M8b §4.1), fed a virtual Alucard swing: the same sprite, timing (wind-up), hitboxes and specials as Alucard's. Replaces D88's version 1 (the weapon's frame swept in an arc).
+- Plan: `docs/design/M12b-offhand-like-alucard.md`. Spike first (6 weapon classes); every hand item is then covered by the M12 hand-item test.
+
+**D106: Graphics live in the 8MB RAM and pass through a small VRAM window** (agent-default, 2026-10-26; Tucker's question)
+- The 8MB expansion is RAM: the GPU draws only from its own 1MB VRAM. But any graphics can be kept in the 8MB and uploaded, a frame's worth at a time, into one small VRAM window just before they're drawn, as the partner puppet already does (its page at 0x1C0,0x100).
+- This replaces "find a free 64×128 area per weapon" (D104's blocker): weapon tile sheets (own off-hand, partner's hand weapons) are copied to the 8MB when loaded and drawn through the window; Maria's guardians keep their VRAM.
+- Still to prove: the window is never written by any stage during play (the VRAM survey, changed from "never nonzero" to "never changes while playing", over every boss and debug start).
