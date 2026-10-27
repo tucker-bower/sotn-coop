@@ -61,6 +61,7 @@ static bool s_HaveOwn;
 static s16 s_Slot[2];   // where each hand's weapon palette goes (one the player doesn't use)
 static u32 s_SlotsFor = 0xFF; // the character they were picked for
 static u16 s_WeaponPal[2][COLORS_PER_PAL];
+static u8 s_Clut[2]; // which of the hand's 24 palettes that is
 static u8 s_PrevEngine; // g_GameEngineStep last frame
 
 static bool InPlay(void) {
@@ -149,6 +150,7 @@ static void FixPalettes(s32 hand) {
     if (IsWeapon(Category(hand)) && Loaded(hand) && (frame = Extended(WEAPON_ANIMSET(hand))) != 0) {
         clut = WEAPON_ANIMSET(hand)[frame]->parts[0].clut;
     }
+    s_Clut[hand] = clut;
     for (k = 0; k < COLORS_PER_PAL; k++) {
         s_WeaponPal[hand][k] = block[clut * COLORS_PER_PAL + k];
     }
@@ -353,16 +355,24 @@ typedef struct {
 } Original;
 static Original s_Original[STAGE_ENTITY_START];
 
+// An entity the weapon's entities made (CreateEntityFromEntity) inherits the bank without passing
+// through here: its hand is in its id (0xE0+ / 0xF0+), its bank the first, its palette the swing's.
 bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand) {
     s32 i = e - g_Entities;
     const Original* o = &s_Original[i];
 
-    if (i < 0 || i >= STAGE_ENTITY_START || e->animSet != ANIMSET_OVL(WBANK) || !o->set) {
+    if (i < 0 || i >= STAGE_ENTITY_START || (u16)e->animSet != ANIMSET_OVL(WBANK) || e->entityId < 0xE0) {
         return false;
     }
-    *set = o->set;
-    *palette = o->palette;
-    *hand = o->hand;
+    *hand = e->entityId >= 0xF0;
+    *set = o->set && o->hand == *hand ? o->set : 0x10 + *hand * 2;
+    if (o->set && o->hand == *hand) {
+        *palette = o->palette;
+    } else if (e->palette & PAL_UNK_FLAG) {
+        *palette = PAL_WEAPONS + *hand * N_WEAPON_PAL + s_Clut[*hand];
+    } else {
+        *palette = e->palette;
+    }
     return true;
 }
 
