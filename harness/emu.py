@@ -105,6 +105,9 @@ def load_symbols(files=("symbols.us.txt", "symbols.us.main.txt", "symbols.us.dra
 
 SYMBOLS = load_symbols()
 
+BOOT_SPEEDUP = "2"
+GAME_TITLE_STATE, GAME_PLAY_STATE = 1, 2
+
 OPTIONS = {
     "swanstation_Console_Enable8MBRAM": "true",
     "swanstation_BIOS_PathNTSCU": "scph5501.bin",
@@ -118,17 +121,24 @@ if BIOS:
 
 
 class Emu:
-    def __init__(self, disc, ram_8mb=True, options=None, audio=False):
-        """audio: keep the core's sound (take_audio() drains it), for real-time play."""
+    def __init__(self, disc, ram_8mb=True, options=None, audio=False, boot_speedup=False):
+        """audio: keep the core's sound (take_audio() drains it), for real-time play.
+        boot_speedup: read the disc twice as fast until the game is at its title screen or in play,
+        then at normal speed (the launcher: about 10 s less black screen at start, Tucker
+        2026-10-26). 4x and more break the game's own boot, the retail disc's too."""
         opts = dict(OPTIONS, swanstation_Console_Enable8MBRAM="true" if ram_8mb else "false")
         opts.update(options or {})
+        self._boot_speedup = boot_speedup
+        if boot_speedup:
+            opts.update(swanstation_CDROM_ReadSpeedup=BOOT_SPEEDUP, swanstation_CDROM_SeekSpeedup=BOOT_SPEEDUP)
+        self._options = DictOptionDriver(variables=opts)
         self._tmp = tempfile.TemporaryDirectory(prefix="coop-emu-")  # fresh, empty memory cards
         self._input = _PadDriver()
         self._audio = ArrayAudioDriver() if audio else _NullAudioDriver()
         self._session = Session(
             str(TOOLS["swanstation_core"]), str(disc),
             input=self._input, audio=self._audio,
-            options=DictOptionDriver(variables=opts),
+            options=self._options,
             path=ExplicitPathDriver(system=str(BIOS.parent if BIOS else TOOLS["bios_dir"]), save=self._tmp.name,
                                     assets=self._tmp.name, playlist=self._tmp.name),
         )
@@ -157,6 +167,10 @@ class Emu:
         for _ in range(n):
             self._session.run()
             self.frame += 1
+        if self._boot_speedup and self.read("g_GameState") in (GAME_TITLE_STATE, GAME_PLAY_STATE):
+            self._boot_speedup = False  # booted: the game reads at its own speed from here on
+            for key in ("swanstation_CDROM_ReadSpeedup", "swanstation_CDROM_SeekSpeedup"):
+                self._options.set_variable(key.encode(), b"1")
 
     def run_inputs(self, inputs):
         """inputs: iterable of (p1, p2) per frame."""

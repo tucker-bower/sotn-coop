@@ -19,7 +19,13 @@ BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (paus
 
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
-PARTNER_LOST_S = 10   # online: seconds of silence before telling the player their partner is gone
+PARTNER_LOST_S = 10
+
+
+def _not_black(surface):
+    """Any of a few dozen pixels lit: the game is showing something."""
+    w, h = surface.get_size()
+    return any(sum(surface.get_at((x * w // 8, y * h // 6))[:3]) > 24 for x in range(1, 8) for y in range(1, 6))   # online: seconds of silence before telling the player their partner is gone
 
 PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harness/emu.py)
     pygame.CONTROLLER_BUTTON_A: "cross", pygame.CONTROLLER_BUTTON_B: "circle",
@@ -538,6 +544,8 @@ class GameView:
         return (f"{'Together' if together else 'Apart'}   ·   music: {'left' if self.music == 0 else 'right'} "
                 f"({self.music_mode}, F1)   ·   F9: report a problem   ·   Esc: pause   ·   {fps}{sim}"), (pa, pb)
 
+    started = False  # a picture has come from the game (before that, its boot's black screen)
+
     def run(self):
         """Returns when the player goes back to the menu (or closes the window): "menu", "quit"
         or ("navigate", action)."""
@@ -629,6 +637,10 @@ class GameView:
             if self.goal and self.frame < 600:
                 text = self.goal[:150]
             self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
+            if not self.started:  # the game's boot: say so over the black (Tucker, 2026-10-26)
+                self.started = self.frame > 3600 or any(f is not None and _not_black(f) for f in frames)
+                if not self.started:
+                    self.overlay("Starting the game", ["Reading your disc: about 10 seconds."])
             t2 = time.perf_counter()
             self.frame_times.append(round((time.perf_counter() - t0) * 1000, 2))
             if self.profile:
