@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-25 (M11 built)_
+_Last updated: 2026-10-26 (M12 in progress: playtest 3 fixes, coverage, off-hands like Alucard's)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -46,22 +46,19 @@ _Last updated: 2026-10-25 (M11 built)_
   - **The published v0.7.1 installer was replaced with this build by mistake** (release.py now refuses to touch a published release).
 
 ## In flight
-- **M12: the agent plays the game (coverage) + playtest 3 fixes** (2026-10-26, branch `coop-m12-coverage`). Design `docs/design/M12-coverage.md` awaits approval; notes and triage in `docs/playtest/2026-10-25-tucker-thor-pc.md`.
-  - **Note 5 (graceful exit): fixed** (D101). `online_partner_leaves`, `test_connect` pass.
-  - **Note 1 (cutscenes): fixed for the prologue, Death, and the scenes tested so far** (D102, D103). Found on the way: the partner kept Alucard's gear after Death's scene (it was a shared-room guest when Death took it), and a pulled-in partner could be sent out of the scene's room.
-    - Passing: `m12_prologue_opening`, `m12_prologue_fight`, `m12_death_waits_for_partner`, and the catalogue (`session_m12.SCENES`/`ROOM_SCENES`): Succubus, Richter (Castle Keep), the Castle Keep scene, Maria in the Alchemy Lab. Maria in the Marble Gallery: `cutscene_pulls_partner_in` (M5).
-    - Not yet triggering in the harness: the Librarian, Maria in the chapel and in the Center (that one starts in both games but doesn't end within 200 s: to investigate), and the inverted castle (Shaft, Dracula, the ending).
-  - **Bosses (M12 part 2): 10 of 12 first-castle bosses pass** the two-game flow (`m12_boss_*`: pull-in, the fight, both fine after, the same flags). The fight bot can't win alone: the players are kept at full HP, the boss is worn down in the authority, and the last hit is scripted after 50 s.
-    - **Succubus: a real co-op gap, open.** Both start at her door. A walks into her intro scene; B's copy starts 50 s later on its own (not held, not pulled: probably a different room), and ends 15 s before A's. After A's scene, B is pulled into the arena but has no Succubus of its own, and no shared room forms, so A fights alone. The end barrier is now up to 60 s (it was 5), which didn't change this. Next: log rooms and the hold state through her intro, then decide (hold or pull the partner into a nightmare-stage scene).
-    - **Scylla:** the harness's walk bounces off her room's doorway (a single game does the same): a test problem.
-    - Minotaur & Werewolf: passes. The pulled-in partner first plays the arena's intro scene, which (like the prologue's) steers the player only while a direction is held.
-  - **Note 4 (Maria's guardians):**
-    - **The wrong sprites: fixed** (D104). A hand weapon's graphics loaded over four of her guardians (owl, cardinal, dragon, doll). `m12_maria_guardians_keep_their_graphics` passes.
-    - **No birds at all: not a separate bug.** The earlier reproduction was the test's: the cardinal (alone of her guardians) can't be thrown while she moves or is in the air (DXC's own rule, `MarDoSubweapon`), and the test threw while walking. Thrown standing, every throw makes a bird, weapon in hand or not (`m12_maria_keeps_throwing`, 64 throws). Most likely what Tucker saw: the weapon's graphics overwrote the cardinal's, so a bird was drawn as the skull and shield or as nothing (fixed, D104); maybe also the move rule. Worth saying in the playtest notes.
-  - **Note 3 (off-hands like Alucard's): decided by Tucker (D105).** Plan and spike: `docs/design/M12b-offhand-like-alucard.md`.
-  - **Note 2 (partner's weapons drawn):** planned. Phase 1: subweapons, spells, familiar (graphics in every game), sent as sprite records with presence. Phase 2: hand weapons, drawn through the VRAM window (D106).
-  - **VRAM (D106):** graphics are kept in the 8MB RAM and uploaded through a small VRAM window when drawn, as the puppet does. First: prove the window is free in every stage.
-  - Tools: `fixtures_m12.py` (prologue and castle-start fixtures), the debug and boss starts built by the harness (`.env/fixtures/debug-starts`), `vram_survey.py` (VRAM read out of savestates).
+- **M12: the agent plays the game (coverage) + playtest 3 fixes + M12b off-hands** (2026-10-26, branch `coop-m12-coverage`, not merged). Designs: `docs/design/M12-coverage.md` (Tucker asked for this coverage directly; approval only needed for part 4, the chained playthrough), `docs/design/M12b-offhand-like-alucard.md` (D105). Playtest notes, triage and status per note: `docs/playtest/2026-10-25-tucker-thor-pc.md`.
+  - **Playtest 3 notes:**
+    1. **Cutscenes: fixed** for every scene tested (D102, D103): the prologue is co-op (one Dracula, scenes held both ways), Death waits for a partner still in the prologue, a pulled-in partner arrives where the scene started, both get control back on the same frame. Found and fixed on the way: the partner kept Alucard's gear after Death's scene. Tests: `m12_prologue_opening`, `m12_prologue_fight`, `m12_death_waits_for_partner`, `m12_scene_*` (Succubus, Richter, Castle Keep, Maria in the Alchemy Lab), `cutscene_*` (M5: Maria in the Marble Gallery).
+    2. **Partner's weapons on screen:** not started (phase 1: subweapons, spells, familiar; phase 2: hand weapons through the VRAM window, D106).
+    3. **Off-hands like Alucard's: built (D105, M12b).** The weapon's own overlay code runs with a virtual Alucard swing: all 72 hand weapons behave in Richter's and Maria's off hand exactly as in Alucard's hands, item by item (`m12_hand_items_*`); swings filmed frame by frame match. Maria's weapon draws from its own sheet (D106). Open: some frames' palette (a raised blade blue instead of white), thrown items (TNT, Karma Coin).
+    4. **Maria's guardians: fixed** (D104): weapon graphics overwrote them (the skull and shield, or invisible birds). `m12_maria_guardians_keep_their_graphics`, `m12_maria_keeps_throwing`. Her cardinal can't be thrown moving or in the air (DXC's rule).
+    5. **Leaving: fixed** (D101): `online_partner_leaves`, `test_connect`.
+  - **Coverage (M12 parts 1-3):**
+    - **Scenes:** see note 1. Open (`session_m12.OPEN_SCENES`): the Librarian (his scene starts when its entity spawns; why it doesn't in the harness is open), Maria in the chapel, Maria in the Center (the harness arrives on the wrong floor), the inverted castle (Shaft, Dracula, the ending).
+    - **Bosses: 10 of 12** first-castle bosses pass the two-game flow (`m12_boss_*`: pull-in, the fight with the players kept alive and the last hit scripted when the bot can't land it, both fine after, the same flags). **Succubus: a real co-op gap, open:** the partner starts its own copy of her intro scene (not held or pulled: probably another room), the copies end 15 s apart, and each game ends up with its own Succubus. **Scylla:** the harness's walk bounces off her doorway (a test problem). Not yet: R+M and A+R pairings, the inverted castle.
+    - **Hand items: all 72 weapons** for Alucard, Richter, Maria (`m12_hand_items_*`). Not yet: obstacles per character, abilities per character.
+  - **Tools:** `fixtures_m12.py` (prologue and castle-start fixtures), the debug and boss starts built by the harness (`.env/fixtures/debug-starts`), `vram_survey.py` (VRAM read out of savestates; `window_free` proves a VRAM area unused), `scenarios_m12.pin_target` (an enemy kept on a weapon's live hitbox).
+  - **Suite:** 106 pass before the boss, scene and hand-item additions; a full run with them is in progress.
 - **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
   - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
   - Cross-play, all three ways passing: `android_pair` (100 s), `android_pc` (PC hosts, 66 s), `android_pc_join` (Android hosts, 50 s), with sound on.
@@ -104,12 +101,13 @@ _Last updated: 2026-10-25 (M11 built)_
   - **PR #6** (`coop-m11-castles` → main): M8, M9 and M11 together; merging it also merges #4 and #5.
   - **Release draft v0.11.0** (the v0.9.0 draft, retagged; 2026-10-25 15:14): `SOTN-Coop-setup.exe` (0.11.0, sha256 6469…4013) and `SOTN-Coop.apk` (e7c8…f949), notes `docs/releases/v0.11.0.md`. Includes the launcher's off-screen window fix (Tucker's saved position was x = −3267, on no monitor). Not yet installed on the PC or the Thor.
 ## Next (M12, in order)
-1. VRAM window survey (D106): "never changes during play" over every boss/debug start.
-2. **M12b: built.** All 72 hand weapons work in Richter's and Maria's off hand exactly as in Alucard's (`m12_hand_items_*`). Open: some frames' palette (a raised blade blue, not white), thrown items (TNT, Karma Coin).
-3. Succubus intro desync (STATUS above); Maria's missing birds with a weapon in hand (`m12_maria_keeps_throwing`).
-4. Partner's weapons, phase 1.
-5. Boss tests for R+M and A+R pairings; the open scenes (Librarian, chapel, Center, inverted castle); Scylla's walk.
-6. M12 part 3: obstacles per character, the hand-item test (after M12b).
+1. **Succubus:** the partner's own copy of her intro scene (log rooms and the hold through it), so both fight one Succubus.
+2. **Partner's weapons on screen (note 2), phase 1:** subweapons, spells, familiar as sprite records with presence (a wire change: link version bump).
+3. **Boss tests for R+M and A+R;** Scylla's walk; the open scenes (Librarian, chapel, Center, inverted castle).
+4. **Obstacles and abilities per character** (M12 part 3).
+5. **M12b leftovers:** frame palettes, thrown items.
+6. **A playtest build** (0.12.0-dev) with all of the above, for Tucker; then the M12 PR.
+- Done since the last plan: the VRAM window (D106), M12b (all 72 weapons), Maria's missing birds (not a separate bug).
 
 ## Next (older)
 - **Tucker: playtest M8** with `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.8.0-dev.exe` (local, not uploaded):
