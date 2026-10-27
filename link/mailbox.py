@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 9
+LINK_VERSION = 10
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -25,6 +25,8 @@ SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
 SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
 CONTROL = 0x21448
 CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
+SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2154C  # u32 count, then CoopSprite[12] (0x14 each): sprites.c (M12)
+SPRITE_SIZE, N_SPRITES = 0x14, 12
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
@@ -109,6 +111,17 @@ class Mailbox:
 
     def partner_age(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_AGE, 4))[0]
+
+    def self_sprites(self):
+        """This game's sprites for the partner (sprites.c): raw CoopSprite records."""
+        n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_SPRITES, 4))[0], N_SPRITES)
+        return self.adapter.read_bytes(self.address + SELF_SPRITES + 4, n * SPRITE_SIZE) if n else b""
+
+    def write_partner_sprites(self, data):
+        n = min(len(data) // SPRITE_SIZE, N_SPRITES)
+        if n:
+            self.adapter.write_bytes(self.address + PARTNER_SPRITES + 4, data[:n * SPRITE_SIZE])
+        self.adapter.write_bytes(self.address + PARTNER_SPRITES, struct.pack("<I", n))
 
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())

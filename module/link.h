@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 9
+#define COOP_LINK_VERSION 10
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -15,6 +15,22 @@
 #define PRESENCE_BOSS 32   // a living boss is in this room (design/M5)
 #define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
 #define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
+
+// One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
+#define COOP_SPRITES 12
+typedef struct {
+    /* 0x00 */ s16 animSet;
+    /* 0x02 */ u16 animCurFrame;
+    /* 0x04 */ s16 x; // in the room, in pixels
+    /* 0x06 */ s16 y;
+    /* 0x08 */ u16 palette;
+    /* 0x0A */ u8 facingLeft;
+    /* 0x0B */ u8 blendMode;
+    /* 0x0C */ u16 zPriority;
+    /* 0x0E */ u16 drawFlags;
+    /* 0x10 */ u16 unk5A;
+    /* 0x12 */ u16 pad;
+} CoopSprite; // size = 0x14
 
 typedef struct {
     /* 0x00 */ u8 flags;     // PRESENCE_*
@@ -124,7 +140,11 @@ typedef struct {
     /* 0x2144C */ u32 character; // host writes: CHAR_* this game's player plays, from its next load (M8)
     /* 0x21450 */ u32 options;   // host writes: OPT_* the player's own settings (M8b)
     /* 0x21454 */ u32 padExtra;  // host writes every frame: PADX_* buttons a PlayStation pad lacks
-} CoopLink; // size = 0x21458
+    /* 0x21458 */ u32 selfSpriteCount;    // game writes every frame (sprites.c, M12)
+    /* 0x2145C */ CoopSprite selfSprites[COOP_SPRITES];
+    /* 0x2154C */ u32 partnerSpriteCount; // host writes
+    /* 0x21550 */ CoopSprite partnerSprites[COOP_SPRITES];
+} CoopLink; // size = 0x21640
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1

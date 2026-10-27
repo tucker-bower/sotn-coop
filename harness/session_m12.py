@@ -392,3 +392,36 @@ def _boss_test(b):
 
 for _b in _bossstarts():
     _boss_test(_b)
+
+
+# --- the partner's attacks on screen (playtest 2026-10-25 note 2, sprites.c) ------------------
+SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
+
+
+@session_scenario()
+def m12_partner_subweapon_drawn(run):
+    """A throws daggers next to B: B gets A's sprites and draws them (the same frame of B, from the
+    same state, rendered with and without them differs)."""
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    into_hall(run)
+    got = None
+    for i in range(240):
+        a.write(SUBWEAPON_ID, DAGGER, "<i")
+        a.write(HEARTS_ADDR, 99, "<i")
+        run.step(1, ("up+square" if i % 30 < 2 else "", ""))
+        n = b.read("g_CoopLink", "<I", 0x2154C)
+        if n:
+            got = n
+            break
+    run.expect(got, "B receives A's sprites (its dagger)")
+    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
+    n = b.read("g_CoopLink", "<I", 0x2154C)
+    state = b.save_state()
+    run.s.b.step(1)
+    with_sprites = b.screenshot().tobytes()
+    b.load_state(state)
+    b.write("g_CoopLink", 0, "<I", 0x2154C)
+    run.s.b.step(1)
+    without = b.screenshot().tobytes()
+    run.expect(with_sprites != without, "B draws them", sprites=n)

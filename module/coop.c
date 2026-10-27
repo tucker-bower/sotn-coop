@@ -13,6 +13,7 @@
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
+#include "sprites.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -134,10 +135,13 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
+    SpritesPlace();
     RenderEntities();
+    SpritesRemove();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();
     CapturePresence(&g_CoopLink.self);
+    SpritesCapture();
     if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES) {
         DrawPuppet(&g_CoopLink.partner);
     }

@@ -8,7 +8,7 @@ import time
 
 from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
 from .playout import Playout
-from .transport import (TAG_ACK, TAG_BYE, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+from .transport import (TAG_ACK, TAG_BYE, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
@@ -42,6 +42,7 @@ class Host:
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
         self.partner_left = False  # the partner said goodbye (its app closed or went back to its menu)
+        self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
@@ -106,6 +107,7 @@ class Host:
         """The partner's host is a new one (it restarted): numbering starts again both ways."""
         self.restarts += 1
         self.partner_left = False  # back again
+        self._sprites_seq = 0
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
@@ -239,6 +241,10 @@ class Host:
         self.mailbox.set_character(self.character)
         self.mailbox.set_options(self.options)
         self.transport.send(TAG_PRESENCE, self.mailbox.self_presence().pack())
+        sprites = self.mailbox.self_sprites()
+        if sprites or self._sprites_sent:  # one empty message after the last, to clear them
+            self.transport.send(TAG_SPRT, sprites)
+        self._sprites_sent = bool(sprites)
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:
             self._snap_sent = seq
@@ -251,7 +257,7 @@ class Host:
         for ev in mine:
             self._note("out", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
 
-        latest, reliable, ctrl_dgrams, snap = None, [], [], None
+        latest, reliable, ctrl_dgrams, snap, sprites = None, [], [], None, None
         now = self.transport.clock()
         for dgram in self.transport.receive():
             tag, seq, frame, payload, addr = dgram
@@ -269,6 +275,9 @@ class Host:
                 reliable.append(dgram)
             elif tag in (TAG_CTRL, TAG_CACK):
                 ctrl_dgrams.append(dgram)
+            elif tag == TAG_SPRT:
+                if seq > self._sprites_seq:  # the newest only
+                    self._sprites_seq, sprites = seq, payload
             elif tag == TAG_BYE:
                 self._check_bye(payload)
             elif tag == TAG_HELLO:
@@ -282,6 +291,8 @@ class Host:
         if latest is not None:
             self.mailbox.write_partner(latest)
             self.received += 1
+        if sprites is not None:
+            self.mailbox.write_partner_sprites(sprites)
         if snap is not None:
             self.mailbox.put_snapshot(snap)
             self._note("in", f"snapshot ({len(snap)} bytes)")

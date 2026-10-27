@@ -28,6 +28,7 @@ TAG_SNAP = b"SNAP"      # (receive() only) a reassembled shared-room snapshot
 TAG_SNPC = b"SNPC"      # payload: snap_id (u32), base_id (u32), chunk_idx (u8), chunk_cnt (u8), zlib chunk
 TAG_CTRL = b"CTRL"      # payload: seq (u32), last (u8), pad (u8), len (u16), chunk (reliable control/save)
 TAG_CACK = b"CACK"      # payload: highest CTRL seq delivered in order (u32)
+TAG_SPRT = b"SPRT"      # payload: the sender's sprites (CoopSprite records, sprites.c): its attacks, drawn by the partner
 TAG_BYE = b"BYE "       # payload: the sender's HELO sid (JSON): it is leaving (the app closed, or back to its menu)
 TAG_HELLO = b"HELO"     # payload: JSON {"link": WIRE_VERSION, "patch": target CRC32 or null}, once a second
 
