@@ -121,6 +121,13 @@ static bool SameRoomAsPartner(void) {
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
+// In this room but half a screen or more away (cameras apart: no shared room).
+static bool FarInRoom(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    s32 dx = p->scrollX - g_Tilemap.scrollX.i.hi, dy = p->scrollY - g_Tilemap.scrollY.i.hi;
+    return SameRoomAsPartner() && (dx >= 128 || dx <= -128 || dy >= 112 || dy <= -112);
+}
+
 static bool PartnerInBossFight(void) {
     return PartnerFresh() && (g_CoopLink.partner.flags & PRESENCE_BOSS) &&
            !(g_CoopLink.partner.flags & PRESENCE_DEAD);
@@ -346,7 +353,11 @@ static void PullIn(void) {
 
     if (!PartnerInBossFight()) {
         s_BossPulled = false;
-    } else if (!s_BossPulled && CanBePulled(false) && !(p->flags & PRESENCE_BUSY)) { // not mid-intro
+    } else if (!s_BossPulled && !(p->flags & PRESENCE_BUSY) && // not mid-intro
+               (CanBePulled(false) ||
+                // the same room but too far apart to share it (a wide arena: the Succubus's, when
+                // one player walked on through her intro): each game would fight its own boss
+                (CanBePulled(true) && SharedRole() == ROLE_NONE && p->role == ROLE_NONE && FarInRoom()))) {
         s_BossPulled = true;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
         s_ArriveText = "Partner is fighting a boss!";

@@ -16,6 +16,8 @@
 #define OVL_BANK(set) ((set) & 0x7FFF)
 
 static u8 s_Placed[COOP_SPRITES]; // the slots this frame's partner sprites went in (0: none)
+u32 g_CoopSpritesDrawn; // how many went in last frame (tests read it: coop.map)
+u32 g_CoopSpritesWhy;   // why none: 1 not in play, 2 partner not here, 3 none drawable
 
 // Their sets: drawable here? DRA's, yes; an overlay's only from the same character, and never the
 // weapon banks (0x10-0x13 hold this player's hand weapons in Alucard's game; 0x17 its off-hand).
@@ -73,9 +75,12 @@ void SpritesPlace(void) {
     for (k = 0; k < COOP_SPRITES; k++) {
         s_Placed[k] = 0;
     }
+    g_CoopSpritesDrawn = 0;
     if (g_GameState != Game_Play || !PartnerHere()) {
+        g_CoopSpritesWhy = g_GameState != Game_Play ? 1 : 2;
         return;
     }
+    g_CoopSpritesWhy = 3;
     for (k = 0; k < g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
         s = &g_CoopLink.partnerSprites[k];
         if (!Drawable(s)) {
@@ -103,6 +108,8 @@ void SpritesPlace(void) {
         e->drawFlags = s->drawFlags;
         e->unk5A = s->unk5A;
         s_Placed[k] = slot--;
+        g_CoopSpritesDrawn++;
+        g_CoopSpritesWhy = 0;
     }
 }
 
@@ -119,5 +126,92 @@ void SpritesRemove(void) {
             }
             s_Placed[k] = 0;
         }
+    }
+}
+
+// --- their primitives -------------------------------------------------------------------------
+// Copied with positions in the room (all four vertices; a tile's w,h are in u0,v0 and stay), and
+// replayed in a pool of this game's own primitives, allocated once per stage (a stage load frees
+// them all), hidden when unused: the game draws them itself.
+#define PRIM_XY(p, k) ((s16*)((u8*)(p) + 0x08 + (k) * 0x0C)) // x0,y0 / x1,y1 / x2,y2 / x3,y3
+#define DRAW_HIDDEN 8 // DRAW_HIDE
+// Our pool's mark, in each primitive's p3 (the GPU packet's pad byte: rendering ignores it). The
+// game frees every primitive at a stage load and in some menus (DestroyAllPrimitives zeroes them):
+// a pool without its mark is gone, and its slots may be someone else's now.
+#define POOL_MARK 0xC5
+static s16 s_Pool = -1;
+
+static bool PoolIntact(void) {
+    s32 k;
+    Primitive* p;
+
+    if (s_Pool < 0) {
+        return false;
+    }
+    for (k = 0, p = &g_PrimBuf[s_Pool]; k < COOP_PRIMS; k++, p = p->next) {
+        if (!p || p->type == PRIM_NONE || p->p3 != POOL_MARK) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void Shift(u8* data, s32 dx, s32 dy) { // data: a Primitive's bytes from 0x04
+    s32 k;
+    for (k = 0; k < 4; k++) {
+        s16* xy = (s16*)(data - 4 + 0x08 + k * 0x0C);
+        xy[0] += dx;
+        xy[1] += dy;
+    }
+}
+
+void PrimsCapture(void) {
+    s32 i, n = 0;
+    Entity* e;
+    Primitive* p;
+
+    for (i = 1; i < SLOT_LAST + 1 && n < COOP_PRIMS; i++) {
+        e = &g_Entities[i];
+        if (!e->entityId || !(e->flags & FLAG_HAS_PRIMS) || e->primIndex < 0 || e->primIndex >= MAX_PRIM_COUNT) {
+            continue;
+        }
+        for (p = &g_PrimBuf[e->primIndex]; p && n < COOP_PRIMS; p = p->next) {
+            if ((p->drawMode & DRAW_HIDDEN) || p->type == PRIM_NONE) {
+                continue;
+            }
+            __builtin_memcpy(g_CoopLink.selfPrims[n], (u8*)p + 4, COOP_PRIM_SIZE);
+            Shift(g_CoopLink.selfPrims[n], g_Tilemap.scrollX.i.hi, g_Tilemap.scrollY.i.hi);
+            n++;
+        }
+    }
+    g_CoopLink.selfPrimCount = n;
+}
+
+void PrimsPlace(void) {
+    s32 k;
+    Primitive* p;
+    bool here = g_GameState == Game_Play && PartnerHere();
+
+    if (g_GameState != Game_Play || g_GameStep != Play_Default) {
+        s_Pool = -1; // a load frees every primitive
+        return;
+    }
+    if (!PoolIntact()) {
+        s_Pool = g_api.AllocPrimitives(PRIM_GT4, COOP_PRIMS);
+        if (s_Pool < 0) {
+            return;
+        }
+    }
+    for (k = 0, p = &g_PrimBuf[s_Pool]; p && k < COOP_PRIMS; k++, p = p->next) {
+        if (here && k < (s32)g_CoopLink.partnerPrimCount && g_CoopLink.partnerPrims[k][3] != PRIM_NONE) {
+            Primitive* next = p->next;
+            __builtin_memcpy((u8*)p + 4, g_CoopLink.partnerPrims[k], COOP_PRIM_SIZE);
+            p->next = next;
+            Shift((u8*)p + 4, -g_Tilemap.scrollX.i.hi, -g_Tilemap.scrollY.i.hi);
+        } else {
+            p->type = PRIM_GT4; // keep the pool's (never PRIM_NONE: that frees it)
+            p->drawMode = DRAW_HIDDEN;
+        }
+        p->p3 = POOL_MARK;
     }
 }

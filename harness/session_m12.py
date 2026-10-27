@@ -398,30 +398,89 @@ for _b in _bossstarts():
 SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
 
 
+@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice: his whip's sprites are in both games
+def m12_partner_attack_drawn(run):
+    """Note 2, phase 1: A (Richter) whips next to B (Richter): B gets A's sprites and draws them (the
+    same frame of B, from the same state, rendered with and without them differs). DRA's
+    subweapons draw with primitives, not sprites: phase 1b."""
+    from session_m8 import as_characters
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    as_characters(run, 1, 1)
+    into_hall(run)
+    got = None
+    for i in range(240):
+        run.step(1, ("square" if i % 30 < 2 else "", ""))
+        n = b.mailbox("partner_sprite_count")
+        if n:
+            got = n
+            break
+    run.expect(got, "B receives A's sprites (the whip)")
+    run.step(2, ("square", ""))  # a fresh crack...
+    run.step(8)                  # ...held out (the whip's segments are blank when it's in)
+    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
+    n = b.mailbox("partner_sprite_count")
+    sprites = a.mailbox("self_sprites")
+    state = b.save_state()  # holds the 15 sprites
+    b.mailbox("write_partner_sprites", b"")
+    run.s.b.step(10)  # the screen shows a frame a few frames late
+    shot_without = b.screenshot()
+    without = shot_without.tobytes()
+    b.load_state(state)
+    run.s.b.step(10)
+    from module import symbols
+    placed_with = (b.read(symbols()["g_CoopSpritesDrawn"], "<I"), b.read(symbols()["g_CoopSpritesWhy"], "<I"))
+    shot_with = b.screenshot()
+    with_sprites = shot_with.tobytes()
+    out = TOOLS["out"] / run.name
+    out.mkdir(parents=True, exist_ok=True)
+    shot_with.save(out / "b_with.png")
+    shot_without.save(out / "b_without.png")
+    a.screenshot().save(out / "a.png")
+    from module import symbols
+    run.expect(with_sprites != without, "B draws them", sprites=n,
+               placed_with=placed_with,
+               partner_char=b.mailbox("partner_presence").character, mine=b.mailbox("self_presence").character,
+               sets=sorted({hex(int.from_bytes(sprites[k:k + 2], "little")) for k in range(0, len(sprites), 0x14)}))
+
+
 @session_scenario()
-def m12_partner_subweapon_drawn(run):
-    """A throws daggers next to B: B gets A's sprites and draws them (the same frame of B, from the
-    same state, rendered with and without them differs)."""
+def m12_partner_dagger_drawn(run):
+    """Note 2, phase 1b: A (Alucard) throws daggers next to B: B gets the dagger's primitives and
+    draws them (the same frame of B, from the same state, with and without them, differs)."""
     from session_shared import into_hall
     a, b = run.s.a, run.s.b
     into_hall(run)
-    got = None
+    got = 0
     for i in range(240):
         a.write(SUBWEAPON_ID, DAGGER, "<i")
         a.write(HEARTS_ADDR, 99, "<i")
         run.step(1, ("up+square" if i % 30 < 2 else "", ""))
-        n = b.read("g_CoopLink", "<I", 0x2154C)
-        if n:
-            got = n
+        if i % 30 == 8 and a.mailbox("self_prims"):
+            got = len(a.mailbox("self_prims")) // 0x30
             break
-    run.expect(got, "B receives A's sprites (its dagger)")
-    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
-    n = b.read("g_CoopLink", "<I", 0x2154C)
-    state = b.save_state()
-    run.s.b.step(1)
-    with_sprites = b.screenshot().tobytes()
+    run.expect(got, "A's dagger has primitives to send", n=got)
+    run.step(1)
+    b.unlink()
+    state = b.save_state()  # holds A's primitives
+    b.mailbox("write_partner_prims", b"")
+    run.s.b.step(10)  # the screen shows a frame a few frames late
+    without = b.screenshot()
+    from emu import SYMBOLS
+    buf = b.read_bytes(SYMBOLS["g_PrimBuf"], 0x34 * 0x500)
+    marked = [(k, buf[k * 0x34 + 7], hex(int.from_bytes(buf[k * 0x34 + 0x32:k * 0x34 + 0x34], "little")))
+              for k in range(0x500) if buf[k * 0x34 + 0x2B] == 0xC5]
+    pool_without = (len(marked), sum(1 for m in marked if not int(m[2], 16) & 8), marked[:3])
     b.load_state(state)
-    b.write("g_CoopLink", 0, "<I", 0x2154C)
-    run.s.b.step(1)
-    without = b.screenshot().tobytes()
-    run.expect(with_sprites != without, "B draws them", sprites=n)
+    run.s.b.step(10)
+    with_prims = b.screenshot()
+    out = TOOLS["out"] / run.name
+    out.mkdir(parents=True, exist_ok=True)
+    with_prims.save(out / "b_with.png")
+    without.save(out / "b_without.png")
+    import struct
+    raw = b.read_bytes("g_Entities", 0xBC * 64)
+    b_own = [(k, hex(struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0])) for k in range(1, 64)
+             if struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0]]
+    run.expect(with_prims.tobytes() != without.tobytes(), "B draws them", prims=got, b_entities=b_own,
+               b_pad_sub=b.read(SUBWEAPON_ID, "<i"), pool_without=pool_without)

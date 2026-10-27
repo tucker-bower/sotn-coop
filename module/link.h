@@ -17,7 +17,11 @@
 #define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
-#define COOP_SPRITES 12
+#define COOP_SPRITES 24
+// ...and their primitives (most attacks draw with them: Alucard's subweapons, Richter's whip):
+// a Primitive without its next pointer, positions in the room.
+#define COOP_PRIMS 32
+#define COOP_PRIM_SIZE 0x30
 typedef struct {
     /* 0x00 */ s16 animSet;
     /* 0x02 */ u16 animCurFrame;
@@ -142,9 +146,13 @@ typedef struct {
     /* 0x21454 */ u32 padExtra;  // host writes every frame: PADX_* buttons a PlayStation pad lacks
     /* 0x21458 */ u32 selfSpriteCount;    // game writes every frame (sprites.c, M12)
     /* 0x2145C */ CoopSprite selfSprites[COOP_SPRITES];
-    /* 0x2154C */ u32 partnerSpriteCount; // host writes
-    /* 0x21550 */ CoopSprite partnerSprites[COOP_SPRITES];
-} CoopLink; // size = 0x21640
+    /* 0x2163C */ u32 partnerSpriteCount; // host writes
+    /* 0x21640 */ CoopSprite partnerSprites[COOP_SPRITES];
+    /* 0x21820 */ u32 selfPrimCount;      // game writes every frame (sprites.c, M12)
+    /* 0x21824 */ u8 selfPrims[COOP_PRIMS][COOP_PRIM_SIZE];
+    /* 0x21E24 */ u32 partnerPrimCount;   // host writes
+    /* 0x21E28 */ u8 partnerPrims[COOP_PRIMS][COOP_PRIM_SIZE];
+} CoopLink; // size = 0x22428
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1

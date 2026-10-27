@@ -25,8 +25,10 @@ SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
 SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
 CONTROL = 0x21448
 CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
-SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2154C  # u32 count, then CoopSprite[12] (0x14 each): sprites.c (M12)
-SPRITE_SIZE, N_SPRITES = 0x14, 12
+SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2163C  # u32 count, then CoopSprite[24] (0x14 each): sprites.c (M12)
+SPRITE_SIZE, N_SPRITES = 0x14, 24
+SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] less next (0x30 each)
+PRIM_SIZE, N_PRIMS = 0x30, 32
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
@@ -116,6 +118,20 @@ class Mailbox:
         """This game's sprites for the partner (sprites.c): raw CoopSprite records."""
         n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_SPRITES, 4))[0], N_SPRITES)
         return self.adapter.read_bytes(self.address + SELF_SPRITES + 4, n * SPRITE_SIZE) if n else b""
+
+    def self_prims(self):
+        """This game's attack primitives for the partner (sprites.c)."""
+        n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PRIMS, 4))[0], N_PRIMS)
+        return self.adapter.read_bytes(self.address + SELF_PRIMS + 4, n * PRIM_SIZE) if n else b""
+
+    def write_partner_prims(self, data):
+        n = min(len(data) // PRIM_SIZE, N_PRIMS)
+        if n:
+            self.adapter.write_bytes(self.address + PARTNER_PRIMS + 4, data[:n * PRIM_SIZE])
+        self.adapter.write_bytes(self.address + PARTNER_PRIMS, struct.pack("<I", n))
+
+    def partner_sprite_count(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_SPRITES, 4))[0]
 
     def write_partner_sprites(self, data):
         n = min(len(data) // SPRITE_SIZE, N_SPRITES)
