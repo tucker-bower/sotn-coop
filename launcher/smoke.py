@@ -44,7 +44,7 @@ def main():
     launcher.make_debug_starts()
     starts = debugstarts.load(launcher.starts_dir(), launcher.patch_crc())
     import bossstarts
-    check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B), "debug starts made", n=len(starts))
+    check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B) + len(bossstarts.S), "debug starts made", n=len(starts))
     unchecked = [n for n, v in starts.items() if v.get("boss") and not v.get("checked")]
     check(not unchecked, "a bot reaches every boss from its boss start", failed=unchecked)
     from link.mailbox import IN_PLAY

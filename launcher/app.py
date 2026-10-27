@@ -1288,24 +1288,28 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir(), self.patch_crc())
-        if not starts or not any(v.get("boss") for v in starts.values()):
+        if not starts or not any(v.get("scene") for v in starts.values()):
             ask = ("They haven't been made for this version yet (about a minute). Make them now?" if not starts else
-                   "There are new ones: one outside each boss, with the level and gear a player\n"
-                   "usually has by then. Make them now (about a minute)?")
+                   "There are new ones: one before each story scene, and one outside each boss, with the\n"
+                   "level and gear a player usually has by then. Make them now (about a minute)?")
             if self.ui.confirm("Debug starts", ask):
                 self.make_debug_starts()
             starts = debugstarts.load(self.starts_dir(), self.patch_crc())
             if not starts:
                 return
         while True:
-            group = self.ui.menu("Debug starts", [("Bosses", "Outside each boss of the first castle, with a typical player's progress"),
-                                                  ("Places", "Spots along the route, with the gear from the start")],
+            groups = [("Bosses", "Outside each boss of the first castle, with a typical player's progress", "boss"),
+                      ("Scenes", "Before each story scene of the first castle, with the progress of that point", "scene"),
+                      ("Places", "Spots along the route, with the gear from the start", None)]
+            group = self.ui.menu("Debug starts", [g[:2] for g in groups],
                                  "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
             if group is None:
                 return
-            names = [n for n in starts if bool(starts[n].get("boss")) == (group == 0)]
-            k = self.ui.menu("Bosses" if group == 0 else "Places",
-                             [(n.removeprefix("Boss: "), starts[n]["about"]) for n in names])
+            kind = groups[group][2]
+            names = [n for n in starts if (kind and starts[n].get(kind)) or
+                     (not kind and not starts[n].get("boss") and not starts[n].get("scene"))]
+            k = self.ui.menu(groups[group][0],
+                             [(n.removeprefix("Boss: ").removeprefix("Scene: "), starts[n]["about"]) for n in names])
             if k is not None:
                 break
         if None in self.pads.assign and self.lobby() is None:

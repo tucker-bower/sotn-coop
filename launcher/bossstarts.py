@@ -155,6 +155,32 @@ EXP_NEXT = [0, 0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250, 3850, 
             44500, 50000, 56000, 61500, 68500, 76000, 84000, 92500, 101500]  # g_ExpNext, levels 0-39
 
 
+# Scene starts (Tucker, 2026-10-26): one before each story scene of the first castle, with the
+# progress of the boss nearest before it in the story (its row: `like`), and the scene's own
+# "seen" castle flag cleared (include/castle_flags.h). Each starts in the room before the scene's,
+# found from the decomp's room tables (assets/st/<stage>/rooms.json, entity_layouts.json): walking
+# on starts the scene. Bosses whose arena opens with a scene (Succubus, Richter, Minotaur &
+# Werewolf) have it in their boss start.
+S = []
+
+
+def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
+    row = dict(next(b for b in B if b["name"] == like))
+    row.update(name=name, area=area, stage=stage, arrive=arrive, walk=walk, check=check, note=note,
+               unset=tuple(unset), scene=True)
+    S.append(row)
+
+
+scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (216, 216, 128), "right", "Slogra & Gaibon",
+      unset=[0x85])  # MET_MARIA_IN_NZ0
+scene("The Librarian", "Long Library", "LIB", (40, 40, 172), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
+scene("Maria in the Royal Chapel", "Royal Chapel", "DAI", (8, 40, 128), "left", "Minotaur & Werewolf",
+      unset=[0x63])  # MET_MARIA_IN_DAI
+scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (0, 128, 400), "", "Richter",
+      unset=[0xD8], note="drop down the shaft")  # MET_MARIA_IN_CEN
+scene("The Castle Keep", "Castle Keep", "TOP", (16, 496, 896), "right", "Richter")
+
+
 def apply(e, b, base, rooms):
     """Writes boss start b's progress over the entrance status `base` (bytes of g_Status)."""
     st = bytearray(base)
@@ -194,6 +220,8 @@ def apply(e, b, base, rooms):
     for name in b["flags"]:
         for f in FLAGS[name]:
             e.write("g_CastleFlags", 1, "<B", f)
+    for f in b.get("unset", ()):  # a scene start: its scene not seen yet
+        e.write("g_CastleFlags", 0, "<B", f)
     e.write("g_CastleFlags", sum(bit for a, bit in WARPS.items() if a in b["areas"]), "<B", WRP_UNLOCKS)
     for k, name in enumerate(b["done"]):
         e.write("g_Settings", 1000 + 100 * k, "<i", RECORDS + 4 * EVENTS[name])
