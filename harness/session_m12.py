@@ -6,6 +6,7 @@ from coop_env import TOOLS
 from session import session_scenario
 
 ST0, NO3 = 0x1F, 0x41
+FLAG_DEAD = 0x100  # include/game.h
 # The prologue's stairs up to the throne room: hold up+left until the opening scene starts.
 CLIMB = "up+left"
 
@@ -314,7 +315,8 @@ for _name, _args in ROOM_SCENES.items():
 # --- every boss (design/M12 part 2) -----------------------------------------------------------
 def _bossstarts():
     import sys
-    sys.path.insert(0, str(TOOLS["out"].parent.parent / "launcher"))
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
     import bossstarts
     return bossstarts.B
 
@@ -340,13 +342,24 @@ def boss_flow(run, b, limit=24000):
     run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
     hp_seen = {}
     fought = 0
+    role_log = []
     for t in range(limit):
-        auth = a if a.mailbox("self_presence").role == ROLE_AUTHORITY else g2
+        pa, pb = a.mailbox("self_presence"), g2.mailbox("self_presence")
+        if not role_log or role_log[-1][1:] != (pa.role, pb.role, pa.flags, pb.flags):
+            role_log = (role_log + [(t, pa.role, pb.role, pa.flags, pb.flags)])[-14:]
+        auth = a if pa.role == ROLE_AUTHORITY else g2
         if t % 30 == 0:
+            for g in (a, g2):  # the players don't die: this tests the flow, not the bot's fighting
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
             for slot, (eid, _, _, hp) in enemies(auth).items():
                 hp_seen.setdefault(slot, hp)
                 if hp > 8:
                     auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+                elif t > 3000:  # the bot can't land the last hit (flying bosses): a scripted kill,
+                    # as the game's hit detection does when HP runs out (design/M12 part 2)
+                    auth.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+                    flags = auth.read("g_Entities", "<I", slot * 0xBC + 0x34)
+                    auth.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
         w.step(1, (fight_pad(a, t=t), fight_pad(g2, t=t + 6)))
         fought = 0 if (boss(a) or boss(g2)) else fought + 1
         if fought > 300:
@@ -354,7 +367,7 @@ def boss_flow(run, b, limit=24000):
     run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:],
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
-               cs=[g.read("g_CutsceneHasControl") for g in (a, g2)])
+               cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
     w.step(300)
     for g, n in ((a, "A"), (g2, "B")):
         p = g.mailbox("self_presence")
