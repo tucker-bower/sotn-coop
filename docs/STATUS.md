@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-26 (M12 in progress: playtest 3 fixes, coverage, off-hands like Alucard's)_
+_Last updated: 2026-10-27 (M12 in progress; resumed after a PC crash, nothing lost)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -55,10 +55,12 @@ _Last updated: 2026-10-26 (M12 in progress: playtest 3 fixes, coverage, off-hand
     5. **Leaving: fixed** (D101): `online_partner_leaves`, `test_connect`.
   - **Coverage (M12 parts 1-3):**
     - **Scenes:** see note 1. Open (`session_m12.OPEN_SCENES`): the Librarian (his scene starts when its entity spawns; why it doesn't in the harness is open), Maria in the chapel, Maria in the Center (the harness arrives on the wrong floor), the inverted castle (Shaft, Dracula, the ending).
-    - **Bosses: 11 of 12** first-castle bosses pass the two-game flow (`m12_boss_*`: pull-in, the fight with the players kept alive and the last hit scripted when the bot can't land it, both fine after, the same flags). The Succubus now passes: a partner in the same wide arena but too far to share it is pulled to the other, once per fight. **Scylla:** her arena pushes the player back out (a single game too: the start lacks something she needs; a fixture problem). **Pairings** (`m12_boss_rm_*`, `m12_boss_ar_*`): Richter + Maria and Alucard + Richter, 19 of 20 pass (A+R at Olrox: the walk from the door doesn't get Alucard in); the Succubus has no pairing tests (no saving in the Nightmare, so no character change at her door). A flying boss leaving a camera made the games pull each other back and forth: fixed (a 10 s boss-pull cooldown). Not yet: the inverted castle.
+    - **2026-10-27, after the PC crash:** both of the suite's failures fixed. **A+R at Olrox was a real co-op bug, not the walk:** a shared-room guest couldn't open a red or sealed door until the room's authority went through it (it got the authority's closed door, tiles included). Now each game runs its own doors (D107): `m12_boss_ar_olrox`, new `m12_guest_opens_red_door`, and M5's `guest_blocked_by_closed_door` (a locked boss room stays locked) pass. **Scylla:** her start was in the Crystal Cloak room behind her, whose way in is barred until she's beaten. It's now in her arena: `m12_boss_scylla`, `_rm_`, `_ar_` pass. The 0.12.0-dev build on the PC doesn't have these yet.
+    - **Bosses: 12 of 12** first-castle bosses pass the two-game flow (Scylla since 2026-10-27) (`m12_boss_*`: pull-in, the fight with the players kept alive and the last hit scripted when the bot can't land it, both fine after, the same flags). The Succubus now passes: a partner in the same wide arena but too far to share it is pulled to the other, once per fight. **Scylla:** her arena pushes the player back out (a single game too: the start lacks something she needs; a fixture problem). **Pairings** (`m12_boss_rm_*`, `m12_boss_ar_*`): Richter + Maria and Alucard + Richter, 19 of 20 pass (A+R at Olrox: the walk from the door doesn't get Alucard in); the Succubus has no pairing tests (no saving in the Nightmare, so no character change at her door). A flying boss leaving a camera made the games pull each other back and forth: fixed (a 10 s boss-pull cooldown). Not yet: the inverted castle.
     - **Hand items: all 72 weapons** for Alucard, Richter, Maria (`m12_hand_items_*`). Not yet: obstacles per character, abilities per character.
   - **Tools:** `fixtures_m12.py` (prologue and castle-start fixtures), the debug and boss starts built by the harness (`.env/fixtures/debug-starts`), `vram_survey.py` (VRAM read out of savestates; `window_free` proves a VRAM area unused), `scenarios_m12.pin_target` (an enemy kept on a weapon's live hitbox).
-  - **Suite (2026-10-27): 150 of 152 pass.** The two: Scylla (her start: the arena pushes the player out) and A+R at Olrox (the walk from the door).
+  - **Suite (2026-10-27 morning): 150 of 152 pass.** The two (Scylla, A+R at Olrox) are fixed since; a full run with the fixes is in progress.
+  - **Rebuilding after a module change:** `scripts/rebuild_fixtures.sh` (disc, Maria, savestates, M12 fixtures, debug starts; about 15 min), or only the starts: `scripts/make_debug_starts.py`.
   - **Playtest build 0.12.0-dev:** installed on the PC (silent install, 2026-10-27); the Thor's APK is built (`.env/android/SOTN-Coop-0.12.0-dev.apk`), to install when it's plugged in. What to try: `docs/playtest/M12-playtest.md`.
 - **M9 Android (design `docs/design/M9-android.md`, D93–D95), branch `coop-m9-android`. Ready for Tucker's Thor playtest (`docs/playtest/M9-thor.md`).**
   - Builds: `.env/android/SOTN-Coop-0.9.0-dev.apk` (arm64 + x86_64) and the matching PC installer `Emulators\SOTN-Coop-release\SOTN-Coop-setup-0.9.0-dev.exe`.
@@ -104,7 +106,7 @@ _Last updated: 2026-10-26 (M12 in progress: playtest 3 fixes, coverage, off-hand
 ## Next (M12, in order)
 1. **Full suite** on all of the above (running).
 2. **Partner's weapons, phase 2:** hand-weapon swings.
-3. **Boss tests for R+M and A+R;** Scylla's walk; the open scenes (Librarian, chapel, Center, inverted castle).
+3. ~~Boss tests for R+M and A+R; Scylla's walk~~ (done 2026-10-27). The open scenes (Librarian, chapel, Center, inverted castle).
 4. **Obstacles and abilities per character** (M12 part 3).
 5. **M12b leftovers:** frame palettes, thrown items.
 6. **Launch black screen (Tucker, 2026-10-26): built, to check in the launcher.** Measured (60 fps): no picture for 5 s (BIOS), black for 14.5 s (the game's code loading), the first picture at frame 1160, the title at 1730. The launcher's emulator now reads the disc 2x until the title (first picture at 540, title at 1110: about 10 s less), then at normal speed; 4x and more break the game's own boot, the retail disc's too. And "Starting the game" shows over the black until the first picture. Our disc boots 3.5 s slower than retail (the co-op module and Richter loading): to look at.
