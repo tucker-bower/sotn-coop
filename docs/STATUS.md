@@ -106,7 +106,9 @@ _Last updated: 2026-10-26 (M12 in progress: playtest 3 fixes, coverage, off-hand
 3. **Boss tests for R+M and A+R;** Scylla's walk; the open scenes (Librarian, chapel, Center, inverted castle).
 4. **Obstacles and abilities per character** (M12 part 3).
 5. **M12b leftovers:** frame palettes, thrown items.
-6. **A playtest build** (0.12.0-dev) with all of the above, for Tucker; then the M12 PR.
+6. **Launch black screen (Tucker, 2026-10-26):** 5-10 s of black after starting a game from the app. Measure where it goes (BIOS, boot, the game's own loads, our patching), and skip what's safe to skip, or show progress.
+7. **Debug starts outside every cutscene and boss (Tucker, 2026-10-26):** extend the 12 boss starts to every scene and boss, each with the level and gear of that point in the story, named for where they are, and offered like castles in the launcher, for Tucker's playtests.
+8. **A playtest build** (0.12.0-dev) with all of the above, for Tucker; then the M12 PR.
 - Done since the last plan: the VRAM window (D106), M12b (all 72 weapons), Maria's missing birds (not a separate bug).
 
 ## Next (older)
