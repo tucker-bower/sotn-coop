@@ -336,7 +336,10 @@ def boss_flow(run, b, limit=24000):
         room, x, y = b["check"]
         for g in (a, g2):
             arrive(run, g, a.mailbox("self_presence").stage, room, x, y)
-    w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
+    # B walks too, as a player would (some arenas open with a scene that only moves on while the
+    # player holds a direction); it stays where it is otherwise (the door's edge)
+    w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""),
+                                              walk if g2.read("g_CutsceneHasControl") else ""))
     run.expect(boss(a), "A walks into the boss's room", at=a.snapshot())
     # a pulled-in partner may first play the arena's scene (Minotaur & Werewolf), which steers it
     # only while a direction is held (like the prologue's)

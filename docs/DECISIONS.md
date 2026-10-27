@@ -516,7 +516,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D102: The prologue is co-op, and scenes are held for each other** (agent-default, 2026-10-26; playtest 2026-10-25 note 1)
 - The prologue is a shared room (one Dracula): both fall into its ending together. No teleports in or out of it.
 - A scene pulls the partner in from the same room too (not only from another room), and waits up to 60 s (not 10) for a partner still on its way: loading, in the opening video, or still in the prologue.
-- End barrier: whoever's scene ends first waits (up to 60 s: the Succubus's copies drifted 15 s apart), so both get control back on the same frame.
+- End barrier: whoever's scene ends first waits up to 10 s, so both get control back on the same frame (60 s froze a player whose partner stood still in a scene that only moves on while a direction is held).
 - Considered: leaving the prologue solo (what playtest 3 hit); holding only the start (scenes driven by where each player stands drift apart).
 
 **D103: Where a partner arrives, and no shared room while the game steers the player** (agent, 2026-10-26)
