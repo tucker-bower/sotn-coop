@@ -26,7 +26,11 @@ HELPERS = ("GetSideToPlayer", "GetDistanceToPlayerX", "GetDistanceToPlayerY")
 # camera (3D projection, parallax), so the authority's primitives are wrong for the guest's
 # camera. Only pure decoration: nothing here hurts, blocks or is collected. Spawners stay
 # copied (their children are scenery, run locally once they appear).
-DECOR = re.compile(r"Entity(Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
+# Red and sealed doors too: they open for the game's own player walking into them, and write
+# their tiles after the authority's are copied in, so a guest opens its own (M12: a guest
+# Alucard was walled in at Olrox's door until the authority walked through). What locks one
+# (NZ1's g_bossDoorsLocked) is in the BSS, which the guest gets from the authority.
+DECOR = re.compile(r"Entity(RedDoor|SealedDoor|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
                    r"Vortex|Bookcase|Furniture|Gears|DoorRubble|Shadow)|Clouds|LightningCloud|"
                    r"DistantBackgroundTrees|ForegroundTree|3DBackgroundHouse|HouseShader|ClockTower3D|"
                    r"StainedGlass|StainedGlassBackground|CavernBackground\w*|NightSky|BgColumnsParallax\w*|"

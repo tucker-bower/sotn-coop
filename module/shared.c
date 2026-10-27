@@ -167,7 +167,8 @@ static void GuestUpdate(void) {
 
 // Scenery that draws from the camera (3D projection, parallax: bushes, trees, clouds...): the
 // authority's primitives are only right for the authority's camera, so the guest runs these
-// itself (playtest 1: trees and bushes in the wrong place on the guest's screen).
+// itself (playtest 1: trees and bushes in the wrong place on the guest's screen). Red and sealed
+// doors too: each opens for its own game's player (gen_overlay_table.py).
 static bool IsScenery(const OverlayInfo* ovl, u32 pfn) {
     const u32* d;
 
