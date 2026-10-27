@@ -13,6 +13,6 @@ Major systems work. These are the polish issues, with what the code shows so far
 ## Status (2026-10-26)
 1. **Cutscenes: fixed** for the prologue's opening and ending, Death (which also showed the partner kept Alucard's gear: fixed), Maria in the Alchemy Lab and the Marble Gallery, the Succubus, Richter and the Castle Keep. Tests `m12_prologue_*`, `m12_death_waits_for_partner`, `m12_scene_*`, `cutscene_*`. Still to cover: the Librarian, Maria in the chapel and in the Center, and the inverted castle's scenes.
 2. **Partner's weapons:** planned (STATUS), not started.
-3. **Off-hand weapons:** a decision for Tucker (STATUS: polish version 1, or Alucard's real weapon code after a spike).
-4. **Maria's guardians:** the wrong sprites are fixed (`m12_maria_guardians_keep_their_graphics`). No birds with a weapon in her hand is reproduced (`m12_maria_keeps_throwing`), cause not found yet.
+3. **Off-hand weapons:** Tucker chose Alucard's real weapon code (D105). Built: every weapon class runs its own overlay with Alucard's timing (`m12b_*`, `m8b_offhand_*`). Open: Maria's weapon tiles (VRAM), multi-palette weapons.
+4. **Maria's guardians: fixed.** A weapon or shield in her other hand overwrote her guardians' graphics, so her birds became a skull and a shield, or nothing visible (`m12_maria_guardians_keep_their_graphics`). Thrown standing, every throw makes a bird (`m12_maria_keeps_throwing`). Note: her cardinal, unlike her other guardians, can't be thrown while she moves or is in the air (DXC's rule).
 5. **Leaving: fixed** (`online_partner_leaves`).

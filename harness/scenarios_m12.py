@@ -51,23 +51,29 @@ def cardinals(e):
 def m12_maria_keeps_throwing(run):
     """Playtest 2026-10-25 note 4: after a while, Maria stopped throwing anything. Her cardinal,
     thrown again and again (hearts kept up), with weapons in and out of her other hand between
-    rounds: every round's throws make birds."""
+    rounds: every throw makes a bird. (Her cardinal, alone of her guardians, can't be thrown while
+    she moves or is in the air: src/maria/pl_setstep.c MarDoSubweapon. Each throw here is made
+    standing.)"""
     e, mb = run.emu, mailbox(run)
-    e.write(SUBWEAPON, AXE, "<i")
-    reload_as(run, mb, CHAR_MARIA)
     rounds = []
     for r, item in enumerate((0, SHORT_SWORD, 0, LEATHER_SHIELD, SHORT_SWORD, 0, 0, 0)):
         e.write(EQUIPMENT, item)
         e.write(SUBWEAPON, AXE, "<i")
         reload_as(run, mb, CHAR_MARIA)
-        seen = 0
-        for i in range(600):
+        run.step(120)  # she lands (a weapon's load pauses the game a moment)
+        birds = 0
+        for k in range(8):  # walk a little, stop, throw
+            run.step(20, "left" if k % 2 else "right")
+            run.step(20)
             e.write(HEARTS, 99, "<i")
-            run.step(1, "up+square" if i % 30 < 2 else ("left" if (i // 150) % 2 else "right"))
-            seen += cardinals(e) > 0
-        rounds.append(seen)
-    # frames (of 600) with a bird on screen: about the same in every round
-    run.expect(min(rounds) > max(rounds) // 2, "every round's throws make birds, weapon in hand or not", rounds=rounds)
+            run.step(2, "up+square")
+            for _ in range(30):
+                run.step(1)
+                if cardinals(e):
+                    birds += 1
+                    break
+        rounds.append(birds)
+    run.expect(all(n == 8 for n in rounds), "every standing throw makes a bird, weapon in hand or not", rounds=rounds)
 
 
 # --- M12b spike: off-hand weapons through the weapon's own overlay (D105) --------------------
