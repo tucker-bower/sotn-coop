@@ -83,9 +83,9 @@ cp "$MOD"/licenses/* "$A/LICENSES/"
 cp "$MOD/README.md" "$A/README.md"
 
 echo "== no game data in the installer"
-if find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
+if find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
     echo "game data found in the stage: refusing" >&2
-    find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" >&2
+    find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" >&2
     exit 1
 fi
 
