@@ -52,7 +52,7 @@ def check_stage(stage):
             continue
         ext = f.suffix.lower()
         ours = "app" in f.relative_to(stage).parts[:1]  # our files: strict; the Python runtime: no game data
-        if ext == ".bin" and f.name != "openbios.bin":
+        if ext == ".bin" and f.name not in ("openbios.bin", "openbios-fast.bin"):
             bad.append(f"{f}: a .bin that isn't OpenBIOS")
         elif ext in (".cue", ".iso", ".state", ".mcd", ".chd", ".img", ".ecm"):
             bad.append(f"{f}: a disc image, savestate or memory card")

@@ -33,7 +33,8 @@ cp "$MOD"/patcher/{bps,patcher,sectors}.py "$MOD/.env/release/sotn-coop.bps" "$M
 cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$STAGE/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$STAGE/config/"
 cp "$ROOT/build/coop/coop.map" "$STAGE/build/coop/"
-cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"
+cp "$MOD/.env/sys/scph5501.bin" "$STAGE/bios/openbios-fast.bin"   # OpenBIOS with FASTBOOT (scripts/bootstrap.sh)
+cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"     # PCSX-Redux's build: savestates from before 0.12
 cp "$MOD/env.example.toml" "$MOD/android/main.py" "$STAGE/"
 mkdir -p "$STAGE/LICENSES" && cp "$MOD/NOTICE" "$STAGE/LICENSES/README.txt" && cp "$MOD/LICENSE" "$STAGE/LICENSES/AGPL-3.0.txt" && cp "$MOD"/licenses/* "$STAGE/LICENSES/"
 # libretro.py: pure Python (its sample cores and their GL libraries aren't needed)
@@ -45,7 +46,7 @@ for arch in "${ARCHES[@]}"; do
 done
 
 echo "== no game data in the app"
-if find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.iso" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
+if find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.iso" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
     echo "game data found in the stage: refusing" >&2
     exit 1
 fi

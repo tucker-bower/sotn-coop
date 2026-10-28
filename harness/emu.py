@@ -129,6 +129,7 @@ class Emu:
         opts = dict(OPTIONS, swanstation_Console_Enable8MBRAM="true" if ram_8mb else "false")
         opts.update(options or {})
         self._boot_speedup = boot_speedup
+        self._title_frames = 0  # frames in a row at the title or in play (boot_speedup)
         if boot_speedup:
             opts.update(swanstation_CDROM_ReadSpeedup=BOOT_SPEEDUP, swanstation_CDROM_SeekSpeedup=BOOT_SPEEDUP)
         self._options = DictOptionDriver(variables=opts)
@@ -167,10 +168,17 @@ class Emu:
         for _ in range(n):
             self._session.run()
             self.frame += 1
-        if self._boot_speedup and self.read("g_GameState") in (GAME_TITLE_STATE, GAME_PLAY_STATE):
-            self._boot_speedup = False  # booted: the game reads at its own speed from here on
-            for key in ("swanstation_CDROM_ReadSpeedup", "swanstation_CDROM_SeekSpeedup"):
-                self._options.set_variable(key.encode(), b"1")
+        if self._boot_speedup:
+            # Booted: the game reads at its own speed from here on. During the BIOS, g_GameState's
+            # address holds the BIOS's leftovers: 2 for one frame at frame 113 with 2x reads, which
+            # turned the speedup off at once (M12 v1.0). The real title lasts, so it counts after
+            # 10 frames in a row.
+            booted = self.read("g_GameState") in (GAME_TITLE_STATE, GAME_PLAY_STATE)
+            self._title_frames = self._title_frames + n if booted else 0
+            if self._title_frames >= 10:
+                self._boot_speedup = False
+                for key in ("swanstation_CDROM_ReadSpeedup", "swanstation_CDROM_SeekSpeedup"):
+                    self._options.set_variable(key.encode(), b"1")
 
     def run_inputs(self, inputs):
         """inputs: iterable of (p1, p2) per frame."""

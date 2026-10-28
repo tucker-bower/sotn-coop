@@ -23,7 +23,7 @@ import platform_android  # noqa: E402
 EXT = platform_android.external_dir()
 os.environ.setdefault("COOP_DATA", str(EXT))
 os.environ["TMPDIR"] = str(platform_android.cache_dir())  # tempfile's default, /tmp, isn't there
-os.environ.setdefault("COOP_BIOS", str(HERE / "bios" / "openbios.bin"))
+os.environ.setdefault("COOP_BIOS", str(HERE / "bios" / "openbios-fast.bin"))
 # SDL sets the activity's orientation when it makes the window, over the manifest's: landscape.
 os.environ["SDL_IOS_ORIENTATIONS"] = "LandscapeLeft LandscapeRight"
 # Android's Back button comes to us (as Esc: pause, back) instead of closing the app mid-game.

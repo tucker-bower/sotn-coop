@@ -585,3 +585,11 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - Files adb writes into the app's folder are unreadable to the app, and `run-as` can't reach shared storage, so the backup goes into the app's private folder and the app copies it into place at its next start (`android/main.py` `restore`), as its own files. Nothing already there is overwritten.
 - **Release-signed builds stay debuggable** (as today's): the tests and this restore use `run-as`. Only someone with USB debugging access to the device can use it.
 - Evidence: `android/test_key_switch.py` (emulator, Android 14): every file back with the same contents, owned by the new app, release-signed. `release.py --android` refuses an APK not signed with the release key (checked with the 0.12.0-dev debug APK).
+
+**D117: The launcher ships OpenBIOS built with FASTBOOT; the old build stays for old savestates** (agent-default, 2026-10-27; M12 v1.0 criterion 6)
+- Measured in the real launcher (`uxdriver.py startup`): the title came 23.1 s after pressing Solo. Two causes:
+  - **The 2× disc read switched itself off at frame 113.** During the BIOS, `g_GameState`'s address holds a 2 for one frame. Now the title has to last 10 frames.
+  - **PCSX-Redux's standard OpenBIOS waits about 300 frames (5 s) before starting the disc.** The harness has always used OpenBIOS built with `FASTBOOT=true` (`scripts/bootstrap.sh`, the same source and licence), and all its tests run on it. After the disc's program starts, the two are identical (frame for frame).
+- Now: **a picture 0.4 s after pressing Solo, the title at 18.2 s** (was 23.1 s; target 20 s).
+- The release and the APK ship it as `bios/openbios-fast.bin`, the default. PCSX-Redux's `openbios.bin` stays beside it: a savestate holds the BIOS's RAM, so it only loads on the BIOS that made it. Each new savestate pair gets a `.bios` note; "Go back to a moment" boots the BIOS it names, and pairs from before 0.12 (no note) boot the old one (or the player's own BIOS, if they chose one). Debug starts are kept per BIOS (`<disc>@<bios>`), so they're remade once.
+- Our disc still reaches the title 84 frames (1.4 s) after retail (the co-op module and Richter loading). Left as is.

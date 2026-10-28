@@ -25,7 +25,8 @@ PYZIP="$CACHE/python-3.14.2-embed-amd64.zip"
 WINPY="$EMU/SOTN-Coop/venv/Scripts/python.exe"
 VENV_SP="$EMU/SOTN-Coop/venv/Lib/site-packages"
 DLL="$EMU/SOTN-Coop/app/bin/swanstation_libretro.dll"
-OPENBIOS="$EMU/PCSX-Redux/openbios.bin"
+OPENBIOS="$MOD/.env/sys/scph5501.bin"           # OpenBIOS with FASTBOOT, built by scripts/bootstrap.sh
+LEGACY_OPENBIOS="$EMU/PCSX-Redux/openbios.bin"  # PCSX-Redux's build: for savestates made before 0.12
 W() { wslpath -w "$1"; }
 
 echo "== patch (from your disc and our build: our changes only)"
@@ -60,7 +61,8 @@ cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$A/pa
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"
 cp "$ROOT/build/coop/coop.map" "$A/build/coop/"
 cp "$DLL" "$A/bin/"
-cp "$OPENBIOS" "$A/bios/openbios.bin"
+cp "$OPENBIOS" "$A/bios/openbios-fast.bin"
+cp "$LEGACY_OPENBIOS" "$A/bios/openbios.bin"
 cp "$MOD/env.example.toml" "$A/"
 cat > "$A/env.toml" <<'TOML'
 # The installed launcher's layout (scripts/build_release.sh): everything relative to app/.
