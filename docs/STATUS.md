@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-27 night (v1.0 release candidate 1.0.0-rc1 built and installed on the PC and the Thor; waiting on Tucker's playtest and one decision)_
+_Last updated: 2026-10-27 night (released as 0.12.0, the public beta of 1.0 (D121); 1.0 after playtester feedback; one decision open)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).

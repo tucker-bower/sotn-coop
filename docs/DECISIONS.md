@@ -606,3 +606,6 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D120: The first-castle playthrough is chained by boss, with teleports between** (agent-default, 2026-10-27; `design/M12-v1-release.md` work item 4)
 - `m12_chain_first_castle_long`: both games play the 12 bosses in route order, carrying what they earn; between bosses, the teleport, and that stretch's relics and story flags. Walking the routes is left to the gate and movement tests (D119): scripted routes for every stretch would be several usage windows and brittle.
 - Time-attack records are reported, not asserted: a scripted kill can skip the death sequence that writes one.
+
+**D121: Everything planned for 1.0 ships now as 0.12.0, the public beta; 1.0 after playtesters' feedback** (Tucker, 2026-10-27)
+- A normal GitHub release, not a "pre-release": the README's download links use `releases/latest`, which skips pre-releases. The notes say it's the beta and ask for feedback (GitHub issues, F9 reports).
