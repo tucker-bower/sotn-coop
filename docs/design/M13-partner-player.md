@@ -70,3 +70,13 @@ Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayer
 5. **Drawing two Alucards needs no VRAM patch:** `RenderEntities` uploads each player sprite frame into its `g_PlayerDraw` slot as it draws, so the partner's copy of `g_PlayerDraw` points one VRAM page left (the old puppet's page). Its drawing pass hides slots 64–255 (`animCurFrame` 0) so enemies aren't drawn twice. Screenshot: both Alucards drawn, each in its own pose.
 - **Still for the 2 MB VRAM patch:** a partner of another character, and weapon and familiar graphics that differ from player 1's. The partner's sprite page overlaps D106's VRAM window (x 0x1E0–0x1FF), which the off-hand weapons use: to be laid out with the VRAM patch.
 - **Go:** the approach works within budget. Next, the build proper: the partner's buttons over the link (played out, input option A), its state pulled to its snapshot past 48 px, then other characters with the VRAM bank, and removing the puppet.
+
+## Build status and what's left (2026-10-28)
+**Built** (`coop-m13-partner-player`, behind `OPT_PARTNER_SIM`, off): the simulated body (spike), the partner's buttons over the link (presence tail), the body made where the partner is in our room, dropped when they leave, pulled back past 48 px, moved with our camera; no puppet while it's drawn. Tests: `m13_spike_partner_sim`, `m13_partner_body_follows`.
+
+**Left, in order:**
+1. **The partner's gear on the body.** The body starts as a copy of player 1, so it holds player 1's equipment, weapons and familiar. Send the partner's equipment ids (and level and stats, for their spells and damage numbers) with a reliable event when they change; load the partner's weapon overlay (24 KB, already sent for M12's drawn swings: D106) into the body's copy of the weapon-overlay region, and swap that region too when the two players' weapons differ.
+2. **The VRAM bank** (our SwanStation build: 2 MB VRAM, lines 512–1023): needed for a partner of another character, and for weapon and familiar graphics that differ from player 1's. Lay it out once for M17 (a bank per partner) and M19 (the framebuffers): see this design's VRAM section. Software renderer only; built for Windows, Android, Linux.
+3. **Richter and Maria as partners:** their player update (our overlays in the 8 MB area) in place of `EntityAlucard`, with their sprite files (already copied for the puppet).
+4. **Familiars, sounds** (the partner's sound effects quieter), **game feel** (fairy revive, respawn effects).
+5. **Turn it on, remove the puppet**, and the acceptance criteria above.
