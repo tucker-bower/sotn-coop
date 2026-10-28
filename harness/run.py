@@ -33,6 +33,7 @@ import session_m11  # noqa: F401
 import session_m12  # noqa: F401
 import scenarios_m12  # noqa: F401
 import scenarios_relics  # noqa: F401
+import scenarios_movement  # noqa: F401
 import spec_test  # noqa: F401
 from scenario import SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario
