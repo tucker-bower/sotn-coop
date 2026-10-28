@@ -550,3 +550,32 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Removed:** the M12b spike's `m12b_offhand_like_alucard_{richter,maria}` and `m12b_alucard_baseline`: 6 weapons, passing at 5 of 6, fully covered by the hand-item sweeps (all 72, item by item).
 - **Measured (2026-10-27):** 155 tests: about 1.2 h one after another (3300 s of tests plus start-up); in parallel 600 s at 7 at once, 505 s at 10, 486 s at 12 (the default), 454 s at 14. All pass.
 - Kept, though large: every boss in every pairing (36 tests, about 30% of the time). Each pairing has found its own bugs (D107), and in parallel they cost minutes.
+
+---
+## 2026-10-27: expanded scope (after the comparison with sotn-online-coop)
+
+**D109: Expanded scope and priority order: M12 (v1.0) → M13 → M14 → M15 → M16 → M17 → M18 → M19** (Tucker, 2026-10-27)
+- Goal: the best, most open, most durable, most complete and easiest-to-use version of this idea. A similar project appeared (`jweyden/sotn-online-coop`, on SymphonyRecomp: `research.md` → "sotn-online-coop").
+- Order: finish M12 into a public v1.0; the partner as a real second player (M13); every pair connects with no server of ours (M14); PvP (M15); Saturn characters (M16); 3+ players (M17, replaces D48); Mac and Linux (M18); widescreen (M19).
+- The timeline is extended to fit Pro's limits; Pro stays the budget.
+
+**D110: Boss fights pause when either player opens the menu** (Tucker, 2026-10-27)
+- Today's behaviour stays. The other project keeps a boss fight running through the menu; we don't. Guarded by a regression test in M12.
+
+**D111: To the backlog: power tuning, more characters' testing, the Thor's dual screen, community characters** (Tucker, 2026-10-27)
+- Tuning and testing more characters is easier with community feedback on a playable build: easy and fun first.
+- The Thor's dual screen helps only Thor owners. M10's widescreen part is M19.
+- A guide and format for community characters (for example, Soma) is a backlog item.
+
+**D112: Android release keystore, backed up in Tucker's password manager** (Tucker, 2026-10-27; replaces D95)
+- Option (a) of STATUS's signing decision. The keystore and its password never go in the repository; the build reads the keystore's path from `env.toml`.
+- The last debug-signed build moves the app's saves to shared storage first, so the switch doesn't lose them (`design/M12-v1-release.md`).
+
+**D113: The mod never requires a hosted server; a relay is the last step, and anyone's** (Tucker, 2026-10-27; keeps D74)
+- Every pair should connect with no choices by the player. IPv6, router port mapping and port prediction come first; a relay that any player's launcher or anyone's server can run is the last step (`design/M14-relay.md`). Replaces STATUS's "Symmetric NAT" decision.
+
+**D114: v1.0 ships after the first-castle playthrough; the inverted castle is v1.1** (Tucker, 2026-10-27)
+- `design/M12-v1-release.md` decision 1. The launch black screen is the 19 s black start (Tucker agreed with the assumption).
+
+**D115: The Mac build ships unsigned, with the steps in the README** (Tucker, 2026-10-27)
+- `design/M18-mac-linux.md`: no Apple Developer ID for now.

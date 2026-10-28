@@ -27,9 +27,18 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M7 | Its own repository (`tucker-bower/sotn-coop`, D72/D73), online PC co-op (D74) | post-month | — |
 | M8 | Playable Maria & Richter from the start + DXC alternate dialogue/voices (D75) | post-month | — |
 | M9 | Android port of the launcher and session engine (D36, D75) | post-month | — |
-| M10 | AYN Thor curated dual-screen (top = you, bottom = partner) + true widescreen FOV (D75) | post-month | — |
+| M10 | ~~AYN Thor curated dual-screen + true widescreen FOV (D75)~~: dual screen to the backlog, widescreen is M19 (D111) | — | — |
 | M11 | Castles: drop-in saves (any partner continues any castle, the joiner keeps a copy), solo mode, shared level at half XP in duo (`docs/design/M11-castles.md`) | post-month, ~2 windows | — |
-| Last | **3–4 players** (D48) | post-month | — |
+| M12 | Coverage (parts 1–3 built), then **v1.0**: every relic, room and scene per character, licence, release key, launch, known bugs, the first-castle playthrough in segments, then the inverted castle (`design/M12-v1-release.md`) | 12–16 windows (+4–6 inverted castle) | — |
+| M13 | The partner as a real second player; 2 MB VRAM in our core; fairy revive; respawn effects (`design/M13-partner-player.md`) | 8–12 windows | — |
+| M14 | Every pair connects: IPv6, port mapping, port prediction, peer/community relays; never a server of ours (`design/M14-relay.md`) | 3–4 windows | — |
+| M15 | PvP, the host's option (`design/M15-pvp.md`) | 3–4 windows | — |
+| M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice (`design/M16-saturn-characters.md`) | 4–6 windows | — |
+| M17 | 3+ players, online then couch (`design/M17-more-players.md`; replaces D48) | 8–10 windows | — |
+| M18 | Mac and Linux (Steam Deck) builds (`design/M18-mac-linux.md`) | 3–5 windows | — |
+| M19 | Widescreen (`design/M19-widescreen.md`) | 8–14 windows | — |
+
+**Expanded scope (D109, 2026-10-27):** the best, most open, most durable, most complete and easiest version of this idea. The timeline is extended to fit Pro's limits: M12–M19 are about 50–70 usage windows. Dates are set at each milestone's approval, not in advance. M10 (the Thor's dual screen) moves to the backlog; its widescreen part is M19.
 
 **Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
 
@@ -98,7 +107,10 @@ Full criteria: `design/M3-teleport-respawn-save.md`.
 ### M9: Android port (D36, D75)
 - **Native Android launcher & session engine:** runs the co-op disc on Android using the SwanStation Android arm64 core (`swanstation_libretro_android.so`) and the link protocol (`docs/link-protocol.md`), connecting over Wi-Fi/internet to another Android device or PC, with controller-first UI, event savestates, and F9 snapshots.
 
-### M10: AYN Thor dual-screen & widescreen (D75)
+### M12–M19
+Acceptance criteria are in each design doc (`design/M12-v1-release.md` … `design/M19-widescreen.md`).
+
+### M10: AYN Thor dual-screen & widescreen (D75): moved to the backlog (D111); widescreen is M19
 - **Curated AYN Thor dual-screen mode:** on the AYN Thor clamshell handheld, the top 6.0" 16:9 AMOLED screen renders your game while the bottom 3.92" screen displays your partner's screen live.
 - **A bat-capped blood vial (Tucker, 2026-10-22):** the progress vial (`UI.bar` in `launcher/app.py`) gets a little metal bat in place of the cork, as if it were a vampire elite's custom vial: wings folded over the neck, centred on it. The cork's off-centre look was fixed in M9 (`odd widths`), and the bat must stay centred too, checked by a pixel test of the render.
 - **True widescreen on the top screen:** expanded horizontal FOV (not stretched 4:3) on the 16:9 top display, widening the draw/clip viewport, room scroll bounds, and entity layout spawn window so rooms and enemies render naturally across the 16:9 frame.
@@ -116,17 +128,16 @@ It needs the player's DXC disc, as Maria does.
 ### F9 sends bug reports (D86)
 F9's snapshot plus a short form, sent to a private repo through a small hosted relay, so players who download a release can report problems. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
 
-### 3–4 players (D48)
-Three or four players, each in their own game:
-- **Presence and the map** show every partner.
-- **Teleport** offers a choice of which partner to go to.
-- **Shared progression** merges across all games, using the same events and union rules.
-- **Shared rooms** have one authority and up to three guests.
-- **Respawn** is at the nearest living partner.
-- **Bosses** scale their HP and aggro to the player count.
-- **The launcher** splits the screen 3 or 4 ways.
+### 3–4 players (D48): now M17
 
-The link was built per-partner, so this mostly means turning "the partner" into "the partners".
+### Power tuning and more characters' testing (D111)
+The M8b power curve (±20% of Alucard at every boss) and testing characters beyond what v1.0 covers wait for community feedback on the v1.0 build.
+
+### AYN Thor dual screen (D111, was M10)
+Top screen you, bottom screen your partner, and the bat-capped blood vial. Only Thor owners benefit, so it waits.
+
+### Community characters (D111)
+A guide, a format and a module interface for adding characters (for example, Soma from *Aria of Sorrow*): a PS1 player overlay in C, built like our Maria (`maria/`), shipped as patches of code only, with its art converted from the player's own files. PS1 overlays are the one character format that also runs on SymphonyRecomp, so community work isn't tied to our engine.
 
 
 ### M8 leftovers (2026-10-21)
