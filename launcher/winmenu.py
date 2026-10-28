@@ -25,7 +25,6 @@ MENUS = [
     ("&View", [("Automatic", "layout:auto"), ("Side by side", "layout:side"), ("Stacked (vertical monitor)", "layout:stacked"),
                ("Player 1 only", "layout:p1"), ("Player 2 only", "layout:p2"),
                ("Player 2 in its own window", "layout:windows"), None,
-               ("Sharp pixels", "scaling:sharp"), ("Smooth", "scaling:smooth"), None,
                ("&Fullscreen\tF11", "fullscreen")]),
     ("&Controllers", [("&Who plays with which controller…", "controllers"), ("&Keyboard keys", "keys")]),
     ("&Help", [("&How to play", "help_play"), ("&Online troubleshooting", "help_online"), None,
@@ -107,10 +106,10 @@ class WinMenu:
         self._old = u.SetWindowLongPtrW(self.hwnd, GWLP_WNDPROC, ctypes.cast(self._proc, ctypes.c_void_p))
 
     def update(self, settings):
-        """Ticks the current layout, scaling and network simulation."""
+        """Ticks the current layout and network simulation."""
         if not self.ok:
             return
-        want = {f"layout:{settings.get('layout', 'auto')}", f"scaling:{settings.get('scaling', 'sharp')}",
+        want = {f"layout:{settings.get('layout', 'auto')}",
                 f"netsim:{settings.get('netsim') or 'off'}"}
         for action, cid in self.ids.items():
             if ":" in action:

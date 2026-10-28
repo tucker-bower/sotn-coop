@@ -21,6 +21,8 @@ void HideMap(void);
 s32 ApplySaveData(SaveData* save);
 void StoreSaveData(SaveData* save, s32 block, s32 cardIcon);
 void SetGameState(GameState gameState);
+void ClearBackbuffer(void);        // DRA
+void SetStageDisplayBuffer(void);  // DRA
 void PlaySfx(s32 sfxId);
 void SetFadeMode(FadeModes fadeMode);
 void UpdateFade(bool skipFollowup);
@@ -451,6 +453,11 @@ static void LoadSave(void) {
     D_8003C730 = 1; // as after loading a memory card save: keep the saved status
     g_GameEngineStep = Engine_Init;
     SetGameState(Game_NowLoading);
+    // Step 2 skips step 0 (Play_Reset), which would clear D_8003C730, and also sets the play
+    // display. From the title, its 512-wide buffers stayed: the game squeezed into the left half,
+    // and drawing over the partner's sprites in VRAM (Tucker's 0.12.0 test, 2026-10-28).
+    ClearBackbuffer();
+    SetStageDisplayBuffer();
     g_GameStep = 2;
     s_WaitingForHost = false;
     s_SaveLoaded = true;

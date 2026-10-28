@@ -247,6 +247,10 @@ def joint_save_and_resume(run):
             if a.read("g_GameState") == 1 and b.read("g_GameState") == 1:
                 break
         run.expect(a.read("g_GameState") == 1 and b.read("g_GameState") == 1, "both at the title screen")
+        for _ in range(600):  # until the title shows: its 512-wide picture (a long connect)
+            sub.step(1)
+            if a.raw_frame()[0] == 512 and b.raw_frame()[0] == 512:
+                break
         s.joint.resume()
         ok = False
         for i in range(3000):
@@ -262,6 +266,9 @@ def joint_save_and_resume(run):
                    sb["hand"] == saved[1]["hand"] and sb["level"] == saved[1]["level"],
                    "each with its own saved status")
         run.expect(a.read_bytes("g_CastleMap", 0x800) == b.read_bytes("g_CastleMap", 0x800), "same map")
+        sub.step(120)
+        widths = [g.raw_frame()[0] for g in (a, b)]  # the title is 512 wide, play 256 (Tucker's 0.12.0 test)
+        run.expect(widths == [256, 256], "the picture is back at the game's width after the title", widths=widths)
 
 
 def chaos(run, minutes):

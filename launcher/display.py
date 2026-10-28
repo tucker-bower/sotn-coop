@@ -4,9 +4,9 @@ Everything goes through SDL's GPU renderer, so a maximized or fullscreen window 
 to fill:
 - menus are drawn on a fixed-size canvas (CANVAS) and scaled to fit the window, letterboxed;
 - each game is drawn at its true 4:3 shape (a PlayStation picture is 4:3 whatever its pixel
-  width), never stretched (D76). "Sharp" scaling first enlarges it by whole pixels, then
-  smooths only the last fraction ("sharp bilinear"), so pixels stay crisp and even at any
-  window size; "Smooth" filters all the way;
+  width), never stretched (D76). It's first enlarged by whole pixels, then smoothed only the
+  last fraction ("sharp bilinear"), so pixels stay crisp and even at any window size (the
+  only scaling: Tucker removed "Smooth", 2026-10-28);
 - layouts: side by side, stacked (a vertical monitor), one player only, or player 2 in a
   window of its own (a second monitor or TV). Online, there's only your own game.
 The window remembers its size; F11 or Alt+Enter toggles fullscreen."""
@@ -37,8 +37,6 @@ GAP = 8
 LAYOUTS = ("auto", "side", "stacked", "p1", "p2", "windows")
 LAYOUT_NAMES = {"auto": "Automatic", "side": "Side by side", "stacked": "Stacked (vertical monitor)", "p1": "Player 1 only",
                 "p2": "Player 2 only", "windows": "Player 2 in its own window"}
-SCALINGS = ("sharp", "smooth")
-SCALING_NAMES = {"sharp": "Sharp", "smooth": "Smooth"}
 
 
 def fit(area, aspect=4 / 3):
@@ -95,27 +93,18 @@ class GameTexture:
         self.src = None
         self.big = None
         self.size = None
-        self.mode = None
-        self._last = None
 
-    def update(self, surface, scaling="sharp"):
-        if (self.src is None or self.size != surface.get_size() or self.mode != scaling):
-            self.src = texture(self.r, surface.get_size(), scaling == "smooth", streaming=True)
+    def update(self, surface):
+        if self.src is None or self.size != surface.get_size():
+            self.src = texture(self.r, surface.get_size(), False, streaming=True)
             self.big = None
-            self.mode = scaling
         self.src.update(surface)
         self.size = surface.get_size()
-        self._last = surface
 
-    def draw(self, rect, scaling):
+    def draw(self, rect):
         if self.src is None or not rect or rect.w <= 0:
             return
-        if scaling != self.mode and self._last is not None:
-            self.update(self._last, scaling)
-        if scaling == "smooth":
-            self.src.draw(dstrect=rect)
-            return
-        # Sharp: enlarge by whole pixels (nearest) to at least the target size, then smooth the
+        # Enlarge by whole pixels (nearest) to at least the target size, then smooth the
         # rest of the way down. Width and height scale separately (PlayStation pixels aren't square).
         sw, sh = self.size
         kx, ky = max(1, -(-rect.w // sw)), max(1, -(-rect.h // sh))
@@ -169,11 +158,6 @@ class Display:
     @property
     def layout(self):
         return self.settings.get("layout", "auto")
-
-    @property
-    def scaling(self):
-        s = self.settings.get("scaling", "sharp")
-        return s if s in SCALINGS else "sharp"
 
     def remember(self):
         try:
@@ -277,7 +261,7 @@ class Display:
     def _draw_games(self):
         rects = cells(self.layout, self.window.size, len(self.games))
         for g, rect in zip(self.games, rects):
-            g.draw(rect, self.scaling)
+            g.draw(rect)
 
     def present_games(self, frames, status=(), color=(230, 230, 230)):
         """frames: a Surface (or None: keep the last one) per game. status: lines for the bar."""
@@ -285,7 +269,7 @@ class Display:
         for i, f in enumerate(frames):
             if f is not None:
                 target = self.second[2] if (self.second and i == 1) else self.games[i]
-                target.update(f, self.scaling)
+                target.update(f)
                 if self.second and i == 1:
                     self.games[1].size = target.size
         self._last = ("games", (status, color))
@@ -295,7 +279,7 @@ class Display:
             win, ren, tex = self.second
             ren.draw_color = (0, 0, 0, 255)
             ren.clear()
-            tex.draw(fit((0, 0, *win.size)), self.scaling)
+            tex.draw(fit((0, 0, *win.size)))
             ren.present()
 
     def _draw_bar(self, lines, color):

@@ -4,7 +4,7 @@
                                                         a controller unplugged, pause, leave
     python launcher/uxdriver.py startup   [--out DIR]   Solo from a fresh install: seconds to the
                                                         first picture and to the title (M12 v1.0)
-    python launcher/uxdriver.py window    [--out DIR]   every layout and pixel mode, resized,
+    python launcher/uxdriver.py window    [--out DIR]   every layout, resized,
                                                         maximized, fullscreen; frame times
     python launcher/uxdriver.py menus     [--out DIR]   every menu-bar item (Windows: through the
                                                         real menu bar's window procedure)
@@ -482,9 +482,7 @@ def _window(pg):
     steps = steps[:i]  # into the game, both playing
 
     for layout in ("side", "stacked", "p1", "p2", "windows", "auto"):
-        for scaling in ("sharp", "smooth"):
-            steps += [("menu", f"layout:{layout}"), ("menu", f"scaling:{scaling}"), ("wait", 20),
-                      ("shot", f"{layout}-{scaling}")]
+        steps += [("menu", f"layout:{layout}"), ("wait", 20), ("shot", layout)]
     for w, h in ((1280, 720), (1920, 1080), (1080, 1920), (700, 400)):
         steps += [("call", lambda d, w=w, h=h: setattr(d.launcher.display.window, "size", (w, h))),
                   ("wait", 20), ("shot", f"resized-{w}x{h}")]
@@ -503,9 +501,9 @@ def _menus(pg):
     for action, screen in (("help_play", "How to play"), ("help_online", "Online troubleshooting"),
                            ("keys", "Keyboard keys"), ("about", "About")):
         steps += [("menu", action), ("screen", screen), ("shot", action), ("key", pg.K_RETURN), ("screen", "Home")]
-    for action in ("layout:stacked", "scaling:smooth", "netsim:wifi", "netsim:off", "layout:auto", "scaling:sharp"):
+    for action in ("layout:stacked", "netsim:wifi", "netsim:off", "layout:auto"):
         steps += [("menu", action), ("wait", 5)]
-    steps += [("expect", lambda d: d.launcher.settings.get("scaling") == "sharp" and not d.launcher.settings.get("netsim"),
+    steps += [("expect", lambda d: d.launcher.settings.get("layout") == "auto" and not d.launcher.settings.get("netsim"),
                "View and Developer menu items change the settings")]
     for action, screen in (("savestates", "Savestates"), ("debug_starts", "Debug starts"), ("controllers", "Press a button"),
                            ("new", "Press a button"), ("continue", "Press a button")):
@@ -730,10 +728,8 @@ def _hud(pg):
     for w, h in ((1032, 592), (1600, 900), (800, 1000)):
         steps += [("call", lambda d, w=w, h=h: setattr(d.launcher.display.window, "size", (w, h))), ("wait", 20)]
         for layout in ("side", "stacked", "p1", "p2", "windows", "auto"):
-            for scaling in ("sharp", "smooth"):
-                steps += [("menu", f"layout:{layout}"), ("menu", f"scaling:{scaling}"), ("wait", 20),
-                          hud_check(f"{w}x{h}-{layout}-{scaling}")]
-    steps += [("menu", "layout:auto"), ("menu", "scaling:sharp"),
+            steps += [("menu", f"layout:{layout}"), ("wait", 20), hud_check(f"{w}x{h}-{layout}")]
+    steps += [("menu", "layout:auto"),
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
     return steps
