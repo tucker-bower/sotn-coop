@@ -105,3 +105,28 @@ def m13_partner_body_follows(run):
     run.expect(samples > 20 and worst <= 48, "A's copy of B stays with B (within the snap distance)",
                worst_px=worst, samples=samples)
     run.expect(a.snapshot()["hp"] > 0, "A plays on")
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def m13_partner_status(run):
+    """The partner's body fights as the partner: B's status (stats, level, equipment) reaches A
+    and is in A's copy of B, while A's own status is untouched."""
+    from link.mailbox import OPT_PARTNER_SIM, STATUS_RANGES
+    a, b = run.s.a, run.s.b
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(30)
+    mine = b"".join(a.read_bytes(addr, n) for addr, n in STATUS_RANGES)
+    b.write(0x80097BE8, 42)                    # g_Status.level
+    b.write(0x80097BB8, 77)                    # statsBase[STR]
+    b.write(0x80097C00, 0x0D)                  # equipment[0], the right hand
+    run.step(60)
+    theirs = b"".join(b.read_bytes(addr, n) for addr, n in STATUS_RANGES)
+    # where g_Status's two ranges are in the copy (partner.c's s_Regions, in order)
+    body = symbols()["g_CoopSpikeBody"]
+    ofs = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4
+    copy = a.read_bytes(body, 0x48, ofs) + a.read_bytes(body, 0x34, ofs + 0x48)
+    run.expect(copy == theirs, "A's copy of B has B's status",
+               differ=[i for i in range(len(theirs)) if copy[i] != theirs[i]][:8])
+    now = b"".join(a.read_bytes(addr, n) for addr, n in STATUS_RANGES)
+    same = [i for i in range(len(mine)) if now[i] != mine[i] and not 0 <= i < 0x18]  # hp..mpMax may tick
+    run.expect(not same, "A's own status is its own", differ=same[:8])

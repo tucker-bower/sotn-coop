@@ -47,6 +47,21 @@ typedef struct {
 #define WEAPON_OVL_SIZE 0x3000    // the overlay, as at 0x8017A000 (hand 0) / 0x8017D000 (hand 1)
 #define WEAPON_SHEET_SIZE 0x4000  // its tile sheet: 0x40 x 0x80 VRAM words (256 x 128, 4bpp)
 #define WEAPON_CLUT_SIZE 0x300    // its 24 palettes (0x110 + hand * 24 on)
+// M13: the partner's status (g_Status from hp to statsTotal, and from subWeapon to the elements:
+// stats, level, equipment), for the partner's body (partner.c). The host reads it from the
+// partner's game and writes it here, magic last, when it changes.
+#define STATUS_PARTNER_ADDR 0x80730000
+#define STATUS_MAGIC 0x53544154 // 'STAT'
+#define STATUS_A 0x80097BA0     // g_Status.hp
+#define STATUS_A_SIZE 0x48
+#define STATUS_B 0x80097BFC     // g_Status.subWeapon
+#define STATUS_B_SIZE 0x34
+typedef struct {
+    /* 0x00 */ u32 magic; // STATUS_MAGIC once written
+    /* 0x04 */ u8 a[STATUS_A_SIZE];
+    /* 0x4C */ u8 b[STATUS_B_SIZE];
+} CoopStatus; // size = 0x80
+
 typedef struct {
     /* 0x00 */ u32 magic; // WEAPON_MAGIC once written
     /* 0x04 */ u32 seq;   // bumped with each new copy (the host sends on a change)

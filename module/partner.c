@@ -28,8 +28,8 @@ static const Region s_Regions[] = {
     {0x80097D1C, 0x280},                // g_PlayerDraw[16]
     {0x800ACF74, 8},                    // D_800ACF74, g_AlucardChairSleepTimer
     {0x8013B5E8, 4},                    // knockback invincibility, HUD HP delay
-    {0x80097BA0, 0x48},                 // g_Status: hp .. statsTotal
-    {0x80097BFC, 0x34},                 // g_Status: subWeapon .. elements
+    {STATUS_A, STATUS_A_SIZE},          // g_Status: hp .. statsTotal (the partner's: PutStatus)
+    {STATUS_B, STATUS_B_SIZE},          // g_Status: subWeapon .. elements
     {0x8013796C, 0x30},                 // g_PlayerHud
     {0x80139828, 0x40},                 // g_StatBuffTimers
     {0x80138FC0, 0x40},                 // g_ButtonCombo
@@ -117,6 +117,28 @@ static void SwapIn(void) {
     }
 }
 
+// The partner's own status (stats, level, equipment: link.h's CoopStatus, sent by its host) in
+// the copy, so it fights and casts as itself. Without it (an older partner), it keeps player 1's.
+static void PutStatus(void) {
+    const CoopStatus* st = (const CoopStatus*)STATUS_PARTNER_ADDR;
+    u8* body = (u8*)g_CoopSpikeBody + 64 * 0xBC;
+    s32 i;
+    u32 k;
+
+    if (st->magic != STATUS_MAGIC) {
+        return;
+    }
+    for (i = 1; i < LEN(s_Regions); i++) {
+        const u8* from = s_Regions[i].addr == STATUS_A ? st->a : s_Regions[i].addr == STATUS_B ? st->b : NULL;
+        if (from) {
+            for (k = 0; k < s_Regions[i].len; k++) {
+                body[k] = from[k];
+            }
+        }
+        body += s_Regions[i].len;
+    }
+}
+
 static void SwapOut(void) {
     s_ScrollX = g_Tilemap.scrollX.i.hi;
     s_ScrollY = g_Tilemap.scrollY.i.hi;
@@ -161,6 +183,9 @@ void PartnerFrame(void) {
     }
     pad = PartnerLive() ? g_CoopLink.partnerPad : g_CoopSpikePad;
     t0 = VSync(1);
+    if (PartnerLive()) {
+        PutStatus();
+    }
     SwapIn();
     if (PartnerLive()) { // pulled to their real spot when it drifts
         s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;

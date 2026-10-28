@@ -8,6 +8,9 @@ LINK_VERSION = 11
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
+# M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
+STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
+STATUS_RANGES = ((0x80097BA0, 0x48), (0x80097BFC, 0x34))
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -165,6 +168,17 @@ class Mailbox:
         base = WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
         self.adapter.write_bytes(base + 0x20, blob[0x20:])
         self.adapter.write_bytes(base, blob[:0x20])
+
+    def self_status(self):
+        """This game's player status (stats, level, equipment): g_Status's two ranges."""
+        return b"".join(self.adapter.read_bytes(a, n) for a, n in STATUS_RANGES)
+
+    def write_partner_status(self, blob):
+        """The partner's status, for its body (module/partner.c); magic last."""
+        if len(blob) != sum(n for _, n in STATUS_RANGES):
+            return
+        self.adapter.write_bytes(STATUS_PARTNER + 4, blob)
+        self.adapter.write_bytes(STATUS_PARTNER, struct.pack("<I", STATUS_MAGIC))
 
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())

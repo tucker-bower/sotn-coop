@@ -14,6 +14,7 @@ from .transport import (TAG_ACK, TAG_BYE, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
+STATUS_EVERY = 10  # frames: the most often this player's status is sent (M13)
 
 
 def _presence(payload):
@@ -55,6 +56,7 @@ class Host:
         self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
         self._prims_sent, self._prims_seq = False, 0
         self._weapons_sent = [None, None]  # each hand's weapon copy last sent (module/weapons.c)
+        self._status_sent, self._status_at = None, -STATUS_EVERY  # M13: this player's status, for the partner's body
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
@@ -121,6 +123,7 @@ class Host:
         self.partner_left = False  # back again
         self._sprites_seq = self._prims_seq = 0
         self._weapons_sent = [None, None]
+        self._status_sent = None
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
@@ -166,6 +169,16 @@ class Host:
                 self._weapons_sent[hand] = seq
                 blob = zlib.compress(self.mailbox.self_weapon(hand), 6)
                 self.send_control({"op": "weapon", "hand": hand, "data": base64.b64encode(blob).decode("ascii")})
+
+    def _send_status(self):
+        """This player's status (stats, level, equipment: M13's partner body, module/partner.c)
+        when it changes, at most every STATUS_EVERY frames. Reliable: the last one must arrive."""
+        if not self.partner_hello or self._frames - self._status_at < STATUS_EVERY:
+            return
+        blob = self.mailbox.self_status()
+        if blob != self._status_sent:
+            self._status_sent, self._status_at = blob, self._frames
+            self.send_control({"op": "status", "data": base64.b64encode(blob).decode("ascii")})
 
     def _take_weapon(self, msg):
         try:
@@ -284,6 +297,7 @@ class Host:
             self.transport.send(TAG_PRIM, zlib.compress(prims, 1))
         self._prims_sent = bool(prims)
         self._send_weapons()
+        self._send_status()
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:
             self._snap_sent = seq
@@ -358,6 +372,11 @@ class Host:
                     self._note("in", f"ctrl {msg.get('op')}")
                     if msg.get("op") == "weapon":
                         self._take_weapon(msg)
+                    elif msg.get("op") == "status":
+                        try:
+                            self.mailbox.write_partner_status(base64.b64decode(msg["data"]))
+                        except (KeyError, TypeError, ValueError):
+                            pass
                     else:
                         self._ctrl_inbox.append(msg)
                 except ValueError:
