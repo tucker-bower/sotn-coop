@@ -72,9 +72,32 @@ def no_system_fonts():
     pygame.sysfont.is_init = True
 
 
+def restore(priv):
+    """After a signing-key switch (D112, android/device.py switch-key): the app's folder was backed
+    up and the app reinstalled; the backup comes back through the private folder (adb can only
+    reach that one as the app), and is copied here into the app's folder, as the app's own files.
+    Nothing already there is overwritten."""
+    src = priv / "restore"
+    if not src.is_dir():
+        return
+    import shutil
+    dst = Path(os.environ["COOP_DATA"])
+    n = 0
+    for f in sorted(src.rglob("*")):
+        to = dst / f.relative_to(src)
+        if f.is_dir():
+            to.mkdir(parents=True, exist_ok=True)
+        elif not to.exists():
+            shutil.copy2(f, to)
+            n += 1
+    shutil.rmtree(src)
+    print(f"COOP-RESTORED {n} files", flush=True)
+
+
 def main():
     no_system_fonts()
     priv = Path(os.environ.get("ANDROID_PRIVATE", HERE.parent))
+    restore(priv)
     test = priv / "coop-ux.json"
     if test.exists():
         cfg = json.loads(test.read_text())

@@ -69,6 +69,21 @@ def check_stage(stage):
     print(f"game data check: {n} files, all program files")
 
 
+def check_apk_key(apk):
+    """Refuses an APK not signed with the release key (D112): an update signed with another key
+    won't install over a player's app without an uninstall, which deletes their saves."""
+    sys.path.insert(0, str(MOD / "harness"))
+    from coop_env import ENV
+    want = ENV.get("android", {}).get("cert_sha256", "").lower()
+    tools = sorted((Path.home() / "android" / "build-tools").glob("*/apksigner"))
+    out = subprocess.run([str(tools[-1]), "verify", "--print-certs", str(apk)], capture_output=True,
+                         text=True).stdout
+    got = [line.split(":", 1)[1].strip().lower() for line in out.splitlines() if "certificate SHA-256 digest" in line]
+    if not want or got != [want]:
+        raise SystemExit(f"{apk.name} isn't signed with the release key (D112): {got or 'not signed'}")
+    print("APK signed with the release key")
+
+
 def sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -107,6 +122,7 @@ def main():
             sh(MOD / "android" / "build.sh", v)
         if not apk.exists():
             raise SystemExit(f"no Android app: {apk} (android/build.sh {v})")
+        check_apk_key(apk)
         assets.append(tmp / "SOTN-Coop.apk")
         shutil.copyfile(apk, assets[-1])
     sums = tmp / "SHA256SUMS.txt"

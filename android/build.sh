@@ -62,4 +62,16 @@ ANDROIDSDK="$A" ANDROIDNDK="$A/ndk/25.2.9519653" ANDROIDAPI=34 NDKAPI=24 \
     --local-recipes "$MOD/android/recipes" --ignore-setup-py > "$OUT/p4a.log" 2>&1 || { tail -40 "$OUT/p4a.log"; exit 1; }
 APK=$(ls -t "$OUT"/*.apk | head -1)
 mv "$APK" "$OUT/SOTN-Coop-$VERSION.apk"
+
+echo "== signing (D112: the release key, else this PC's debug key)"
+read -r KS PW AL < <("$PY" -c "import sys, os; sys.path.insert(0, '$MOD/harness'); from coop_env import ENV
+a = ENV.get('android', {}); e = os.path.expanduser
+print(e(a.get('keystore', '-')), e(a.get('password_file', '-')), a.get('alias', '-'))")
+if [ -f "$KS" ] && [ -f "$PW" ]; then
+    "$(ls -d "$A"/build-tools/* | sort -V | tail -1)/apksigner" sign --ks "$KS" --ks-key-alias "$AL" \
+        --ks-pass "file:$PW" "$OUT/SOTN-Coop-$VERSION.apk"   # (the key has the same password)
+    echo "release-signed"
+else
+    echo "WARNING: no release keystore ($KS): debug-signed, can't be released or installed over a release" >&2
+fi
 ls -l "$OUT/SOTN-Coop-$VERSION.apk"

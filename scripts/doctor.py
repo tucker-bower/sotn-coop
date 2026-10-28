@@ -6,6 +6,7 @@ Paths come from env.example.toml, overridden by env.toml.
 """
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,11 @@ check(r.returncode == 0, "us build matches retail (115 files)" if r.returncode =
 print("== Windows side")
 for key in ("win_emulators", "win_masters"):
     check(path(ENV["paths"][key]).exists(), f"{key}: {ENV['paths'][key]}", "edit env.toml", required=False)
+
+print("== Android release key (D112)")
+ks = Path(os.path.expanduser(ENV.get("android", {}).get("keystore", "-")))
+check(ks.exists(), f"keystore: {ks}", "restore it and password_file from Tucker's password manager (env.example.toml [android])",
+      required=False)
 
 print("== hygiene")
 tracked = subprocess.run(["git", "ls-files", "disks", "*.iso", "*.cue", "*.bin", "*.state", "*.mcd", ".env"],
