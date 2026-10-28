@@ -107,6 +107,7 @@ static void MusicUpdate(void) {
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    g_CoopLink.selfPad = g_pads[0].pressed; // M13: the partner's copy of us runs on these
     CharacterFrame();
     SpellsUpdate();
     OffhandUpdate();
@@ -152,7 +153,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     CapturePresence(&g_CoopLink.self);
     SpritesCapture();
     PrimsCapture();
-    if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES) {
+    if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES && !PartnerSimulated()) {
         DrawPuppet(&g_CoopLink.partner);
     }
 }

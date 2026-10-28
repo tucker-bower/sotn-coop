@@ -4,5 +4,6 @@
 
 void PartnerFrame(void); // after the game's update, before drawing (coop.c RenderEntitiesHook)
 void PartnerDraw(void);  // after player 1's RenderEntities
+bool PartnerSimulated(void); // the partner's body is the simulated one this frame (no puppet)
 
 #endif

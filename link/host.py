@@ -16,6 +16,14 @@ from .transport import (TAG_ACK, TAG_BYE, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL
 HELLO_EVERY = 60  # frames
 
 
+def _presence(payload):
+    """A partner's presence, and its buttons after it (M13; 0 from an older partner)."""
+    p = Presence.unpack(payload)
+    if len(payload) >= Presence.SIZE + 2:
+        p.pad = struct.unpack_from("<H", payload, Presence.SIZE)[0]
+    return p
+
+
 class Host:
     def __init__(self, mailbox, transport, rank=0, patch_crc=None, playout=False):
         """rank: 0 or 1, distinct per game; breaks shared-room authority ties (design/M4).
@@ -265,7 +273,8 @@ class Host:
         self.mailbox.set_rank(self.rank)
         self.mailbox.set_character(self.character)
         self.mailbox.set_options(self.options)
-        self.transport.send(TAG_PRESENCE, self.mailbox.self_presence().pack())
+        me = self.mailbox.self_presence()
+        self.transport.send(TAG_PRESENCE, me.pack() + struct.pack("<H", me.pad & 0xFFFF))
         sprites = self.mailbox.self_sprites()
         if sprites or self._sprites_sent:  # one empty message after the last, to clear them
             self.transport.send(TAG_SPRT, sprites)
@@ -293,9 +302,9 @@ class Host:
             tag, seq, frame, payload, addr = dgram
             if tag == TAG_PRESENCE:
                 if self.playout:
-                    self.playout.push_presence(now, frame, Presence.unpack(payload))
+                    self.playout.push_presence(now, frame, _presence(payload))
                 elif seq > self._latest_seq:  # UDP may reorder: keep the newest
-                    self._latest_seq, latest = seq, Presence.unpack(payload)
+                    self._latest_seq, latest = seq, _presence(payload)
             elif tag == TAG_SNAP:
                 if self.playout:
                     self.playout.push_snapshot(now, frame, payload)

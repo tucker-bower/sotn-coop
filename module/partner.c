@@ -1,14 +1,16 @@
-// M13 spike (design/M13-partner-player.md): the partner as a real second player. Each frame,
-// after the game has updated player 1, the partner's copy of "the player" is swapped into RAM,
-// the game's own player update runs on it with the partner's buttons, and it's swapped back out.
-// Off unless OPT_PARTNER_SIM is set (the harness, for the spike's measurements). Cosmetic: no hit
-// detection runs for it. Drawing is the next step (the player's sprite goes to one fixed VRAM
-// spot each frame: see the design's spike notes).
+// M13 (design/M13-partner-player.md): the partner as a real second player. Each frame, after the
+// game has updated player 1, the partner's copy of "the player" is swapped into RAM, the game's
+// own player update runs on it with the partner's buttons (CoopLink.partnerPad, played out with
+// its presence), and it's swapped back out. It exists while the partner is in our room, and is
+// pulled to their real spot when it drifts past SNAP_PX. Cosmetic: no hit detection runs for it.
+// Off unless OPT_PARTNER_SIM is set (not finished: Alucard partners only, no VRAM bank yet).
+// Without a partner (the harness's spike test), it's a copy of player 1 on g_CoopSpikePad.
 #define COOP_MODULE
 #include <game.h>
 #include "coop_api.h"
 #include "link.h"
 #include "partner.h"
+#include "puppet.h"
 
 void EntityAlucard(void);        // DRA
 void UpdatePlayerEntities(void); // DRA
@@ -36,6 +38,8 @@ static const Region s_Regions[] = {
 u32 g_CoopSpikeBody[BODY_SIZE / 4]; // the partner's copy, while player 1's is in RAM (its entity 0 first)
 static bool s_Made;
 static u16 s_PrevPad;
+static s16 s_ScrollX, s_ScrollY; // the camera when the copy was last swapped out
+#define SNAP_PX 48
 
 u32 g_CoopSpikePad;   // harness: the partner's buttons (PAD_*)
 u32 g_CoopSpikeLines; // the last partner frame's cost, in scanlines (263 a frame)
@@ -98,31 +102,87 @@ static void Make(void) {
     s_Made = true;
 }
 
+// Entity positions are on screen (relative to the camera), and the camera moved while the copy
+// was out of RAM: its slots move with it, as the game moves its own entities.
+static void SwapIn(void) {
+    s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
+    s32 i;
+
+    Swap();
+    for (i = 0; i < 64; i++) {
+        if (i == 0 || g_Entities[i].entityId) {
+            g_Entities[i].posX.i.hi += dx;
+            g_Entities[i].posY.i.hi += dy;
+        }
+    }
+}
+
+static void SwapOut(void) {
+    s_ScrollX = g_Tilemap.scrollX.i.hi;
+    s_ScrollY = g_Tilemap.scrollY.i.hi;
+    Swap();
+}
+
+static bool PartnerLive(void) { return g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES; }
+
+// The partner is in this room, in play, as Alucard (other characters: the VRAM bank, later).
+static bool PartnerHere(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
+           (p->flags & PRESENCE_IN_PLAY) && p->character == 0 && g_PlayableCharacter == 0;
+}
+
+bool PartnerSimulated(void) {
+    return s_Made && (g_CoopOptions & OPT_PARTNER_SIM) && (!PartnerLive() || PartnerHere());
+}
+
 void PartnerFrame(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
     Pad pad0;
     Entity* cur;
     s32 t0;
+    u16 pad;
 
     if (!(g_CoopOptions & OPT_PARTNER_SIM) || g_GameState != Game_Play || g_GameStep != Play_Default) {
         return;
     }
+    if (PartnerLive() && !PartnerHere()) {
+        s_Made = false; // gone from this room: made again where they are when they're back
+        return;
+    }
     if (!s_Made) {
         Make();
+        s_ScrollX = g_Tilemap.scrollX.i.hi;
+        s_ScrollY = g_Tilemap.scrollY.i.hi;
+        if (PartnerLive()) { // where they are (their presence is in room pixels)
+            ((Entity*)g_CoopSpikeBody)->posX.i.hi = p->x - g_Tilemap.scrollX.i.hi;
+            ((Entity*)g_CoopSpikeBody)->posY.i.hi = p->y - g_Tilemap.scrollY.i.hi;
+        }
     }
+    pad = PartnerLive() ? g_CoopLink.partnerPad : g_CoopSpikePad;
     t0 = VSync(1);
-    Swap();
+    SwapIn();
+    if (PartnerLive()) { // pulled to their real spot when it drifts
+        s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
+        if (PLAYER.posX.i.hi - x > SNAP_PX || x - PLAYER.posX.i.hi > SNAP_PX ||
+            PLAYER.posY.i.hi - y > SNAP_PX || y - PLAYER.posY.i.hi > SNAP_PX) {
+            PLAYER.posX.i.hi = x;
+            PLAYER.posY.i.hi = y;
+            PLAYER.velocityX = PLAYER.velocityY = 0;
+        }
+    }
     pad0 = g_pads[0];
-    g_pads[0].pressed = g_CoopSpikePad;
-    g_pads[0].tapped = g_CoopSpikePad & ~s_PrevPad;
+    g_pads[0].pressed = pad;
+    g_pads[0].tapped = pad & ~s_PrevPad;
     g_pads[0].repeat = g_pads[0].tapped;
-    s_PrevPad = g_CoopSpikePad;
+    s_PrevPad = pad;
     cur = g_CurrentEntity;
     g_CurrentEntity = &PLAYER;
     EntityAlucard();
     UpdatePlayerEntities();
     g_CurrentEntity = cur;
     g_pads[0] = pad0;
-    Swap();
+    SwapOut();
     g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter
     if (g_CoopSpikeLines > g_CoopSpikeMax) {
         g_CoopSpikeMax = g_CoopSpikeLines;
@@ -135,10 +195,10 @@ void PartnerDraw(void) {
     static u16 frames[256 - 64];
     s32 i;
 
-    if (!s_Made || !(g_CoopOptions & OPT_PARTNER_SIM) || g_GameState != Game_Play) {
+    if (!PartnerSimulated() || g_GameState != Game_Play) {
         return;
     }
-    Swap();
+    SwapIn();
     for (i = 64; i < 256; i++) {
         frames[i - 64] = g_Entities[i].animCurFrame;
         g_Entities[i].animCurFrame = 0;
@@ -147,7 +207,7 @@ void PartnerDraw(void) {
     for (i = 64; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i - 64];
     }
-    Swap();
+    SwapOut();
 }
 
 // Where the partner is (the harness checks it moves as its buttons say).

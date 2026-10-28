@@ -31,6 +31,7 @@ CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
 SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2163C  # u32 count, then CoopSprite[24] (0x14 each): sprites.c (M12)
 SPRITE_SIZE, N_SPRITES = 0x14, 24
 SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] less next (0x30 each)
+SELF_PAD, PARTNER_PAD = 0x22428, 0x2242C  # M13: each player's buttons, with the presence
 PRIM_SIZE, N_PRIMS = 0x30, 32
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
@@ -75,11 +76,12 @@ class Presence:
     scroll_y: int = 0
     role: int = 0
     aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
+    pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 
     SIZE = _PRESENCE.size
 
     def pack(self):
-        return _PRESENCE.pack(*astuple(self))
+        return _PRESENCE.pack(*astuple(self)[:-1])
 
     @classmethod
     def unpack(cls, data):
@@ -110,10 +112,14 @@ class Mailbox:
         return self.header()[2]
 
     def self_presence(self):
-        return Presence.unpack(self.adapter.read_bytes(self.address + SELF, Presence.SIZE))
+        p = Presence.unpack(self.adapter.read_bytes(self.address + SELF, Presence.SIZE))
+        p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PAD, 4))[0]
+        return p
 
     def partner_presence(self):
-        return Presence.unpack(self.adapter.read_bytes(self.address + PARTNER, Presence.SIZE))
+        p = Presence.unpack(self.adapter.read_bytes(self.address + PARTNER, Presence.SIZE))
+        p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_PAD, 4))[0]
+        return p
 
     def partner_age(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_AGE, 4))[0]
@@ -162,6 +168,7 @@ class Mailbox:
 
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())
+        self.adapter.write_bytes(self.address + PARTNER_PAD, struct.pack("<I", presence.pad))
         self.adapter.write_bytes(self.address + PARTNER_AGE, struct.pack("<I", 0))
 
     # --- event rings (module/link.h). Each event is its raw 8 bytes: the host only relays them.
