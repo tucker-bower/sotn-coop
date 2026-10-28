@@ -18,3 +18,8 @@ Both players need 0.12.0-dev; the link version changed.
 7. **Debug starts (Developer › Debug starts):** Bosses, **Scenes** and Places, each with that point's level and gear. The Scenes: Maria in the Alchemy Lab, Maria in the Royal Chapel, the Castle Keep. The Librarian now works from his start (walk left: he greets you, then his shop opens). **Please check Maria in the Center the real way:** go into the Center through its door on her floor; she should talk and give you the Holy Glasses, and you should get control back. Her debug start doesn't finish the scene yet.
 
 F9 saves a report whenever something looks wrong.
+
+### For 1.0 (2026-10-27)
+- **The Lesser Demon, Olrox and Richter:** after you beat each one, the fight should end normally (music, the way on opens). The automated run can't check these three the way the game does (its bot can't land their last hit).
+- **Maria in the Center:** see item 7.
+- **Richter or Maria with the Gravity Boots:** try a high ledge Alucard reaches with his super jump (a decision is open on how high theirs should go: STATUS).

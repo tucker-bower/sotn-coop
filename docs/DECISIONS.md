@@ -602,3 +602,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - If, with the same relics, Richter and Maria jump at least as high and as far as Alucard, every room Alucard can cross with those relics they can cross too. The room's other gates have per-character tests already (mist grates, low gaps, poison water; blue doors and the ferryman read only the relic). `m12_envelope_{richter,maria}` measures each relic step against Alucard's from the same spot.
 - **Why:** a collision-tile planner with each character's physics is several usage windows and its own source of false results; the envelope is one test, measured in the real game.
 - It found two gaps (a decision for Tucker, STATUS): with Gravity Boots, Maria's high jump reaches 191 px and Richter's 261 px against Alucard's 331 px; with the Leap Stone only, Richter's backflip adds little height (63 px against 101 px). Climbing with the Soul of Bat is unlimited for both.
+
+**D120: The first-castle playthrough is chained by boss, with teleports between** (agent-default, 2026-10-27; `design/M12-v1-release.md` work item 4)
+- `m12_chain_first_castle_long`: both games play the 12 bosses in route order, carrying what they earn; between bosses, the teleport, and that stretch's relics and story flags. Walking the routes is left to the gate and movement tests (D119): scripted routes for every stretch would be several usage windows and brittle.
+- Time-attack records are reported, not asserted: a scripted kill can skip the death sequence that writes one.
