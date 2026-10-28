@@ -197,3 +197,74 @@ def m12_familiars(run, ch):
     report(run, got)
     bad = [g for g in got if not g["ok"]]
     run.expect(not bad, f"all 5 familiars work for {NAMES[ch].capitalize()}", bad=bad)
+
+
+# --- subweapons and item crashes ------------------------------------------------------------
+SUBWEAPON, HEARTS, HEARTS_MAX = 0x80097BFC, 0x80097BA8, 0x80097BAC  # g_Status
+SUBWEAPONS = range(1, 10)  # SUBWPN_DAGGER..SUBWPN_AGUNEA (include/game.h): the castle's pickups
+# Known bug (STATUS, M12 v1.0 known bugs): Maria has guardians, not Alucard's subweapons, and
+# nothing maps the cross, bible, stopwatch, rebound stone or agunea to one: she throws nothing.
+# The test passes while exactly these fail, so a new failure still shows.
+KNOWN = {("m12_subweapons", CHAR_MARIA): {4, 5, 6, 7, 9}}
+
+
+def use_subweapon(run, inputs):
+    """(hearts spent, new entities in the player's slots) while the inputs play, then 90 frames."""
+    e = run.emu
+    e.write(HEARTS_MAX, 200, "<i")
+    e.write(HEARTS, 200, "<i")  # Alucard's cross costs 100
+    before, seen = player_ids(e), set()
+    for b in inputs + [""] * 90:
+        run.step(1, b)
+        seen |= player_ids(e) - before
+    return 200 - e.read(HEARTS, "<i"), len(seen)
+
+
+def subweapon_sweep(run, ch, inputs, relics=()):
+    e, mb = run.emu, mailbox(run)
+    if ch != CHAR_ALUCARD:
+        reload_as(run, mb, ch)
+    to_the_hall(run, mb)
+    start = e.save_state()
+    got = []
+    for sub in SUBWEAPONS:
+        e.load_state(start)
+        for r in relics:
+            e.write(STATUS, RELIC_ON, "<B", r)
+        e.write(SUBWEAPON, sub, "<i")
+        run.step(2)
+        hearts, made = use_subweapon(run, inputs)
+        alive = e.snapshot()["hp"] > 0 and e.read("g_GameState") == 2  # still playing
+        got.append({"subweapon": sub, "hearts": hearts, "entities": made, "playing": alive,
+                    "ok": hearts > 0 and made > 0 and alive})
+    report(run, got)
+    return got
+
+
+@per_character
+def m12_subweapons(run, ch):
+    """Every subweapon the castle has (1-9), thrown by every character (up + attack): it costs
+    hearts, makes its entities, and the game plays on. Maria's guardians stand in for some of them
+    (her code's mapping); what each one does is in the report."""
+    got = subweapon_sweep(run, ch, ["up+square"] * 2)
+    known = KNOWN.get(("m12_subweapons", ch), set())
+    bad = [g for g in got if not g["ok"] and g["subweapon"] not in known]
+    run.expect(not bad, f"every subweapon works for {NAMES[ch].capitalize()}", bad=bad)
+    fixed = [g["subweapon"] for g in got if g["ok"] and g["subweapon"] in known]
+    run.expect(not fixed, "a known bug is fixed: take it off KNOWN", fixed=fixed)
+
+
+def _crashes(run, ch):
+    """Every item crash (Richter) and guardian crash (Maria), with Echo of Bat (M8b §3): triangle
+    spends the crash's hearts and makes its entities, for every subweapon."""
+    got = subweapon_sweep(run, ch, ["triangle"] * 2, relics=(ECHO_OF_BAT,))
+    bad = [g for g in got if not g["ok"]]
+    run.expect(not bad, f"every crash works for {NAMES[ch].capitalize()}", bad=bad)
+
+
+for _ch in (CHAR_RICHTER, CHAR_MARIA):
+    def _one(run, ch=_ch):
+        return _crashes(run, ch)
+    _one.__name__ = f"m12_crashes_{NAMES[_ch]}"
+    _one.__doc__ = _crashes.__doc__
+    scenario(start="entrance", disc=COOP_DISC)(_one)
