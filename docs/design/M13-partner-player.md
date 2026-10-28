@@ -53,3 +53,10 @@ Go/no-go to Tucker if a measurement misses its target.
 
 ## Budget
 About 8–12 usage windows: the spike 1–2, the swap and drawing 4–6, familiars, sound and game feel 2–3, removing the puppet 1.
+
+## Spike notes (2026-10-27, branch `coop-m13-partner-player`)
+- **Where it runs:** DRA's main loop calls `CoopUpdate()` before `UpdateGame()` and `CoopRenderEntities()` right after (`src/dra/42398.c`). The partner's frame goes in the render hook: after the game has updated player 1, before anything is drawn.
+- **What gets swapped** (the other project's list, `mods/shared/CoopCore.cs` `Regions`, checked against ours): entity slots 0–63 (12 KB), `g_Player` (0x3D0), the DRA player statics 0x80137FB4–0x80138454, `g_PlayerDraw` (0x280), `D_800ACF74` (8), 0x8013B5E8 (4), `g_Status` stats (0x48) and gear (0x34), `g_PlayerHud` (0x30), `g_StatBuffTimers` (0x40), `g_ButtonCombo` (0x40): about 14.5 KB, so four copies a frame are about 58 KB. Weapon overlays (24 KB) only when the partner's weapons differ; the familiar overlay (40 KB) only when the familiars differ. Not needed here: their 208 KB player-overlay slot (our Richter and Maria live in the 8 MB area already, D7).
+- **The update:** `EntityAlucard()` (0x8010A5BC) with `g_CurrentEntity = PLAYER`, then `UpdatePlayerEntities()` (0x8011A4D0), with the partner's buttons in `g_pads[0]`. No hit detection (cosmetic in a shared room, as now).
+- **Drawing only the partner:** `RenderEntities()` walks all 256 slots and skips any with `animCurFrame == 0`. For the partner's pass: swap its slots 0–63 in, zero `animCurFrame` of slots 64–255 (192 halfwords, kept aside), call it, put everything back.
+- **The blocker for graphics:** Alucard's current sprite is uploaded to a fixed VRAM spot each frame, so a second player's upload would overwrite the first's. That's the 2 MB VRAM patch (a private bank), or for two Alucards a second upload spot in spare VRAM. The spike measures the simulation first (frame cost, RAM, determinism), graphics second.
