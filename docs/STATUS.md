@@ -105,7 +105,7 @@ _Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; d
   - **Release draft v0.11.0** (the v0.9.0 draft, retagged; 2026-10-25 15:14): `SOTN-Coop-setup.exe` (0.11.0, sha256 6469…4013) and `SOTN-Coop.apk` (e7c8…f949), notes `docs/releases/v0.11.0.md`. Includes the launcher's off-screen window fix (Tucker's saved position was x = −3267, on no monitor). Not yet installed on the PC or the Thor.
 ## Next (M12 v1.0, design `docs/design/M12-v1-release.md`, approved; D109–D116)
 1. ~~**Licence**~~ (done 2026-10-27): `LICENSE` (AGPL-3.0), `NOTICE`, `licenses/`, in the installer and the APK; `release.py` refuses a release without them. GitHub shows the licence once this reaches `main`.
-2. ~~**Android release key**~~ (done 2026-10-27, D112/D116): builds are release-signed, `release.py` refuses any other key, `device.py switch-key` moves the Thor over with its saves (`test_key_switch.py` passes). **Tucker:** save the keystore and its password in your password manager (see Decisions needed).
+2. ~~**Android release key**~~ (done 2026-10-27, D112/D116): builds are release-signed, `release.py` refuses any other key, `device.py switch-key` moves the Thor over with its saves (`test_key_switch.py` passes). Tucker backed the key up; the Thor is on it (0.12.1-dev, saves kept).
 3. ~~**Launch black screen**~~ (done 2026-10-27, D117): a picture 0.4 s after pressing Solo, the title at 18.2 s (was 23.1 s), measured in the real launcher (`uxdriver.py startup`, passes). The 2× disc read had switched itself off at frame 113, and the shipped OpenBIOS waited 5 s; it's now the FASTBOOT build the harness always used, with old savestates booting the old one.
 4. **Coverage, widened:** every relic, spell, subweapon and Item Crash per character; the room report (static planner plus live checks); the 4 open scenes (Librarian, chapel, Center).
    - **Relics (2026-10-27):** `m12_relics_alucard` (his forms and their upgrades: 9 measured, each only with its relic), `m12_vlad_relics_*` (+10 STR/CON/INT/LCK, the Heart's curse immunity, all 3 characters), `m12_familiars_*` (all 5 cards, all 3 characters: the M8 leftover "faerie, demon, sword need a check" is done, they work). Richter's and Maria's gates were M8b's. **Gaps:** Power of Wolf and Skill of Wolf (the wolf's dash isn't reached in the test hall; listed in the report). Not yet: Jewel of Open, Merman Statue, Cube of Zoe, Spirit Orb, Faerie Scroll per character (stage code reads the relic; they need fixtures at a blue door, the ferryman, a candle).
@@ -134,8 +134,8 @@ _Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; d
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **Back up the Android release key (2 minutes):** copy both files from `\\wsl.localhost\Ubuntu\home\tucker\.config\sotn-coop\release` (`sotn-coop-release.jks` and `password.txt`) into your password manager, as an attachment and a password. Losing them means no Android update can ever install over a player's app again. Then, with the Thor plugged in, I'll run `device.py switch-key` once.
-- None new. **Approved 2026-10-27:** the M12 v1.0 and M13–M19 designs (D109), v1.0 without the inverted castle (D114), the Mac build unsigned (D115).
+- None new. Android key backed up by Tucker (Google Drive, 2FA, 2026-10-27); the Thor moved to it the same day (`device.py switch-key`: 19 files, 2.1 GB, back and owned by the app; 0.12.1-dev installed).
+- **Approved 2026-10-27:** the M12 v1.0 and M13–M19 designs (D109), v1.0 without the inverted castle (D114), the Mac build unsigned (D115).
 
 ### Older, still open
 - None.
