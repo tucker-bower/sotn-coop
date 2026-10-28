@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-27 night (released as 0.12.0, the public beta of 1.0 (D121); 1.0 after playtester feedback; one decision open)_
+_Last updated: 2026-10-28 overnight (0.12.0 beta released; extra jumps built (PR #9, D122); M13 spike passed: go)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -103,6 +103,10 @@ _Last updated: 2026-10-27 night (released as 0.12.0, the public beta of 1.0 (D12
   - **Test environment broke after the PC crash:** since WSL restarted, nothing from outside reaches the Android test emulators (their STUN fails too). `android_room` and `android_pc_join` fail the same way with yesterday's 0.9.0 code and APK, which passed then, so it isn't the code. The real Thor and PC don't use this path. Next: fix the emulator networking (likely a restart of the emulators/WSL), then re-run both.
   - **PR #6** (`coop-m11-castles` → main): M8, M9 and M11 together; merging it also merges #4 and #5.
   - **Release draft v0.11.0** (the v0.9.0 draft, retagged; 2026-10-25 15:14): `SOTN-Coop-setup.exe` (0.11.0, sha256 6469…4013) and `SOTN-Coop.apk` (e7c8…f949), notes `docs/releases/v0.11.0.md`. Includes the launcher's off-screen window fix (Tucker's saved position was x = −3267, on no monitor). Not yet installed on the PC or the Thor.
+## In flight (overnight 2026-10-28)
+- **Extra jumps (D122), PR #9** (`coop-m12-extra-jump`): built and passing (`m12_envelope_*`, suite 170/170). Not released: for the next beta when Tucker says.
+- **M13 spike: passed, go** (`coop-m13-partner-player`, stacked on PR #9; design §"Spike results"): two Alucards in one game, the partner run by the game's own player code: 9.5–12.5% of a frame, 14.5 KB, deterministic, player 1 untouched, both drawn without a VRAM patch. Suite 171/171 with the spike in (off by default). Next: the partner's buttons over the link, then other characters (VRAM bank), then removing the puppet.
+
 ## Next (M12 v1.0, design `docs/design/M12-v1-release.md`, approved; D109–D116)
 1. ~~**Licence**~~ (done 2026-10-27): `LICENSE` (AGPL-3.0), `NOTICE`, `licenses/`, in the installer and the APK; `release.py` refuses a release without them. GitHub shows the licence once this reaches `main`.
 2. ~~**Android release key**~~ (done 2026-10-27, D112/D116): builds are release-signed, `release.py` refuses any other key, `device.py switch-key` moves the Thor over with its saves (`test_key_switch.py` passes). Tucker backed the key up; the Thor is on it (0.12.1-dev, saves kept).

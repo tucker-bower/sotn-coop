@@ -34,6 +34,7 @@ SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] le
 PRIM_SIZE, N_PRIMS = 0x30, 32
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
+OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
 

@@ -60,3 +60,13 @@ About 8–12 usage windows: the spike 1–2, the swap and drawing 4–6, familia
 - **The update:** `EntityAlucard()` (0x8010A5BC) with `g_CurrentEntity = PLAYER`, then `UpdatePlayerEntities()` (0x8011A4D0), with the partner's buttons in `g_pads[0]`. No hit detection (cosmetic in a shared room, as now).
 - **Drawing only the partner:** `RenderEntities()` walks all 256 slots and skips any with `animCurFrame == 0`. For the partner's pass: swap its slots 0–63 in, zero `animCurFrame` of slots 64–255 (192 halfwords, kept aside), call it, put everything back.
 - **The blocker for graphics:** Alucard's current sprite is uploaded to a fixed VRAM spot each frame, so a second player's upload would overwrite the first's. That's the 2 MB VRAM patch (a private bank), or for two Alucards a second upload spot in spare VRAM. The spike measures the simulation first (frame cost, RAM, determinism), graphics second.
+
+## Spike results (2026-10-27, `m13_spike_partner_sim`: all pass)
+Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayerEntities()` on scripted buttons (`module/partner.c`, behind `OPT_PARTNER_SIM`, off by default).
+1. **Frame cost:** 25 scanlines on a typical frame, 33 at most: **9.5–12.5% of a frame** (target: under 25%). The first version swapped all 64 entity slots (75–88 scanlines); swapping only the slots in use on either side cut it to a third. Measured in PS1 cycles, so it's the same on the Thor's emulator.
+2. **RAM:** 14.5 KB in the 8 MB area (the swapped regions).
+3. **Determinism:** the same inputs give byte-identical 2 MB of RAM in two runs; savestates hold the partner (it lives in the 8 MB area).
+4. **Isolation:** player 1 ends exactly where it does without the partner.
+5. **Drawing two Alucards needs no VRAM patch:** `RenderEntities` uploads each player sprite frame into its `g_PlayerDraw` slot as it draws, so the partner's copy of `g_PlayerDraw` points one VRAM page left (the old puppet's page). Its drawing pass hides slots 64–255 (`animCurFrame` 0) so enemies aren't drawn twice. Screenshot: both Alucards drawn, each in its own pose.
+- **Still for the 2 MB VRAM patch:** a partner of another character, and weapon and familiar graphics that differ from player 1's. The partner's sprite page overlaps D106's VRAM window (x 0x1E0–0x1FF), which the off-hand weapons use: to be laid out with the VRAM patch.
+- **Go:** the approach works within budget. Next, the build proper: the partner's buttons over the link (played out, input option A), its state pulled to its snapshot past 48 px, then other characters with the VRAM bank, and removing the puppet.
