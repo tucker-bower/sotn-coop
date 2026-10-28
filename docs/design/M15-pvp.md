@@ -1,6 +1,6 @@
 # M15 design: PvP
 
-**Status:** proposal for Tucker's review (2026-10-27). Depends on M13 (the partner as a real player).
+**Status:** approved by Tucker (2026-10-27). Depends on M13 (the partner as a real player).
 
 ## Goal
 An option, set by the host, that lets players hurt each other with their attacks: weapons, subweapons, spells and familiars, through the game's own damage rules (defence, elements, knockback, invincibility frames).

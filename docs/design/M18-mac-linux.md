@@ -1,6 +1,6 @@
 # M18 design: Mac and Linux
 
-**Status:** proposal for Tucker's review (2026-10-27).
+**Status:** approved by Tucker (2026-10-27).
 
 ## Goal
 The same launcher, the same features and the same cross-play on macOS (Apple Silicon and Intel) and Linux, **the Steam Deck included**. The stack already runs on Linux in development (Python, pygame-ce, libretro.py, SwanStation), so this is mostly packaging and testing.

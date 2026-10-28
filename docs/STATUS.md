@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; their designs are up for review on `coop-plan-m12-m19`)_
+_Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; designs approved; M12 v1.0 in progress)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -133,11 +133,7 @@ _Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; t
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **Review the expanded-scope designs** (D109), on branch `coop-plan-m12-m19`: `docs/design/M12-v1-release.md`, `M13-partner-player.md`, `M14-relay.md`, `M15-pvp.md`, `M16-saturn-characters.md`, `M17-more-players.md`, `M18-mac-linux.md`, `M19-widescreen.md`. Each has options, a recommendation, acceptance criteria and a budget (M12–M19: about 50–70 usage windows).
-- **Does v1.0 wait for the inverted castle?** Recommended: no; v1.0 after the first-castle playthrough, the inverted castle in v1.1 (`M12-v1-release.md`).
-- **The launch black screen:** is it the 19 s black start (built: 2× disc speed and "Starting the game", to check), or something else you saw?
-- **Mac signing (M18, later):** unsigned with README steps (recommended for now) or an Apple Developer ID ($99/year).
-- **Settled today:** the Android key (D112), symmetric NAT (D113, M14), boss fights pause in the menu (D110). The M8b power curve goes to the backlog (D111); M8b's reachability audit becomes M12's room report (`M12-v1-release.md`, option B).
+- None new. **Approved 2026-10-27:** the M12 v1.0 and M13–M19 designs (D109), v1.0 without the inverted castle (D114), the Mac build unsigned (D115).
 
 ### Older, still open
 - None.

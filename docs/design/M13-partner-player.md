@@ -1,6 +1,6 @@
 # M13 design: the partner as a real second player
 
-**Status:** proposal for Tucker's review (2026-10-27). Starts with a spike. Comparison with the other project: `research.md` → "sotn-online-coop".
+**Status:** approved by Tucker (2026-10-27). Starts with a spike. Comparison with the other project: `research.md` → "sotn-online-coop".
 
 ## Goal
 The partner in your game is no longer a puppet drawn from snapshots: it's a second player run by the game's own code, with the partner's own buttons. Their weapons, spells, subweapons, familiar, hit reactions and sounds all come from the game itself, for every character. This replaces M12's piece-by-piece drawing (sprites, then swings, then...) and is the base for PvP (M15) and 3+ players (M17).

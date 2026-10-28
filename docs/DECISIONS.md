@@ -573,3 +573,9 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D113: The mod never requires a hosted server; a relay is the last step, and anyone's** (Tucker, 2026-10-27; keeps D74)
 - Every pair should connect with no choices by the player. IPv6, router port mapping and port prediction come first; a relay that any player's launcher or anyone's server can run is the last step (`design/M14-relay.md`). Replaces STATUS's "Symmetric NAT" decision.
+
+**D114: v1.0 ships after the first-castle playthrough; the inverted castle is v1.1** (Tucker, 2026-10-27)
+- `design/M12-v1-release.md` decision 1. The launch black screen is the 19 s black start (Tucker agreed with the assumption).
+
+**D115: The Mac build ships unsigned, with the steps in the README** (Tucker, 2026-10-27)
+- `design/M18-mac-linux.md`: no Apple Developer ID for now.

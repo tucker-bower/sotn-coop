@@ -1,6 +1,6 @@
 # M14 design: every pair connects (relay fallback)
 
-**Status:** proposal for Tucker's review (2026-10-27). Replaces the "Symmetric NAT" decision in STATUS.
+**Status:** approved by Tucker (2026-10-27). Replaces the "Symmetric NAT" decision in STATUS.
 
 ## Goal
 Any two players connect with a room code, whatever routers or networks they're on, without knowing or choosing anything. **The mod never requires a hosted server** (D74 stays): every step works with no server of ours, and the last step, a relay, can be run by anyone, including one of the players.

@@ -1,6 +1,6 @@
 # M19 design: widescreen
 
-**Status:** proposal for Tucker's review (2026-10-27). Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it. Depends on M13's VRAM layout.
+**Status:** approved by Tucker (2026-10-27). Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it. Depends on M13's VRAM layout.
 
 ## Goal
 True widescreen: a wider view of the castle (about 352 px, 16:9), not a stretch (D76). Optional, in Settings.

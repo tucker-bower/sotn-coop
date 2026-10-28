@@ -1,6 +1,6 @@
 # M16 design: Saturn characters
 
-**Status:** proposal for Tucker's review (2026-10-27).
+**Status:** approved by Tucker (2026-10-27).
 
 ## Goal
 Three more choices in the lobby, each from the player's own discs, all optional:

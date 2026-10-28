@@ -1,6 +1,6 @@
 # M17 design: 3+ players
 
-**Status:** proposal for Tucker's review (2026-10-27). Replaces backlog D48. Depends on M13.
+**Status:** approved by Tucker (2026-10-27). Replaces backlog D48. Depends on M13.
 
 ## Goal
 As many players as the technology holds, each in their own game, one castle. Online first, then couch.

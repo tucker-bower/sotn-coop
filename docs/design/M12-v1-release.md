@@ -1,6 +1,6 @@
 # M12 finish: v1.0 release
 
-**Status:** proposal for Tucker's review (2026-10-27). Extends `M12-coverage.md` (parts 1–3 built) into the v1.0 release. Priority order and scope: D109.
+**Status:** approved by Tucker (2026-10-27). Extends `M12-coverage.md` (parts 1–3 built) into the v1.0 release. Priority order and scope: D109.
 
 ## Goal
 A playable, public **v1.0** that a stranger can install and finish the first castle with, on PC or Android, alone, on the couch or online. "Covered" means what it meant in M12 (a session test with RAM assertions on both games); v1.0 widens what is covered to the whole first castle and closes the release gaps (licence, signing, start-up).
