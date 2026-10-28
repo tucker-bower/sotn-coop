@@ -19,6 +19,8 @@ s16** CoopMarBanks[1] = {maria_spr};
 void MARIA_Load(void);
 void (*CoopMarHooks[1])(void) = {MARIA_Load};
 
+int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
+
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
     if (subweapon == COOP_MAR_BASIC) {
         attack += g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;

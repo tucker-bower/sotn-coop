@@ -14,4 +14,12 @@ struct Entity;
 int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
 #define COOP_SHORTCUT(pad) ((g_CoopOptions & OPT_SHORTCUTS) && (g_Player.padTapped & (pad)))
 
+// Extra jumps (D122): each of the Leap Stone and the Gravity Boots gives one jump in the air, so
+// Richter and Maria reach what Alucard reaches with the same relics (his double jump and super
+// jump). g_CoopAirJumps: Richter's, how many he's used since the ground; Maria's, bits (src/maria
+// pl_collision.c). Both coop_ric.c / coop_maria.c, refilled on the ground in RicMain / MarMain.
+extern int g_CoopAirJumps;
+#define COOP_AIR_JUMPS ((COOP_CAN(RELIC_LEAP_STONE) != 0) + (COOP_CAN(RELIC_GRAVITY_BOOTS) != 0))
+#define COOP_AIR_JUMP_LEFT (g_CoopAirJumps < COOP_AIR_JUMPS)
+
 #endif

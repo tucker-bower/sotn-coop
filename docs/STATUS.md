@@ -140,11 +140,6 @@ _Last updated: 2026-10-27 night (released as 0.12.0, the public beta of 1.0 (D12
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **Richter's and Maria's jump heights (found by `m12_envelope_*`, D119):** with the same relics they should reach the same places as Alucard (M8b's rule).
-  - **Gravity Boots:** Alucard's super jump reaches 331 px; Richter's high jump 261 px, Maria's 191 px. Between the Gravity Boots and the Soul of Bat (which lets both climb without limit), a ledge between those heights is out of their reach.
-  - **Leap Stone alone:** Richter's backflip only works right after leaving the ground, so it adds little height (63 px vs Alucard's 101). On the usual route he has the Gravity Boots first, so this rarely matters.
-  - **Options:** (a) **raise their Gravity Boots high jump to Alucard's height, and let Richter's backflip work at any point of a jump with the Leap Stone (recommended)**: it follows the approved M8b rule, a small change in our overlays; (b) leave it and see what playtesters hit; (c) only the high jump.
-- None new. Android key backed up by Tucker (Google Drive, 2FA, 2026-10-27); the Thor moved to it the same day (`device.py switch-key`: 19 files, 2.1 GB, back and owned by the app; 0.12.1-dev installed).
 - **Approved 2026-10-27:** the M12 v1.0 and M13–M19 designs (D109), v1.0 without the inverted castle (D114), the Mac build unsigned (D115).
 
 ### Older, still open

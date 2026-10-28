@@ -23,6 +23,8 @@ s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 #define SUBWPN_HYDRO_STORM 16
 
 // RicSetSubweaponParams's attack, for every attack Richter makes (the whip is a "subweapon").
+int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
+
 s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
     if (id == SUBWPN_WHIP || id == SUBWPN_FLAME_WHIP) {
         attack += g_Status.statsTotal[STAT_STR] * WHIP_STR_PCT / 100;

@@ -609,3 +609,8 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D121: Everything planned for 1.0 ships now as 0.12.0, the public beta; 1.0 after playtesters' feedback** (Tucker, 2026-10-27)
 - A normal GitHub release, not a "pre-release": the README's download links use `releases/latest`, which skips pre-releases. The notes say it's the beta and ask for feedback (GitHub issues, F9 reports).
+
+**D122: Richter and Maria get extra jumps, not higher jumps** (Tucker, 2026-10-27; closes the gaps D119 found)
+- Each of the Leap Stone and the Gravity Boots gives Richter and Maria one jump in the air, refilled on landing (`g_CoopAirJumps`, `COOP_AIR_JUMPS` in `richter/coop_ric.h`). The jump heights stay as they are.
+- Richter's backflip keeps its vanilla moment (jump again just after leaving the ground) and costs one; any other press in the air, or falling off a ledge, is a plain jump. Maria's double jump is her Leap Stone jump, and her Gravity Boots jump is her own high jump, done in the air (her double jump alone left her 105 px short); a press uses the double jump first, Up asks for the high jump. The Soul of Bat's climbing re-arm is unchanged.
+- Measured (`m12_envelope_*`): with the Leap Stone, Richter 121 px, Maria 104, Alucard 106; with the Gravity Boots too, Richter 375, Maria 425, Alucard 375.
