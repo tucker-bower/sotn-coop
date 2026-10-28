@@ -140,3 +140,6 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 
 ## Building
 See [`SETUP.md`](SETUP.md): `scripts/bootstrap.sh` sets up a machine, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc, and `scripts/release.py` builds the installer and a draft GitHub release.
+
+## Licence
+SOTN Co-op is free software under the [GNU Affero General Public License v3](LICENSE), like [sotn-decomp](https://github.com/Xeeynamo/sotn-decomp), which it is built on. What the releases bundle (SwanStation, OpenBIOS, Python and others) and under which licences: [NOTICE](NOTICE), with the full texts in [licenses/](licenses). No game data is in this repository or in any release.

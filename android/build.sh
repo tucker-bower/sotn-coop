@@ -35,6 +35,7 @@ cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/conf
 cp "$ROOT/build/coop/coop.map" "$STAGE/build/coop/"
 cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"
 cp "$MOD/env.example.toml" "$MOD/android/main.py" "$STAGE/"
+mkdir -p "$STAGE/LICENSES" && cp "$MOD/NOTICE" "$STAGE/LICENSES/README.txt" && cp "$MOD/LICENSE" "$STAGE/LICENSES/AGPL-3.0.txt" && cp "$MOD"/licenses/* "$STAGE/LICENSES/"
 # libretro.py: pure Python (its sample cores and their GL libraries aren't needed)
 SP="$("$PY" -c "import libretro, os; print(os.path.dirname(os.path.dirname(libretro.__file__)))")"
 cp -r "$SP/libretro" "$STAGE/libretro" && rm -rf "$STAGE/libretro/samples"

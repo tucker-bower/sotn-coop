@@ -60,6 +60,9 @@ def check_stage(stage):
             bad.append(f"{f}: not on the allow-list ({ext})")
         elif f.stat().st_size > MAX_FILE:
             bad.append(f"{f}: {f.stat().st_size} bytes")
+    for name in ("README.txt", "AGPL-3.0.txt", "SwanStation-GPL-3.0.txt"):   # NOTICE, LICENSE, the core's GPL
+        if not any(f.name == name and f.parent.name == "LICENSES" for f in stage.rglob(name)):
+            bad.append(f"LICENSES/{name} missing: no release without the licences (NOTICE, LICENSE, licenses/)")
     if bad:
         raise SystemExit("game data check failed:\n  " + "\n  ".join(bad[:20]))
     n = sum(1 for f in stage.rglob("*") if f.is_file())
