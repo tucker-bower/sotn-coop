@@ -33,7 +33,8 @@ class NoGame:
 
 
 class Player:
-    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0", port=0, relays=()):
+    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0", port=0, relays=(),
+                 portmap=False):
         self.sock = net.socket(router)
         self.t = UdpTransport(port=port, sock=self.sock, bind_host="0.0.0.0")
         self.t.clock = clock
@@ -41,9 +42,18 @@ class Player:
         if link is not None:
             self.host.hello["link"] = link
         self.host.start_connect(room, role, relay=relay, stun_servers=stuns, resolve=False,
-                                lan_ip=self.sock.addr[0], app=app, relays=list(relays))
+                                lan_ip=self.sock.addr[0], app=app, relays=list(relays),
+                                portmap=self._portmap(router) if portmap else (lambda port: None))
         if app is None:  # a launcher from before 0.9.0: its candidates carry no version
             self.host.connector.version = {}
+
+    def _portmap(self, router):
+        """A router that answers UPnP / NAT-PMP: it forwards the game's port (link/portmap.py)."""
+        def mapped(port):
+            router.forward(port, self.sock.addr)
+            router.out[self.sock.addr] = port
+            return (router.ip, port)
+        return mapped
 
     def tick(self):
         self.host.handshake_tick()
@@ -58,7 +68,7 @@ class SeeingRelay(Relay):
 
 
 def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35, b_version=None,
-            relay=None, port=0, with_relay=False):
+            relay=None, port=0, with_relay=False, portmap=""):
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
     relays, rel = (), None
@@ -72,9 +82,10 @@ def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", s
     clock = lambda: clock_t[0]
     ra = net.router(a_kind)
     rb = ra if same_house else net.router(b_kind)
-    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock, port=port, relays=relays)
+    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock, port=port, relays=relays,
+               portmap="a" in portmap)
     b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, port=port, relays=relays,
-               **(b_version or {}))
+               portmap="b" in portmap, **(b_version or {}))
     a.relay_server = rel
     if forward == "a":  # the host's router forwards the game's port to it
         ra.forward(a.t.port, a.sock.addr)
@@ -141,6 +152,12 @@ def main():
         plain = any(tag in d for d in getattr(rel, "seen", []) for tag in (b"PRES", b"HELO", b"BAT-7K2Q"))
         check(flow and sa["via"] and rel.forwarded > 0 and not plain,
               f"{ka} host + {kb} joiner, with a relay: connected through it, sealed ({sa['state']}/{sb['state']}, via {sa['via']}, plaintext seen: {plain})")
+    # M14 step 3: a symmetric router that answers UPnP / NAT-PMP opens the game's port: direct
+    for ka, kb, who in ((SYMMETRIC, PORT_RESTRICTED, "a"), (PORT_RESTRICTED, SYMMETRIC, "b"), (SYMMETRIC, SYMMETRIC, "a")):
+        a, b = session(ka, kb, portmap=who, seconds=20)
+        sa = a.host.connector.status()
+        check(sa["state"] == b.host.connector.state == "connected" and sa["via"] is None and exchanged(a, b),
+              f"{ka} host + {kb} joiner, the {'host' if who == 'a' else 'joiner'}'s router opens the port: connected directly")
     a, b = session(CONE, PORT_RESTRICTED, with_relay=True, seconds=20)
     check(a.host.connector.state == "connected" and a.host.connector.via is None,
           "with a relay, a pair that can punch still connects directly")

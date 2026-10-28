@@ -166,7 +166,7 @@ class Connector:
     """Run by the host every frame (tick) until the partner is found."""
 
     def __init__(self, transport, room, role, relay, hello, stun_servers=STUN_SERVERS,
-                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, relays=None):
+                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, relays=None, portmap=None):
         """role: "host" or "join". hello: () -> the HELO payload to punch with. version: {"link":
         wire version, "app": the launcher's}, posted with the candidates, so that two different
         versions are told so at once, instead of waiting for packets that can't be understood."""
@@ -194,6 +194,17 @@ class Connector:
         self.via = None          # the relay both use, once it comes to that
         self._their_relay = None  # the host's choice, from its message
         self._punch_t0 = None
+        # M14 step 3: ask the router to open the game's port (UPnP, NAT-PMP), in the background;
+        # portmap(port) -> (public ip, port) or None (tests: link/natsim's routers)
+        self.mapped = None
+        self._mapping = None
+        if portmap is None and not os.environ.get("COOP_NO_PORTMAP"):
+            from .portmap import map_port
+            portmap = lambda port: map_port(port, lan_ip=lan_ip)  # noqa: E731
+        if portmap is not None:
+            self._mapping = threading.Thread(target=lambda: setattr(self, "mapped", portmap(transport.port)),
+                                             daemon=True)
+            self._mapping.start()
         self._resolved = None
         if resolve:
             threading.Thread(target=self._resolve_servers, daemon=True).start()
@@ -212,7 +223,7 @@ class Connector:
     def status(self):
         left = None if self._t0 is None else max(0, int(self.timeout - (self.t.clock() - self._t0)))
         return {"state": self.state, "reason": self.reason, "nat": self.nat, "their_nat": self.their_nat,
-                "via": self.via,
+                "via": self.via, "mapped": self.mapped,
                 "mine": self.mine, "theirs": self.theirs, "left_s": left,
                 "relay_error": getattr(self.relay, "error", None)}
 
@@ -259,6 +270,11 @@ class Connector:
                 self.state = "waiting"
                 log.info("connect %s: my addresses %s (router: %s); waiting for the partner on the relay",
                          self.role, self.mine, self.nat)
+        # the router opened our port: that address first, and posted again
+        if self.mapped and self.state != "starting" and list(self.mapped) not in self.mine:
+            self.mine.insert(0, list(self.mapped))
+            self._published = None
+            log.info("connect %s: the router opened %s for us", self.role, self.mapped)
         # 2. rendezvous
         if self.state in ("waiting", "punching"):
             every = RETRY_S if getattr(self.relay, "post_error", None) else REPUBLISH_S

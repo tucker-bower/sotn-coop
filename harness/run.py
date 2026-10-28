@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 
+os.environ.setdefault("COOP_NO_PORTMAP", "1")  # tests never ask the real router to open a port (M14)
 import scenarios  # noqa: F401  (registers scenarios)
 import scenarios_m8  # noqa: F401
 import session_scenarios  # noqa: F401
