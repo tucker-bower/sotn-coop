@@ -173,7 +173,9 @@ typedef struct {
     /* 0x21824 */ u8 selfPrims[COOP_PRIMS][COOP_PRIM_SIZE];
     /* 0x21E24 */ u32 partnerPrimCount;   // host writes
     /* 0x21E28 */ u8 partnerPrims[COOP_PRIMS][COOP_PRIM_SIZE];
-} CoopLink; // size = 0x22428
+    /* 0x22428 */ u32 selfPad;    // game writes every frame: its player's buttons (M13: the partner's
+    /* 0x2242C */ u32 partnerPad; // host writes with each presence   copy runs on them, partner.c)
+} CoopLink; // size = 0x22430
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1

@@ -19,7 +19,7 @@ This is everything a **host** needs, so another one can be written without readi
 1. **Hello:** every 60 frames, send `HELO`.
 2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
-4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below).
+4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below), whose `pad` is `CoopLink.selfPad`.
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
 6. **Events out:** move the game's new events out of the `out` ring, then send them reliably (`EVTS`).
 7. **Receive** every datagram waiting:
@@ -49,7 +49,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 - **Sending:** the sender keeps every event until it's acked. It sends new ones right away, and resends all unacked ones after the retransmission timeout (below).
 - **Receiving:** the receiver keeps events that arrive ahead of a gap, delivers in number order, drops what it already delivered, and answers every `EVTS` with an `ACK` carrying its in-order high-water mark.
 
-**Presence tail (16 bytes after the presence):** `snapAck` (u32: the newest `snap_id` this host has decoded, 0 if none), `clockMs` (u32: the sender's clock in ms, wrapping), `echoMs` (u32: the newest `clockMs` heard from the partner, 0 if none), `holdMs` (u16: how long ago, in ms, that was heard), 2 bytes of padding.
+**Presence tail (16 bytes after the presence):** `snapAck` (u32: the newest `snap_id` this host has decoded, 0 if none), `clockMs` (u32: the sender's clock in ms, wrapping), `echoMs` (u32: the newest `clockMs` heard from the partner, 0 if none), `holdMs` (u16: how long ago, in ms, that was heard), `pad` (u16: the sender's buttons that frame, `CoopLink.selfPad`; 0 from hosts before 0.13, which sent padding there). The receiver writes `pad` to `CoopLink.partnerPad` with the presence it came with (M13: the partner's simulated body runs on it).
 - **Round trip:** on receiving a tail with `echoMs` set, `rtt = now - echoMs - holdMs` (ms, wrapping). Smooth it as TCP does (RFC 6298).
 - **Snapshot acks:** the newest `snapAck` the partner has sent is the base for the next delta.
 

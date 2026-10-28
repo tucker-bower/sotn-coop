@@ -36,7 +36,7 @@ TAG_HELLO = b"HELO"     # payload: JSON {"link": WIRE_VERSION, "patch": target C
 PRESENCE_SIZE = 0x2C
 # After the presence: the newest snapshot id decoded (u32), the sender's clock (ms, u32), the
 # newest clock heard from the partner (ms, u32), and how long ago that was heard (ms, u16).
-_PRES_TAIL = struct.Struct("<IIIHxx")
+_PRES_TAIL = struct.Struct("<IIIHH")  # snapshot acked, clocks (3), and the player's buttons (M13; 0 before)
 _SNPC_HDR = struct.Struct("<IIBB")
 _CTRL_HDR = struct.Struct("<IBBH")
 MAX_SNAP_CHUNK = 1150  # keeps total UDP payload <= 1176 bytes (well below a 1200-byte path MTU)
@@ -262,7 +262,8 @@ class UdpTransport:
         if tag == TAG_SNAP:
             self._send_snapshot(payload)
         elif tag == TAG_PRESENCE:
-            tail = _PRES_TAIL.pack(self._snap_done, *self.clock_stamp())
+            pad = struct.unpack("<H", payload[PRESENCE_SIZE:PRESENCE_SIZE + 2])[0] if len(payload) >= PRESENCE_SIZE + 2 else 0
+            tail = _PRES_TAIL.pack(self._snap_done, *self.clock_stamp(), pad)
             self._send_datagram(tag, payload[:PRESENCE_SIZE] + tail)
         else:
             self._send_datagram(tag, payload)
@@ -301,9 +302,11 @@ class UdpTransport:
                 if snap is not None:
                     out.append((TAG_SNAP, seq, snap[0], snap[1], addr))
             elif tag == TAG_PRESENCE:
+                pad = b"\0\0"
                 if len(body) >= PRESENCE_SIZE + _PRES_TAIL.size:
                     self._presence_tail(frame, body[PRESENCE_SIZE:PRESENCE_SIZE + _PRES_TAIL.size])
-                out.append((tag, seq, frame, body[:PRESENCE_SIZE], addr))
+                    pad = body[PRESENCE_SIZE + _PRES_TAIL.size - 2:PRESENCE_SIZE + _PRES_TAIL.size]
+                out.append((tag, seq, frame, body[:PRESENCE_SIZE] + pad, addr))  # the presence, then its buttons
             else:
                 out.append((tag, seq, frame, body, addr))
         return out
@@ -325,7 +328,7 @@ class UdpTransport:
                 self.rtt.sample(rtt / 1000)
 
     def _presence_tail(self, frame, tail):
-        acked, their_ms, echo_ms, hold_ms = _PRES_TAIL.unpack(tail)
+        acked, their_ms, echo_ms, hold_ms, _pad = _PRES_TAIL.unpack(tail)
         if acked in self._sent_snaps and acked > self._snap_acked:
             self._snap_acked = acked
         self.clock_heard(their_ms, echo_ms, hold_ms)

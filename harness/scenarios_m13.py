@@ -35,7 +35,7 @@ def m13_spike_partner_sim(run):
     e = run.emu
     start = e.save_state()
     script = ["right"] * 120 + [""] * 30 + ["cross"] * 16 + [""] * 60 + ["left"] * 90
-    p1 = ["left"] * 120 + [""] * 196
+    p1 = ["left"] * 30 + ["right"] * 30 + [""] * 256  # moves, but stays in the room (the copy is camera-relative)
     # 1. it moves as its buttons say
     run_partner(run, script[:2], p1[:2])
     x0 = body_x(e)
@@ -75,3 +75,33 @@ def m13_spike_partner_sim(run):
     # 3. the frame cost (last: the other checks still run)
     run.expect(cost < SCANLINES // 4, "the partner's frame costs under a quarter of a frame",
                scanlines=cost, percent=round(100 * cost / SCANLINES, 1), last=last)
+
+
+# --- the partner's body in a two-game session ------------------------------------------------
+from session import session_scenario  # noqa: E402
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def m13_partner_body_follows(run):
+    """Game A simulates B's body from B's buttons (played out with B's presence) while B walks
+    and jumps around the room: A's copy stays with B's real spot (within the snap distance), and
+    A's own player is untouched; no puppet is drawn while the body is."""
+    from link.mailbox import OPT_PARTNER_SIM
+    a, b = run.s.a, run.s.b
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    body = symbols()["g_CoopSpikeBody"]
+    run.step(30)
+    worst, samples = 0, 0
+    pattern = ["right"] * 60 + ["right+cross"] * 14 + ["right"] * 40 + ["left"] * 80 + ["left+cross"] * 14 + [""] * 40
+    for t, pad in enumerate(pattern * 2):
+        run.step(1, ("", pad))
+        if t % 10 == 0:
+            raw = a.read_bytes(body, 0xBC)
+            bx = struct.unpack_from("<h", raw, 2)[0] + a.read("g_Tilemap", "<h", 0x0A)  # + scrollX.i.hi
+            sb = b.snapshot()
+            if sb["room"] == a.snapshot()["room"]:
+                worst = max(worst, abs(bx - sb["world_x"]))
+                samples += 1
+    run.expect(samples > 20 and worst <= 48, "A's copy of B stays with B (within the snap distance)",
+               worst_px=worst, samples=samples)
+    run.expect(a.snapshot()["hp"] > 0, "A plays on")
