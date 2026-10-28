@@ -44,3 +44,7 @@ The connector tries everything at once and keeps the first path that works. The 
 
 ## Budget
 About 3–4 usage windows: IPv6 and port mapping 1, port prediction 1, the relay and its encryption 1–2.
+
+## Build log
+- **2026-10-28, step 5 first (the relay), branch `coop-m14-relay`:** `link/relay.py` (anyone runs it: `python -m link.relay`), the transport's sealed relay mode (`use_relay`: `RLY1` + room id + nonce, HMAC tag and SHA-256 keystream from the room token; stdlib only), and the connector's fallback: the host posts the relay it picked with its addresses, and after 6 s of punching without a reply both go through it. `link/test_connect.py`: the 3 pairings punching can't do (port-restricted vs symmetric, both ways; symmetric vs symmetric) connect through a relay, presences flow, and the relay never sees a readable packet; a pair that can punch still connects directly. All online session tests pass.
+- **Where relays come from:** `COOP_RELAYS="host:port,..."` for now. Next: the launcher setting (relay for others, on by default, capped), announcing on an ntfy topic, and the stuck pair picking the nearest; then steps 2–4 (IPv6, port mapping, port prediction), which avoid the relay.
