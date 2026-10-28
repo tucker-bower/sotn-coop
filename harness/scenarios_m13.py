@@ -130,3 +130,68 @@ def m13_partner_status(run):
     now = b"".join(a.read_bytes(addr, n) for addr, n in STATUS_RANGES)
     same = [i for i in range(len(mine)) if now[i] != mine[i] and not 0 <= i < 0x18]  # hp..mpMax may tick
     run.expect(not same, "A's own status is its own", differ=same[:8])
+
+
+def _swing_in_body(run, same):
+    """A (Alucard) swings a hand weapon next to B, who simulates A's body. same: B holds the same
+    weapon. Returns (A's animation frames, the body's, frames the body ran weapon entities,
+    frames B drew A's real swing, frames B placed other partner sprites)."""
+    from link.mailbox import OPT_PARTNER_SIM, WEAPON_MAGIC, WEAPON_PARTNER
+    from scenarios_m12 import CATEGORY_OFS, EQUIP_DEFS, EQUIP_SIZE, N_HAND_ITEMS, WEAPON_CATEGORIES
+    from scenarios_m8 import EQUIPMENT
+    from session_m8 import as_characters
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    raw = a.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
+    items = [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
+    a.write(EQUIPMENT, items[0], "<I")
+    b.write(EQUIPMENT, items[0 if same else 1], "<I")
+    as_characters(run, 0, 0)
+    into_hall(run)
+    for _ in range(300):
+        run.step(1)
+        if b.read(WEAPON_PARTNER, "<I") == WEAPON_MAGIC:
+            break
+    b.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(30)
+    body = symbols()["g_CoopSpikeBody"]
+    player = 0x800733D8  # g_Entities[0]
+    a_frames, body_frames = set(), set()
+    ran = drawn = placed = 0
+    for i in range(240):
+        run.step(1, ("square" if i % 40 < 2 else "", ""))
+        ids = [b.read(body, "<H", k * 0xBC + 0x26) for k in range(64)]  # Entity.entityId
+        ran += any(0xE0 <= x <= 0xFF for x in ids)
+        a_frames.add(a.read(player + 0x56, "<h"))   # Entity.animCurFrame
+        body_frames.add(b.read(body, "<h", 0x56))
+        if b.read(symbols()["g_CoopWeaponsDrawn"], "<I"):
+            drawn += 1
+            if drawn in (2, 4):  # a frame of the swing, for the eye
+                from coop_env import TOOLS
+                out = TOOLS["out"] / run.name
+                out.mkdir(parents=True, exist_ok=True)
+                b.screenshot().save(out / f"b_swing_{drawn}.png")
+                a.screenshot().save(out / f"a_swing_{drawn}.png")
+        placed += bool(b.read(symbols()["g_CoopSpritesDrawn"], "<I"))
+    return a_frames, body_frames, ran, drawn, placed
+
+
+@session_scenario()
+def m13_partner_weapon_differs(run):
+    """A's weapon isn't B's: B's copy of A strikes A's poses (its own weapon entity can't run: the
+    overlay is B's weapon's, and drops it), and B draws A's real swing from the link, where the
+    body is; no other partner sprites on top of the body."""
+    a_frames, body_frames, ran, drawn, placed = _swing_in_body(run, same=False)
+    run.expect(len(a_frames) > 4 and a_frames <= body_frames, "B's copy of A strikes A's poses",
+               missing=sorted(a_frames - body_frames))
+    run.expect(drawn, "B draws A's real swing", frames=drawn)
+    run.expect(not placed, "and no partner sprites over the body", frames=placed)
+
+
+@session_scenario()
+def m13_partner_weapon_same(run):
+    """The same weapon: B's copy of A swings it and draws it itself; nothing comes from the link."""
+    a_frames, body_frames, ran, drawn, placed = _swing_in_body(run, same=True)
+    run.expect(ran and a_frames <= body_frames, "B's copy of A swings", frames=ran,
+               missing=sorted(a_frames - body_frames))
+    run.expect(not drawn and not placed, "drawn by the body alone", real=drawn, sprites=placed)

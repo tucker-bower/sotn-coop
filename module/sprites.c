@@ -11,6 +11,7 @@
 #include "character.h"
 #include "sprites.h"
 #include "weapons.h"
+#include "partner.h"
 
 #define SLOT_FIRST 4
 #define SLOT_LAST 63
@@ -85,6 +86,10 @@ void SpritesPlace(void) {
     g_CoopSpritesDrawn = 0;
     if (g_GameState != Game_Play || !PartnerHere()) {
         g_CoopSpritesWhy = g_GameState != Game_Play ? 1 : 2;
+        return;
+    }
+    if (PartnerSimulated()) { // M13: the partner's body draws its own (partner.c)
+        g_CoopSpritesWhy = 4;
         return;
     }
     g_CoopSpritesWhy = 3;
@@ -197,7 +202,7 @@ void PrimsCapture(void) {
 void PrimsPlace(void) {
     s32 k;
     Primitive* p;
-    bool here = g_GameState == Game_Play && PartnerHere();
+    bool here = g_GameState == Game_Play && PartnerHere() && !PartnerSimulated(); // M13: the body's own
 
     if (g_GameState != Game_Play || g_GameStep != Play_Default) {
         s_Pool = -1; // a load frees every primitive

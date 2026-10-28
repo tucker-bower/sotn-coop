@@ -139,6 +139,20 @@ static void PutStatus(void) {
     }
 }
 
+bool PartnerWeaponDiffers(s32 hand) {
+    const CoopStatus* st = (const CoopStatus*)STATUS_PARTNER_ADDR;
+
+    // equipment[hand] is 4 bytes into the second range (subWeapon first)
+    return st->magic != STATUS_MAGIC || *(const u32*)(st->b + 4 + hand * 4) != g_Status.equipment[hand];
+}
+
+void PartnerBodyOffset(s16* dx, s16* dy) {
+    const Entity* body = (const Entity*)g_CoopSpikeBody;
+
+    *dx = body->posX.i.hi + s_ScrollX - g_CoopLink.partner.x;
+    *dy = body->posY.i.hi + s_ScrollY - g_CoopLink.partner.y;
+}
+
 static void SwapOut(void) {
     s_ScrollX = g_Tilemap.scrollX.i.hi;
     s_ScrollY = g_Tilemap.scrollY.i.hi;
@@ -214,23 +228,31 @@ void PartnerFrame(void) {
     }
 }
 
+// The body's own hand-weapon entities (DRA runs ids 0xE0-0xEF from hand 0's overlay, 0xF0-0xFF
+// from hand 1's) when the weapon isn't ours: not drawn (weapons.c draws the real swing).
+static bool HiddenWeapon(const Entity* e) {
+    return e->entityId >= 0xE0 && PartnerWeaponDiffers(e->entityId >= 0xF0);
+}
+
 // Draws the partner: its slots swapped in, everything else hidden (animCurFrame 0, which
 // RenderEntities skips), drawn, and all put back. After player 1's RenderEntities.
 void PartnerDraw(void) {
-    static u16 frames[256 - 64];
+    static u16 frames[256];
     s32 i;
 
     if (!PartnerSimulated() || g_GameState != Game_Play) {
         return;
     }
     SwapIn();
-    for (i = 64; i < 256; i++) {
-        frames[i - 64] = g_Entities[i].animCurFrame;
-        g_Entities[i].animCurFrame = 0;
+    for (i = 1; i < 256; i++) {
+        frames[i] = g_Entities[i].animCurFrame;
+        if (i >= 64 || HiddenWeapon(&g_Entities[i])) {
+            g_Entities[i].animCurFrame = 0;
+        }
     }
     RenderEntities();
-    for (i = 64; i < 256; i++) {
-        g_Entities[i].animCurFrame = frames[i - 64];
+    for (i = 1; i < 256; i++) {
+        g_Entities[i].animCurFrame = frames[i];
     }
     SwapOut();
 }

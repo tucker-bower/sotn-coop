@@ -13,6 +13,7 @@
 #include "character.h"
 #include "offhand.h"
 #include "weapons.h"
+#include "partner.h"
 
 #define WEAPON_PRG(hand) ((hand) ? 0x8017D000 : 0x8017A000)
 #define ANIMSET_OFS 0x40 // every weapon overlay's first sprite table (offhand.c's WEAPON_ANIMSET)
@@ -329,6 +330,9 @@ void WeaponsDraw(void) {
     const CoopSprite* s;
     RECT r;
     s32 k, hand, before = g_GpuUsage.gt4;
+    CoopSprite moved;
+    s16 dx = 0, dy = 0;
+    bool sim;
 
     g_CoopWeaponsDrawn = 0;
     if (g_GameState != Game_Play || !PartnerHere()) {
@@ -336,12 +340,25 @@ void WeaponsDraw(void) {
     }
     s_CurX = s_CurY = s_ShelfH = 0;
     s_PalsIn = 0;
+    sim = PartnerSimulated();
+    if (sim) {
+        PartnerBodyOffset(&dx, &dy);
+    }
     for (k = 0; k < (s32)g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
         s = &g_CoopLink.partnerSprites[k];
         hand = s->weapon & 1;
         if (!(s->weapon & WEAPON_SPRITE) || Partner(hand)->magic != WEAPON_MAGIC ||
             (s->animSet & 0x7FFF) != 0x10 + hand * 2) { // the second bank: not yet
             continue;
+        }
+        if (sim) { // M13: only a weapon the body can't run, where the body is (partner.c)
+            if (!PartnerWeaponDiffers(hand)) {
+                continue;
+            }
+            moved = *s;
+            moved.x += dx;
+            moved.y += dy;
+            s = &moved;
         }
         Draw(s, hand);
         g_CoopWeaponsDrawn++;
