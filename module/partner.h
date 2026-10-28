@@ -5,5 +5,9 @@
 void PartnerFrame(void); // after the game's update, before drawing (coop.c RenderEntitiesHook)
 void PartnerDraw(void);  // after player 1's RenderEntities
 bool PartnerSimulated(void); // the partner's body is the simulated one this frame (no puppet)
+// A hand weapon the body can't run (its code is the partner's overlay, not ours): its swing is
+// drawn from the partner's real sprites (weapons.c), moved to where the body is.
+bool PartnerWeaponDiffers(s32 hand);
+void PartnerBodyOffset(s16* dx, s16* dy); // the body's spot minus the partner's real one
 
 #endif
