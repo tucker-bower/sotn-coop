@@ -3,6 +3,7 @@
 #include <game.h>
 #include "coop_api.h"
 #include "link.h"
+#include "partner.h"
 #include "message.h"
 #include "arrive.h"
 #include "boss.h"
@@ -131,7 +132,10 @@ static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s
 // After RenderEntities, the frame's game state is final: publish it, and draw the partner
 // against it.
 static void __attribute__((used)) RenderEntitiesHook(void) {
-    u16 frame = PLAYER.animCurFrame;
+    u16 frame;
+
+    PartnerFrame(); // M13 spike: the partner's own frame, after player 1's
+    frame = PLAYER.animCurFrame;
 
     MistStepAfter();
     if (MistStepHidden()) {
@@ -140,6 +144,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     SpritesPlace();
     PrimsPlace();
     RenderEntities();
+    PartnerDraw(); // M13 spike
     WeaponsDraw();
     SpritesRemove();
     PLAYER.animCurFrame = frame;

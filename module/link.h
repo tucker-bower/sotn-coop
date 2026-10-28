@@ -186,6 +186,7 @@ typedef struct {
 #define CHAR_MARIA 2
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
+#define OPT_PARTNER_SIM 2 // M13 spike: the partner simulated by the game's own player code (partner.c)
 // Alucard's spell on each right-stick direction (up, right, down, left): 4 bits each from this
 // bit, SpellIds + 1 (0: none).
 #define OPT_SPELL_SHIFT 8
