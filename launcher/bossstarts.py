@@ -177,8 +177,9 @@ def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
 # walking in again replays it).
 scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (16, 40, 128), "left", "Slogra & Gaibon",
       unset=[0x85])  # MET_MARIA_IN_NZ0
-# In his room, at its right edge: his scene's entity (x 44) spawns as the camera reaches it.
-scene("The Librarian", "Long Library", "LIB", (32, 120, 172), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
+# In his room, at its right edge: walking left from there starts his scene, which steers the
+# player in (to x 0x74). At x 120 the player was already past where it starts (M12 v1.0).
+scene("The Librarian", "Long Library", "LIB", (32, 236, 120), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
 scene("Maria in the Royal Chapel", "Royal Chapel", "DAI", (8, 40, 128), "left", "Minotaur & Werewolf",
       unset=[0x63])  # MET_MARIA_IN_DAI
 # In the Center, at its right edge on Maria's floor (the way in is a door there), out of the

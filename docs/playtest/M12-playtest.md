@@ -15,6 +15,6 @@ Both players need 0.12.0-dev; the link version changed.
 4. **Off-hand weapons (Richter or Maria):** put a weapon in the free hand in Alucard's equip menu and press ○. It should swing exactly as in Alucard's hands, with the same animation, timing and specials (try a katana, a brand sword, the Heaven Sword). Known: some frames are the wrong colour (a blue blade).
 5. **Maria's guardians:** with a weapon or shield in her other hand, her birds stay birds. Throw them standing; they can't be thrown while she's moving or jumping, as in DXC.
 6. **Partner's attacks:** in the same room, your partner's subweapons (dagger, axe...), spells and Richter's whip show on your screen. Their hand-weapon swings don't yet.
-7. **Debug starts (Developer › Debug starts):** Bosses, **Scenes** and Places, each with that point's level and gear. The Scenes: Maria in the Alchemy Lab, Maria in the Royal Chapel, the Castle Keep. The Librarian and Maria in the Center are listed but not right yet.
+7. **Debug starts (Developer › Debug starts):** Bosses, **Scenes** and Places, each with that point's level and gear. The Scenes: Maria in the Alchemy Lab, Maria in the Royal Chapel, the Castle Keep. The Librarian now works from his start (walk left: he greets you, then his shop opens). **Please check Maria in the Center the real way:** go into the Center through its door on her floor; she should talk and give you the Holy Glasses, and you should get control back. Her debug start doesn't finish the scene yet.
 
 F9 saves a report whenever something looks wrong.

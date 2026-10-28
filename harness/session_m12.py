@@ -231,6 +231,10 @@ OPEN_SCENES = {
     "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN
     # started once on arrival, then not when both games share the start: what else it needs is open
     "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
+    # (2026-10-27) from its scene start, walking left: the scene takes control at frame 202 and
+    # gives it back at 295 without its last step (MET_MARIA_IN_CEN stays 0), then the game keeps
+    # steering the player (even alone); in two games it never ends. Open: the start's spot, or
+    # the module ending it (D103). Tucker's playtest checks the real way in (the door).
     # starts as soon as one enters the room and steers Alucard to Maria: the harness's arrival
     # spots (and the scene start's) are on the wrong floor; idle, Alucard drops to the floor below
     # and the scene never ends, even in one game
@@ -546,6 +550,29 @@ def _start_scene_test(name, start, walk):
 
 for _name, (_start, _walk) in START_SCENES.items():
     _start_scene_test(_name, _start, _walk)
+
+
+@session_scenario(starts=(str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state")))
+def m12_scene_librarian_from_start(run):
+    """The Librarian's first meeting, together: A walks into his room from its right edge (his
+    scene starts and steers A in), B is pulled in; both play it, both set MET_LIBRARIAN, and both
+    end in his shop. (His scene keeps control while the player is in his shop and near him: leaving
+    it through the menu is not scripted yet: a listed gap, STATUS.)"""
+    a, b = run.s.a, run.s.b
+    for g in (a, b):  # B, elsewhere with the same progress, hasn't met him either
+        g.write("g_CastleFlags", 0, "<B", 0x72)
+    w = SceneWatch(run)
+    w.until(lambda: w.starts[0], 3000, ("left", ""))
+    run.expect(w.starts[0], "A's scene starts", at=a.snapshot())
+    w.until(lambda: w.starts[1], 1200)
+    run.expect(w.starts[1], "B is pulled in and plays it too", starts=w.starts, log=w.log)
+    shop = 0x801B15C0  # his shop menu's entity (lib e_shop.c, func_us_801B15C0)
+    in_shop = lambda g: any(g.read(0x800733D8 + k * 0xBC + 0x28) == shop for k in range(64, 256))
+    met = lambda: [g.read("g_CastleFlags", "<B", 0x72) for g in (a, b)]
+    w.until(lambda: met() == [1, 1] and in_shop(a) and in_shop(b), 6000)
+    met = met()
+    run.expect(met == [1, 1], "both games met the Librarian (MET_LIBRARIAN)", met=met)
+    run.expect(in_shop(a) and in_shop(b), "both end at his shop", starts=w.starts)
 
 
 # --- doors in a shared room (D107) ----------------------------------------------------------
