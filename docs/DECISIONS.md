@@ -609,3 +609,8 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D121: Everything planned for 1.0 ships now as 0.12.0, the public beta; 1.0 after playtesters' feedback** (Tucker, 2026-10-27)
 - A normal GitHub release, not a "pre-release": the README's download links use `releases/latest`, which skips pre-releases. The notes say it's the beta and ask for feedback (GitHub issues, F9 reports).
+
+**D123: Online play connects the way Slippi does: direct, plus what to try when it fails; no relays** (Tucker, 2026-10-28; cuts down `design/M14-relay.md`)
+- The game tries a direct connection (hole punching, the LAN broadcast) and asks the router to open its port (UPnP IGD, NAT-PMP). When nothing works, the lobby says what either player can do: turn on UPnP, forward UDP 47811, or use another network (not a phone hotspot).
+- Options considered: launchers relaying for each other, opt-in or on by default (each helper's public IP is posted on a public ntfy topic); community relays listed in the repo (may be none at launch). Rejected as complexity for a few percent of pairs. Slippi and Dolphin netplay run no relays; games with relays get them from a platform (Steam, Epic) or a paid server (RetroArch), against D74.
+- `link/relay.py` and the transport's relay mode stay, marked unused and still tested: a starting point for an invested player to run their own (`COOP_RELAYS`). IPv6 and port prediction are deferred until playtest reports say how often pairs get stuck.

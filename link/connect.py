@@ -38,11 +38,18 @@ GAME_PORT = 47811  # the game's port when it's free (the launcher asks for it fi
 BROADCAST_EVERY_S = 0.5
 log = logging.getLogger(__name__)
 TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
-RELAY_AFTER_S = 6.0  # punching this long without a reply: both go through the relay (M14)
+RELAY_AFTER_S = 6.0  # punching this long without a reply: both go through a relay, if one is set (M14; unused, D123)
+
+
+# What to try when the two games can't reach each other (D123: Slippi's way, no relay).
+FIXES = ("Either of you can fix it: turn on UPnP in your router's settings, or forward UDP port "
+         f"{GAME_PORT} to your device, or use another network (not a phone hotspot).")
 
 
 def default_relays():
-    """Relays to fall back on (link/relay.py: anyone's): COOP_RELAYS="host:port,host:port"."""
+    """Relays to fall back on (link/relay.py): COOP_RELAYS="host:port,host:port".
+    UNUSED IN RELEASES (D123): nothing sets COOP_RELAYS, so the relay step never runs. It's kept,
+    tested (link/test_connect.py), as a starting point for anyone who wants to run a relay."""
     out = []
     for item in os.environ.get("COOP_RELAYS", "").split(","):
         host, _, port = item.strip().rpartition(":")
@@ -190,7 +197,7 @@ class Connector:
         self._broadcasts = []
         self._resolve = resolve
         self._servers = list(stun_servers)
-        self.relays = list(default_relays() if relays is None else relays)  # M14: the last step
+        self.relays = list(default_relays() if relays is None else relays)  # M14: the last step (empty in releases, D123)
         self.via = None          # the relay both use, once it comes to that
         self._their_relay = None  # the host's choice, from its message
         self._punch_t0 = None
@@ -306,7 +313,7 @@ class Connector:
                     log.info("connect %s: partner's addresses %s (router: %s, version %s); punching",
                              self.role, cands, self.their_nat, theirs.get("app"))
                 self.state = "punching"
-        # 3. punching, and after RELAY_AFTER_S without a reply, the relay (M14)
+        # 3. punching, and after RELAY_AFTER_S without a reply, the relay (M14: only with COOP_RELAYS, D123)
         if self.state == "punching" and self._punch_t0 is None:
             self._punch_t0 = now
         if (self.state == "punching" and self.via is None and now - self._punch_t0 > RELAY_AFTER_S
@@ -341,6 +348,7 @@ class Connector:
             who = "Your" if self.nat == "symmetric" else "Your partner's"
             return (f"{who} internet connection gives every connection a different port (a phone "
                     "hotspot or some ISPs do this), so the two games can't reach each other directly. "
-                    "Try another network, or forward a UDP port on the router (Help ▸ Online troubleshooting).")
-        return ("Both games found each other but no packets got through: a firewall may be blocking "
-                "the game. Allow SOTN Co-op through Windows Firewall when asked, and try again.")
+                    f"{FIXES} (Help ▸ Online troubleshooting.)")
+        return ("Both games found each other but no packets got through: a firewall or router may be "
+                "blocking the game. Allow SOTN Co-op through Windows Firewall when asked. "
+                f"{FIXES} (Help ▸ Online troubleshooting.)")

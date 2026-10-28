@@ -1,12 +1,12 @@
 """Asking the home router to open the game's port (design/M14-relay.md, step 3): NAT-PMP (RFC 6886,
 Apple's, and most routers' PCP ports answer it too) and UPnP IGD (the common one). With the port
 open, the game is reachable from anywhere, so even a router that gives a new port per destination
-("symmetric") lets the partner in, and a launcher can relay for others.
+("symmetric") lets the partner in.
 
     m = map_port(port)   # -> (public ip, public port) or None, within about 2 s (it expires: LEASE_S)
 
 Both are tried at once; whichever answers first wins. Nothing here is required: a router without
-either is skipped quickly, and the other ways in (hole punching, the relay) still work."""
+either is skipped quickly, and hole punching still works."""
 
 import logging
 import re

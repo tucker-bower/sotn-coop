@@ -1,6 +1,11 @@
-"""The relay (design/M14-relay.md): the last step when two games can't reach each other directly
-(symmetric routers on both sides, or against a port-restricted one). Open source, one file, run by
-anyone: a player's launcher (a setting), or anyone's server:
+"""UNUSED IN RELEASES (D123). The game connects the way Slippi does: directly (hole punching and
+router port mapping), and when that fails it tells the players what to try. No relay is run or
+listed, and nothing in the launcher starts one. This file is kept, working and tested
+(link/test_connect.py), as a starting point for anyone who wants to run their own: start it on a
+machine both players can reach, and give both launchers COOP_RELAYS="host:port".
+
+The relay (design/M14-relay.md): the last step when two games can't reach each other directly
+(symmetric routers on both sides, or against a port-restricted one). One file, stdlib only:
 
     python -m link.relay [--port 3479] [--max-rooms 64]
 
