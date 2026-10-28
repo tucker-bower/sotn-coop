@@ -43,7 +43,8 @@ def adb(serial, *args, check=True, **kw):
 
 TMP = "/data/local/tmp/coop"
 # The launcher's settings for the test (its data folder: the app's private one, so a test can
-# reach it).
+# reach it). The emulators draw in software (no GPU), so the games are scaled in one pass
+# (COOP_ONE_PASS, display.py: a test switch, not a setting).
 SETTINGS = {}
 
 
@@ -97,7 +98,7 @@ def script_on(serial, who, script, port):
     """Sets the app up to play one uxdriver script at its next start (android/main.py)."""
     cfg = {"script": script, "disc": f"discs/{CUE}",  # relative to the app's folder (main.py)
            "env": {"COOP_UX_CODE": "code.txt" if script == "online_join" else "code-host.txt",
-                   "COOP_PORT": str(port), "COOP_PROFILE": "1",  # with sound, as players
+                   "COOP_PORT": str(port), "COOP_PROFILE": "1", "COOP_ONE_PASS": "1",  # with sound, as players
                    "COOP_DATA_FILE": "data"}}
     f = OUT / f"coop-ux-{who}.json"
     f.write_text(json.dumps(cfg))

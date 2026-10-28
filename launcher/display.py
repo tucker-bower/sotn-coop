@@ -93,6 +93,7 @@ class GameTexture:
         self.src = None
         self.big = None
         self.size = None
+        self._last = None
 
     def update(self, surface):
         if self.src is None or self.size != surface.get_size():
@@ -100,9 +101,13 @@ class GameTexture:
             self.big = None
         self.src.update(surface)
         self.size = surface.get_size()
+        self._last = surface  # the last frame shown (launcher/uxdriver.py checks it)
 
     def draw(self, rect):
         if self.src is None or not rect or rect.w <= 0:
+            return
+        if os.environ.get("COOP_ONE_PASS"):  # tests on GPU-less emulators (android/test_pair.py)
+            self.src.draw(dstrect=rect)
             return
         # Enlarge by whole pixels (nearest) to at least the target size, then smooth the
         # rest of the way down. Width and height scale separately (PlayStation pixels aren't square).

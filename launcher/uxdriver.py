@@ -559,7 +559,8 @@ def _online_host(pg, code_file):
             *_android_picture("host-playing"),
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
             ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
-            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+            # the game pauses itself to say the partner left (gameview.partner_gone): no Esc
+            ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
