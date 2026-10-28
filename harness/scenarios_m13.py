@@ -45,6 +45,7 @@ def m13_spike_partner_sim(run):
     x2 = body_x(e)
     run.expect(x1 > x0 + 40 and x2 < x1, "the partner walks right, then left, on its own buttons", x=(x0, x1, x2))
     with_sim = e.snapshot()
+    with_sim_state = e.save_state()
     ram_a = e.read_bytes(0x80000000, 0x200000)
     run.step(1)
     shot_on = e.screenshot()
@@ -64,6 +65,12 @@ def m13_spike_partner_sim(run):
     shot_off.save(out / "partner_off.png")
     box = ImageChops.difference(shot_on.convert("RGB"), shot_off.convert("RGB")).getbbox()
     run.expect(box is not None, "the partner is drawn (the screen differs only by it)", box=box)
+    # its sprite is in VRAM's second bank, where player 1's is in the first (g_PlayerDraw[0].rect0)
+    rx, ry, rw, rh = struct.unpack("<hhhh", e.read_bytes("g_PlayerDraw", 8))
+    e.load_state(with_sim_state)
+    run.step(1)
+    bank = e.vram_rect(rx, 512 + ry, max(rw, 1), max(rh, 1))
+    run.expect(any(any(row) for row in bank), "its sprite is in VRAM's second bank", rect=(rx, ry, rw, rh))
     same = {k: (with_sim[k], alone[k]) for k in ("world_x", "world_y", "hp", "room") if with_sim[k] != alone[k]}
     run.expect(not same, "player 1 ends the same with or without the partner", differ=same)
     # 4. determinism: the same inputs, the same RAM

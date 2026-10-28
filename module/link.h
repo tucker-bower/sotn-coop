@@ -47,6 +47,14 @@ typedef struct {
 #define WEAPON_OVL_SIZE 0x3000    // the overlay, as at 0x8017A000 (hand 0) / 0x8017D000 (hand 1)
 #define WEAPON_SHEET_SIZE 0x4000  // its tile sheet: 0x40 x 0x80 VRAM words (256 x 128, 4bpp)
 #define WEAPON_CLUT_SIZE 0x300    // its 24 palettes (0x110 + hand * 24 on)
+// M13: VRAM's second bank (lines 512-1023, our SwanStation build: patches/swanstation.patch),
+// for the partner's graphics. An upload or fill with VRAM_BANK in its y goes there; a primitive
+// with TPAGE_BANK in its tpage reads its texture from there, and one with CLUT_BANK in its clut
+// its palette (rows 512 and up). Drawing and the display stay in the first bank.
+#define VRAM_BANK 0x200
+#define TPAGE_BANK 0x4000
+#define CLUT_BANK 0x8000
+
 // M13: the partner's status (g_Status from hp to statsTotal, and from subWeapon to the elements:
 // stats, level, equipment), for the partner's body (partner.c). The host reads it from the
 // partner's game and writes it here, magic last, when it changes.

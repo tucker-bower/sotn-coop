@@ -89,15 +89,16 @@ static void Make(void) {
         }
     }
     ((Entity*)g_CoopSpikeBody)->posX.i.hi += 32;
-    // Its sprites upload one VRAM page to the left of player 1's (RenderEntities loads each
-    // player-sprite frame into its g_PlayerDraw slot as it draws): the old puppet's page
-    // (puppet.c, 0x1C1,0x101), free while the partner is simulated.
+    // Its sprites go to VRAM's second bank, where player 1's would be (RenderEntities loads each
+    // player-sprite frame into its g_PlayerDraw slot as it draws, and clears its edges): y bit 9
+    // for the uploads and fills, texpage bit 14 for the drawing (our SwanStation build:
+    // patches/swanstation.patch).
     draw = (PlayerDraw*)((u8*)g_CoopSpikeBody + DRAW_OFS);
     for (i = 0; i < 16; i++, draw++) {
-        draw->rect0.x -= 0x40;
-        draw->rect1.x -= 0x40;
-        draw->rect2.x -= 0x40;
-        draw->tpage -= 1;
+        draw->rect0.y |= VRAM_BANK;
+        draw->rect1.y |= VRAM_BANK;
+        draw->rect2.y |= VRAM_BANK;
+        draw->tpage |= TPAGE_BANK;
     }
     s_Made = true;
 }

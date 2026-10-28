@@ -87,9 +87,12 @@ step_python() {
 }
 
 step_swanstation() {
-    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10}"
+    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10} (+ patches/swanstation.patch: VRAM's second bank)"
     local src="$ENV_DIR/src/swanstation"
     checkout "$SWANSTATION_REPO" "$SWANSTATION_REV" "$src"
+    if git -C "$src" apply --check "$COOP/patches/swanstation.patch" 2>/dev/null; then
+        git -C "$src" apply "$COOP/patches/swanstation.patch"
+    fi
     cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
     cmake --build "$src/build"
     cp "$(find "$src/build" -name swanstation_libretro.so | head -1)" "$ENV_DIR/bin/"
