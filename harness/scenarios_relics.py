@@ -202,10 +202,10 @@ def m12_familiars(run, ch):
 # --- subweapons and item crashes ------------------------------------------------------------
 SUBWEAPON, HEARTS, HEARTS_MAX = 0x80097BFC, 0x80097BA8, 0x80097BAC  # g_Status
 SUBWEAPONS = range(1, 10)  # SUBWPN_DAGGER..SUBWPN_AGUNEA (include/game.h): the castle's pickups
-# Known bug (STATUS, M12 v1.0 known bugs): Maria has guardians, not Alucard's subweapons, and
-# nothing maps the cross, bible, stopwatch, rebound stone or agunea to one: she throws nothing.
-# The test passes while exactly these fail, so a new failure still shows.
-KNOWN = {("m12_subweapons", CHAR_MARIA): {4, 5, 6, 7, 9}}
+# Maria has guardians, not Alucard's subweapons: the Maria port's glue (mods/mariapsp-forpsx/maria.c)
+# turns the dagger, axe, holy water and vibhuti into the cat, cardinal, turtle and dragon, and the
+# others keep the guardian she has, with a heart back (D118: the bible too; it used to leave her none).
+MARIA_GUARDIAN = {1: 1, 2: 2, 3: 3, 8: 8}  # the ones that change her guardian (Alucard ids, as stored)
 
 
 def use_subweapon(run, inputs):
@@ -231,12 +231,17 @@ def subweapon_sweep(run, ch, inputs, relics=()):
         e.load_state(start)
         for r in relics:
             e.write(STATUS, RELIC_ON, "<B", r)
+        if ch == CHAR_MARIA:  # as a pickup: she holds the cat (the dagger) first
+            e.write(SUBWEAPON, 1, "<i")
+            run.step(5)
         e.write(SUBWEAPON, sub, "<i")
-        run.step(2)
+        run.step(5)
+        holds = e.read(SUBWEAPON, "<i")
         hearts, made = use_subweapon(run, inputs)
         alive = e.snapshot()["hp"] > 0 and e.read("g_GameState") == 2  # still playing
-        got.append({"subweapon": sub, "hearts": hearts, "entities": made, "playing": alive,
-                    "ok": hearts > 0 and made > 0 and alive})
+        kept = ch != CHAR_MARIA or holds == MARIA_GUARDIAN.get(sub, 1)
+        got.append({"subweapon": sub, "holds": holds, "hearts": hearts, "entities": made, "playing": alive,
+                    "ok": hearts > 0 and made > 0 and alive and kept})
     report(run, got)
     return got
 
@@ -244,14 +249,11 @@ def subweapon_sweep(run, ch, inputs, relics=()):
 @per_character
 def m12_subweapons(run, ch):
     """Every subweapon the castle has (1-9), thrown by every character (up + attack): it costs
-    hearts, makes its entities, and the game plays on. Maria's guardians stand in for some of them
-    (her code's mapping); what each one does is in the report."""
+    hearts, makes its entities, and the game plays on. For Maria, each is picked up while she holds
+    the cat: four become a guardian, the rest leave her the cat (MARIA_GUARDIAN, D118)."""
     got = subweapon_sweep(run, ch, ["up+square"] * 2)
-    known = KNOWN.get(("m12_subweapons", ch), set())
-    bad = [g for g in got if not g["ok"] and g["subweapon"] not in known]
+    bad = [g for g in got if not g["ok"]]
     run.expect(not bad, f"every subweapon works for {NAMES[ch].capitalize()}", bad=bad)
-    fixed = [g["subweapon"] for g in got if g["ok"] and g["subweapon"] in known]
-    run.expect(not fixed, "a known bug is fixed: take it off KNOWN", fixed=fixed)
 
 
 def _crashes(run, ch):

@@ -1,3 +1,23 @@
+diff --git a/mods/mariapsp-forpsx/maria.c b/mods/mariapsp-forpsx/maria.c
+index 850b8cd58..b5c93e31a 100644
+--- a/mods/mariapsp-forpsx/maria.c
++++ b/mods/mariapsp-forpsx/maria.c
+@@ -286,13 +286,12 @@ static inline void ConvertSubweaponRicToMaria() {
+     case SUBWPN_HOLYWATER:
+         g_Status.subWeapon = PL_W_TURTLE;
+         break;
+-    case SUBWPN_BIBLE:
+-        g_Status.subWeapon = PL_W_NONE;
+-        break;
+     case SUBWPN_VIBHUTI:
+         g_Status.subWeapon = PL_W_DRAGON;
+         break;
+     default:
++        // co-op (D118): the bible too, as the cross, stopwatch, rebound stone and agunea (it was
++        // PL_W_NONE: picking one up left Maria nothing to throw)
+         // Re-use previous subweapon, and increase heart count by 1
+         g_Status.subWeapon = equipped_subweapon;
+         if (g_Status.hearts < g_Status.heartsMax) {
 diff --git a/src/dra/42398.c b/src/dra/42398.c
 index 3e7101345..1f59ff30f 100644
 --- a/src/dra/42398.c

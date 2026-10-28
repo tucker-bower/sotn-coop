@@ -593,3 +593,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - Now: **a picture 0.4 s after pressing Solo, the title at 18.2 s** (was 23.1 s; target 20 s).
 - The release and the APK ship it as `bios/openbios-fast.bin`, the default. PCSX-Redux's `openbios.bin` stays beside it: a savestate holds the BIOS's RAM, so it only loads on the BIOS that made it. Each new savestate pair gets a `.bios` note; "Go back to a moment" boots the BIOS it names, and pairs from before 0.12 (no note) boot the old one (or the player's own BIOS, if they chose one). Debug starts are kept per BIOS (`<disc>@<bios>`), so they're remade once.
 - Our disc still reaches the title 84 frames (1.4 s) after retail (the co-op module and Richter loading). Left as is.
+
+**D118: Maria keeps her guardian when she picks up a Bible** (agent-default, 2026-10-27; found by `m12_subweapons_maria`)
+- The Maria port's glue (`mods/mariapsp-forpsx/maria.c`, upstream) turns Alucard's subweapons into her guardians: dagger → cat, axe → cardinal, holy water → turtle, vibhuti → dragon. The cross, stopwatch, rebound stone and agunea keep the guardian she has and give a heart back. The **bible** was mapped to none: picking one up left her nothing to throw.
+- Now the bible is like the other four (`patches/sotn-decomp.patch`, one hunk). Considered: mapping the five to the doll (her fifth guardian), which isn't selectable in the port and would need its graphics loaded.
