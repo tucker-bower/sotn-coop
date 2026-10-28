@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-27 (M12 in progress; resumed after a PC crash, nothing lost)_
+_Last updated: 2026-10-27 (scope expanded, D109: M12 → v1.0, then M13–M19; their designs are up for review on `coop-plan-m12-m19`)_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -133,18 +133,14 @@ _Last updated: 2026-10-27 (M12 in progress; resumed after a PC crash, nothing lo
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **Approve M12** (`docs/design/M12-coverage.md`): cutscene, boss, obstacle and hand-item coverage, then a chained end-to-end playthrough as far as the budget goes. About 6–8 usage windows plus 3 for the fixes.
-- **Android signing key (before the first public Android release, D95):** the APK is signed with this PC's debug key. An update signed with any other key won't install over it without an uninstall, and the uninstall deletes the player's saves. Options: (a) **a release keystore, backed up in your password manager (recommended)**; (b) keep the debug key and back up `~/.android/debug.keystore`.
-- **M8b power curve (criterion 4): how to tune?** `harness/power_curve.py` fights each boss start as all three characters, but one generic bot isn't good enough to measure ±20%. It reaches 2 of the first 4 bosses, double bosses confuse its HP count, and its kill times swing widely. Options:
-  - **(a) Tune by your playtest (recommended):** play Richter/Maria vs Alucard at a few boss starts (Developer › Debug starts › Bosses). The knobs are one table each (`richter/coop_ric.c`, `maria/coop_maria.c`: STR %, INT divisor, Fire/Echo %). Cost: your time, about an hour.
-  - **(b) Per-boss bots** (approach and dodge patterns for each of the 12), then automatic tuning: about 2–3 usage windows.
-- **M8b reachability audit (criterion 3): full route bot, or gate audit + playtest?** As designed, a bot walks each character room by room from every boss start, proving every relic, boss and save room is reachable with exactly the relics a player has. That's a pathfinding bot for the whole first castle, three times over: about 2–3 more usage windows, and brittle. Options:
-  - **(a) Gate audit + your playtest (recommended):** a test per gate type from M8b §2 for Richter and Maria: high ledges (Gravity Boots / chained backflips / Maria's wings), low gaps (slide), mist grates (Mist Step, done), poison water (done), blue doors and the ferryman (they read the relic: character-neutral), and the worn-item gates (Spike Breaker, the rings, Holy Glasses), which work because they wear Alucard's gear now. Then a Richter + Maria couch playthrough by you finds what a gate list can't. The safety net (an Alucard player, D85) covers anything missed. About 0.5 window.
-  - **(b) The full route bot**, as written: 2–3 windows.
-- **Symmetric NAT (phone hotspots, some ISPs):** about 5–15% of pairs can't connect without a relay server (TURN) that we'd host and pay for. That would break D74's zero-infrastructure rule. Options:
-  - keep it as is (the launcher explains the failure)
-  - UPnP (free, partial)
-  - a small TURN server (about $5/month)
+- **Review the expanded-scope designs** (D109), on branch `coop-plan-m12-m19`: `docs/design/M12-v1-release.md`, `M13-partner-player.md`, `M14-relay.md`, `M15-pvp.md`, `M16-saturn-characters.md`, `M17-more-players.md`, `M18-mac-linux.md`, `M19-widescreen.md`. Each has options, a recommendation, acceptance criteria and a budget (M12–M19: about 50–70 usage windows).
+- **Does v1.0 wait for the inverted castle?** Recommended: no; v1.0 after the first-castle playthrough, the inverted castle in v1.1 (`M12-v1-release.md`).
+- **The launch black screen:** is it the 19 s black start (built: 2× disc speed and "Starting the game", to check), or something else you saw?
+- **Mac signing (M18, later):** unsigned with README steps (recommended for now) or an Apple Developer ID ($99/year).
+- **Settled today:** the Android key (D112), symmetric NAT (D113, M14), boss fights pause in the menu (D110). The M8b power curve goes to the backlog (D111); M8b's reachability audit becomes M12's room report (`M12-v1-release.md`, option B).
+
+### Older, still open
+- None.
 
 ## Environment notes
 - **The decomp's `mods/co-op/module` is a link to this repo's `module/`** (2026-10-21). `.env` here points into the old fork (`/home/tucker/sotn-decomp-coop/mods/co-op/.env`), whose `mods/co-op` folder was an Oct 19 copy: DRA was being built against its stale `coop_api.h`. The stale folder is kept as `module.stale-2026-10-19`.

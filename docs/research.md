@@ -280,3 +280,13 @@ Channels: #runbook (rules and links), #general, #ps1-sotn, #psp-sotn, #saturn-so
   - story flags: `include/castle_flags.h`
   - the explored map: `g_CastleMap`, 2 bits per cell
   - level ups: `CheckAndDoLevelUp`, `g_ExpNext`, `g_LevelHPIncrease`
+
+## sotn-online-coop (jweyden; checked 2026-10-27, for D109)
+`github.com/jweyden/sotn-online-coop`: a co-op mod with the same goal, first published 2026-10-26 (4 commits, AGPL-3.0). Read, not built or run.
+- **Engine:** SymphonyRecomp (a static recompilation of the PS1 game into .NET), not an emulator. The mod is about 10k lines of C# inside the game's process, plus a 729-line patch to the engine (GPU, VRAM, sound, disc reading, recompiler), pinned to three upstream commits.
+- **The partner is a real second player:** each frame they swap the partner's player state into RAM and run `EntityAlucard` again with the partner's input, with rollback (up to 8 frames) and a snapshot pull past 48 px. The engine's VRAM is 1024 lines: lines 512+ are a private texture and palette bank per partner. This is the basis of M13.
+- **Same shared-room design as ours (D50/D51/D57):** the first in the room runs it, the stream is entity slots 64–255 plus primitives, hits and pickups go back to it. Their stream is a full deflated copy each frame with no jitter buffer, and packets over about 1200 bytes rely on IP fragmentation: our M7 design before M7b's playout and deltas.
+- **Features we lacked:** up to 3 players (6 internally), PvP (the victim's game decides), Saturn Maria and the long-coat Richter (PS1 overlays in C, `decomp-mods/*-forpsx`, AGPL: the base of M16), the PSP recast Alucard voice, fairy and Life Apple revives, per-character respawn effects, Mac support, a relay fallback.
+- **Weaknesses:** players need Docker Desktop, the .NET SDK, about 15 GB and all three discs (US PS1, EU PSP, JP Saturn); setup recompiles the game on the player's machine (30–60 min). No Android. A lobby server at a fixed IP whose source isn't published. No tests or CI in the repository.
+- **Why Docker:** only the extra characters need it (a MIPS compiler, sotn-decomp's Go and Rust asset tools); their overlays have disc art compiled in, so they can't ship prebuilt. Our Maria avoids this with patches of code only (`maria/make_patches.py`).
+- **Outreach:** Tucker commented on their gameplay video (2026-10-27) with a link to this repository and suggestions (optional discs, no Docker, an open server, the netcode findings).
