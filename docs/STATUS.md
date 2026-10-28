@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-28 morning (0.12.0 beta released; extra jumps built (PR #9, D122); M13 spike passed and the body follows the partner; M14 relay and port mapping built)_
+_Last updated: 2026-10-28 morning (0.12.0 beta released; extra jumps built (PR #9, D122); M13 spike passed and the body follows the partner; M14 cut down to the Slippi way (D123, PR #10))_
 
 ## Done
 - Forked sotn-decomp, `coop` branch. Project docs, research, scope change D7 (Richter as P2, 8MB).
@@ -107,7 +107,7 @@ _Last updated: 2026-10-28 morning (0.12.0 beta released; extra jumps built (PR #
 - **Extra jumps (D122), PR #9** (`coop-m12-extra-jump`): built and passing (`m12_envelope_*`, suite 170/170). Not released: for the next beta when Tucker says.
 - **M13 spike: passed, go** (`coop-m13-partner-player`, stacked on PR #9; design §"Spike results"): two Alucards in one game, the partner run by the game's own player code: 9.5–12.5% of a frame, 14.5 KB, deterministic, player 1 untouched, both drawn without a VRAM patch. Suite 171/171 with the spike in (off by default). **Built since:** the partner's buttons over the link (`CoopLink.selfPad`/`partnerPad`, the presence tail's spare 2 bytes: wire-compatible), and the body follows the partner: made where they are when they're in our room, gone when they leave, pulled back past 48 px, moved with our camera. `m13_partner_body_follows` passes (A's copy of B stays within the snap distance while B walks and jumps). Still behind `OPT_PARTNER_SIM` (off). Next: the VRAM bank in our SwanStation build for other characters and weapons, then turning it on and removing the puppet.
 
-- **M14, branch `coop-m14-relay`** (from `main`; design build log): the open relay (`link/relay.py`, anyone runs it; packets sealed with a key from the room code), the connector's fallback to it after 6 s, and router port mapping (`link/portmap.py`: UPnP IGD and NAT-PMP). `link/test_connect.py`: **every router pairing connects** (with a relay, or directly when a router opens the port); `link/test_portmap.py` passes. Left: where relays come from (launchers relaying for others: decision below), IPv6, port prediction, a real two-home test.
+- **M14, PR #10** (`coop-m14-relay`, from `main`): **connects the way Slippi does (D123).** Hole punching plus router port mapping (`link/portmap.py`: UPnP IGD and NAT-PMP); when nothing works, the lobby and Help ▸ Online troubleshooting say what to try (UPnP, forward UDP 47811, another network). The relay (`link/relay.py`) is kept, marked unused, only active with `COOP_RELAYS`. `link/test_connect.py`, `link/test_portmap.py` and the 7 `online_*` tests pass. Deferred: IPv6, port prediction. Left: a real two-home test.
 
 ## Next (M12 v1.0, design `docs/design/M12-v1-release.md`, approved; D109–D116)
 1. ~~**Licence**~~ (done 2026-10-27): `LICENSE` (AGPL-3.0), `NOTICE`, `licenses/`, in the installer and the APK; `release.py` refuses a release without them. GitHub shows the licence once this reaches `main`.
@@ -146,7 +146,7 @@ _Last updated: 2026-10-28 morning (0.12.0 beta released; extra jumps built (PR #
 - Day 4 (2026-10-21): M8 designs approved; M8 implementation well along (two sessions so far, one cut off by a PC restart).
 
 ## Decisions needed (Tucker)
-- **M14: should launchers relay for others, and announce themselves publicly?** For a stuck pair to find a player's launcher to relay through, that launcher has to post its public IP address and port on a public ntfy topic, where anyone can read them (and its upload carries other people's games, capped at about 1 Mbit/s). The approved design has this on by default; the IP exposure wasn't discussed. Options: (a) **off by default, a setting "Help other players connect" that says what it shares (recommended)**; (b) on by default, as designed; (c) no peer relays: only relays someone runs on a server (`python -m link.relay`), listed in a file in this repository. Until you decide, relays come only from `COOP_RELAYS`.
+- **Decided 2026-10-28:** online play connects the way Slippi does, no relays (D123).
 - **Approved 2026-10-27:** the M12 v1.0 and M13–M19 designs (D109), v1.0 without the inverted castle (D114), the Mac build unsigned (D115).
 
 ### Older, still open
