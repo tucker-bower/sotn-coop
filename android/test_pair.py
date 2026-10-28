@@ -43,8 +43,8 @@ def adb(serial, *args, check=True, **kw):
 
 TMP = "/data/local/tmp/coop"
 # The launcher's settings for the test (its data folder: the app's private one, so a test can
-# reach it). The emulators draw in software (no GPU): "Smooth" is one pass.
-SETTINGS = {"scaling": os.environ.get("COOP_TEST_SCALING", "smooth")}
+# reach it).
+SETTINGS = {}
 
 
 def as_app(serial, command, check=True):

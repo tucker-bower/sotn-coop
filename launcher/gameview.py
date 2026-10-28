@@ -402,7 +402,7 @@ class GameView:
     def pause_menu(self, why=None):
         """Esc (or Start on a TV, with the menu bar out of reach): Resume, the View settings, How to
         play, Report a problem, Leave. Returns "resume", "menu", "quit" or ("navigate", action)."""
-        from display import LAYOUT_NAMES, SCALING_NAMES
+        from display import LAYOUT_NAMES
         sel = 0
         if self.audio:
             self.audio.clear()
@@ -410,7 +410,6 @@ class GameView:
         while True:
             items = ["Resume",
                      f"Layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
-                     f"Pixels: {SCALING_NAMES.get(st.get('scaling', 'sharp'), 'Sharp')}",
                      "How to play", "Report a problem (F9)", "Save and go back to the menu"]
             for ev in pygame.event.get():
                 if self.display.handle(ev):
@@ -447,19 +446,18 @@ class GameView:
                 if move == "ok":
                     if sel == 0:
                         return "resume"
-                    if sel in (1, 2):  # cycle the layout / the pixels, as View in the menu bar
-                        key, names = ("layout", LAYOUT_NAMES) if sel == 1 else ("scaling", SCALING_NAMES)
-                        order = list(names)
+                    if sel == 1:  # cycle the layout, as View in the menu bar
+                        key, order = "layout", list(LAYOUT_NAMES)
                         now = st.get(key, order[0])
                         st[key] = order[(order.index(now) + 1) % len(order)] if now in order else order[0]
                         if self.launcher:
                             self.launcher.action(f"{key}:{st[key]}")
                         continue
-                    if sel == 3:
+                    if sel == 2:
                         if self.launcher:
                             self.launcher.action("help_play")
                         continue
-                    if sel == 4:
+                    if sel == 3:
                         self.report()
                         return "resume"
                     return "menu"

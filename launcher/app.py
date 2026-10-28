@@ -475,8 +475,6 @@ class Launcher:
         st = self.settings
         if action.startswith("layout:"):
             st["layout"] = action.split(":", 1)[1]
-        elif action.startswith("scaling:"):
-            st["scaling"] = action.split(":", 1)[1]
         elif action.startswith("netsim:"):
             st["netsim"] = None if action.endswith("off") else action.split(":", 1)[1]
         elif action == "fullscreen":
@@ -1331,8 +1329,6 @@ class Launcher:
         while True:
             st = self.settings
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
-                     (f"Pixels: {'Sharp' if st.get('scaling', 'sharp') == 'sharp' else 'Smooth'}",
-                      "Sharp keeps every pixel crisp; Smooth softens them. Always the true 4:3 picture."),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
@@ -1346,16 +1342,14 @@ class Launcher:
                 order = list(LAYOUT_NAMES)
                 st["layout"] = order[(order.index(st.get("layout", "auto")) + 1) % len(order)]
             elif k == 1:
-                st["scaling"] = "smooth" if st.get("scaling", "sharp") == "sharp" else "sharp"
-            elif k == 2:
                 st["music"] = {"auto": "left", "left": "right", "right": "auto"}[st.get("music", "auto")]
-            elif k == 3:
+            elif k == 2:
                 st["aggro"] = (st.get("aggro", 50) + 10) % 110
-            elif k == 4:
+            elif k == 3:
                 self.game_files()
-            elif k == 5:
+            elif k == 4:
                 self.controls_menu()
-            elif k == 6:
+            elif k == 5:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

@@ -373,6 +373,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D79: Window: Automatic layout and sharp-bilinear pixels by default** (agent-default, 2026-10-20)
 - **Automatic** picks side by side or stacked, whichever gives the bigger picture.
 - **Sharp** enlarges by whole pixels, then smooths the last fraction, at the true 4:3 shape (no stretch: D76). **Smooth** is plain filtering.
+- **2026-10-28 (Tucker):** "Smooth" removed. Sharp is the only scaling; there's no pixel setting.
 
 **D80: The Game menu has no Reset and no "Joint save now"** (agent-default, 2026-10-20)
 - Coffins are the save points by design.

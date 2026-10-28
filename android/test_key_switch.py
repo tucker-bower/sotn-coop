@@ -21,7 +21,7 @@ import test_pair  # noqa: E402
 SERIAL = "emulator-5554"
 EXT = device.EXT
 CASTLE = {"castles/Test_2026-10-27-20-00/castle.json": '{"name": "Test"}\n',
-          "castles/Test_2026-10-27-20-00/A.mcd.txt": "slot A\n", "settings.json": '{"scaling": "smooth"}\n'}
+          "castles/Test_2026-10-27-20-00/A.mcd.txt": "slot A\n", "settings.json": '{"layout": "side"}\n'}
 
 
 def adb(*args, check=False, capture_output=False, **kw):
