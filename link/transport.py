@@ -19,6 +19,8 @@ import zlib
 import collections
 from collections import OrderedDict
 
+from . import relay  # M14: packets through a relay are sealed (link/relay.py)
+
 WIRE_VERSION = 9
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
 TAG_PRESENCE = b"PRES"  # payload: presence (0x2C), then _PRES_TAIL
@@ -89,6 +91,8 @@ class UdpTransport:
         self.host = host
         self.peer = None
         self.peer_confirmed = False  # a valid HELO came from self.peer (link/host.py)
+        self.relay = None  # (ip, port) of the relay the partner is reached through (M14), or None
+        self.relay_room = self.relay_token = None
         if peer_port is not None:
             self.connect(peer_port)
         self.sock = sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -137,6 +141,13 @@ class UdpTransport:
         self.loss = 0.0           # fraction of packets randomly dropped (0.0 - 1.0)
         self.loss_drops = 0
         self._rng = random.Random(1)
+
+    def use_relay(self, addr, token):
+        """M14: from now on the partner is reached through this relay (link/relay.py), with the
+        room's token for the relay's room id and the packets' key."""
+        self.relay = (str(addr[0]), int(addr[1]))
+        self.relay_token = token
+        self.relay_room = relay.room_id(token)
 
     def accept_peer(self, addr):
         """A valid HELO came from addr: that's the partner (or the partner's new address, when
@@ -251,6 +262,8 @@ class UdpTransport:
         self.packets_sent += 1
         if self.sim:
             pkt = self.sim.stamp(pkt)
+        if self.relay is not None and self.peer == self.relay:  # through the relay: sealed (link/relay.py)
+            pkt = relay.MAGIC + self.relay_room + relay.seal(self.relay_token, pkt)
         try:
             self.sock.sendto(pkt, self.peer)
         except OSError:  # partner not listening (yet, or any more): presence is best-effort
@@ -284,6 +297,12 @@ class UdpTransport:
         Snapshot chunks come out as one TAG_SNAP once complete and decoded."""
         out = []
         for data, addr in self._datagrams():
+            if self.relay is not None and (str(addr[0]), int(addr[1])) == self.relay:
+                if data[:len(relay.MAGIC)] != relay.MAGIC or data[len(relay.MAGIC):relay.HEADER] != self.relay_room:
+                    continue
+                data = relay.open_(self.relay_token, data[relay.HEADER:])
+                if data is None:  # not sealed with this room's key: not the partner's
+                    continue
             if self._stun_tx and len(data) >= 20 and data[:2] == b"\x01\x01":  # a STUN answer
                 self._stun_reply(data)
                 continue

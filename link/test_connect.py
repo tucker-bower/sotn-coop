@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from link.connect import GAME_PORT, TIMEOUT_S, Connector  # noqa: E402
 from link.host import Host  # noqa: E402
 from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, DeadRelay, Internet, MemoryRelay, StunServer  # noqa: E402
+from link.relay import Relay  # noqa: E402
 from link.transport import TAG_PRESENCE, UdpTransport  # noqa: E402
 
 
@@ -32,7 +33,8 @@ class NoGame:
 
 
 class Player:
-    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0", port=0):
+    def __init__(self, net, router, room, role, relay, stuns, clock, link=None, app="0.9.0", port=0, relays=(),
+                 portmap=False):
         self.sock = net.socket(router)
         self.t = UdpTransport(port=port, sock=self.sock, bind_host="0.0.0.0")
         self.t.clock = clock
@@ -40,25 +42,51 @@ class Player:
         if link is not None:
             self.host.hello["link"] = link
         self.host.start_connect(room, role, relay=relay, stun_servers=stuns, resolve=False,
-                                lan_ip=self.sock.addr[0], app=app)
+                                lan_ip=self.sock.addr[0], app=app, relays=list(relays),
+                                portmap=self._portmap(router) if portmap else (lambda port: None))
         if app is None:  # a launcher from before 0.9.0: its candidates carry no version
             self.host.connector.version = {}
+
+    def _portmap(self, router):
+        """A router that answers UPnP / NAT-PMP: it forwards the game's port (link/portmap.py)."""
+        def mapped(port):
+            router.forward(port, self.sock.addr)
+            router.out[self.sock.addr] = port
+            return (router.ip, port)
+        return mapped
 
     def tick(self):
         self.host.handshake_tick()
 
 
+class SeeingRelay(Relay):
+    """The relay of link/relay.py, keeping what passed through it (to check it can't read it)."""
+
+    def handle(self, data, addr):
+        self.seen = getattr(self, "seen", []) + [data]
+        super().handle(data, addr)
+
+
 def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", seconds=35, b_version=None,
-            relay=None, port=0):
+            relay=None, port=0, with_relay=False, portmap=""):
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
+    relays, rel = (), None
+    if with_relay:  # an open relay on the internet (anyone's: link/relay.py)
+        sock = net.socket(None)
+        sock.bind(("0.0.0.0", 3479))
+        rel = SeeingRelay(sock, clock=lambda: clock_t[0])
+        relays = [sock.addr]
     relay = relay or MemoryRelay()
     clock_t = [0.0]
     clock = lambda: clock_t[0]
     ra = net.router(a_kind)
     rb = ra if same_house else net.router(b_kind)
-    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock, port=port)
-    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, port=port, **(b_version or {}))
+    a = Player(net, ra, "BAT-7K2Q", "host", relay, [s.addr for s in stuns], clock, port=port, relays=relays,
+               portmap="a" in portmap)
+    b = Player(net, rb, room_b, "join", relay, [s.addr for s in stuns], clock, port=port, relays=relays,
+               portmap="b" in portmap, **(b_version or {}))
+    a.relay_server = rel
     if forward == "a":  # the host's router forwards the game's port to it
         ra.forward(a.t.port, a.sock.addr)
         ra.out[a.sock.addr] = a.t.port
@@ -68,6 +96,8 @@ def session(a_kind, b_kind, same_house=False, forward=None, room_b="BAT-7K2Q", s
         b.tick()
         for s in stuns:
             s.tick()
+        if rel:
+            rel.poll()
         if a.host.connector.state == b.host.connector.state == "connected" or {
                 a.host.connector.state, b.host.connector.state} <= {"connected", "failed"}:
             break
@@ -78,6 +108,8 @@ def exchanged(a, b):
     """After connecting, presences flow both ways (from the confirmed addresses only)."""
     for p, q in ((a, b), (b, a)):
         p.t.send(TAG_PRESENCE, bytes(0x2C))
+        if getattr(a, "relay_server", None):  # through the relay: its turn to forward
+            a.relay_server.poll()
         got = [d for d in q.t.receive() if d[0] == TAG_PRESENCE]
         if not got:
             return False
@@ -106,6 +138,29 @@ def main():
         else:
             ok = "failed" in (sa["state"], sb["state"]) and "port" in (sa["reason"] or sb["reason"] or "")
             check(ok, f"{ka} host + {kb} joiner: fails with a reason ({sa['reason'] or sb['reason']!r:.60})")
+
+    # M14: with an open relay, the pairings hole punching can't do connect too, through it; the relay
+    # carries only sealed packets (it can't read a presence or a HELO)
+    for ka, kb in itertools.product(KINDS, KINDS):
+        if expect_connects(ka, kb):
+            continue
+        a, b = session(ka, kb, with_relay=True, seconds=20)
+        sa, sb = a.host.connector.status(), b.host.connector.status()
+        flow = sa["state"] == sb["state"] == "connected" and exchanged(a, b)
+        a.tick(); b.tick()
+        rel = a.relay_server
+        plain = any(tag in d for d in getattr(rel, "seen", []) for tag in (b"PRES", b"HELO", b"BAT-7K2Q"))
+        check(flow and sa["via"] and rel.forwarded > 0 and not plain,
+              f"{ka} host + {kb} joiner, with a relay: connected through it, sealed ({sa['state']}/{sb['state']}, via {sa['via']}, plaintext seen: {plain})")
+    # M14 step 3: a symmetric router that answers UPnP / NAT-PMP opens the game's port: direct
+    for ka, kb, who in ((SYMMETRIC, PORT_RESTRICTED, "a"), (PORT_RESTRICTED, SYMMETRIC, "b"), (SYMMETRIC, SYMMETRIC, "a")):
+        a, b = session(ka, kb, portmap=who, seconds=20)
+        sa = a.host.connector.status()
+        check(sa["state"] == b.host.connector.state == "connected" and sa["via"] is None and exchanged(a, b),
+              f"{ka} host + {kb} joiner, the {'host' if who == 'a' else 'joiner'}'s router opens the port: connected directly")
+    a, b = session(CONE, PORT_RESTRICTED, with_relay=True, seconds=20)
+    check(a.host.connector.state == "connected" and a.host.connector.via is None,
+          "with a relay, a pair that can punch still connects directly")
 
     a, b = session(PORT_RESTRICTED, PORT_RESTRICTED, same_house=True)
     lan = b.t.peer and b.t.peer[0].startswith("192.168.")

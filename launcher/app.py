@@ -100,11 +100,14 @@ Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
 HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Read it to your partner, or paste it to them.
 Joining: type your partner's room code. Both of you need the same version of SOTN Co-op.
 
-If it can't connect:
+If it can't connect (only one of you needs to fix it):
 ·  Windows may ask whether to allow SOTN Co-op through its firewall: choose Allow.
+·  Turn on UPnP in your router's settings (most routers have it on already). The game then opens
+   its own port.
 ·  A phone hotspot, or some internet providers, can't connect directly. Try another network.
-·  Still stuck? On the host's router, forward a UDP port to the host's PC; the joiner then types
-   the host's address as ip:port instead of the room code (Help › About shows the port while hosting).
+·  Or forward UDP port 47811 on your router to your PC or phone.
+·  Still stuck? Forward the port on the host's router; the joiner then types the host's address as
+   ip:port instead of the room code (Help › About shows the port while hosting).
 The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
 
 KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
