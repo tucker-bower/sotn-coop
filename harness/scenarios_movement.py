@@ -16,10 +16,8 @@ from scenarios_relics import MP, MP_MAX, report
 TOLERANCE = 8  # px: a character may fall this short of Alucard (sprite and hitbox differences)
 CLIMBS = 200  # px: climbing that keeps going this far counts as unlimited (the measuring spot has a
               # ceiling that Richter's backflips drift under; Alucard's bat flies up through a gap)
-# Known gaps, a decision for Tucker (STATUS, D119): the test passes while exactly these fall short,
-# so a new shortfall still fails.
-KNOWN = {"richter": {"second jump (Leap Stone)", "high jump (Gravity Boots)"},
-         "maria": {"high jump (Gravity Boots)"}}
+# Known gaps: the test passes while exactly these fall short, so a new shortfall still fails.
+KNOWN = {"richter": set(), "maria": set()}  # D122's extra jumps closed the two gaps D119 found
 JUMP = ["cross"] * 16 + [""] * 60
 HIGH = ["down"] * 3 + [""] * 2 + ["up"] * 2 + ["up+cross"] * 2 + [""] * 60
 RUN_JUMP = ["right"] * 20 + ["right+cross"] * 16 + ["right"] * 60
@@ -30,6 +28,8 @@ SECOND = {0: [["cross"] * 16 + [""] * 2 + ["cross"] * 12 + [""] * 60],
                          ["cross"] * 16 + [""] * 2 + ["cross"] * 2 + [""] * 60],     # ...at the top
           CHAR_MARIA: [["cross"] * 16 + [""] * 2 + ["cross"] * 12 + [""] * 60]}
 THEN_SECOND = HIGH[:9] + [""] * 24 + ["cross"] * 12 + [""] * 60  # a high jump, then the second at its top
+TAPS = lambda after, wait: after + [""] * wait + (["cross"] * 14 + [""] * 2) * 8 + [""] * 60  # press and hold jump, again and again: one takes
+TAPPED = [TAPS(HIGH[:9], w) for w in (20, 30, 40, 50)] + [TAPS(["cross"] * 16, w) for w in (4, 8, 12)]
 CLIMB = {0: [["r1"] * 2 + [""] * 30 + ["up"] * 600],
          CHAR_RICHTER: [(["cross"] * 2 + [""] * 2) * 150 + [""] * 60, (["cross"] * 2 + [""] * 6) * 75 + [""] * 60],
          CHAR_MARIA: [(["cross"] * 12 + [""] * 2) * 40 + [""] * 60, (["cross"] * 6 + [""] * 4) * 60 + [""] * 60]}
@@ -48,8 +48,8 @@ def best(r, ways):
 STEPS = [
     ("jump", [], lambda r, ch: rise(r, JUMP)),
     ("running jump, distance", [], lambda r, ch: travel(r, RUN_JUMP)),
-    ("second jump (Leap Stone)", [LEAP_STONE], lambda r, ch: best(r, SECOND[ch] + [JUMP])),
-    ("high jump (Gravity Boots)", [LEAP_STONE, GRAVITY_BOOTS], lambda r, ch: best(r, [HIGH, THEN_SECOND] + SECOND[ch])),
+    ("second jump (Leap Stone)", [LEAP_STONE], lambda r, ch: best(r, SECOND[ch] + [JUMP] + TAPPED[4:])),
+    ("high jump (Gravity Boots)", [LEAP_STONE, GRAVITY_BOOTS], lambda r, ch: best(r, [HIGH, THEN_SECOND] + SECOND[ch] + TAPPED)),
     ("climbing (Soul of Bat)", [LEAP_STONE, GRAVITY_BOOTS, SOUL_OF_BAT],
      lambda r, ch: best(r, CLIMB[ch] + [HIGH, THEN_SECOND])),
 ]
