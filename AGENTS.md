@@ -38,7 +38,8 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 - **Primary:** a headless, frame-stepped harness with savestates, scripted and bot inputs, and RAM assertions.
 - **Multi-instance session tests:** run two game instances plus the host yourself, with scripted inputs on both and assertions across both games. Co-op features count as working only when a session test proves it. Don't wait for Tucker to run a two-player check.
 - **Secondary:** emulators on Tucker's PC at `C:\Users\tucke\OneDrive\Desktop\Emulators`. Install anything needed there and use it for cross-emulator compatibility checks. Ask before installing anything outside that folder.
-- **Before any playtest build:** boot-and-run checks on the dev platform, plus PCSX-Redux, and on the product emulator once R1 has chosen it.
+- **Everyday:** `harness/run.py` (parallel, about 8 minutes; D108).
+- **Before any playtest build:** `harness/run.py --full` (adds the long soaks and fuzz), boot-and-run checks on the dev platform, plus PCSX-Redux, and on the product emulator once R1 has chosen it.
 
 ## PR template
 ```

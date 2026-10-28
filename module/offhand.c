@@ -1,17 +1,12 @@
-// Off-hand weapons for Richter and Maria (design/M8b §4.1): ○ uses what's in a hand.
+// Off-hand weapons for Richter and Maria (D105, design/M12b): ○ uses what's in a hand.
 //
 // Richter keeps his whip and Maria her guardians. In Alucard's equip menu they put any weapon,
 // food or potion in a hand, and ○ uses it:
-// - a weapon swings: the weapon's own sprite (its frame reaching furthest forward, from the
-//   weapon overlay the game loaded for that hand) sweeps an arc in front of them, or thrusts for
-//   a fist. It hits with the weapon's own numbers (GetEquipProperties: ATK + STR, element, hit
-//   effect), through the game's normal damage, as Alucard's does;
+// - a weapon works exactly as in Alucard's hands: its own overlay's code, sprites, hitboxes and
+//   specials, timed by Alucard's own attack animation run on a virtual Alucard (see below);
 // - potions heal as Alucard's do (Potion, High potion, Elixir, Manna prism: DRA's amounts),
-//   and food heals by its value, at once. (Alucard's item entities are DRA's, which Richter's
-//   entity loop doesn't run; food is dropped and picked up by its weapon overlay, which would
-//   take Richter's sprite bank.) The other potions (resists, stats): not yet;
+//   and food heals by its value, at once. The other potions (resists, stats): not yet;
 // - shields only add their DEF (the equipment totals do that); thrown items: not yet.
-// No new art: the swing is the weapon's frame, turned (design/M8b §4.1, option A).
 //
 // The weapon overlays (0x8017A000, 0x8017D000) are loaded by the game when the menu closes;
 // after a load (where the game skips them for Richter's player code) the module loads them.
@@ -28,12 +23,19 @@
 #include "link.h"
 #include "character.h"
 #include "offhand.h"
+#include "weapons.h"
 
 // DRA (src/dra/menu.c, 5D5BC.c, 7879C.c)
 bool LoadWeaponPrg(s32 equipIndex);
 void InitWeapon(s32 itemSlot);
 void GetEquipProperties(s32 handId, Equipment* res, s32 equipId);
 void func_80118894(Entity* self);
+Entity* CreateEntFactoryFromEntity(Entity* source, u32 factoryParams, s16 arg2);
+void EntityFactory(Entity* self);
+void PlayAnimation(s8* frameProps, AnimationFrame** frames);
+extern PfnEntityUpdate g_DraEntityTbl[]; // DRA's player entities (src/dra/7879C.c)
+extern s8 D_800B0130[];              // Alucard's animation frame properties (src/dra/692E8.c)
+extern AnimationFrame* D_800B01B8[]; // ...and his animations
 int ReduceWeapon(s32 hand);
 s32 GetStatusAilmentTimer(s32 statusAilment, s32 timer);
 #define STATUS_AILMENT_POTION 4      // src/dra/dra.h: STATUS_AILMENT_UNK04
@@ -46,13 +48,7 @@ extern s32 g_EquippedWeaponIds[2];
 #define WEAPON_PRG(hand) ((hand) ? 0x8017D000 : 0x8017A000)
 #define WEAPON_ANIMSET(hand) ((SpriteParts**)(WEAPON_PRG(hand) + 0x40)) // every w0_/w1_ overlay
 #define WEAPON_SIZE 0x3000
-#define BANK 0x16 // stage sprite banks 0x16-0x17 are free in every stage (Richter: 0x10-0x13, familiars 0x14)
-#define E_OFFHAND 0x7E
-#define SLOT_FIRST 0x18
-#define SLOT_LAST 0x2F
-#define SWING_FRAMES 14
-#define HAND_X 6   // where Richter's and Maria's hand is, from their middle (facing right)
-#define HAND_Y -10
+#define WBANK 0x17 // the weapon's sprites (stage sprite bank 0x17 is free; Richter uses 0x10-0x13, familiars 0x14, Maria 0x10-0x16)
 
 static s8 s_Loading = -1; // the hand whose weapon is being loaded
 static u8 s_Hand;         // the hand of the swing now
@@ -65,6 +61,7 @@ static bool s_HaveOwn;
 static s16 s_Slot[2];   // where each hand's weapon palette goes (one the player doesn't use)
 static u32 s_SlotsFor = 0xFF; // the character they were picked for
 static u16 s_WeaponPal[2][COLORS_PER_PAL];
+static u8 s_Clut[2]; // which of the hand's 24 palettes that is
 static u8 s_PrevEngine; // g_GameEngineStep last frame
 
 static bool InPlay(void) {
@@ -148,10 +145,12 @@ static void FixPalettes(s32 hand) {
     if (k == N_WEAPON_PAL * COLORS_PER_PAL) {
         return; // nothing loaded over them
     }
+    WeaponKeepClut(hand, block); // all 24, for the partner to draw this weapon (weapons.c)
     s_Hand = hand;
     if (IsWeapon(Category(hand)) && Loaded(hand) && (frame = Extended(WEAPON_ANIMSET(hand))) != 0) {
         clut = WEAPON_ANIMSET(hand)[frame]->parts[0].clut;
     }
+    s_Clut[hand] = clut;
     for (k = 0; k < COLORS_PER_PAL; k++) {
         s_WeaponPal[hand][k] = block[clut * COLORS_PER_PAL + k];
     }
@@ -207,105 +206,6 @@ static s32 Extended(SpriteParts** animset) {
     return best;
 }
 
-// The hitbox around the frame, and the hilt (its end nearest the body) as the turning point.
-static void Hitbox(Entity* self, SpriteParts* parts) {
-    s32 k, x0 = 999, x1 = -999, y0 = 999, y1 = -999;
-    SpritePart* p;
-
-    for (k = 0; k < parts->count; k++) {
-        p = &parts->parts[k];
-        x0 = p->offsetx < x0 ? p->offsetx : x0;
-        y0 = p->offsety < y0 ? p->offsety : y0;
-        x1 = p->offsetx + p->width > x1 ? p->offsetx + p->width : x1;
-        y1 = p->offsety + p->height > y1 ? p->offsety + p->height : y1;
-    }
-    self->hitboxOffX = (x0 + x1) / 2;
-    self->hitboxOffY = (y0 + y1) / 2;
-    self->hitboxWidth = (x1 - x0) / 2;
-    self->hitboxHeight = (y1 - y0) / 2 + 12; // the arc sweeps above and below it
-    self->rotPivotX = x0;
-    self->rotPivotY = (y0 + y1) / 2;
-    self->ext.weapon.unk82 = HAND_X - x0; // EntityOffhand: the hilt to the hand
-    self->ext.weapon.unk90 = HAND_Y - (y0 + y1) / 2;
-}
-
-// The swing: the weapon's extended frame turns from raised to lowered in front of the player.
-static void EntityOffhand(Entity* self) {
-    s32 t = self->ext.weapon.anim; // frames since the swing began
-    bool fist = self->params & 1;
-
-    // The frame is placed for Alucard's arm: its hilt goes to their hand instead.
-    self->posX.val = PLAYER.posX.val;
-    self->posX.i.hi += PLAYER.facingLeft ? -self->ext.weapon.unk82 : self->ext.weapon.unk82;
-    self->posY.val = PLAYER.posY.val;
-    self->posY.i.hi += self->ext.weapon.unk90;
-    self->facingLeft = PLAYER.facingLeft;
-    self->zPriority = PLAYER.zPriority + 2;
-    if (t >= SWING_FRAMES || !InPlay()) {
-        self->hitboxState = 0;
-        DestroyEntity(self);
-        return;
-    }
-    if (fist) { // a punch: out and back
-        self->rotate = 0;
-        self->posX.i.hi += (PLAYER.facingLeft ? -1 : 1) * (t < SWING_FRAMES / 2 ? t : SWING_FRAMES - t);
-    } else { // raised 70 degrees to lowered 30, around the hilt (either way it faces)
-        self->rotate = -0x320 + t * 0x470 / SWING_FRAMES;
-    }
-    // It hits in the middle of the swing, where the blade is in front.
-    self->hitboxState = (t >= 3 && t <= SWING_FRAMES - 3) ? self->ext.weapon.unk80 : 0;
-    self->ext.weapon.anim = t + 1;
-}
-
-static void Swing(s32 hand) {
-    Equipment equip;
-    Entity* e;
-    s32 slot, frame, item = g_Status.equipment[hand];
-
-    // Attackers are slots 1-47 for the stage's hit detection (src/st/collision.h): the highest
-    // free one, away from where the player's own attacks start.
-    for (slot = SLOT_LAST; slot >= SLOT_FIRST; slot--) {
-        if (!g_Entities[slot].entityId) {
-            break;
-        }
-    }
-    if (slot < SLOT_FIRST) {
-        return;
-    }
-    s_Hand = hand;
-    frame = Extended(WEAPON_ANIMSET(hand));
-    if (!frame) {
-        return;
-    }
-    ((SpriteParts**)g_api.o.spriteBanks)[BANK + hand] = (SpriteParts*)WEAPON_ANIMSET(hand);
-    e = &g_Entities[slot];
-    DestroyEntity(e);
-    e->entityId = E_OFFHAND;
-    e->pfnUpdate = EntityOffhand;
-    e->step = 1; // the game never picks an update function for it (7879C.c)
-    e->params = Category(hand) == ITEM_FIST;
-    e->animSet = ANIMSET_OVL(BANK + hand);
-    e->animCurFrame = frame;
-    e->palette = s_Slot[hand] >= 0 ? PAL_UNK_FLAG | s_Slot[hand] : PAL_UNK_110 + (hand ? 0x18 : 0);
-    e->unk5A = 0x64 + (hand ? 2 : 0);
-    e->flags = FLAG_UNK_20000 | FLAG_POS_PLAYER_LOCKED;
-    e->drawFlags = ENTITY_ROTATE;
-    GetEquipProperties(hand, &equip, item);
-    e->attack = equip.attack;
-    e->attackElement = equip.element;
-    e->ext.weapon.unk80 = equip.hitType ? equip.hitType : 2;
-    e->nFramesInvincibility = equip.enemyInvincibilityFrames;
-    e->stunFrames = equip.stunFrames;
-    e->hitEffect = equip.hitEffect;
-    e->entityRoomIndex = equip.criticalRate;
-    e->ext.weapon.anim = 0;
-    func_80118894(e);
-    Hitbox(e, WEAPON_ANIMSET(hand)[frame]);
-    e->posX.val = PLAYER.posX.val;
-    e->posY.val = PLAYER.posY.val;
-    PlaySfx(SFX_WEAPON_SWISH_A);
-}
-
 // Potions, with DRA's amounts (src/dra/7E4BC.c: GetStatusAilmentTimer adds the Bwaka knife's
 // bonus), and food by its value (its ATK).
 static void Use(s32 hand) {
@@ -338,14 +238,222 @@ static void Use(s32 hand) {
     ReduceWeapon(hand);
 }
 
-static bool Busy(void) {
-    s32 i;
-    for (i = SLOT_FIRST; i <= SLOT_LAST; i++) {
-        if (g_Entities[i].entityId == E_OFFHAND) {
-            return true;
+// --- D105: the weapon's own overlay, as for Alucard (design/M12b) ----------------------------
+// ○ starts what Alucard's attack starts (src/dra/6E42C.c): the weapon's blueprint through DRA's
+// factory, whose children (0xE0+ / 0xF0+) Richter's and Maria's entity loops send here. Alucard's
+// attack animation runs on a virtual Alucard (s_Alu), advanced by DRA's PlayAnimation; while a
+// weapon entity updates, PLAYER's animation is that one, so the overlay draws, times and hits as
+// in Alucard's hands. Richter's or Maria's own body is untouched.
+#define FACTORY_FIRST 8 // DRA's CreateEntFactoryFromEntity takes a free slot in 8-15
+#define FACTORY_SLOTS 8
+#define E_FACTORY 1     // the factory's entity id in every player entity loop (src/dra/7879C.c)
+static Entity s_Alu;
+static bool s_Swinging;
+static u16 s_Unk46;
+static bool s_Grounded; // the swing started on the ground
+
+static void AluSwing(s32 hand) {
+    u32 item = g_Status.equipment[hand];
+    Equipment* eq = &g_EquipDefs[item];
+    Entity* f;
+    Entity* cur = g_CurrentEntity;
+
+    f = CreateEntFactoryFromEntity(&PLAYER, FACTORY(eq->unk13 + ((hand + 1) << 12),
+                                                    ((eq->unk14 & 0x7F) + (hand << 7))), item);
+    if (!f) {
+        return;
+    }
+    __builtin_memset(&s_Alu, 0, sizeof(s_Alu));
+    s_Grounded = g_Player.vram_flag & 1;
+    s_Alu.ext.player.anim = eq->playerAnim + (s_Grounded ? 0 : 4); // in the air: his jump swing
+    s_Unk46 = eq->unk11 + 0x7FFF + 2;
+    s_Swinging = true;
+    s_Hand = hand;
+    g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
+    PlayAnimation(D_800B0130, D_800B01B8);
+    // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's
+    // starts now, so it keeps DRA's update.
+    g_CurrentEntity = f;
+    EntityFactory(f);
+    f->pfnUpdate = EntityFactory;
+    g_CurrentEntity = cur;
+    ReduceWeapon(hand);
+}
+
+static void AluAnimate(void) {
+    Entity* cur = g_CurrentEntity;
+
+    if (!s_Swinging) {
+        return;
+    }
+    // As Alucard: on the ground, no walking or turning until the swing ends (his attack step)
+    if (s_Grounded) {
+        g_pads[0].pressed &= ~(PAD_LEFT | PAD_RIGHT);
+        g_pads[0].tapped &= ~(PAD_LEFT | PAD_RIGHT);
+    }
+    g_CurrentEntity = &s_Alu;
+    PlayAnimation(D_800B0130, D_800B01B8);
+    g_CurrentEntity = cur;
+    if (s_Alu.poseTimer < 0) {
+        s_Swinging = false;
+    }
+}
+
+// --- Maria: the weapon's tile sheet beside her guardians (D106, design/M12b) -------------------
+// DRA loads a hand weapon's sheet at 0x240,0x100 (right hand) or 0x240,0x180 (left), over her
+// guardians (D104), whose graphics are then put back. Before that, the sheet is copied to the
+// 8MB, and the one ○ will swing goes back at 0x240,0x180: that area holds her owl and doll, which
+// she can't select in our port (maria.c's ConvertSubweaponRicToMaria maps no subweapon to them).
+#define SHEET_W 0x40 // 16-bit words: 256 4bpp pixels
+#define SHEET_H 0x80
+#define SHEET_Y(hand) ((hand) ? 0x180 : 0x100)
+#define SHEET(hand) ((u_long*)(WEAPON_SHEET_ADDR + (hand) * SHEET_W * SHEET_H * 2))
+static s8 s_SheetHand = -1; // the hand whose sheet is at 0x240,0x180 in Maria's game
+
+void OffhandKeepSheet(s32 hand) {
+    RECT r;
+
+    r.x = 0x240;
+    r.y = SHEET_Y(hand);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    DrawSync(0);
+    StoreImage(&r, SHEET(hand));
+    DrawSync(0);
+}
+
+// Her guardians' upload (MARIA_Load) is queued and runs over the next frames: the weapon's sheet
+// goes in after it.
+#define SHEET_DELAY 8
+static s8 s_PlaceIn;
+
+void OffhandPlaceSheet(void) { s_PlaceIn = SHEET_DELAY; }
+
+static void PlaceSheet(void) {
+    RECT r;
+    s32 hand;
+
+    for (hand = 0; hand < 2 && !(IsWeapon(Category(hand)) && Loaded(hand)); hand++) {
+    }
+    if (hand == 2) {
+        s_SheetHand = -1;
+        return;
+    }
+    r.x = 0x240;
+    r.y = SHEET_Y(1);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    LoadImage(&r, SHEET(hand));
+    s_SheetHand = hand;
+}
+
+// Each weapon entity's bank, palette and hand before they're changed below: the partner draws
+// its sprites as Alucard's (weapons.c).
+typedef struct {
+    u8 set, hand;
+    u16 palette;
+} Original;
+static Original s_Original[STAGE_ENTITY_START];
+
+// An entity the weapon's entities made (CreateEntityFromEntity) inherits the bank without passing
+// through here: its hand is in its id (0xE0+ / 0xF0+), its bank the first, its palette the swing's.
+bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand) {
+    s32 i = e - g_Entities;
+    const Original* o = &s_Original[i];
+
+    if (i < 0 || i >= STAGE_ENTITY_START || (u16)e->animSet != ANIMSET_OVL(WBANK) || e->entityId < 0xE0) {
+        return false;
+    }
+    *hand = e->entityId >= 0xF0;
+    *set = o->set && o->hand == *hand ? o->set : 0x10 + *hand * 2;
+    if (o->set && o->hand == *hand) {
+        *palette = o->palette;
+    } else if (e->palette & PAL_UNK_FLAG) {
+        *palette = PAL_WEAPONS + *hand * N_WEAPON_PAL + s_Clut[*hand];
+    } else {
+        *palette = e->palette;
+    }
+    return true;
+}
+
+void CoopWeaponEntity(Entity* self) {
+    s32 hand = self->entityId >= 0xF0;
+    PfnEntityUpdate fn;
+    u16 id = self->entityId;
+
+    // As DRA's loop (src/dra/7879C.c): these ids are DRA's own entities, the rest the weapon's
+    if (id == 0xEF || id == 0xFF || id == 0xED || id == 0xFD) {
+        fn = g_DraEntityTbl[E_FACTORY];
+    } else if (id == 0xEE || id == 0xFE) {
+        fn = g_DraEntityTbl[15];
+    } else {
+        fn = ((PfnEntityUpdate*)WEAPON_PRG(hand))[id - (hand ? 0xF0 : 0xE0)];
+    }
+    SpriteParts** banks = (SpriteParts**)g_api.o.spriteBanks;
+    SpriteParts* own[4];
+    u16 before[FACTORY_SLOTS];
+    u8 anim = PLAYER.ext.player.anim;
+    u16 pose = PLAYER.pose;
+    s16 timer = PLAYER.poseTimer;
+    u16 unk46 = g_Player.unk46;
+    u16 drawFlags = PLAYER.drawFlags;
+    s16 scaleY = PLAYER.scaleY;
+    s32 i, set;
+
+    for (i = 0; i < 4; i++) {
+        own[i] = banks[0x10 + i];
+    }
+    for (i = 0; i < FACTORY_SLOTS; i++) {
+        before[i] = g_Entities[FACTORY_FIRST + i].entityId;
+    }
+    if (s_Swinging) {
+        PLAYER.ext.player.anim = s_Alu.ext.player.anim;
+        PLAYER.pose = s_Alu.pose;
+        PLAYER.poseTimer = s_Alu.poseTimer;
+        g_Player.unk46 = s_Unk46;
+        PLAYER.drawFlags = 0; // the overlay copies these: Alucard's, not Richter's or Maria's
+        PLAYER.scaleY = 0x100;
+    } else {
+        g_Player.unk46 = 0; // the swing is over: the weapon's entities end themselves
+    }
+    fn(self);
+    // Factories the weapon's entities start (DRA's CreateEntFactoryFromEntity: slots 8-15) are
+    // DRA's: their loops would run them as their own (entity 1, step 0) with their blueprints, so
+    // DRA's starts now (the katanas' slashes, the brands' trails, the Heaven Sword...).
+    for (i = 0; i < FACTORY_SLOTS; i++) {
+        Entity* f = &g_Entities[FACTORY_FIRST + i];
+        if (f->entityId == E_FACTORY && before[i] != E_FACTORY && f->step == 0) {
+            g_CurrentEntity = f;
+            EntityFactory(f);
+            f->pfnUpdate = EntityFactory;
         }
     }
-    return false;
+    g_CurrentEntity = self;
+    set = self->animSet & 0x7FFF;
+    if (self->entityId && (self->animSet & ANIMSET_OVL_FLAG) && set >= 0x10 && set < 0x14) {
+        banks[WBANK] = banks[set]; // the overlay put its sprites in a body bank: ours instead
+        self->animSet = ANIMSET_OVL(WBANK);
+        s_Original[self - g_Entities].set = set;
+        s_Original[self - g_Entities].hand = hand;
+        s_Original[self - g_Entities].palette = self->palette;
+    }
+    if (self->entityId && CharacterLoaded() == CHAR_MARIA && hand == s_SheetHand) {
+        self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
+    }
+    if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
+        self->palette < PAL_WEAPONS + N_PAL && s_Slot[hand] >= 0) {
+        s_Original[self - g_Entities].palette = self->palette;
+        self->palette = PAL_UNK_FLAG | s_Slot[hand]; // the player's own palettes are there
+    }
+    for (i = 0; i < 4; i++) {
+        banks[0x10 + i] = own[i];
+    }
+    PLAYER.ext.player.anim = anim;
+    PLAYER.pose = pose;
+    PLAYER.poseTimer = timer;
+    g_Player.unk46 = unk46;
+    PLAYER.drawFlags = drawFlags;
+    PLAYER.scaleY = scaleY;
 }
 
 // Once per frame, before UpdateGame (the pads are this frame's).
@@ -369,13 +477,17 @@ void OffhandUpdate(void) {
     }
     s_PrevEngine = g_GameEngineStep;
     LoadWeapons();
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || Busy()) {
+    AluAnimate();
+    if (s_PlaceIn && !--s_PlaceIn) {
+        PlaceSheet();
+    }
+    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging) {
         return;
     }
     for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○
         c = Category(hand);
         if (IsWeapon(c) && Loaded(hand) && s_Loading < 0) {
-            Swing(hand);
+            AluSwing(hand);
             return;
         }
         if (c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF)) {

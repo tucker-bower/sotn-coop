@@ -13,6 +13,7 @@
 #include "boss.h"
 #include "message.h"
 #include "link.h"
+#include "shared.h"
 
 extern RoomTeleport D_800A245C[]; // DRA: stage teleports (doors between stages)
 extern RoomLoadDef* D_801375BC;   // DRA: the current room's RoomLoadDef (first member)
@@ -62,19 +63,30 @@ static bool s_DownForBoss; // dead while the partner fights a boss: respawn once
 
 // Pulled into the partner's boss fight / cutscene (design/M5): once per fight or cutscene
 static bool s_BossPulled, s_CutscenePulled;
+// After a boss pull, none for a while: a flying boss in a wide arena (the Lesser Demon) leaves one
+// camera's view and comes back, and the two games pulled each other back and forth.
+#define BOSS_PULL_COOLDOWN 600
+static s16 s_BossPullCooldown;
 // Cutscenes together (playtest 2026-10-20): the game whose scene starts holds on its first
 // frame until the partner, pulled in, has its own copy running, so both play at the same time.
 // A pulled-in game is a follower: nobody is pulled into a follower's scene (each copy used to
 // pull the other back in when its player left the room, forever). After a scene, a short
 // cooldown before this game can be pulled into another.
 #define CS_HOLD_MAX 600      // frames the leader waits for the partner (10 s)
+#define CS_HOLD_WAY_MAX 3600 // ...or 60 s while the partner is on its way: loading, in the opening
+                             // video, or still in the prologue (playtest 2026-10-25: Death's scene at
+                             // the entrance played for whoever finished the prologue first, alone)
 #define CS_FOLLOW_MAX 300    // frames a pulled-in game waits for its copy of the scene to start
 #define CS_COOLDOWN 300      // frames after a scene before this game can be pulled into another
+#define CS_END_MAX 600       // frames a game whose scene ended waits for the partner's to end too (10 s: an idle
+                             // partner stalls a scene that steers the player only while a direction is held)
 static bool s_CsOn, s_CsFollower;
-static s16 s_CsHold, s_CsFollowAge, s_CsCooldown;
+static s16 s_CsHold, s_CsFollowAge, s_CsCooldown, s_CsEndHold;
 
 // The partner saved at a save room: this game writes its own memory card save for the same
 // save room, through the game's own card code, frozen while it does (D46, D49).
+static s16 s_GroundLeft = -1, s_GroundTop; // the room (map cell) the presence's ground spot is in
+static u16 s_GroundStage;
 static bool s_CardSaving;
 static CoopCommand s_CardCmd;
 static s32 s_PrevPort, s_PrevBlock;
@@ -93,13 +105,31 @@ static bool PartnerFresh(void) {
 
 static bool PartnerReachable(void) {
     const CoopPresence* p = &g_CoopLink.partner;
+    // Nobody teleports into or out of the prologue (it's together, but it's Richter's).
     return PartnerFresh() && !(p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) &&
-           SAME_WORLD(p);
+           SAME_WORLD(p) && p->stage != STAGE_ST0 && g_StageId != STAGE_ST0;
+}
+
+// The partner's game is running but not in play yet (title, opening video, loading), or is
+// still in the prologue while this game has left it: it's coming.
+static bool PartnerOnItsWay(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    if (g_CoopLink.partnerAge > 30) {
+        return false;
+    }
+    return !(p->flags & PRESENCE_IN_PLAY) || (p->stage == STAGE_ST0 && g_StageId != STAGE_ST0);
 }
 
 static bool SameRoomAsPartner(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
+}
+
+// In this room but half a screen or more away (cameras apart: no shared room).
+static bool FarInRoom(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    s32 dx = p->scrollX - g_Tilemap.scrollX.i.hi, dy = p->scrollY - g_Tilemap.scrollY.i.hi;
+    return SameRoomAsPartner() && (dx >= 128 || dx <= -128 || dy >= 112 || dy <= -112);
 }
 
 static bool PartnerInBossFight(void) {
@@ -115,6 +145,14 @@ u16 CurrentRoomId(void) {
 }
 
 bool ArriveBusy(void) { return s_State != ARRIVE_IDLE; }
+
+// A scene just ended here and the game still steers the player (its last part, after the
+// dialogue: Death takes the gear then). No shared room forms meanwhile: as a guest, the partner's
+// Death was the leader's copy and never took the partner's gear (M12). Only after a scene: a door
+// steers the player for a moment too, and a guest must become one before its own enemies spawn.
+bool SceneAftermath(void) {
+    return s_CsCooldown && g_Player.demo_timer && SharedRole() == ROLE_NONE;
+}
 
 static const char* s_ArriveText; // shown once arrived (with a flash: Richter's Cross Crash fade)
 
@@ -306,27 +344,38 @@ static bool DeathUpdate(void) {
 
 // --- boss fights and cutscenes: the partner is pulled in (design/M5)
 
-static bool CanBePulled(void) {
+// sameRoom: a cutscene pulls a partner in the same room too, to the spot that started it
+// (playtest 2026-10-25: two players in one room each started a room's scene on their own).
+static bool CanBePulled(bool sameRoom) {
     return InNormalPlay() && g_GameEngineStep == Engine_Normal && !ArriveBusy() &&
-           !(g_Player.status & PLAYER_STATUS_DEAD) && !g_CutsceneHasControl && !SameRoomAsPartner() &&
-           !s_CardSaving && !D_80137598;
+           !(g_Player.status & PLAYER_STATUS_DEAD) && !g_CutsceneHasControl &&
+           (sameRoom || !SameRoomAsPartner()) && !s_CardSaving && !D_80137598;
 }
 
 static void PullIn(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
+    if (s_BossPullCooldown) {
+        s_BossPullCooldown--;
+    }
     if (!PartnerInBossFight()) {
         s_BossPulled = false;
-    } else if (!s_BossPulled && CanBePulled() && !(p->flags & PRESENCE_BUSY)) { // not mid-intro
+    } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
+               (CanBePulled(false) ||
+                // the same room but too far apart to share it (a wide arena: the Succubus's, when
+                // one player walked on through her intro): each game would fight its own boss
+                (CanBePulled(true) && SharedRole() == ROLE_NONE && p->role == ROLE_NONE && FarInRoom()))) {
         s_BossPulled = true;
+        s_BossPullCooldown = BOSS_PULL_COOLDOWN;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
         s_ArriveText = "Partner is fighting a boss!";
         return;
     }
+    // Never back into the prologue from the castle; within the prologue, yes (design/M12).
     if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || (p->flags & PRESENCE_DEAD) ||
-        p->stage == STAGE_ST0) {
+        (p->stage == STAGE_ST0 && g_StageId != STAGE_ST0) || !SAME_WORLD(p)) {
         s_CutscenePulled = false;
-    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled()) {
+    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled(true)) {
         // The partner is busy (the cutscene has control): arrive anyway. This game runs its
         // own copy of the scene; the flags it sets are shared, so it plays out the same.
         s_CutscenePulled = true;
@@ -344,14 +393,21 @@ static void CutsceneTrack(void) {
     if (s_CsCooldown) {
         s_CsCooldown--;
     }
-    if (on && !s_CsOn && !s_CsFollower && g_StageId != STAGE_ST0 && PartnerFresh() &&
-        !(p->flags & (PRESENCE_DEAD | PRESENCE_CUTSCENE)) && p->stage != STAGE_ST0 && !SameRoomAsPartner()) {
+    if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) &&
+        ((PartnerFresh() && !(p->flags & PRESENCE_CUTSCENE) && SAME_WORLD(p) &&
+          (p->stage != STAGE_ST0 || g_StageId == STAGE_ST0)) ||
+         PartnerOnItsWay())) {
         s_CsHold = 1; // the partner will be pulled in: wait for it
     }
     if (!on && s_CsOn) {
         s_CsFollower = false;
         s_CsHold = 0;
         s_CsCooldown = CS_COOLDOWN;
+        // The partner's copy of the scene is still running in this room: both players get
+        // control back together (M12: scenes driven by where each player is drift apart).
+        if (PartnerFresh() && (p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner()) {
+            s_CsEndHold = 1;
+        }
     }
     if (s_CsFollower && !on && !ArriveBusy() && ++s_CsFollowAge > CS_FOLLOW_MAX) {
         s_CsFollower = false; // pulled in, but no scene here: an ordinary game again
@@ -359,14 +415,25 @@ static void CutsceneTrack(void) {
     s_CsOn = on;
 }
 
-// True while the leader holds its scene for the partner (this frame's game update is skipped).
+// True while the leader holds its scene for the partner, or a game whose scene ended waits for
+// the partner's to end (this frame's game update is skipped).
 static bool CutsceneHold(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
+    if (s_CsEndHold) {
+        if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || !SameRoomAsPartner() ||
+            s_CsEndHold >= CS_END_MAX) {
+            s_CsEndHold = 0;
+            return false;
+        }
+        s_CsEndHold++;
+        return true;
+    }
     if (!s_CsHold) {
         return false;
     }
-    if (!PartnerFresh() || (p->flags & PRESENCE_DEAD) || s_CsHold >= CS_HOLD_MAX ||
+    if (g_CoopLink.partnerAge > 30 || (p->flags & PRESENCE_DEAD) ||
+        s_CsHold >= (PartnerOnItsWay() ? CS_HOLD_WAY_MAX : CS_HOLD_MAX) ||
         ((p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner())) {
         s_CsHold = 0; // the partner's copy runs (or it can't come): go
         return false;
@@ -494,9 +561,19 @@ void ArrivePresence(CoopPresence* p) {
         return;
     }
     p->roomId = CurrentRoomId();
-    if (g_Player.vram_flag & 1) { // touching the floor
+    // Where to put a partner who comes here: the last spot on the floor in this room. On entering
+    // a room, until the player lands, where they are now (M12: a player who jumped into Death's
+    // room sent the pulled-in partner to the previous room's coordinates, out of this room).
+    // During a scene it stays where the scene started, which is where a pulled-in partner must
+    // arrive for its own copy to play the same (the scene walks the player on; arriving there,
+    // Death's scene walked the partner out of the room, over and over).
+    if (((g_Player.vram_flag & 1) && !g_CutsceneHasControl) || p->roomLeft != s_GroundLeft ||
+        p->roomTop != s_GroundTop || p->stage != s_GroundStage) {
         p->groundX = p->x;
         p->groundY = p->y;
+        s_GroundLeft = p->roomLeft;
+        s_GroundTop = p->roomTop;
+        s_GroundStage = p->stage;
     }
     if (IsPausedEngine(g_GameEngineStep)) {
         p->flags |= PRESENCE_PAUSED;
@@ -506,8 +583,7 @@ void ArrivePresence(CoopPresence* p) {
         (g_GameEngineStep == Engine_10 || (g_Player.status & PLAYER_STATUS_DEAD) || s_WaitingForHost)) {
         p->flags |= PRESENCE_DEAD;
     }
-    if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl ||
-        g_StageId == STAGE_ST0 ||
+    if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl || SceneAftermath() ||
         !(g_GameEngineStep == Engine_Normal || IsPausedEngine(g_GameEngineStep))) {
         p->flags |= PRESENCE_BUSY;
     }

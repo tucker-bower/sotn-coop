@@ -26,17 +26,25 @@ local function press(button, at, now) -- hold `button` for 2 vsyncs starting at 
     if now == at then pad.setOverride(button) elseif now == at + 2 then pad.clearOverride(button) end
 end
 
--- New game inputs, as in savestates.new_game (vsync offsets)
-local script = { { B.START, 1800 }, { B.CROSS, 2162 }, { B.CROSS, 2464 }, { B.CROSS, 2586 }, { B.START, 2608 } }
+-- New game inputs, as in savestates.new_game: vsync offsets from the title screen (g_GameState 1).
+-- They were absolute from power-on, which broke when the disc's boot got longer (M12 v1.0).
+local script = { { B.START, 600 }, { B.CROSS, 962 }, { B.CROSS, 1264 }, { B.CROSS, 1386 }, { B.START, 1408 } }
+local title -- the vsync the title screen came
+local held = 0 -- vsyncs in a row at the title: the BIOS leaves a 1 there for a frame (D117)
 
 local phases = {
     function(n) -- 1: menus until prologue gameplay; the module must be resident by the title screen
-        for _, s in ipairs(script) do press(s[1], s[2], n) end
-        if n == 1790 then
+        held = u32(SYM.g_GameState) == 1 and held + 1 or 0
+        if not title and held >= 10 then
+            title = n
             if u32(SYM.g_CoopLink) ~= 0x504F4F43 then
                 finish(false, string.format("module not resident at the title (magic %08x)", u32(SYM.g_CoopLink)))
             end
-            log(string.format("title: module resident, heartbeat %d, g_Timer %d", u32(SYM.g_CoopLink + 8), u32(SYM.g_Timer)))
+            log(string.format("title at vsync %d: module resident, heartbeat %d, g_Timer %d", n,
+                u32(SYM.g_CoopLink + 8), u32(SYM.g_Timer)))
+        end
+        if title then
+            for _, s in ipairs(script) do press(s[1], title + s[2], n) end
         end
         if u32(SYM.g_StageId) == 0x1F and u32(SYM.g_GameState) == 2 then log("prologue at vsync " .. n); return true end
         if n > 20000 then finish(false, "never reached the prologue") end

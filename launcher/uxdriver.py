@@ -2,6 +2,8 @@
 
     python launcher/uxdriver.py couch     [--out DIR]   fresh install: disc, lobby, a new game,
                                                         a controller unplugged, pause, leave
+    python launcher/uxdriver.py startup   [--out DIR]   Solo from a fresh install: seconds to the
+                                                        first picture and to the title (M12 v1.0)
     python launcher/uxdriver.py window    [--out DIR]   every layout and pixel mode, resized,
                                                         maximized, fullscreen; frame times
     python launcher/uxdriver.py menus     [--out DIR]   every menu-bar item (Windows: through the
@@ -80,6 +82,9 @@ class Driver:
         self.out = out
         self.heading = None
         self.subtitle = ""
+        self.first_seen = {}  # screen -> when it first appeared (perf_counter): the startup script
+        self.marks = {}
+        self.view = None  # the GameView while the games run
         self.log = []
         self.checks = []
         self.shots = []
@@ -105,6 +110,12 @@ class Driver:
             drv.screen(title)
             return orig_overlay(this, title, *a, **kw)
         gameview.GameView.overlay = overlay
+        orig_view_init = gameview.GameView.__init__
+
+        def view_init(this, *a, **kw):
+            orig_view_init(this, *a, **kw)
+            drv.view = this
+        gameview.GameView.__init__ = view_init
         self.game_frames = 0
         self.intervals = []
         self._last_present = None
@@ -144,6 +155,7 @@ class Driver:
         if heading != self.heading:
             self.heading = heading
             self._new = True
+            self.first_seen.setdefault(heading, time.perf_counter())
 
     def _maybe_shot(self, name=None):
         if getattr(self, "_new", False) or name:
@@ -285,10 +297,10 @@ def run(script, out, retail_cue=None):
         os.environ["COOP_DATA"] = tempfile.mkdtemp(prefix="coop-ux-")
     if retail_cue:
         os.environ["COOP_PICK_FILE"] = str(retail_cue)
-    if not (ROOT / "bios" / "openbios.bin").exists():  # a dev checkout: the OpenBIOS the release ships
+    if not (ROOT / "bios" / "openbios-fast.bin").exists():  # a dev checkout: the OpenBIOS the release ships
         sys.path.insert(0, str(ROOT / "harness"))
-        from coop_env import ENV, path
-        openbios = path(ENV["paths"]["win_emulators"]) / "PCSX-Redux" / "openbios.bin"
+        from coop_env import TOOLS
+        openbios = TOOLS["bios_dir"] / "scph5501.bin"   # OpenBIOS, FASTBOOT (scripts/bootstrap.sh)
         if openbios.exists():
             os.environ.setdefault("COOP_DEV_BIOS", str(openbios))
     dev_patch = ROOT / ".env" / "release" / "sotn-coop.bps"
@@ -424,6 +436,43 @@ def _solo(pg):
         ("screen", "Solo: which castle?"), ("shot", "castle-list"),
         ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "it lists the castle played (the list is New castle and it)"),
         ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
+
+
+def _startup(pg):
+    """design/M12-v1-release.md criterion 6 (the launch black screen, D114): from pressing Solo,
+    a picture (the "Starting the game" overlay or the game) within 1 s, and the title screen within
+    20 s. Times are wall-clock, at the launcher's real 60 fps."""
+    A = pg.CONTROLLER_BUTTON_A
+
+    def mark(d, name):
+        d.marks.setdefault(name, time.perf_counter())
+
+    def state(d):
+        return d.view.games[0].read("g_GameState") if d.view and d.view.games else None  # between frames (events)
+
+    def title(d):
+        if state(d) in (1, 2):  # GAME_TITLE_STATE, GAME_PLAY_STATE (harness/emu.py)
+            mark(d, "title")
+        return "title" in d.marks
+
+    def report(d):
+        t0 = d.marks["pressed"]
+        first = min(t for k, t in d.first_seen.items() if k in ("Starting the game", "Game") and t >= t0)
+        d.startup = {"picture_s": round(first - t0, 2), "game_picture_s": round(d.first_seen["Game"] - t0, 2),
+                     "title_s": round(d.marks["title"] - t0, 2), "title_frame": d.view.frame}
+        print("startup:", d.startup, flush=True)
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN),
+        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
+        ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
+        ("until", title), ("shot", "title"), ("call", report),
+        ("expect", lambda d: d.startup["picture_s"] <= 1.0, "a picture within 1 s of pressing Solo"),
+        ("expect", lambda d: d.startup["title_s"] <= 20.0, "the title within 20 s"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
 
 
@@ -690,7 +739,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "solo": _solo, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

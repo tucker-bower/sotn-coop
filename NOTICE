@@ -1,0 +1,20 @@
+SOTN Co-op
+
+A co-op mod for Castlevania: Symphony of the Night. It contains no game data: on first launch
+it makes the co-op disc from YOUR OWN copy of the game (USA, SLUS-00067). Castlevania and
+Symphony of the Night are trademarks of Konami; this project is not affiliated with Konami.
+
+SOTN Co-op (the launcher, the co-op module, the patches) is free software under the GNU Affero
+General Public License, version 3 (LICENSE), like sotn-decomp, which it is built on.
+Source: https://github.com/tucker-bower/sotn-coop
+
+What the releases include, and under which licence (full texts in licenses/):
+- SwanStation, the PlayStation emulator core: GPL-3.0. https://github.com/libretro/swanstation
+- OpenBIOS, an open-source PlayStation BIOS from PCSX-Redux: MIT.
+  https://github.com/grumpycoders/pcsx-redux (src/mips/openbios)
+- sotn-decomp, by Xeeynamo and its contributors: AGPL-3.0. https://github.com/Xeeynamo/sotn-decomp
+- Python: PSF License. The Windows build uses python.org's embeddable distribution.
+- libretro.py: MIT. pygame-ce (Windows) and pygame (Android): LGPL-2.1. Pillow: MIT-CMU.
+- Android only: python-for-android (MIT), pyjnius (MIT), SDL2, SDL2_image, SDL2_mixer and
+  SDL2_ttf (zlib), OpenSSL (Apache-2.0), libffi (MIT), libjpeg-turbo (IJG/BSD), libpng
+  (libpng), SQLite (public domain).

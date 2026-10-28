@@ -7,6 +7,10 @@
                                              Settings > Game files)
     python android/device.py log [file]      the app's log since it started (default
                                              .env/out/device-log.txt), for a playtest's bugs
+    python android/device.py switch-key [apk]  once, from a debug-signed app to the release key
+                                             (D112): backs up the app's folder (castles, settings,
+                                             disc) to .env/android/backup-<time>, uninstalls,
+                                             installs the APK, and puts the folder back
 
 The device needs USB debugging on (Settings > About > tap Build number 7 times, then
 Developer options > USB debugging), and to allow this PC when it asks. From WSL, the Windows
@@ -63,9 +67,52 @@ def device():
     return usb[0]
 
 
+EXT = f"/sdcard/Android/data/{PKG}/files"   # the app's folder (COOP_DATA): castles, settings, disc
+
+
+def switch_key(adb, apk, backup=None, local=windows_path):
+    """A new signing key can't install over the old one: the app must be uninstalled, and that
+    deletes its folder. So the folder is copied off first and put back after (adb's shell user
+    can read and write every app's Android/data folder). `adb(*args, **kw)` runs adb on the device;
+    `local` turns a local path into one that adb takes (WSL to Windows for the USB device's adb)."""
+    import time
+    backup = backup or ROOT / ".env" / "android" / time.strftime("backup-%Y%m%d-%H%M%S")
+    backup.mkdir(parents=True)
+    print("backing up the app's folder to", backup)
+    if adb("shell", "ls", EXT, capture_output=True).returncode == 0:
+        adb("pull", EXT, local(backup), check=True)
+    files = [f for f in backup.rglob("*") if f.is_file()]
+    print(f"  {len(files)} files")
+    adb("uninstall", PKG, capture_output=True)
+    print("installing", apk.name)
+    r = adb("install", local(apk), capture_output=True)
+    if r.returncode:
+        raise SystemExit((r.stdout + r.stderr).strip() + f"\nThe backup is in {backup}")
+    # adb's own files in the app's folder are unreadable to the app, so the backup goes to the
+    # app's private folder (run-as: the build is debuggable) and the app copies it in at its next
+    # start (android/main.py restore)
+    if files:
+        tmp = "/data/local/tmp/coop-restore"
+        adb("shell", "rm", "-rf", tmp, check=True)
+        adb("push", local(backup / "files"), tmp, check=True)
+        adb("shell", "chmod", "-R", "755", tmp, check=True)
+        adb("shell", f"run-as {PKG} sh -c 'mkdir -p files && rm -rf files/restore && cp -r {tmp} files/restore'", check=True)
+        adb("shell", "rm", "-rf", tmp, check=True)
+    adb("shell", "monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1", capture_output=True)
+    for _ in range(60):
+        out = adb("shell", "run-as", PKG, "ls", "files", capture_output=True).stdout
+        if "restore" not in out.split():
+            break
+        time.sleep(1)
+    else:
+        raise SystemExit(f"The app didn't take the backup back in 60 s. The backup is in {backup}")
+    print(f"Done: {len(files)} files back in the app's folder. The backup stays in {backup}.")
+    return 0
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "--help"
-    if cmd not in ("install", "disc", "dxc", "log"):
+    if cmd not in ("install", "disc", "dxc", "log", "switch-key"):
         print(__doc__)
         return 0
     print("device:", device())
@@ -76,6 +123,9 @@ def main():
         r = adb("install", "-r", windows_path(apk), capture_output=True)
         print((r.stdout + r.stderr).strip())
         return r.returncode
+    if cmd == "switch-key":
+        apk = Path(sys.argv[2]) if len(sys.argv) > 2 else max((ROOT / ".env" / "android").glob("*.apk"), key=os.path.getmtime)
+        return switch_key(adb, apk)
     if cmd == "disc":
         folder = "/sdcard/Download/SOTN"
         adb("shell", "mkdir", "-p", folder, check=True)

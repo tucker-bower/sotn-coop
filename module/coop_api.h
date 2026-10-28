@@ -24,6 +24,7 @@
 // has already compiled may not be noticed (Richter then Maria hung).
 #define COOP_PLAYER_FAR 0x805C0000
 #define COOP_PLAYER_FAR_END 0x80680000
+#define WEAPON_SHEET_ADDR 0x80700000 // the hand weapons' tile sheets, copied out of VRAM (D106: 2 x 16KB)
 
 void CoopBoot(void);           // replaces InitializePads()
 bool CoopUpdate(void);         // replaces DebugUpdate(): main loop, before UpdateGame

@@ -128,9 +128,11 @@ boss("Olrox", "Olrox's Quarters", "NO2", (0x58, 56, 132), "left", 26, 17000, (8,
 boss("Succubus", "Underground Caverns (Nightmare)", "DRE", (0, 16, 180), "right", 28, 21000, (9, 7),
      ("holy sword", "shaman shield", "steel helm", "gold plate", "blood cloak", "no accessory", "no accessory"),
      "holy water", R8, A7, F4, D8, keep=("bekatowa", "cutlass", "knight shield"))
-boss("Scylla", "Underground Caverns", "BO3", (24, 128, 160), "right", 30, 24000, (10, 8),
-     ("holy sword", "herald shield", "steel helm", "gold plate", "crystal cloak", "gold ring", "no accessory"),
-     "holy water", R9, A7, F5 + ["scylla wyrm"], D9, keep=("bekatowa", "shaman shield", "blood cloak"))
+# In her arena (room 0), right of her: the Crystal Cloak room (24) is behind her, and walking in
+# from there, a barrier (E_UNK_3E) pushes the player back out until she's beaten.
+boss("Scylla", "Underground Caverns", "BO3", (0, 650, 150), "left", 30, 24000, (10, 8),
+     ("holy sword", "herald shield", "steel helm", "gold plate", "blood cloak", "gold ring", "no accessory"),
+     "holy water", R9, A7, F5 + ["scylla wyrm"], D9, keep=("bekatowa", "shaman shield"))
 boss("Cerberus", "Abandoned Mine", "CHI", (8, 390, 132), "right", 32, 28000, (11, 9),
      ("holy sword", "herald shield", "steel helm", "ice mail", "crystal cloak", "gold ring", "moonstone"),
      "holy water", R10, A8, F6, D10, keep=("bekatowa", "gold plate", "blood cloak"))
@@ -153,6 +155,38 @@ LEVEL_HP = [1, 3, 6, 10, 20, 30, 40, 50, 100, 200]  # g_LevelHPIncrease (src/dra
 EXP_NEXT = [0, 0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250, 3850, 4500, 5200, 5950, 6750,
             7600, 8500, 9450, 10450, 11700, 13200, 15100, 17500, 20400, 23700, 27200, 30900, 35000, 39500,
             44500, 50000, 56000, 61500, 68500, 76000, 84000, 92500, 101500]  # g_ExpNext, levels 0-39
+
+
+# Scene starts (Tucker, 2026-10-26): one before each story scene of the first castle, with the
+# progress of the boss nearest before it in the story (its row: `like`), and the scene's own
+# "seen" castle flag cleared (include/castle_flags.h). Each starts in the room before the scene's,
+# found from the decomp's room tables (assets/st/<stage>/rooms.json, entity_layouts.json): walking
+# on starts the scene. Bosses whose arena opens with a scene (Succubus, Richter, Minotaur &
+# Werewolf) have it in their boss start.
+S = []
+
+
+def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
+    row = dict(next(b for b in B if b["name"] == like))
+    row.update(name=name, area=area, stage=stage, arrive=arrive, walk=walk, check=check, note=note,
+               unset=tuple(unset), scene=True)
+    S.append(row)
+
+
+# From the right: her scene steers Alucard left (from the left he walks straight back out, and
+# walking in again replays it).
+scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (16, 40, 128), "left", "Slogra & Gaibon",
+      unset=[0x85])  # MET_MARIA_IN_NZ0
+# In his room, at its right edge: walking left from there starts his scene, which steers the
+# player in (to x 0x74). At x 120 the player was already past where it starts (M12 v1.0).
+scene("The Librarian", "Long Library", "LIB", (32, 236, 120), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
+scene("Maria in the Royal Chapel", "Royal Chapel", "DAI", (8, 40, 128), "left", "Minotaur & Werewolf",
+      unset=[0x63])  # MET_MARIA_IN_DAI
+# In the Center, at its right edge on Maria's floor (the way in is a door there), out of the
+# camera's reach of the scene (x 384).
+scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (8, 728, 455), "left", "Richter",
+      unset=[0xD8])  # MET_MARIA_IN_CEN
+scene("The Castle Keep", "Castle Keep", "TOP", (16, 496, 896), "right", "Richter")
 
 
 def apply(e, b, base, rooms):
@@ -194,6 +228,8 @@ def apply(e, b, base, rooms):
     for name in b["flags"]:
         for f in FLAGS[name]:
             e.write("g_CastleFlags", 1, "<B", f)
+    for f in b.get("unset", ()):  # a scene start: its scene not seen yet
+        e.write("g_CastleFlags", 0, "<B", f)
     e.write("g_CastleFlags", sum(bit for a, bit in WARPS.items() if a in b["areas"]), "<B", WRP_UNLOCKS)
     for k, name in enumerate(b["done"]):
         e.write("g_Settings", 1000 + 100 * k, "<i", RECORDS + 4 * EVENTS[name])

@@ -16,6 +16,7 @@
 #include "coop_api.h"
 #include "link.h"
 #include "character.h"
+#include "weapons.h"
 #include "message.h"
 #include "offhand.h"
 
@@ -35,6 +36,7 @@ extern CdFile g_LbaBinRichter; // DRA: RIC.BIN's place on the disc
 
 static u32 s_Loaded;        // CHAR_* of the player the last load brought in
 static s32 s_PrevLoadFile;  // g_LoadFile last frame
+#define MAR_GUARDIANS_HOOK 0x8013C1F4 // her MARIA_Load, which uploads the guardians' graphics (maria/maria.ld)
 static bool s_RihLoading;   // the disc is loading Richter's sound bank
 
 // The trailer at the end of a two-part player file (richter/ric.ld).
@@ -275,6 +277,21 @@ void CharacterFrame(void) {
         }
     }
     SoundBankStep();
+    // A hand weapon's graphics just loaded: in Maria's game they went over four of her guardians
+    // (src/dra/cd.c loads them at 0x240,0x100 and 0x240,0x180, where her PS1 layout puts the owl,
+    // cardinal, dragon and doll): put hers back (playtest 2026-10-25 note 4: her birds became a
+    // skull and a shield).
+    if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
+        g_LoadFile != s_PrevLoadFile && g_StageId != STAGE_ST0) {
+        WeaponLoaded(s_PrevLoadFile == CdFile_Weapon1); // for the partner to draw it (weapons.c)
+    }
+    if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
+        g_LoadFile != s_PrevLoadFile && s_Loaded == CHAR_MARIA && g_StageId != STAGE_ST0 &&
+        (b = Blob(CHAR_MARIA)) != NULL) {
+        OffhandKeepSheet(s_PrevLoadFile == CdFile_Weapon1);
+        (*(void (**)(void))MAR_GUARDIANS_HOOK)();
+        OffhandPlaceSheet();
+    }
     s_PrevLoadFile = g_LoadFile;
     Familiar();
     PoisonWater();

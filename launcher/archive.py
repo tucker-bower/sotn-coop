@@ -13,6 +13,7 @@ The player can delete a playthrough's savestates from the Savestates screen (it 
 """
 
 import json
+import os
 import re
 import time
 import uuid
@@ -199,7 +200,21 @@ class Castle:
             with open(path, "xb") as f:  # "x": fails rather than overwrite
                 f.write(blob)
             written.append(path)
+        if os.environ.get("COOP_BIOS"):  # which BIOS made it: a state loads only on its own BIOS
+            (self.states / f"{base}.bios").write_text(os.environ["COOP_BIOS"])
         return written
+
+    @staticmethod
+    def state_bios(a_file, bundled_dir, default):
+        """The BIOS a savestate pair was made with (its .bios note), found again if the install
+        moved (a bundled BIOS by name). States from before 0.12 have no note: `default`."""
+        note = Path(str(a_file)[:-len(" A.state.zst")] + ".bios")
+        if not note.exists():
+            return Path(default)
+        made = Path(note.read_text().strip())
+        if made.exists():
+            return made
+        return bundled_dir / made.name if (bundled_dir / made.name).exists() else Path(default)
 
     def savestate_pairs(self):
         """[(label, A file, B file or None)], newest first."""

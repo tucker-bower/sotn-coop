@@ -25,7 +25,8 @@ PYZIP="$CACHE/python-3.14.2-embed-amd64.zip"
 WINPY="$EMU/SOTN-Coop/venv/Scripts/python.exe"
 VENV_SP="$EMU/SOTN-Coop/venv/Lib/site-packages"
 DLL="$EMU/SOTN-Coop/app/bin/swanstation_libretro.dll"
-OPENBIOS="$EMU/PCSX-Redux/openbios.bin"
+OPENBIOS="$MOD/.env/sys/scph5501.bin"           # OpenBIOS with FASTBOOT, built by scripts/bootstrap.sh
+LEGACY_OPENBIOS="$EMU/PCSX-Redux/openbios.bin"  # PCSX-Redux's build: for savestates made before 0.12
 W() { wslpath -w "$1"; }
 
 echo "== patch (from your disc and our build: our changes only)"
@@ -60,7 +61,8 @@ cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$A/pa
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"
 cp "$ROOT/build/coop/coop.map" "$A/build/coop/"
 cp "$DLL" "$A/bin/"
-cp "$OPENBIOS" "$A/bios/openbios.bin"
+cp "$OPENBIOS" "$A/bios/openbios-fast.bin"
+cp "$LEGACY_OPENBIOS" "$A/bios/openbios.bin"
 cp "$MOD/env.example.toml" "$A/"
 cat > "$A/env.toml" <<'TOML'
 # The installed launcher's layout (scripts/build_release.sh): everything relative to app/.
@@ -74,49 +76,16 @@ bios_dir = "bios"
 savestates = ".env/savestates"
 out = ".env/out"
 TOML
-cat > "$A/LICENSES/README.txt" <<'TXT'
-SOTN Co-op
-
-A co-op mod for Castlevania: Symphony of the Night. It contains no game data: on first launch
-it makes the co-op disc from YOUR OWN copy of the game (USA, SLUS-00067). Castlevania and
-Symphony of the Night are trademarks of Konami; this project is not affiliated with Konami.
-
-What's included, and under which licence:
-- SOTN Co-op (the launcher, the co-op module, the patch): AGPL-3.0, like sotn-decomp, which it
-  is built on. Source: https://github.com/tucker-bower/sotn-coop
-- SwanStation (bin/swanstation_libretro.dll), the PlayStation emulator core: GPL-3.0.
-  Source: https://github.com/libretro/swanstation
-- OpenBIOS (bios/openbios.bin), an open-source PlayStation BIOS from PCSX-Redux: MIT, see
-  OpenBIOS-LICENSE.txt. Source: https://github.com/grumpycoders/pcsx-redux (src/mips/openbios)
-- Python (python/), python.org's embeddable distribution: PSF License.
-- pygame-ce (LGPL-2.1), libretro.py (MIT), Pillow (MIT-CMU): in python/Lib/site-packages.
-TXT
-cat > "$A/LICENSES/OpenBIOS-LICENSE.txt" <<'TXT'
-MIT License
-
-Copyright (c) 2019-2024 PCSX-Redux authors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software
-and associated documentation files (the "Software"), to deal in the Software without
-restriction, including without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or
-substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-TXT
+# The licences (NOTICE is the README the installer shows first; full texts in licenses/)
+cp "$MOD/NOTICE" "$A/LICENSES/README.txt"
+cp "$MOD/LICENSE" "$A/LICENSES/AGPL-3.0.txt"
+cp "$MOD"/licenses/* "$A/LICENSES/"
 cp "$MOD/README.md" "$A/README.md"
 
 echo "== no game data in the installer"
-if find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
+if find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
     echo "game data found in the stage: refusing" >&2
-    find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" >&2
+    find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.state" -o -iname "*.mcd" >&2
     exit 1
 fi
 

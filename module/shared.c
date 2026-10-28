@@ -16,6 +16,7 @@
 #include "boss.h"
 #include "progress.h"
 #include "shared.h"
+#include "arrive.h"
 #include "character.h"
 #include "solid.h"
 #include "vram.h"
@@ -166,7 +167,8 @@ static void GuestUpdate(void) {
 
 // Scenery that draws from the camera (3D projection, parallax: bushes, trees, clouds...): the
 // authority's primitives are only right for the authority's camera, so the guest runs these
-// itself (playtest 1: trees and bushes in the wrong place on the guest's screen).
+// itself (playtest 1: trees and bushes in the wrong place on the guest's screen). Red and sealed
+// doors too: each opens for its own game's player (gen_overlay_table.py).
 static bool IsScenery(const OverlayInfo* ovl, u32 pfn) {
     const u32* d;
 
@@ -219,6 +221,10 @@ static bool PartnerShareable(void) {
     // partner's, whose scene may be over (playtest 2026-10-20: Maria vanished mid-exit in one
     // game, its scene waited for her forever).
     if (g_CutsceneHasControl) {
+        return false;
+    }
+    // Nor forming one right after a scene while the game still steers the player (arrive.c).
+    if (SceneAftermath()) {
         return false;
     }
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {

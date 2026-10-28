@@ -4,7 +4,10 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 9
+LINK_VERSION = 11
+# Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
+WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
+WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -25,6 +28,10 @@ SAVE_BLOCK, CARD_RESULT, RANK = 0x342C, 0x3430, 0x3434
 SNAP_OUT_SEQ, SNAP_OUT, SNAP_IN_SEQ, SNAP_IN = 0x3438, 0x3440, 0x12440, 0x12448  # size word follows each seq
 CONTROL = 0x21448
 CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
+SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2163C  # u32 count, then CoopSprite[24] (0x14 each): sprites.c (M12)
+SPRITE_SIZE, N_SPRITES = 0x14, 24
+SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] less next (0x30 each)
+PRIM_SIZE, N_PRIMS = 0x30, 32
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
@@ -109,6 +116,48 @@ class Mailbox:
 
     def partner_age(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_AGE, 4))[0]
+
+    def self_sprites(self):
+        """This game's sprites for the partner (sprites.c): raw CoopSprite records."""
+        n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_SPRITES, 4))[0], N_SPRITES)
+        return self.adapter.read_bytes(self.address + SELF_SPRITES + 4, n * SPRITE_SIZE) if n else b""
+
+    def self_prims(self):
+        """This game's attack primitives for the partner (sprites.c)."""
+        n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PRIMS, 4))[0], N_PRIMS)
+        return self.adapter.read_bytes(self.address + SELF_PRIMS + 4, n * PRIM_SIZE) if n else b""
+
+    def write_partner_prims(self, data):
+        n = min(len(data) // PRIM_SIZE, N_PRIMS)
+        if n:
+            self.adapter.write_bytes(self.address + PARTNER_PRIMS + 4, data[:n * PRIM_SIZE])
+        self.adapter.write_bytes(self.address + PARTNER_PRIMS, struct.pack("<I", n))
+
+    def partner_sprite_count(self):
+        return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_SPRITES, 4))[0]
+
+    def write_partner_sprites(self, data):
+        n = min(len(data) // SPRITE_SIZE, N_SPRITES)
+        if n:
+            self.adapter.write_bytes(self.address + PARTNER_SPRITES + 4, data[:n * SPRITE_SIZE])
+        self.adapter.write_bytes(self.address + PARTNER_SPRITES, struct.pack("<I", n))
+
+    # --- hand weapons (module/weapons.c): each game's copy, and the partner's -----------------
+    def self_weapon_seq(self, hand):
+        """(magic ok, seq) of this game's copy of that hand's weapon."""
+        magic, seq = struct.unpack("<II", self.adapter.read_bytes(WEAPON_SELF + hand * WEAPON_HAND_SIZE, 8))
+        return magic == WEAPON_MAGIC, seq
+
+    def self_weapon(self, hand):
+        return self.adapter.read_bytes(WEAPON_SELF + hand * WEAPON_HAND_SIZE, WEAPON_SIZE)
+
+    def write_partner_weapon(self, hand, blob):
+        """The partner's copy (header last: the game checks its magic)."""
+        if len(blob) != WEAPON_SIZE:
+            return
+        base = WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
+        self.adapter.write_bytes(base + 0x20, blob[0x20:])
+        self.adapter.write_bytes(base, blob[:0x20])
 
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())

@@ -33,8 +33,10 @@ cp "$MOD"/patcher/{bps,patcher,sectors}.py "$MOD/.env/release/sotn-coop.bps" "$M
 cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$STAGE/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$STAGE/config/"
 cp "$ROOT/build/coop/coop.map" "$STAGE/build/coop/"
-cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"
+cp "$MOD/.env/sys/scph5501.bin" "$STAGE/bios/openbios-fast.bin"   # OpenBIOS with FASTBOOT (scripts/bootstrap.sh)
+cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"     # PCSX-Redux's build: savestates from before 0.12
 cp "$MOD/env.example.toml" "$MOD/android/main.py" "$STAGE/"
+mkdir -p "$STAGE/LICENSES" && cp "$MOD/NOTICE" "$STAGE/LICENSES/README.txt" && cp "$MOD/LICENSE" "$STAGE/LICENSES/AGPL-3.0.txt" && cp "$MOD"/licenses/* "$STAGE/LICENSES/"
 # libretro.py: pure Python (its sample cores and their GL libraries aren't needed)
 SP="$("$PY" -c "import libretro, os; print(os.path.dirname(os.path.dirname(libretro.__file__)))")"
 cp -r "$SP/libretro" "$STAGE/libretro" && rm -rf "$STAGE/libretro/samples"
@@ -44,7 +46,7 @@ for arch in "${ARCHES[@]}"; do
 done
 
 echo "== no game data in the app"
-if find "$STAGE" -iname "*.bin" ! -name openbios.bin -o -iname "*.cue" -o -iname "*.iso" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
+if find "$STAGE" -iname "*.bin" ! -name openbios.bin ! -name openbios-fast.bin -o -iname "*.cue" -o -iname "*.iso" -o -iname "*.state" -o -iname "*.mcd" | grep -q .; then
     echo "game data found in the stage: refusing" >&2
     exit 1
 fi
@@ -61,4 +63,16 @@ ANDROIDSDK="$A" ANDROIDNDK="$A/ndk/25.2.9519653" ANDROIDAPI=34 NDKAPI=24 \
     --local-recipes "$MOD/android/recipes" --ignore-setup-py > "$OUT/p4a.log" 2>&1 || { tail -40 "$OUT/p4a.log"; exit 1; }
 APK=$(ls -t "$OUT"/*.apk | head -1)
 mv "$APK" "$OUT/SOTN-Coop-$VERSION.apk"
+
+echo "== signing (D112: the release key, else this PC's debug key)"
+read -r KS PW AL < <("$PY" -c "import sys, os; sys.path.insert(0, '$MOD/harness'); from coop_env import ENV
+a = ENV.get('android', {}); e = os.path.expanduser
+print(e(a.get('keystore', '-')), e(a.get('password_file', '-')), a.get('alias', '-'))")
+if [ -f "$KS" ] && [ -f "$PW" ]; then
+    "$(ls -d "$A"/build-tools/* | sort -V | tail -1)/apksigner" sign --ks "$KS" --ks-key-alias "$AL" \
+        --ks-pass "file:$PW" "$OUT/SOTN-Coop-$VERSION.apk"   # (the key has the same password)
+    echo "release-signed"
+else
+    echo "WARNING: no release keystore ($KS): debug-signed, can't be released or installed over a release" >&2
+fi
 ls -l "$OUT/SOTN-Coop-$VERSION.apk"

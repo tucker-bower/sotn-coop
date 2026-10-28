@@ -37,7 +37,7 @@ def _build(disc, out_dir, queue, patch=None):
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         import bossstarts
-        steps = 3 + len(STARTS) + 1 + len(bossstarts.B)
+        steps = 3 + len(STARTS) + 1 + len(bossstarts.B) + len(bossstarts.S)
         queue.put(("progress", 0, steps, "Starting a new game"))
         index = {}
         with Emu(disc) as e:
@@ -85,6 +85,14 @@ def _build(disc, out_dir, queue, patch=None):
                 e.save_state_file(out / file)
                 about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the boss)")
                 index[name] = {"about": about, "file": file, "where": e.snapshot(), "boss": True, "checked": ok}
+            for k, b in enumerate(bossstarts.S):  # scene starts (Tucker, 2026-10-26)
+                queue.put(("progress", 4 + len(STARTS) + len(bossstarts.B) + k, steps, b["name"]))
+                name = f"Scene: {b['name']}"
+                ok = _boss_start(e, mb, bases["entrance"], b, rooms, bossstarts)
+                file = name.replace(":", " -").replace("&", "and") + ".state"
+                e.save_state_file(out / file)
+                about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the scene)")
+                index[name] = {"about": about, "file": file, "where": e.snapshot(), "scene": True, "checked": ok}
         # The starts hold the co-op module as it was: made for one patch only.
         (out / "index.json").write_text(json.dumps({"patch": patch, "starts": index}, indent=1))
         queue.put(("done", steps, steps, str(out)))
@@ -115,7 +123,8 @@ def _survey(e, entrance, route, bossstarts):
 
 
 def _boss_start(e, mb, entrance, b, rooms, bossstarts):
-    """Leaves the emulator outside boss b with b's progress; True if a bot then reached the boss."""
+    """Leaves the emulator outside boss b with b's progress; True if a bot then reached the boss
+    (for a scene start, b["scene"]: its scene started)."""
     from link.mailbox import BOSS, BUSY, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, IN_PLAY
     from bots import walker
     import savestates as route
@@ -153,7 +162,7 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
     bot = walker(b["walk"], attack_every=0)
     ok = False
     for i in range(7200):  # an arena may take a while to bring its boss in; Richter talks first
-        if mb.self_presence().flags & BOSS:
+        if mb.self_presence().flags & (CUTSCENE if b.get("scene") else BOSS):
             ok = True
             break
         e.step(1, bot(e.snapshot(), i))

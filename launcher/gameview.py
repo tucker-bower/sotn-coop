@@ -19,6 +19,13 @@ BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (paus
 
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
+PARTNER_LOST_S = 10
+
+
+def _not_black(surface):
+    """Any of a few dozen pixels lit: the game is showing something."""
+    w, h = surface.get_size()
+    return any(sum(surface.get_at((x * w // 8, y * h // 6))[:3]) > 24 for x in range(1, 8) for y in range(1, 6))   # online: seconds of silence before telling the player their partner is gone
 
 PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harness/emu.py)
     pygame.CONTROLLER_BUTTON_A: "cross", pygame.CONTROLLER_BUTTON_B: "circle",
@@ -462,6 +469,20 @@ class GameView:
             self._rects = self.overlay("Paused", lines, items, sel)
             pygame.time.wait(16)
 
+    def partner_gone(self):
+        """Online: what to tell the player, once, when the partner leaves or goes silent
+        (playtest 2026-10-25: closing one app left the other saying nothing)."""
+        state = getattr(self, "partner_state", None)
+        if state == getattr(self, "_told", None):
+            return None
+        self._told = state if state in ("left", "lost") else None
+        if state == "left":
+            return "Your partner left the game. You can keep playing alone."
+        if state == "lost":
+            return (f"Lost contact with your partner (nothing for {PARTNER_LOST_S} s). Keep playing: "
+                    "they come back if the connection does.")
+        return None
+
     def wait_for_controller(self, player):
         """A player's controller was unplugged: that game waits until any controller's button is
         pressed (it becomes that player's), or Esc."""
@@ -500,8 +521,13 @@ class GameView:
             age = g.mailbox("partner_age")
             pa, pb = g.mailbox("self_presence"), g.mailbox("partner_presence")
             together = age <= 30 and {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
+            self.partner_state = ("left" if hst.get("partner_left") else
+                                  "lost" if hst.get("partner_hello") and (hst.get("rx_age") or 0) > PARTNER_LOST_S
+                                  else "here" if age <= 30 else getattr(self, "partner_state", None))
             if self.mismatch:
                 link = self.mismatch
+            elif self.partner_state == "left":
+                link = "Your partner left the game"
             elif age > 180:
                 link = "Waiting for your partner…"
             else:
@@ -517,6 +543,8 @@ class GameView:
         sim = f"   ·   simulated network: {self.netsim}" if self.netsim else ""
         return (f"{'Together' if together else 'Apart'}   ·   music: {'left' if self.music == 0 else 'right'} "
                 f"({self.music_mode}, F1)   ·   F9: report a problem   ·   Esc: pause   ·   {fps}{sim}"), (pa, pb)
+
+    started = False  # a picture has come from the game (before that, its boot's black screen)
 
     def run(self):
         """Returns when the player goes back to the menu (or closes the window): "menu", "quit"
@@ -556,6 +584,10 @@ class GameView:
                 if not leave and self.pads.missing(player):
                     r = self.wait_for_controller(player)
                     leave = None if r == "resume" else r
+            gone = self.partner_gone()
+            if not leave and gone:
+                r = self.pause_menu(gone)
+                leave = None if r == "resume" else r
             if leave:
                 result = leave
                 break
@@ -604,7 +636,12 @@ class GameView:
             text = self.notice if self.frame < self.notice_until else status
             if self.goal and self.frame < 600:
                 text = self.goal[:150]
-            self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
+            if not self.started:  # the game's boot: say so instead of the black (Tucker, 2026-10-26)
+                self.started = self.frame > 3600 or any(f is not None and _not_black(f) for f in frames)
+            if self.started:
+                self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
+            else:
+                self.overlay("Starting the game", ["Reading your disc: about 10 seconds."])
             t2 = time.perf_counter()
             self.frame_times.append(round((time.perf_counter() - t0) * 1000, 2))
             if self.profile:

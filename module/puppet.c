@@ -70,7 +70,7 @@ static bool ForeignOf(u32 character, Foreign* f) {
         }
         f->base = (u32)(b + 1);
         f->banks = 0x8013C1F0; // CoopMarBanks
-        f->pals = f->base + (0x8013C1F4 - OVL_ADDR); // maria_pal
+        f->pals = f->base + (0x8013C1F8 - OVL_ADDR); // maria_pal
         f->palFirst = MARPAL_FIRST;
         return true;
     }

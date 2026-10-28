@@ -44,7 +44,7 @@ def main():
     launcher.make_debug_starts()
     starts = debugstarts.load(launcher.starts_dir(), launcher.patch_crc())
     import bossstarts
-    check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B), "debug starts made", n=len(starts))
+    check(len(starts) == len(debugstarts.STARTS) + len(bossstarts.B) + len(bossstarts.S), "debug starts made", n=len(starts))
     unchecked = [n for n, v in starts.items() if v.get("boss") and not v.get("checked")]
     check(not unchecked, "a bot reaches every boss from its boss start", failed=unchecked)
     from link.mailbox import IN_PLAY
@@ -82,10 +82,13 @@ def main():
     import json
     about = json.loads(zipfile.ZipFile(report).read("about.json"))
     check(about["note"] == "smoke test note" and about["link"] and about["os"], "with the note and versions")
-    before = sorted(f.name for f in p.states.iterdir())
+    before = sorted(f.name for f in p.states.glob("*.state.zst"))
     p.savestate("Extra", _Fake(), "")
-    after = sorted(f.name for f in p.states.iterdir())
+    after = sorted(f.name for f in p.states.glob("*.state.zst"))
     check(set(before) <= set(after) and len(after) == len(before) + 2, "a new savestate never replaces one")
+    bios = os.environ.get("COOP_BIOS")
+    check(all(archive.Castle.state_bios(fa, Path("."), "none") == Path(bios) for _, fa, _ in p.savestate_pairs()),
+          "each savestate notes the BIOS that made it (it loads on that one)", bios=bios)
     check_continue(launcher, starts)
     check_online(launcher, starts)
     print("data folder:", os.environ["COOP_DATA"])

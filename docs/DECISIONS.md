@@ -390,7 +390,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Route:** the critical path in `docs/research.md` (Slogra & Gaibon → … → Richter). **Levels** rise from 8 to 38; level-up gains are applied at the game's own averages (`CheckAndDoLevelUp`), and vessels follow the route. **Gear** is items found on the way by then (the per-area item lists in `castle_flags.h`), plus a few earlier pieces in the bag and potions. Familiar cards are found but not summoned.
 - **Earlier bosses** are recorded as beaten (time attack records, `SLO_GAI_DEFEATED`), with the story flags met so far. **The map** shows every area visited so far, fully explored (from each area's own room table, read at build time).
 - **The state is a real save:** it's written, then saved and loaded through the joint-save commands, so the game recomputes attack, defense and stat totals as after a memory card load.
-- **Placement exceptions:** Scylla starts past the Scylla Wyrm (beaten), at her own door. Lesser Demon starts at the bars you pass in mist form. Richter starts at his arena's door, with his intro dialogue; Holy Glasses are in the bag, not worn (equip them for Shaft's orb instead).
+- **Placement exceptions:** Scylla starts in her arena, right of her, with the Scylla Wyrm beaten (2026-10-27: it started in the Crystal Cloak room behind her, whose way in is barred until she's beaten). Lesser Demon starts at the bars you pass in mist form. Richter starts at his arena's door, with his intro dialogue; Holy Glasses are in the bag, not worn (equip them for Shaft's orb instead).
 - **Why:** quick to tune, since each boss is one row in `launcher/bossstarts.py`. Every start is proved by a bot that walks in until the boss is there; `launcher/smoke.py` requires all 12.
 
 **D84: M8 direction** (Tucker, 2026-10-20; one agent-default noted)
@@ -508,3 +508,104 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D100: A joiner with a room code only takes a HELO with that room's token** (agent, 2026-10-25)
 - Found by `android_room` while the harness ran on the same PC: the PC joiner's LAN broadcast (D96) was answered by one of the harness's games (no room code), and the joiner took it as its partner. The Android host was left waiting. A real house could do the same with any game joined by ip:port.
 - `Host._check_hello`: with a room code, a HELO with no room token is accepted only by a host (its partner typed our ip:port, the fallback). A joiner requires the room's token. `link/test_connect.py` covers both.
+
+**D101: Leaving says goodbye** (agent-default, 2026-10-26; playtest 2026-10-25 note 5)
+- A closing app (or one going back to its menu) sends `BYE` three times, unacknowledged: it's closing. The partner's launcher pauses once with "Your partner left the game. You can keep playing alone." Silence for 10 s without a goodbye: "Lost contact with your partner…", once. Both clear when the partner comes back (a new host sid).
+- Considered: a reliable control message (needs acks from an app that's already closing); only the status bar (what failed on the Thor: nobody reads it mid-game).
+
+**D102: The prologue is co-op, and scenes are held for each other** (agent-default, 2026-10-26; playtest 2026-10-25 note 1)
+- The prologue is a shared room (one Dracula): both fall into its ending together. No teleports in or out of it.
+- A scene pulls the partner in from the same room too (not only from another room), and waits up to 60 s (not 10) for a partner still on its way: loading, in the opening video, or still in the prologue.
+- End barrier: whoever's scene ends first waits up to 10 s, so both get control back on the same frame (60 s froze a player whose partner stood still in a scene that only moves on while a direction is held).
+- Considered: leaving the prologue solo (what playtest 3 hit); holding only the start (scenes driven by where each player stands drift apart).
+
+**D103: Where a partner arrives, and no shared room while the game steers the player** (agent, 2026-10-26)
+- The presence's ground spot resets on entering a room (by the tilemap's cell: the room id lags) and stays put during a scene. A pulled-in partner arrives where the scene started. Before, the partner was sent to the previous room's coordinates, or to where the scene had walked the leader, and Death's scene walked it out of the room, again and again.
+- A shared room doesn't form while the game steers the player (`demo_timer`), though one already shared stays shared. As a guest, the partner's Death was the leader's copy and never took the partner's gear.
+
+**D104: Maria's guardians are re-uploaded after a hand weapon loads** (agent-default, 2026-10-26; playtest 2026-10-25 note 4)
+- DRA loads a hand weapon's graphics where Maria's PS1 layout puts four guardians (owl, cardinal, dragon, doll). After every weapon load in her game, the module calls her `MARIA_Load` (exported at 0x8013C1F4; her palettes move to 0x8013C1F8).
+- Cost: her off-hand weapon is then drawn from her guardians' tiles. That's part of the off-hand decision (note 3), which the fix for drawing it waits on.
+- Considered: moving her guardians, or the weapons, to free VRAM. A survey (`harness/vram_survey.py`, VRAM read out of savestates) found no 64×32 block that's unused in every stage, so there's no known-safe spot yet.
+
+**D105: Off-hand weapons work exactly like Alucard's** (Tucker, 2026-10-26; playtest 2026-10-25 note 3)
+- Richter's and Maria's off-hand runs the weapon's own overlay code (option B of design/M8b §4.1), fed a virtual Alucard swing: the same sprite, timing (wind-up), hitboxes and specials as Alucard's. Replaces D88's version 1 (the weapon's frame swept in an arc).
+- Plan: `docs/design/M12b-offhand-like-alucard.md`. Spike first (6 weapon classes); every hand item is then covered by the M12 hand-item test.
+
+**D106: Graphics live in the 8MB RAM and pass through a small VRAM window** (agent-default, 2026-10-26; Tucker's question)
+- The 8MB expansion is RAM: the GPU draws only from its own 1MB VRAM. But any graphics can be kept in the 8MB and uploaded, a frame's worth at a time, into one small VRAM window just before they're drawn, as the partner puppet already does (its page at 0x1C0,0x100).
+- This replaces "find a free 64×128 area per weapon" (D104's blocker): weapon tile sheets (own off-hand, partner's hand weapons) are copied to the 8MB when loaded and drawn through the window; Maria's guardians keep their VRAM.
+- **The window: x 0x1E0-0x1FF, y 0x100-0x1DF** (32×224 words, in the puppet's page beside its frame slot). Proved unused by corruption: `vram_survey.window_free` fills it with garbage in a savestate and compares 2-3 s of play and of the pause menu, over 29 states (the library, the debug and boss starts): no difference anywhere. The method catches smaller used areas (controls at 0x200 and 0x280: every frame differs).
+
+**D107: A shared-room guest runs its own red and sealed doors** (agent-default, 2026-10-27)
+- Found by `m12_boss_ar_olrox`: when the partner was the room's authority, a guest Alucard was walled in at the sealed door outside Olrox's room. Doors open only for their own game's player, and the guest got the authority's closed door, tiles included (the room's tiles come with the snapshot since M5). A guest couldn't open any red door either: in real play, whoever entered a room second couldn't leave it through a door until the first player did.
+- Now `EntityRedDoor` and `EntitySealedDoor` are on each overlay's list of entities a guest runs itself (`scripts/gen_overlay_table.py`). The local door writes its own tiles after the authority's are copied in. What locks a boss room's door (NZ1's `g_bossDoorsLocked`) lives in the BSS, which the guest still gets from the authority. `guest_blocked_by_closed_door` (M5) checks that a locked boss room stays locked for the guest.
+- Cost: each game shows its own door, so a partner can be seen walking through a door that's closed on your screen.
+- Considered: the guest asking the authority to open its door. Rejected because a sealed door also steers the player who opens it (it walks them through), so the authority's player would be moved.
+
+**D108: The everyday suite runs in parallel, the long tests before playtest builds** (agent-default, 2026-10-27; Tucker: the suite was slowing development to a halt)
+- `harness/run.py` runs each test in its own process, the cores less 4 at once (12 on this PC: a few left for its own use), longest first by the last run's time. The tests that time the host in real time (`run.SOLO`: the mixed soaks' p99) run alone at the end: at 14 at once `mixed_soak_short` measured 1.10 ms against its 1 ms budget. Session tests step a simulated clock, so they're deterministic under load; the tests with real sockets, relays or LAN broadcasts (`run.NETWORK_MODULES`) share one lane. Maria's blob is built once before the workers start.
+- **Everyday suite:** everything but the names ending `min` or `_long`. `run.py --full` adds them and is the check before a playtest build (AGENTS.md).
+- **Trimmed, no coverage lost:** `teleport_fuzz` is 60 teleports (200: `teleport_fuzz_long`). The three 72-weapon sweeps are six halves, and Alucard's reference results are committed (`harness/data/hand_items_alucard.json`: item ids and pass/fail flags, no game data), so Richter's and Maria's halves no longer wait for his.
+- **Removed:** the M12b spike's `m12b_offhand_like_alucard_{richter,maria}` and `m12b_alucard_baseline`: 6 weapons, passing at 5 of 6, fully covered by the hand-item sweeps (all 72, item by item).
+- **Measured (2026-10-27):** 155 tests: about 1.2 h one after another (3300 s of tests plus start-up); in parallel 600 s at 7 at once, 505 s at 10, 486 s at 12 (the default), 454 s at 14. All pass.
+- Kept, though large: every boss in every pairing (36 tests, about 30% of the time). Each pairing has found its own bugs (D107), and in parallel they cost minutes.
+
+---
+## 2026-10-27: expanded scope (after the comparison with sotn-online-coop)
+
+**D109: Expanded scope and priority order: M12 (v1.0) → M13 → M14 → M15 → M16 → M17 → M18 → M19** (Tucker, 2026-10-27)
+- Goal: the best, most open, most durable, most complete and easiest-to-use version of this idea. A similar project appeared (`jweyden/sotn-online-coop`, on SymphonyRecomp: `research.md` → "sotn-online-coop").
+- Order: finish M12 into a public v1.0; the partner as a real second player (M13); every pair connects with no server of ours (M14); PvP (M15); Saturn characters (M16); 3+ players (M17, replaces D48); Mac and Linux (M18); widescreen (M19).
+- The timeline is extended to fit Pro's limits; Pro stays the budget.
+
+**D110: Boss fights pause when either player opens the menu** (Tucker, 2026-10-27)
+- Today's behaviour stays. The other project keeps a boss fight running through the menu; we don't. Guarded by a regression test in M12.
+
+**D111: To the backlog: power tuning, more characters' testing, the Thor's dual screen, community characters** (Tucker, 2026-10-27)
+- Tuning and testing more characters is easier with community feedback on a playable build: easy and fun first.
+- The Thor's dual screen helps only Thor owners. M10's widescreen part is M19.
+- A guide and format for community characters (for example, Soma) is a backlog item.
+
+**D112: Android release keystore, backed up in Tucker's password manager** (Tucker, 2026-10-27; replaces D95)
+- Option (a) of STATUS's signing decision. The keystore and its password never go in the repository; the build reads the keystore's path from `env.toml`.
+- The last debug-signed build moves the app's saves to shared storage first, so the switch doesn't lose them (`design/M12-v1-release.md`).
+
+**D113: The mod never requires a hosted server; a relay is the last step, and anyone's** (Tucker, 2026-10-27; keeps D74)
+- Every pair should connect with no choices by the player. IPv6, router port mapping and port prediction come first; a relay that any player's launcher or anyone's server can run is the last step (`design/M14-relay.md`). Replaces STATUS's "Symmetric NAT" decision.
+
+**D114: v1.0 ships after the first-castle playthrough; the inverted castle is v1.1** (Tucker, 2026-10-27)
+- `design/M12-v1-release.md` decision 1. The launch black screen is the 19 s black start (Tucker agreed with the assumption).
+
+**D115: The Mac build ships unsigned, with the steps in the README** (Tucker, 2026-10-27)
+- `design/M18-mac-linux.md`: no Apple Developer ID for now.
+
+**D116: The key switch is a USB backup and restore, not an in-app move to shared storage** (agent-default, 2026-10-27; revises D112's migration)
+- No APK has ever been published (v0.7.1 has none; v0.11.0 is a draft), so the only debug-signed installs are Tucker's Thor and the test emulators. `android/device.py switch-key` backs up the app's folder over USB, uninstalls, installs the release-signed APK, and puts the folder back.
+- Files adb writes into the app's folder are unreadable to the app, and `run-as` can't reach shared storage, so the backup goes into the app's private folder and the app copies it into place at its next start (`android/main.py` `restore`), as its own files. Nothing already there is overwritten.
+- **Release-signed builds stay debuggable** (as today's): the tests and this restore use `run-as`. Only someone with USB debugging access to the device can use it.
+- Evidence: `android/test_key_switch.py` (emulator, Android 14): every file back with the same contents, owned by the new app, release-signed. `release.py --android` refuses an APK not signed with the release key (checked with the 0.12.0-dev debug APK).
+
+**D117: The launcher ships OpenBIOS built with FASTBOOT; the old build stays for old savestates** (agent-default, 2026-10-27; M12 v1.0 criterion 6)
+- Measured in the real launcher (`uxdriver.py startup`): the title came 23.1 s after pressing Solo. Two causes:
+  - **The 2× disc read switched itself off at frame 113.** During the BIOS, `g_GameState`'s address holds a 2 for one frame. Now the title has to last 10 frames.
+  - **PCSX-Redux's standard OpenBIOS waits about 300 frames (5 s) before starting the disc.** The harness has always used OpenBIOS built with `FASTBOOT=true` (`scripts/bootstrap.sh`, the same source and licence), and all its tests run on it. After the disc's program starts, the two are identical (frame for frame).
+- Now: **a picture 0.4 s after pressing Solo, the title at 18.2 s** (was 23.1 s; target 20 s).
+- The release and the APK ship it as `bios/openbios-fast.bin`, the default. PCSX-Redux's `openbios.bin` stays beside it: a savestate holds the BIOS's RAM, so it only loads on the BIOS that made it. Each new savestate pair gets a `.bios` note; "Go back to a moment" boots the BIOS it names, and pairs from before 0.12 (no note) boot the old one (or the player's own BIOS, if they chose one). Debug starts are kept per BIOS (`<disc>@<bios>`), so they're remade once.
+- Our disc still reaches the title 84 frames (1.4 s) after retail (the co-op module and Richter loading). Left as is.
+
+**D118: Maria keeps her guardian when she picks up a Bible** (agent-default, 2026-10-27; found by `m12_subweapons_maria`)
+- The Maria port's glue (`mods/mariapsp-forpsx/maria.c`, upstream) turns Alucard's subweapons into her guardians: dagger → cat, axe → cardinal, holy water → turtle, vibhuti → dragon. The cross, stopwatch, rebound stone and agunea keep the guardian she has and give a heart back. The **bible** was mapped to none: picking one up left her nothing to throw.
+- Now the bible is like the other four (`patches/sotn-decomp.patch`, one hunk). Considered: mapping the five to the doll (her fifth guardian), which isn't selectable in the port and would need its graphics loaded.
+
+**D119: "Every room, every character" is proved by movement envelopes, not a tile planner** (agent-default, 2026-10-27; changes the method of `design/M12-v1-release.md` option B)
+- If, with the same relics, Richter and Maria jump at least as high and as far as Alucard, every room Alucard can cross with those relics they can cross too. The room's other gates have per-character tests already (mist grates, low gaps, poison water; blue doors and the ferryman read only the relic). `m12_envelope_{richter,maria}` measures each relic step against Alucard's from the same spot.
+- **Why:** a collision-tile planner with each character's physics is several usage windows and its own source of false results; the envelope is one test, measured in the real game.
+- It found two gaps (a decision for Tucker, STATUS): with Gravity Boots, Maria's high jump reaches 191 px and Richter's 261 px against Alucard's 331 px; with the Leap Stone only, Richter's backflip adds little height (63 px against 101 px). Climbing with the Soul of Bat is unlimited for both.
+
+**D120: The first-castle playthrough is chained by boss, with teleports between** (agent-default, 2026-10-27; `design/M12-v1-release.md` work item 4)
+- `m12_chain_first_castle_long`: both games play the 12 bosses in route order, carrying what they earn; between bosses, the teleport, and that stretch's relics and story flags. Walking the routes is left to the gate and movement tests (D119): scripted routes for every stretch would be several usage windows and brittle.
+- Time-attack records are reported, not asserted: a scripted kill can skip the death sequence that writes one.
+
+**D121: Everything planned for 1.0 ships now as 0.12.0, the public beta; 1.0 after playtesters' feedback** (Tucker, 2026-10-27)
+- A normal GitHub release, not a "pre-release": the README's download links use `releases/latest`, which skips pre-releases. The notes say it's the beta and ask for feedback (GitHub issues, F9 reports).

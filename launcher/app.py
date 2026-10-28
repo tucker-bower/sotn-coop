@@ -56,7 +56,10 @@ WINDOW_TITLE = "SOTN Co-op"
 SIZE = CANVAS
 INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (150, 20, 30), (12, 8, 14)
 OK_GREEN = (140, 200, 120)
-BUNDLED_BIOS = APP / "bios" / "openbios.bin"
+# OpenBIOS built with FASTBOOT (scripts/bootstrap.sh): the game starts 5 s sooner than on
+# PCSX-Redux's standard build, which stays for savestates made before 0.12 (M12 v1.0)
+BUNDLED_BIOS = APP / "bios" / "openbios-fast.bin"
+LEGACY_BIOS = APP / "bios" / "openbios.bin"
 PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
 # Maria's patches (maria/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
@@ -507,8 +510,8 @@ class Launcher:
         b = self.settings.get("bios") or (None if BUNDLED_BIOS.exists() else os.environ.get("COOP_DEV_BIOS"))
         return Path(b) if b and Path(b).exists() else BUNDLED_BIOS
 
-    def apply_bios(self):
-        os.environ["COOP_BIOS"] = str(self.bios())
+    def apply_bios(self, bios=None):
+        os.environ["COOP_BIOS"] = str(bios or self.bios())
 
     def disc(self):
         d = self.settings.get("disc")
@@ -995,9 +998,9 @@ class Launcher:
 
     # --- playing
 
-    def session(self, starts, playthrough):
+    def session(self, starts, playthrough, bios=None):
         from session import Session
-        self.apply_bios()
+        self.apply_bios(bios)
         return Session(self.disc(), starts=starts, audio=True,
                        session_file=playthrough.joint_save if playthrough else None,
                        characters=tuple(self.characters), blob=self.blob())
@@ -1272,7 +1275,8 @@ class Launcher:
                 with tempfile.TemporaryDirectory(prefix="coop-") as tmp:
                     (Path(tmp) / "A.state").write_bytes(a)
                     (Path(tmp) / "B.state").write_bytes(b)
-                    with self.session((str(Path(tmp) / "A.state"), str(Path(tmp) / "B.state")), p) as s:
+                    bios = Castle.state_bios(fa, BUNDLED_BIOS.parent, self.settings.get("bios") or LEGACY_BIOS)
+                    with self.session((str(Path(tmp) / "A.state"), str(Path(tmp) / "B.state")), p, bios) as s:
                         s.joint.on_write = p.saved
                         self.load_cards(s, p)
                         self.run_view(s, p)
@@ -1288,24 +1292,28 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir(), self.patch_crc())
-        if not starts or not any(v.get("boss") for v in starts.values()):
+        if not starts or not any(v.get("scene") for v in starts.values()):
             ask = ("They haven't been made for this version yet (about a minute). Make them now?" if not starts else
-                   "There are new ones: one outside each boss, with the level and gear a player\n"
-                   "usually has by then. Make them now (about a minute)?")
+                   "There are new ones: one before each story scene, and one outside each boss, with the\n"
+                   "level and gear a player usually has by then. Make them now (about a minute)?")
             if self.ui.confirm("Debug starts", ask):
                 self.make_debug_starts()
             starts = debugstarts.load(self.starts_dir(), self.patch_crc())
             if not starts:
                 return
         while True:
-            group = self.ui.menu("Debug starts", [("Bosses", "Outside each boss of the first castle, with a typical player's progress"),
-                                                  ("Places", "Spots along the route, with the gear from the start")],
+            groups = [("Bosses", "Outside each boss of the first castle, with a typical player's progress", "boss"),
+                      ("Scenes", "Before each story scene of the first castle, with the progress of that point", "scene"),
+                      ("Places", "Spots along the route, with the gear from the start", None)]
+            group = self.ui.menu("Debug starts", [g[:2] for g in groups],
                                  "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
             if group is None:
                 return
-            names = [n for n in starts if bool(starts[n].get("boss")) == (group == 0)]
-            k = self.ui.menu("Bosses" if group == 0 else "Places",
-                             [(n.removeprefix("Boss: "), starts[n]["about"]) for n in names])
+            kind = groups[group][2]
+            names = [n for n in starts if (kind and starts[n].get(kind)) or
+                     (not kind and not starts[n].get("boss") and not starts[n].get("scene"))]
+            k = self.ui.menu(groups[group][0],
+                             [(n.removeprefix("Boss: ").removeprefix("Scene: "), starts[n]["about"]) for n in names])
             if k is not None:
                 break
         if None in self.pads.assign and self.lobby() is None:

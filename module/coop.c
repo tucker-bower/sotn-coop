@@ -13,6 +13,8 @@
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
+#include "sprites.h"
+#include "weapons.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -33,6 +35,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         ".globl g_CoopCharacter\ng_CoopCharacter: .word 0\n" // coop_api.h
         ".globl g_CoopRicFile\ng_CoopRicFile: .space 24\n" // CdlFILE of COOPRIC.BIN (boot.c)
         ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (richter/coop_ric.h)
+        ".globl g_CoopWeaponEntity\ng_CoopWeaponEntity: .word CoopWeaponEntity\n" // offhand.c (D105)
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};
@@ -106,6 +109,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     CharacterFrame();
     SpellsUpdate();
     OffhandUpdate();
+    WeaponsUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
@@ -133,10 +137,16 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
+    SpritesPlace();
+    PrimsPlace();
     RenderEntities();
+    WeaponsDraw();
+    SpritesRemove();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();
     CapturePresence(&g_CoopLink.self);
+    SpritesCapture();
+    PrimsCapture();
     if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES) {
         DrawPuppet(&g_CoopLink.partner);
     }

@@ -52,7 +52,7 @@ def check_stage(stage):
             continue
         ext = f.suffix.lower()
         ours = "app" in f.relative_to(stage).parts[:1]  # our files: strict; the Python runtime: no game data
-        if ext == ".bin" and f.name != "openbios.bin":
+        if ext == ".bin" and f.name not in ("openbios.bin", "openbios-fast.bin"):
             bad.append(f"{f}: a .bin that isn't OpenBIOS")
         elif ext in (".cue", ".iso", ".state", ".mcd", ".chd", ".img", ".ecm"):
             bad.append(f"{f}: a disc image, savestate or memory card")
@@ -60,10 +60,28 @@ def check_stage(stage):
             bad.append(f"{f}: not on the allow-list ({ext})")
         elif f.stat().st_size > MAX_FILE:
             bad.append(f"{f}: {f.stat().st_size} bytes")
+    for name in ("README.txt", "AGPL-3.0.txt", "SwanStation-GPL-3.0.txt"):   # NOTICE, LICENSE, the core's GPL
+        if not any(f.name == name and f.parent.name == "LICENSES" for f in stage.rglob(name)):
+            bad.append(f"LICENSES/{name} missing: no release without the licences (NOTICE, LICENSE, licenses/)")
     if bad:
         raise SystemExit("game data check failed:\n  " + "\n  ".join(bad[:20]))
     n = sum(1 for f in stage.rglob("*") if f.is_file())
     print(f"game data check: {n} files, all program files")
+
+
+def check_apk_key(apk):
+    """Refuses an APK not signed with the release key (D112): an update signed with another key
+    won't install over a player's app without an uninstall, which deletes their saves."""
+    sys.path.insert(0, str(MOD / "harness"))
+    from coop_env import ENV
+    want = ENV.get("android", {}).get("cert_sha256", "").lower()
+    tools = sorted((Path.home() / "android" / "build-tools").glob("*/apksigner"))
+    out = subprocess.run([str(tools[-1]), "verify", "--print-certs", str(apk)], capture_output=True,
+                         text=True).stdout
+    got = [line.split(":", 1)[1].strip().lower() for line in out.splitlines() if "certificate SHA-256 digest" in line]
+    if not want or got != [want]:
+        raise SystemExit(f"{apk.name} isn't signed with the release key (D112): {got or 'not signed'}")
+    print("APK signed with the release key")
 
 
 def sha256(path):
@@ -104,6 +122,7 @@ def main():
             sh(MOD / "android" / "build.sh", v)
         if not apk.exists():
             raise SystemExit(f"no Android app: {apk} (android/build.sh {v})")
+        check_apk_key(apk)
         assets.append(tmp / "SOTN-Coop.apk")
         shutil.copyfile(apk, assets[-1])
     sums = tmp / "SHA256SUMS.txt"

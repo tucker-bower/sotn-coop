@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 9
+#define COOP_LINK_VERSION 11
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -15,6 +15,47 @@
 #define PRESENCE_BOSS 32   // a living boss is in this room (design/M5)
 #define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
 #define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
+
+// One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
+#define COOP_SPRITES 24
+// ...and their primitives (most attacks draw with them: Alucard's subweapons, Richter's whip):
+// a Primitive without its next pointer, positions in the room.
+#define COOP_PRIMS 32
+#define COOP_PRIM_SIZE 0x30
+typedef struct {
+    /* 0x00 */ s16 animSet;
+    /* 0x02 */ u16 animCurFrame;
+    /* 0x04 */ s16 x; // in the room, in pixels
+    /* 0x06 */ s16 y;
+    /* 0x08 */ u16 palette;
+    /* 0x0A */ u8 facingLeft;
+    /* 0x0B */ u8 blendMode;
+    /* 0x0C */ u16 zPriority;
+    /* 0x0E */ u16 drawFlags;
+    /* 0x10 */ u16 unk5A;
+    /* 0x12 */ u16 weapon; // a hand weapon's sprite: WEAPON_SPRITE | hand (weapons.c), else 0
+} CoopSprite; // size = 0x14
+#define WEAPON_SPRITE 0x100 // CoopSprite.weapon: animSet is its bank (0x10-0x13), palette its own
+
+// A player's hand weapons, for the partner to draw their swings (weapons.c, M12 note 2 phase 2):
+// each game copies a weapon's overlay, tile sheet and palettes here when it loads; the host sends
+// a hand's copy when its seq changes and writes the partner's at WEAPON_PARTNER_ADDR.
+#define WEAPON_SELF_ADDR 0x80710000
+#define WEAPON_PARTNER_ADDR 0x80720000
+#define WEAPON_HAND_SIZE 0x8000 // per hand, from the address above
+#define WEAPON_MAGIC 0x534E5057 // 'WPNS'
+#define WEAPON_OVL_SIZE 0x3000    // the overlay, as at 0x8017A000 (hand 0) / 0x8017D000 (hand 1)
+#define WEAPON_SHEET_SIZE 0x4000  // its tile sheet: 0x40 x 0x80 VRAM words (256 x 128, 4bpp)
+#define WEAPON_CLUT_SIZE 0x300    // its 24 palettes (0x110 + hand * 24 on)
+typedef struct {
+    /* 0x00 */ u32 magic; // WEAPON_MAGIC once written
+    /* 0x04 */ u32 seq;   // bumped with each new copy (the host sends on a change)
+    /* 0x08 */ u32 item;  // the item in that hand
+    /* 0x0C */ u32 pad[5];
+    /* 0x20 */ u8 ovl[WEAPON_OVL_SIZE];
+    /* 0x3020 */ u16 sheet[WEAPON_SHEET_SIZE / 2];
+    /* 0x7020 */ u16 clut[WEAPON_CLUT_SIZE / 2];
+} CoopWeapon; // size = 0x7320
 
 typedef struct {
     /* 0x00 */ u8 flags;     // PRESENCE_*
@@ -124,7 +165,15 @@ typedef struct {
     /* 0x2144C */ u32 character; // host writes: CHAR_* this game's player plays, from its next load (M8)
     /* 0x21450 */ u32 options;   // host writes: OPT_* the player's own settings (M8b)
     /* 0x21454 */ u32 padExtra;  // host writes every frame: PADX_* buttons a PlayStation pad lacks
-} CoopLink; // size = 0x21458
+    /* 0x21458 */ u32 selfSpriteCount;    // game writes every frame (sprites.c, M12)
+    /* 0x2145C */ CoopSprite selfSprites[COOP_SPRITES];
+    /* 0x2163C */ u32 partnerSpriteCount; // host writes
+    /* 0x21640 */ CoopSprite partnerSprites[COOP_SPRITES];
+    /* 0x21820 */ u32 selfPrimCount;      // game writes every frame (sprites.c, M12)
+    /* 0x21824 */ u8 selfPrims[COOP_PRIMS][COOP_PRIM_SIZE];
+    /* 0x21E24 */ u32 partnerPrimCount;   // host writes
+    /* 0x21E28 */ u8 partnerPrims[COOP_PRIMS][COOP_PRIM_SIZE];
+} CoopLink; // size = 0x22428
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1

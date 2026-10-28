@@ -1,14 +1,16 @@
 """One host per game. Call after_frame() once per emulated frame, while the emulator is paused."""
 
+import base64
 import collections
 import json
+import zlib
 import os
 import struct
 import time
 
 from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
 from .playout import Playout
-from .transport import (TAG_ACK, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+from .transport import (TAG_ACK, TAG_BYE, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
@@ -41,6 +43,10 @@ class Host:
         self.restarts = 0
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
+        self.partner_left = False  # the partner said goodbye (its app closed or went back to its menu)
+        self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
+        self._prims_sent, self._prims_seq = False, 0
+        self._weapons_sent = [None, None]  # each hand's weapon copy last sent (module/weapons.c)
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
@@ -104,6 +110,9 @@ class Host:
     def _partner_restarted(self):
         """The partner's host is a new one (it restarted): numbering starts again both ways."""
         self.restarts += 1
+        self.partner_left = False  # back again
+        self._sprites_seq = self._prims_seq = 0
+        self._weapons_sent = [None, None]
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
@@ -126,6 +135,7 @@ class Host:
             "peer": self.transport.peer,
             "partner_hello": self.partner_hello,
             "mismatch": self.mismatch,
+            "partner_left": self.partner_left,
             "rx_age": age,
             "sent": self.sent,
             "received": self.received,
@@ -135,6 +145,43 @@ class Host:
         """Sends a reliable control/save JSON dict to the partner host (online joint saves)."""
         self.ctrl.send(json.dumps(msg).encode())
         self._note("out", f"ctrl {msg.get('op')}")
+
+    def _send_weapons(self):
+        """A hand's weapon copy (overlay, tile sheet, palettes: module/weapons.c), once per new
+        copy, so the partner can draw its swings. Reliable: it's sent rarely, and a lost one would
+        leave the swings undrawn."""
+        if not self.partner_hello:
+            return
+        for hand in (0, 1):
+            ok, seq = self.mailbox.self_weapon_seq(hand)
+            if ok and seq != self._weapons_sent[hand]:
+                self._weapons_sent[hand] = seq
+                blob = zlib.compress(self.mailbox.self_weapon(hand), 6)
+                self.send_control({"op": "weapon", "hand": hand, "data": base64.b64encode(blob).decode("ascii")})
+
+    def _take_weapon(self, msg):
+        try:
+            hand, blob = int(msg["hand"]) & 1, zlib.decompress(base64.b64decode(msg["data"]))
+        except (KeyError, TypeError, ValueError, zlib.error):
+            return
+        self.mailbox.write_partner_weapon(hand, blob)
+
+    def goodbye(self):
+        """Tells the partner this game is leaving, so it can say so at once instead of waiting
+        for silence (playtest 2026-10-25). Unacknowledged: sent a few times, as the app is closing."""
+        if self.partner_hello and not self.mismatch:
+            for _ in range(3):
+                self.transport.send(TAG_BYE, json.dumps({"sid": self.hello["sid"]}).encode())
+            self._note("out", "bye")
+
+    def _check_bye(self, payload):
+        try:
+            sid = json.loads(payload).get("sid")
+        except (ValueError, AttributeError):
+            return
+        if self.partner_hello and sid == self.partner_hello.get("sid") and not self.partner_left:
+            self.partner_left = True
+            self._note("in", "bye")
 
     def take_control(self):
         """Returns and clears received control/save JSON dicts."""
@@ -189,6 +236,8 @@ class Host:
         for tag, _, _, payload, addr in self.transport.receive():
             if tag == TAG_HELLO:
                 self._check_hello(payload, addr)
+            elif tag == TAG_BYE:
+                self._check_bye(payload)
         return self.status()
 
     def after_frame(self):
@@ -203,16 +252,29 @@ class Host:
             for tag, _, _, payload, addr in self.transport.receive():
                 if tag == TAG_HELLO:
                     self._check_hello(payload, addr)
+                elif tag == TAG_BYE:
+                    self._check_bye(payload)
             return
         if self.mismatch:  # refused: still say hello (the partner may update), relay nothing
             for tag, _, _, payload, addr in self.transport.receive():
                 if tag == TAG_HELLO:
                     self._check_hello(payload, addr)
+                elif tag == TAG_BYE:
+                    self._check_bye(payload)
             return
         self.mailbox.set_rank(self.rank)
         self.mailbox.set_character(self.character)
         self.mailbox.set_options(self.options)
         self.transport.send(TAG_PRESENCE, self.mailbox.self_presence().pack())
+        sprites = self.mailbox.self_sprites()
+        if sprites or self._sprites_sent:  # one empty message after the last, to clear them
+            self.transport.send(TAG_SPRT, sprites)
+        self._sprites_sent = bool(sprites)
+        prims = self.mailbox.self_prims()
+        if prims or self._prims_sent:
+            self.transport.send(TAG_PRIM, zlib.compress(prims, 1))
+        self._prims_sent = bool(prims)
+        self._send_weapons()
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:
             self._snap_sent = seq
@@ -225,7 +287,7 @@ class Host:
         for ev in mine:
             self._note("out", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
 
-        latest, reliable, ctrl_dgrams, snap = None, [], [], None
+        latest, reliable, ctrl_dgrams, snap, sprites, prims_in = None, [], [], None, None, None
         now = self.transport.clock()
         for dgram in self.transport.receive():
             tag, seq, frame, payload, addr = dgram
@@ -243,6 +305,14 @@ class Host:
                 reliable.append(dgram)
             elif tag in (TAG_CTRL, TAG_CACK):
                 ctrl_dgrams.append(dgram)
+            elif tag == TAG_PRIM:
+                if seq > self._prims_seq:
+                    self._prims_seq, prims_in = seq, payload
+            elif tag == TAG_SPRT:
+                if seq > self._sprites_seq:  # the newest only
+                    self._sprites_seq, sprites = seq, payload
+            elif tag == TAG_BYE:
+                self._check_bye(payload)
             elif tag == TAG_HELLO:
                 self._check_hello(payload, addr)
                 if self.mismatch:
@@ -254,6 +324,13 @@ class Host:
         if latest is not None:
             self.mailbox.write_partner(latest)
             self.received += 1
+        if sprites is not None:
+            self.mailbox.write_partner_sprites(sprites)
+        if prims_in is not None:
+            try:
+                self.mailbox.write_partner_prims(zlib.decompress(prims_in))
+            except zlib.error:
+                pass
         if snap is not None:
             self.mailbox.put_snapshot(snap)
             self._note("in", f"snapshot ({len(snap)} bytes)")
@@ -269,7 +346,10 @@ class Host:
             for raw_msg in self.ctrl.tick(ctrl_dgrams):
                 try:
                     msg = json.loads(raw_msg)
-                    self._ctrl_inbox.append(msg)
                     self._note("in", f"ctrl {msg.get('op')}")
+                    if msg.get("op") == "weapon":
+                        self._take_weapon(msg)
+                    else:
+                        self._ctrl_inbox.append(msg)
                 except ValueError:
                     pass

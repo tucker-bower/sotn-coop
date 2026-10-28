@@ -39,7 +39,8 @@ class _Worker:
         if shm_name:
             from multiprocessing import shared_memory
             self.shm = shared_memory.SharedMemory(name=shm_name)
-        self.emu = emu = Emu(disc, audio=audio)
+        # The launcher (real-time play) booting from the disc: faster disc reads until the title
+        self.emu = emu = Emu(disc, audio=audio, boot_speedup=bool(audio and not start))
         emu.__enter__()
         if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
             emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
@@ -109,6 +110,8 @@ class _Worker:
         return None
 
     def close(self):
+        if self.linked:
+            self.host.goodbye()
         self.transport.close()
         self.emu.__exit__(None, None, None)
 
