@@ -8,6 +8,7 @@
                                                         maximized, fullscreen; frame times
     python launcher/uxdriver.py menus     [--out DIR]   every menu-bar item (Windows: through the
                                                         real menu bar's window procedure)
+    python launcher/uxdriver.py test_castles [--out DIR]  COOP_DATA with test castles: Solo plays one from its start (D127)
     python launcher/uxdriver.py online    [--out DIR]   two launchers on this PC: one hosts, the
                                                         other types the room code; both play
     python launcher/uxdriver.py characters [--out DIR]  Settings › Game files: wrong discs refused in
@@ -441,6 +442,35 @@ def _solo(pg):
     ]
 
 
+def _test_castles(pg):
+    """Test castles (D127), with COOP_DATA holding a castle and the test castles: Solo > Test castles >
+    the first (Slogra & Gaibon) plays a fresh copy, and the game arrives at its start."""
+    A = pg.CONTROLLER_BUTTON_A
+
+    def at_start(d):
+        from archive import Castle
+        played = [c for c in Castle.all() if c.info.get("start")]
+        g = d.view.games[0] if d.view and d.view.games else None
+        if not played or g is None:
+            return False
+        p, want = g.mailbox("self_presence"), played[0].info["start"]
+        return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16  # the save alone: x 128
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # the last item
+        ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", lambda d: d.heading == "Game"),
+        ("until", lambda d: at_start(d) or d.waited > 20000),
+        ("call", lambda d: setattr(d, "arrived", d.view.frame)),  # then past the room's fade in
+        ("until", lambda d: d.view.frame > d.arrived + 150 or d.waited > 20000), ("shot", "at-the-boss"),
+        ("expect", at_start, "the fresh copy plays from its start, outside Slogra & Gaibon"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
+
+
 def _startup(pg):
     """design/M12-v1-release.md criterion 6 (the launch black screen, D114): from pressing Solo,
     a picture (the "Starting the game" overlay or the game) within 1 s, and the title screen within
@@ -741,7 +771,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "solo": _solo, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
