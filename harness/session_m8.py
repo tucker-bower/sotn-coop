@@ -44,8 +44,8 @@ def reload_game(run, g, limit=3000):
 
 def mixed_pair(run, ca, cb):
     """M8 criterion 3 (first part): A and B, as these characters, share the entrance hall. B is
-    the guest, sees A's enemies, and B's hits count in A's world. Each draws the other's animated
-    puppet (and the clip shows it)."""
+    the guest, sees A's enemies, and B's hits count in A's world. Each draws the other (since
+    M13 its body, run by the game; and the clip shows it)."""
     a, b = run.s.a, run.s.b
     for g, c in ((a, ca), (b, cb)):
         if c != CHAR_ALUCARD:
@@ -61,6 +61,7 @@ def mixed_pair(run, ca, cb):
         run.step(30)
     run.expect(roles(run) == (ROLE_AUTHORITY, ROLE_GUEST), "they share the room: A authority, B guest",
                roles=roles(run))
+    run.step(30)  # each game's copy of the other is made as they meet (M13: partner.c)
     for viewer, other in ((a, cb), (b, ca)):
         _, count, _ = partner_pixels(viewer)
         run.expect(count > 150, f"{'AB'[viewer is b]} draws {NAMES[other]}'s puppet", pixels=count)

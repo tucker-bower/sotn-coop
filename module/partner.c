@@ -17,6 +17,7 @@
 #include "link.h"
 #include "partner.h"
 #include "familiar.h"
+#include "arrive.h"
 #include <sfx.h>
 
 void EntityAlucard(void);        // DRA
@@ -446,6 +447,7 @@ static void Make(void) {
     u32 k;
     // just revived: its init plays its character's teleport-in (arrive.c's TeleportIn)
     s32 how = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) ? 6 : 0;
+    s32 saved;
 
     g_CoopBodyTeleports += how != 0;
 
@@ -490,9 +492,10 @@ static void Make(void) {
             g_CoopSpikeBody[k] = 0;
         }
         SwapIn();
+        saved = D_80097C98; // player 1's (it may be set during a load)
         D_80097C98 = how;
         AluInit();
-        D_80097C98 = 0;
+        D_80097C98 = saved;
         SwapOut();
         pl->posX.i.hi = x; // where the copy was (the partner's spot, below, when it's live)
         pl->posY.i.hi = y;
@@ -516,13 +519,14 @@ static void Make(void) {
             g_CoopSpikeBody[k] = 0;
         }
         SwapIn();
+        saved = D_80097C98;
         D_80097C98 = how;
         if (t->init) {
             t->init(0);
         } else {
             ((PlayerOvl*)HDR_ADDR)->D_8013C004(0);
         }
-        D_80097C98 = 0;
+        D_80097C98 = saved;
         SwapOut();
     }
     // Its sprites go to VRAM's second bank, where player 1's would be (RenderEntities loads each
@@ -728,6 +732,9 @@ void PartnerFrame(void) {
     s32 t0;
     u16 pad;
 
+    if (ArriveCardSaving()) {
+        return; // the game is frozen while its card is written (the card and pads share the port)
+    }
     if (g_GameState != Game_Play || g_GameStep != Play_Default) {
         // A load (a stage, a save, a teleport's arrival) frees every primitive and replaces the
         // stage's sprite-bank table: the body goes with it, and is made again in play.
@@ -916,7 +923,8 @@ void PartnerDraw(void) {
     static u16 frames[256];
     s32 i;
 
-    if (!PartnerSimulated() || g_GameState != Game_Play || g_GameStep != Play_Default || s_JustMade) {
+    if (!PartnerSimulated() || g_GameState != Game_Play || g_GameStep != Play_Default || s_JustMade ||
+        ArriveCardSaving()) {
         return;
     }
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;

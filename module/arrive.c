@@ -288,10 +288,12 @@ void AluInit(void); // DRA
 static u16 s_TeleportIn; // frames left showing it in presence
 
 bool ArriveTeleportIn(void) { return s_TeleportIn != 0; }
+bool ArriveCardSaving(void) { return s_CardSaving; }
 u32 g_CoopTeleportIns; // teleport-ins played (tests read it: coop.map)
 
 static void TeleportIn(void) {
     s16 x = PLAYER.posX.i.hi, y = PLAYER.posY.i.hi;
+    s32 saved = D_80097C98;
 
     D_80097C98 = 6;
     if (CharacterLoaded() == CHAR_ALUCARD) {
@@ -299,7 +301,7 @@ static void TeleportIn(void) {
     } else {
         g_PlOvl.D_8013C004(0);
     }
-    D_80097C98 = 0;
+    D_80097C98 = saved;
     PLAYER.posX.i.hi = x;
     PLAYER.posY.i.hi = y;
     s_TeleportIn = TELEPORT_IN_FRAMES;
