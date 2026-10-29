@@ -193,6 +193,8 @@ void PrimsCapture(void) {
             }
             __builtin_memcpy(g_CoopLink.selfPrims[n], (u8*)p + 4, COOP_PRIM_SIZE);
             Shift(g_CoopLink.selfPrims[n], g_Tilemap.scrollX.i.hi, g_Tilemap.scrollY.i.hi);
+            // M13 step 4: a familiar's (the sword's are primitives), for the partner's body to keep
+            g_CoopLink.selfPrims[n][PRIM_TAG] = e->entityId >= FAMILIAR_IDS && e->entityId < FAMILIAR_IDS + 0x10 ? FAMILIAR_TAG : 0;
             n++;
         }
     }

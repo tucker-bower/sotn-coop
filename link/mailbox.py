@@ -8,6 +8,9 @@ LINK_VERSION = 11
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
+# Familiars (link.h's CoopFamiliar, module/familiar.c, M13 step 4)
+FAMILIAR_SELF, FAMILIAR_PARTNER = 0x807C0000, 0x807E0000
+FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
 STATUS_RANGES = ((0x80097BA0, 0x48), (0x80097BFC, 0x34))
@@ -168,6 +171,22 @@ class Mailbox:
         base = WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
         self.adapter.write_bytes(base + 0x20, blob[0x20:])
         self.adapter.write_bytes(base, blob[:0x20])
+
+    # --- familiars (module/familiar.c): each game's copy, and the partner's ---------------------
+    def self_familiar_seq(self):
+        """(magic ok, seq) of this game's copy of its familiar."""
+        magic, seq = struct.unpack("<II", self.adapter.read_bytes(FAMILIAR_SELF, 8))
+        return magic == FAMILIAR_MAGIC, seq
+
+    def self_familiar(self):
+        return self.adapter.read_bytes(FAMILIAR_SELF, FAMILIAR_SIZE)
+
+    def write_partner_familiar(self, blob):
+        """The partner's copy (header last: the game checks its magic)."""
+        if len(blob) != FAMILIAR_SIZE:
+            return
+        self.adapter.write_bytes(FAMILIAR_PARTNER + 0x20, blob[0x20:])
+        self.adapter.write_bytes(FAMILIAR_PARTNER, blob[:0x20])
 
     def self_status(self):
         """This game's player status (stats, level, equipment): g_Status's two ranges."""

@@ -56,6 +56,7 @@ class Host:
         self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
         self._prims_sent, self._prims_seq = False, 0
         self._weapons_sent = [None, None]  # each hand's weapon copy last sent (module/weapons.c)
+        self._familiar_sent = None  # the familiar copy last sent (module/familiar.c)
         self._status_sent, self._status_at = None, -STATUS_EVERY  # M13: this player's status, for the partner's body
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
@@ -123,6 +124,7 @@ class Host:
         self.partner_left = False  # back again
         self._sprites_seq = self._prims_seq = 0
         self._weapons_sent = [None, None]
+        self._familiar_sent = None
         self._status_sent = None
         self.events = ReliableChannel(self.transport, EVENT_SIZE)
         self.ctrl = ReliableMessages(self.transport)
@@ -169,6 +171,24 @@ class Host:
                 self._weapons_sent[hand] = seq
                 blob = zlib.compress(self.mailbox.self_weapon(hand), 6)
                 self.send_control({"op": "weapon", "hand": hand, "data": base64.b64encode(blob).decode("ascii")})
+
+    def _send_familiar(self):
+        """This player's familiar (overlay, tile sheet, palettes: module/familiar.c), once per new
+        copy, for the partner to draw it. Reliable, as the weapons."""
+        if not self.partner_hello:
+            return
+        ok, seq = self.mailbox.self_familiar_seq()
+        if ok and seq != self._familiar_sent:
+            self._familiar_sent = seq
+            blob = zlib.compress(self.mailbox.self_familiar(), 6)
+            self.send_control({"op": "familiar", "data": base64.b64encode(blob).decode("ascii")})
+
+    def _take_familiar(self, msg):
+        try:
+            blob = zlib.decompress(base64.b64decode(msg["data"]))
+        except (KeyError, TypeError, ValueError, zlib.error):
+            return
+        self.mailbox.write_partner_familiar(blob)
 
     def _send_status(self):
         """This player's status (stats, level, equipment: M13's partner body, module/partner.c)
@@ -297,6 +317,7 @@ class Host:
             self.transport.send(TAG_PRIM, zlib.compress(prims, 1))
         self._prims_sent = bool(prims)
         self._send_weapons()
+        self._send_familiar()
         self._send_status()
         seq, snap = self.mailbox.snapshot_out()
         if seq != self._snap_sent:
@@ -372,6 +393,8 @@ class Host:
                     self._note("in", f"ctrl {msg.get('op')}")
                     if msg.get("op") == "weapon":
                         self._take_weapon(msg)
+                    elif msg.get("op") == "familiar":
+                        self._take_familiar(msg)
                     elif msg.get("op") == "status":
                         try:
                             self.mailbox.write_partner_status(base64.b64decode(msg["data"]))

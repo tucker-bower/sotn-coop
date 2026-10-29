@@ -18,6 +18,7 @@
 #include "link.h"
 #include "partner.h"
 #include "puppet.h"
+#include "familiar.h"
 
 void EntityAlucard(void);        // DRA
 void UpdatePlayerEntities(void); // DRA
@@ -328,6 +329,7 @@ static void Make(void) {
             LoadGraphics((const u8*)FGAME2_ADDR, (const u8*)FGAME2_ADDR + 0x40000); // Richter's; Maria's runs on it too
         }
         s_BankLoaded = s_Char;
+        FamiliarReload(); // the strips held the partner's familiar too
     }
     if (!s_Code) { // DRA's Alucard, from his own init, with nothing of player 1's (slots 1-63
                    // hold player 1's afterimages, familiar, weapons: their primitives are player 1's)
@@ -632,6 +634,8 @@ static void BankPolys(u32 gt4, u32 gt3) {
     }
 }
 
+void PartnerBankPolys(u32 gt4, u32 gt3) { BankPolys(gt4, gt3); }
+
 // The body's primitives, drawn now by themselves (every other one hidden for it), then hidden
 // from the game's pass (ShowPrims puts them back before the body's next frame).
 static void DrawPrims(void) {
@@ -694,6 +698,10 @@ void PartnerDraw(void) {
     }
     if (s_Banked) { // its whip and effects (most of Richter's attacks are primitives), from the bank
         DrawPrims();
+    }
+    if (PartnerLive()) { // its familiar, beside the body (in RAM now: the copy holds player 1)
+        FamiliarDraw(PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - g_CoopLink.partner.x,
+                     PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi - g_CoopLink.partner.y);
     }
     SwapOut();
 }

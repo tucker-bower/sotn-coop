@@ -22,6 +22,9 @@
 // a Primitive without its next pointer, positions in the room.
 #define COOP_PRIMS 32
 #define COOP_PRIM_SIZE 0x30
+#define PRIM_TAG (0x2B - 4)  // its p3 (a pad byte): FAMILIAR_TAG for a familiar's (M13 step 4)
+#define FAMILIAR_TAG 0xFA
+#define FAMILIAR_IDS 0xD0    // the familiars' entity ids, 0xD0-0xDF
 typedef struct {
     /* 0x00 */ s16 animSet;
     /* 0x02 */ u16 animCurFrame;
@@ -69,6 +72,26 @@ typedef struct {
     /* 0x04 */ u8 a[STATUS_A_SIZE];
     /* 0x4C */ u8 b[STATUS_B_SIZE];
 } CoopStatus; // size = 0x80
+
+// M13 step 4: a player's familiar, for the partner to draw it (familiar.c): each game copies its
+// familiar's overlay, tile sheet and palettes here when it loads; the host sends the copy when its
+// seq changes and writes the partner's at FAMILIAR_PARTNER_ADDR.
+#define FAMILIAR_SELF_ADDR 0x807C0000
+#define FAMILIAR_PARTNER_ADDR 0x807E0000
+#define FAMILIAR_MAGIC 0x4C4D4146 // 'FAML'
+#define FAMILIAR_OVL_SIZE 0xA000   // as at 0x80170000
+#define FAMILIAR_SHEET_SIZE 0x6000 // (0x2C0, 0x100) 0x40 x 0x80 VRAM words, then (0x2C0, 0x180) 0x20 x 0x80
+#define FAMILIAR_CLUT_SIZE 0x400   // palettes 0x140-0x15F
+typedef struct {
+    /* 0x00 */ u32 magic;   // FAMILIAR_MAGIC once written
+    /* 0x04 */ u32 seq;     // bumped with each new copy
+    /* 0x08 */ u32 servant; // g_ServantLoaded: 0 none
+    /* 0x0C */ u32 bank;    // its sprite bank (g_api.o.spriteBanks[0x14]), as it ran
+    /* 0x10 */ u32 pad[4];
+    /* 0x20 */ u8 ovl[FAMILIAR_OVL_SIZE];
+    /* 0xA020 */ u16 sheet[FAMILIAR_SHEET_SIZE / 2];
+    /* 0x10020 */ u16 clut[FAMILIAR_CLUT_SIZE / 2];
+} CoopFamiliar; // size = 0x10420
 
 typedef struct {
     /* 0x00 */ u32 magic; // WEAPON_MAGIC once written

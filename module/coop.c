@@ -4,6 +4,7 @@
 #include "coop_api.h"
 #include "link.h"
 #include "partner.h"
+#include "familiar.h"
 #include "message.h"
 #include "arrive.h"
 #include "boss.h"
@@ -112,6 +113,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     SpellsUpdate();
     OffhandUpdate();
     WeaponsUpdate();
+    FamiliarUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
