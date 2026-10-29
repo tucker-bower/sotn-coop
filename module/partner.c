@@ -326,6 +326,8 @@ static void AluPalettes(void) {
 #define DRAW_OFS (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)) // g_PlayerDraw in the copy
 
 static bool s_TeleportSeen; // the partner's FLIP_TELEPORT_IN, last frame
+static s32 s_PartnerHp = -1; // its HP, as its status last said (a drop: it was hit in its game)
+u32 g_CoopBodyHits; // hits given to the body (tests read it: coop.map)
 u32 g_CoopBodyTeleports; // bodies made with the partner's teleport-in (tests read it: coop.map)
 
 static void Make(void) {
@@ -351,6 +353,7 @@ static void Make(void) {
     // A partner build's own uploads always go to the second bank (coop_ric.h): it draws from there.
     s_Banked = s_Code || s_Char != CharacterLoaded();
     s_Reloaded = false;
+    s_PartnerHp = -1; // its first status here isn't a hit
     s_ScrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Banked && s_BankLoaded != s_Char) { // before the init: Maria's uploads her palettes
@@ -643,6 +646,18 @@ void PartnerFrame(void) {
     }
     ShowPrims();
     SwapIn();
+    // Hit in its own game (its HP dropped): its own hit reaction here, its own code's knockback
+    // and voice, from the same HP to the same HP (cosmetic: the body's status is the partner's).
+    if (PartnerLive() && ((const CoopStatus*)STATUS_PARTNER_ADDR)->magic == STATUS_MAGIC) {
+        s32 hp = *(const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a; // g_Status.hp
+        if (s_PartnerHp > hp && hp > 0) {
+            g_Status.hp = s_PartnerHp;
+            PLAYER.hitParams = DAMAGEKIND_1;
+            PLAYER.hitPoints = s_PartnerHp - hp + g_Status.defenseEquip;
+            g_CoopBodyHits++;
+        }
+        s_PartnerHp = hp;
+    }
     if (PartnerLive()) { // pulled to their real spot when it drifts
         s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
         if (PLAYER.posX.i.hi - x > SNAP_PX || x - PLAYER.posX.i.hi > SNAP_PX ||

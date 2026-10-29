@@ -522,3 +522,39 @@ def m13_fairy_revive(run):
     run.expect(status(a)["hp"] == status(a)["hp_max"], "with full HP", hp=status(a)["hp"])
     run.expect(a.read("g_Status", "<B", LIFE_APPLE) == 0 and b.read("g_Status", "<B", LIFE_APPLE) == 0,
                "the Life Apple is gone in both games", a=a.read("g_Status", "<B", LIFE_APPLE), b=b.read("g_Status", "<B", LIFE_APPLE))
+
+
+def _partner_hit(run, cb):
+    """M13 criterion 4: B is hit in its own game (its HP drops, as an enemy's hit does), and A's
+    copy of B plays B's character's own hit reaction (its hit step), ending at B's HP."""
+    from link.mailbox import OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    sym = symbols()
+    if cb != CHAR_ALUCARD:
+        run.expect(reload_game(run, b), "B reloads as its character")
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(60)
+    body = sym["g_CoopSpikeBody"]
+    hits0 = a.read(sym["g_CoopBodyHits"])
+    hp = b.read("g_Status", "<i", 0x23C)
+    b.write("g_Status", hp - 12, "<i", 0x23C)
+    steps = set()
+    for _ in range(60):
+        run.step(1)
+        steps.add(a.read(body, "<H", 0x2C))  # PLAYER.step
+    run.expect(a.read(sym["g_CoopBodyHits"]) > hits0, "A's copy of B was hit")
+    run.expect(10 in steps, "and played its hit reaction (step 10)", steps=sorted(steps))
+    status_hp = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4  # its g_Status.hp, in the copy
+    run.expect(a.read(body, "<i", status_hp) == b.read("g_Status", "<i", 0x23C), "ending at B's HP",
+               body=a.read(body, "<i", status_hp), b=b.read("g_Status", "<i", 0x23C))
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def m13_partner_hit_alucard(run):
+    _partner_hit(run, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
+def m13_partner_hit_richter(run):
+    _partner_hit(run, CHAR_RICHTER)
