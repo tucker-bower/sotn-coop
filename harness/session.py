@@ -286,6 +286,10 @@ class Session:
         self.b._ask("connect", ports[0])
         for g, c in zip(self.games, self.characters):
             g.host("set_player", character=c, blob=self.blob)
+        if os.environ.get("COOP_BODY_OFF"):  # M13: no partner body in either game (comparisons)
+            from module import symbols
+            for g in self.games:
+                g.write(symbols()["g_CoopBodyOff"], 1)
         if self.session_file:
             from link.jointsave import JointSave
             self.joint = JointSave([MailboxProxy(self.a), MailboxProxy(self.b)], self.session_file)

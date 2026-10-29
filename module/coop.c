@@ -11,7 +11,6 @@
 #include "character.h"
 #include "mist.h"
 #include "progress.h"
-#include "puppet.h"
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
@@ -108,6 +107,7 @@ static void MusicUpdate(void) {
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    PartnerBoot();
     g_CoopLink.selfPad = g_pads[0].pressed; // M13: the partner's copy of us runs on these
     CharacterFrame();
     SpellsUpdate();
@@ -144,20 +144,14 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
-    SpritesPlace();
-    PrimsPlace();
     RenderEntities();
     PartnerDraw(); // M13 spike
     WeaponsDraw();
-    SpritesRemove();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();
     CapturePresence(&g_CoopLink.self);
     SpritesCapture();
     PrimsCapture();
-    if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES && !PartnerSimulated()) {
-        DrawPuppet(&g_CoopLink.partner);
-    }
 }
 
 // After the player's map cursor: a second, blue one on the partner's map cell. Same animation

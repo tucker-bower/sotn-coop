@@ -52,7 +52,8 @@ def guest_scenery_matches_solo(run):
     run.expect(shared == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B the guest", roles=shared)
     for i, shot in linked.items():
         x, y = where[i]
-        n = screen_diff(shot, solo[i], (x - 40, y - 56, x + 40, y + 56))
+        # A's body (M13) is within its snap distance of A's real spot (48 px: module/partner.c)
+        n = screen_diff(shot, solo[i], (x - 40 - 48, y - 56 - 48, x + 40 + 48, y + 56 + 48))
         run.expect(n < 50, f"frame {i}: B's screen matches its solo screen (outside A's sprite)", differing=n)
 
 

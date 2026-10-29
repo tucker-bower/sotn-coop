@@ -13,11 +13,10 @@
 
 #define COOP_ADDR 0x80280000
 #define COOP_MAGIC 0x504F4F43 // 'COOP'
-// Copies CoopBoot reads for drawing a partner who plays another character (design/M8 §2):
-// our Richter (COOPRIC.BIN) and Alucard's sprites (BIN/ARC_F.BIN), each as linked at 0x8013C000.
-#define PUPPET_RIC_ADDR 0x80500000
-#define PUPPET_ALU_ADDR 0x80540000
-#define PUPPET_RICPAL_ADDR (FGAME2_ADDR + 0x40000) // Richter's palettes 0x100-0x13F, in F_GAME2.BIN
+// Copies CoopBoot reads: our Richter (COOPRIC.BIN: character.c points Richter's load at it) and
+// Alucard's sprites (BIN/ARC_F.BIN, for an Alucard partner: partner.c), each as linked at 0x8013C000.
+#define COOPRIC_ADDR 0x80500000
+#define ARC_F_ADDR 0x80540000
 // Our Richter's and Maria's code and BSS (richter/ric.ld, maria/maria.ld): only their data is
 // in Richter's overlay slot, so familiars fit after it (design/M8b §3). Each has its own
 // address here (0x805C0000, 0x80600000): code rewritten at an address an emulator's recompiler

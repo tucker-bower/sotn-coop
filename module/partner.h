@@ -2,6 +2,9 @@
 #ifndef PARTNER_H
 #define PARTNER_H
 
+#define PARTNER_STALE_FRAMES 30 // no host update for this long: the partner's gone (no body)
+
+void PartnerBoot(void);  // once, at boot: finds the BIOS's rand() seed (the partner's is its own)
 void PartnerFrame(void); // after the game's update, before drawing (coop.c RenderEntitiesHook)
 void PartnerDraw(void);  // after player 1's RenderEntities
 bool PartnerSimulated(void); // the partner's body is the simulated one this frame (no puppet)

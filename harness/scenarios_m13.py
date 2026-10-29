@@ -182,7 +182,7 @@ def _swing_in_body(run, same):
                 out.mkdir(parents=True, exist_ok=True)
                 b.screenshot().save(out / f"b_swing_{drawn}.png")
                 a.screenshot().save(out / f"a_swing_{drawn}.png")
-        placed += bool(b.read(symbols()["g_CoopSpritesDrawn"], "<I"))
+    # placed: partner sprites put over the body: none since M13 step 5 (sprites.c only sends them)
     return a_frames, body_frames, ran, drawn, placed
 
 
@@ -200,11 +200,19 @@ def m13_partner_weapon_differs(run):
 
 @session_scenario()
 def m13_partner_weapon_same(run):
-    """The same weapon: B's copy of A swings it and draws it itself; nothing comes from the link."""
+    """The same weapon: B's copy of A strikes A's poses but never runs the weapon's code (B's one
+    copy of the overlay is B's own: running it there stopped B's own swing), so A's swing comes from
+    the link; and B's own swing still works."""
     a_frames, body_frames, ran, drawn, placed = _swing_in_body(run, same=True)
-    run.expect(ran and a_frames <= body_frames, "B's copy of A swings", frames=ran,
-               missing=sorted(a_frames - body_frames))
-    run.expect(not drawn and not placed, "drawn by the body alone", real=drawn, sprites=placed)
+    run.expect(a_frames <= body_frames, "B's copy of A strikes A's poses", missing=sorted(a_frames - body_frames))
+    run.expect(not ran, "but runs no weapon entities", frames=ran)
+    run.expect(drawn, "A's swing is drawn from the link", frames=drawn)
+    b = run.s.b
+    own = 0
+    for i in range(80):
+        run.step(1, ("", "square" if i % 40 < 2 else ""))
+        own += any(0xE0 <= b.read("g_Entities", "<H", k * 0xBC + 0x26) <= 0xFF for k in range(1, 64))
+    run.expect(own, "and B's own swing still spawns its weapon", frames=own)
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
@@ -219,7 +227,7 @@ def m13_partner_richter(run):
     run.expect(reload_game(run, b) and b.mailbox("self_presence").character == CHAR_RICHTER, "B plays Richter")
     run.step(60)
     sym = symbols()
-    banks_at = a.read("g_api", "<I", 0x10)  # g_api.o.spriteBanks (Overlay: +0x10)
+    banks_at = a.read("g_api", "<I", 0x14)  # g_api.o.spriteBanks (Overlay: +0x14)
     banks = a.read_bytes(banks_at + 0x40, 16)
     a.host("set_player", options=OPT_PARTNER_SIM)
     run.step(30)
@@ -262,7 +270,7 @@ def m13_partner_maria(run):
     a, b = run.s.a, run.s.b
     run.expect(reload_game(run, b) and b.mailbox("self_presence").character == CHAR_MARIA, "B plays Maria")
     run.step(60)
-    banks_at = a.read("g_api", "<I", 0x10)
+    banks_at = a.read("g_api", "<I", 0x14)  # g_api.o.spriteBanks
     banks = a.read_bytes(banks_at + 0x40, 16)
     a.host("set_player", options=OPT_PARTNER_SIM)
     run.step(30)
@@ -558,3 +566,40 @@ def m13_partner_hit_alucard(run):
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
 def m13_partner_hit_richter(run):
     _partner_hit(run, CHAR_RICHTER)
+
+
+# --- criterion 2: the partner's attacks, drawn by the game's own code, for all 9 pairings --------
+PAIR_NAMES = {0: "a", 1: "r", 2: "m"}
+
+
+def _pixels_test(ca, cb):
+    @session_scenario(characters=(ca, cb))
+    def test(run):
+        """M13 criterion 2: A (the partner) next to B: B draws A's body, A's attack and A's
+        subweapon (partner_pixels: B's picture with and without its partner), all from A's body
+        in B's game."""
+        from session_m12 import DAGGER, HEARTS_ADDR, SUBWEAPON_ID, attack_pixels
+
+        def arm(a):
+            a.write(SUBWEAPON_ID, DAGGER, "<i")
+            a.write(HEARTS_ADDR, 99, "<i")
+        def sword(a):  # Alucard's attack: a sword's swing (Death took his gear at the entrance)
+            from scenarios_m12 import CATEGORY_OFS, EQUIP_DEFS, EQUIP_SIZE, N_HAND_ITEMS, WEAPON_CATEGORIES
+            from scenarios_m8 import EQUIPMENT
+            raw = a.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
+            a.write(EQUIPMENT, next(i for i in range(1, N_HAND_ITEMS)
+                                    if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES), "<I")
+        idle, hit = attack_pixels(run, (ca, cb), "square", setup=sword if ca == 0 else None)
+        run.expect(idle > 100, "B draws A's body", pixels=idle)
+        run.expect(hit > idle + 20, "and A's attack", standing=idle, attacking=hit)
+        idle2, sub = attack_pixels(run, (ca, cb), "up+square", arm=arm)
+        run.expect(sub > idle2 + 20, "and A's subweapon", standing=idle2, throwing=sub)
+    test.__name__ = f"m13_pixels_{PAIR_NAMES[ca]}{PAIR_NAMES[cb]}"
+    from session import SESSION_SCENARIOS
+    SESSION_SCENARIOS[test.__name__] = SESSION_SCENARIOS.pop("test")
+    return test
+
+
+for _ca in (0, 1, 2):
+    for _cb in (0, 1, 2):
+        _pixels_test(_ca, _cb)

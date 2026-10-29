@@ -50,12 +50,13 @@ void BOOT CoopBoot(void) {
     *(volatile u32*)0x1F801060 |= 0xE00; // RAM_SIZE: expose 8MB
     ReadFile(s_CoopFile, (void*)COOP_ADDR, &file, true, 0, 0);
     // Our Richter (design/M8): character.c points Richter's CD load at it, and a copy stays in
-    // 8MB RAM with Alucard's sprites, to draw a partner who plays another character (puppet.c).
+    // 8MB RAM with Alucard's sprites (ARC_F.BIN), for an Alucard partner in another character's
+    // game (partner.c's AluHeader).
     // Now is the only safe time to read them: in play, the CD streams the music.
-    ReadFile(s_RicFile, (void*)PUPPET_RIC_ADDR, &g_CoopRicFile, false, 0, 0);
-    ReadFile(s_AluFile, (void*)PUPPET_ALU_ADDR, &file, false, 0, 0);
-    // Richter's graphics file (his palettes 0x100-0x13F are at 0x40000 in it), for the puppet,
-    // and for a Richter partner's own graphics in VRAM's second bank (design/M13 step 3)...
+    ReadFile(s_RicFile, (void*)COOPRIC_ADDR, &g_CoopRicFile, false, 0, 0);
+    ReadFile(s_AluFile, (void*)ARC_F_ADDR, &file, false, 0, 0);
+    // Richter's graphics file, for a Richter or Maria partner's own graphics in VRAM's second bank
+    // (design/M13 step 3)...
     ReadFile(s_RicHudFile, (void*)FGAME2_ADDR, &file, false, 0, 0);
     // ...and the partner's Richter, linked to run there (richter/ric_partner.ld).
     ReadFile(s_RicPartnerFile, (void*)PARTNER_RIC_ADDR, &g_CoopRicPartnerFile, false, 0, 0);

@@ -145,9 +145,9 @@ static void CopyOverlay(const CharBlob* b) {
     FlushCache();
 }
 
-// Our Richter's file, as CoopBoot read it into expansion RAM (for the partner's puppet).
+// Our Richter's file, as CoopBoot read it into expansion RAM.
 static const FarTrailer* RicTrailer(void) {
-    return Trailer((const u8*)PUPPET_RIC_ADDR, g_CoopRicFile.size);
+    return Trailer((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
 }
 
 // Richter's load reads our Richter (COOPRIC.BIN) in the castle, and the retail RIC.BIN in the
@@ -264,7 +264,7 @@ void CharacterFrame(void) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
-            PlaceFar((const u8*)PUPPET_RIC_ADDR, g_CoopRicFile.size);
+            PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
         }
     }
     // ...and its sound bank, once the chain that loads Richter's (SD_RIH, then SD_MAR) is done.

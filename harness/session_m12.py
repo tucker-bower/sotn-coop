@@ -416,92 +416,57 @@ for _b in _bossstarts():
 SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
 
 
-@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice: his whip's sprites are in both games
-def m12_partner_attack_drawn(run):
-    """Note 2, phase 1: A (Richter) whips next to B (Richter): B gets A's sprites and draws them (the
-    same frame of B, from the same state, rendered with and without them differs). DRA's
-    subweapons draw with primitives, not sprites: phase 1b."""
+def attack_pixels(run, chars, pad, every=30, arm=None, setup=None):
+    """M13 (criterion 2): what A adds to B's screen (partner_pixels: B drawn with and without its
+    partner), standing, then mid-attack; A's body in B's game draws its own attacks, so the attack
+    adds to it. arm(a): set A up for the attack (a subweapon) before each press."""
+    from link.mailbox import BUSY, IN_PLAY
     from session_m8 import as_characters
+    from session_scenarios import partner_pixels
     from session_shared import into_hall
     a, b = run.s.a, run.s.b
-    as_characters(run, 1, 1)
+    if setup:  # before the load (it loads A's weapon)
+        setup(a)
+    if chars != (0, 0) or setup:
+        as_characters(run, *chars)
     into_hall(run)
-    got = None
-    for i in range(240):
-        run.step(1, ("square" if i % 30 < 2 else "", ""))
-        n = b.mailbox("partner_sprite_count")
-        if n:
-            got = n
+    for _ in range(900):  # B in play in A's room (its arrival can still be loading)
+        run.step(1)
+        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if pa.room == pb.room and pb.flags & IN_PLAY and not pb.flags & BUSY:
             break
-    run.expect(got, "B receives A's sprites (the whip)")
-    run.step(2, ("square", ""))  # a fresh crack...
-    run.step(8)                  # ...held out (the whip's segments are blank when it's in)
-    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
-    n = b.mailbox("partner_sprite_count")
-    sprites = a.mailbox("self_sprites")
-    state = b.save_state()  # holds the 15 sprites
-    b.mailbox("write_partner_sprites", b"")
-    run.s.b.step(10)  # the screen shows a frame a few frames late
-    shot_without = b.screenshot()
-    without = shot_without.tobytes()
-    b.load_state(state)
-    run.s.b.step(10)
-    from module import symbols
-    placed_with = (b.read(symbols()["g_CoopSpritesDrawn"], "<I"), b.read(symbols()["g_CoopSpritesWhy"], "<I"))
-    shot_with = b.screenshot()
-    with_sprites = shot_with.tobytes()
-    out = TOOLS["out"] / run.name
-    out.mkdir(parents=True, exist_ok=True)
-    shot_with.save(out / "b_with.png")
-    shot_without.save(out / "b_without.png")
-    a.screenshot().save(out / "a.png")
-    from module import symbols
-    run.expect(with_sprites != without, "B draws them", sprites=n,
-               placed_with=placed_with,
-               partner_char=b.mailbox("partner_presence").character, mine=b.mailbox("self_presence").character,
-               sets=sorted({hex(int.from_bytes(sprites[k:k + 2], "little")) for k in range(0, len(sprites), 0x14)}))
+    run.step(30)
+    _, idle, _ = partner_pixels(b)
+    best = 0
+    for i in range(4 * every):
+        if arm:
+            arm(a)
+        run.step(1, (pad if i % every < 2 else "", ""))
+        if i % every in (4, 8, 12, 16):  # the attack's frames (the swing is drawn from the link)
+            _, n, _ = partner_pixels(b)
+            best = max(best, n)
+    return idle, best
+
+
+@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice
+def m12_partner_attack_drawn(run):
+    """Note 2 (since M13: the partner's body draws it): A (Richter) whips next to B (Richter), and
+    B's screen shows it: A adds more to B's picture mid-whip than standing."""
+    idle, whip = attack_pixels(run, (1, 1), "square")
+    run.expect(idle > 100, "B draws A", pixels=idle)
+    run.expect(whip > idle + 50, "and A's whip", standing=idle, whipping=whip)
 
 
 @session_scenario()
 def m12_partner_dagger_drawn(run):
-    """Note 2, phase 1b: A (Alucard) throws daggers next to B: B gets the dagger's primitives and
-    draws them (the same frame of B, from the same state, with and without them, differs)."""
-    from session_shared import into_hall
-    a, b = run.s.a, run.s.b
-    into_hall(run)
-    got = 0
-    for i in range(240):
+    """Note 2, phase 1b (since M13: the partner's body throws it): A (Alucard) throws daggers next
+    to B, and B's screen shows them."""
+    def arm(a):
         a.write(SUBWEAPON_ID, DAGGER, "<i")
         a.write(HEARTS_ADDR, 99, "<i")
-        run.step(1, ("up+square" if i % 30 < 2 else "", ""))
-        if i % 30 == 8 and a.mailbox("self_prims"):
-            got = len(a.mailbox("self_prims")) // 0x30
-            break
-    run.expect(got, "A's dagger has primitives to send", n=got)
-    run.step(1)
-    b.unlink()
-    state = b.save_state()  # holds A's primitives
-    b.mailbox("write_partner_prims", b"")
-    run.s.b.step(10)  # the screen shows a frame a few frames late
-    without = b.screenshot()
-    from emu import SYMBOLS
-    buf = b.read_bytes(SYMBOLS["g_PrimBuf"], 0x34 * 0x500)
-    marked = [(k, buf[k * 0x34 + 7], hex(int.from_bytes(buf[k * 0x34 + 0x32:k * 0x34 + 0x34], "little")))
-              for k in range(0x500) if buf[k * 0x34 + 0x2B] == 0xC5]
-    pool_without = (len(marked), sum(1 for m in marked if not int(m[2], 16) & 8), marked[:3])
-    b.load_state(state)
-    run.s.b.step(10)
-    with_prims = b.screenshot()
-    out = TOOLS["out"] / run.name
-    out.mkdir(parents=True, exist_ok=True)
-    with_prims.save(out / "b_with.png")
-    without.save(out / "b_without.png")
-    import struct
-    raw = b.read_bytes("g_Entities", 0xBC * 64)
-    b_own = [(k, hex(struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0])) for k in range(1, 64)
-             if struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0]]
-    run.expect(with_prims.tobytes() != without.tobytes(), "B draws them", prims=got, b_entities=b_own,
-               b_pad_sub=b.read(SUBWEAPON_ID, "<i"), pool_without=pool_without)
+    idle, thrown = attack_pixels(run, (0, 0), "up+square", arm=arm)
+    run.expect(idle > 100, "B draws A", pixels=idle)
+    run.expect(thrown > idle + 20, "and A's daggers", standing=idle, throwing=thrown)
 
 
 # --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------
