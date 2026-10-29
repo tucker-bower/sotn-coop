@@ -73,6 +73,7 @@ static u32 s_Banks[BANKS];
 static u32 s_Char;    // CHAR_* of the body
 static bool s_Code;   // it runs its own player code (not DRA's Alucard)
 static bool s_AluHere; // an Alucard partner in another character's game (DRA's Alucard, ARC_F swapped in)
+static bool s_OtherChar; // another character than player 1 (its own afterimage slots: Swap)
 static Unkstruct_8006C3C4 s_PalOps[LEN(D_8006C3C4)]; // DRA's palette operations, kept from it
 static bool s_Banked; // its graphics are in VRAM's second bank (another character than ours)
 static s32 s_SavedChar;
@@ -280,12 +281,14 @@ static void Swap(void) {
         }
     }
     // the 64 player slots: only those in use on either side (most are empty), and always the
-    // player's (0) and its afterimages' (1-3: no id, but set up by AluInit and RicInit, slot 1
-    // holding their primitives). Skipped, those were player 1's and the body's at once: one's
-    // afterimage code walked the other's chain to its end and wrote through NULL, into the BIOS.
+    // player's (0). Its afterimages' (1-3: no id, but set up by AluInit and RicInit, slot 1
+    // holding their primitives) too when it's another character than player 1: shared, Alucard's
+    // afterimage code (8 primitives) walked Richter's or Maria's chain (6) to its end and wrote
+    // through NULL, into the BIOS. Of the same character, they share them, as they always did.
     for (i = 0; i < 64; i++, body += 0xBC / 4) {
         u32* ram = (u32*)&g_Entities[i];
-        if (i > E_AFTERIMAGE_3 && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
+        if (i && (i > E_AFTERIMAGE_3 || !s_OtherChar) && !((Entity*)ram)->entityId &&
+            !((Entity*)body)->entityId) {
             continue;
         }
         for (k = 0; k < 0xBC / 4; k++) {
@@ -482,6 +485,7 @@ static void Make(void) {
     s_AluHere = !s_Code && CharacterLoaded() != CHAR_ALUCARD;
     // A partner build's own uploads always go to the second bank (coop_ric.h): it draws from there.
     s_Banked = s_Code || s_Char != CharacterLoaded();
+    s_OtherChar = s_Char != CharacterLoaded();
     s_Reloaded = false;
     s_PartnerHp = -1; // its first status here isn't a hit
     s_ScrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
@@ -661,13 +665,28 @@ static s16 s_Prims[PRIMS];
 static u8 s_PrimHidden[PRIMS]; // hidden by us from the game's pass (it hadn't hidden it itself)
 static s32 s_PrimCount;
 
+// Slot i (the body's slots swapped in) holds primitives of the body's own: an entity's, or its
+// afterimages' (slot 1: no id) if its init made them. A body made as a copy of player 1 has
+// player 1's afterimage chain there (the same primIndex): never the body's to free or change.
+static bool OwnPrims(s32 i) {
+    const Entity* mine = (const Entity*)g_CoopSpikeBody + i; // player 1's, while swapped in
+
+    if (!(g_Entities[i].flags & FLAG_HAS_PRIMS)) {
+        return false;
+    }
+    if (i == 0 || g_Entities[i].entityId) {
+        return true;
+    }
+    return i <= E_AFTERIMAGE_3 && !((mine->flags & FLAG_HAS_PRIMS) && mine->primIndex == g_Entities[i].primIndex);
+}
+
 static void FindPrims(void) {
     Primitive* prim;
     s32 i;
 
     s_PrimCount = 0;
     for (i = 0; i < 64; i++) {
-        if ((i <= E_AFTERIMAGE_3 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
+        if (OwnPrims(i)) {
             for (prim = &g_PrimBuf[g_Entities[i].primIndex]; prim && s_PrimCount < PRIMS; prim = prim->next) {
                 s_Prims[s_PrimCount++] = prim - g_PrimBuf;
             }
@@ -726,7 +745,7 @@ static void Drop(void) {
         ShowPrims();
         SwapIn();
         for (i = 0; i < 64; i++) {
-            if ((i <= E_AFTERIMAGE_3 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
+            if (OwnPrims(i)) {
                 g_api.FreePrimitives(g_Entities[i].primIndex);
                 g_Entities[i].flags &= ~FLAG_HAS_PRIMS;
             }
