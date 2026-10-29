@@ -391,8 +391,9 @@ def boss_flow(run, b, limit=24000):
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
                cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
-    w.step(300)
-    if b["name"] == "Richter":
+    if b["name"] != "Richter":
+        w.step(300)
+    else:
         # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: its own
         # scene fades to white and the ending plays (BO6's e_cutscene_actors). The scripted kill
         # does that; the fade takes some 320 frames, so wait it out: both games, the ending.
@@ -401,6 +402,8 @@ def boss_flow(run, b, limit=24000):
         def both_ended():
             for k, g in enumerate((a, g2)):
                 ended[k] |= g.read("g_GameState") in (GAME_ENDING, GAME_TITLE)  # its ending, then the title
+                if not ended[k]:  # still kept alive: what's left of his attacks lands in the fade
+                    g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
             return all(ended)
         w.until(both_ended, 2400)
         run.expect(all(ended), "killing Richter ends the game, in both games (as alone)",
@@ -454,16 +457,19 @@ def attack_pixels(run, chars, pad, every=30, arm=None, setup=None):
         if pa.room == pb.room and pb.flags & IN_PLAY and not pb.flags & BUSY:
             break
     run.step(30)
-    _, idle, _ = partner_pixels(b)
-    best = 0
+    box, idle, _ = partner_pixels(b)
+    best, wide = 0, 0
+    width = (box[2] - box[0]) if box else 0
     for i in range(4 * every):
         if arm:
             arm(a)
         run.step(1, (pad if i % every < 2 else "", ""))
         if i % every in (4, 8, 12, 16):  # the attack's frames (the swing is drawn from the link)
-            _, n, _ = partner_pixels(b)
+            bb, n, _ = partner_pixels(b)
             best = max(best, n)
-    return idle, best
+            wide = max(wide, (bb[2] - bb[0]) - width if bb else 0)
+    # A weapon, a whip, a dagger reach out of the body: wider, or more pixels than standing
+    return idle, best if wide < 8 else max(best, idle + 21)
 
 
 @session_scenario(characters=(1, 1))  # CHAR_RICHTER twice

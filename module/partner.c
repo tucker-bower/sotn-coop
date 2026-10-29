@@ -149,6 +149,9 @@ u32 g_CoopSpikeLines; // the last partner frame's cost, in scanlines (263 a fram
 u32 g_CoopSpikeMax;   // the most it has cost
 u32 g_CoopMakeLines;  // what making the body last cost, in scanlines (tests)
 static bool s_JustMade; // made this frame: its update and drawing start next frame
+static bool s_AfterLoad; // a load, its Engine_Init not run yet: no body
+static u8 s_StageUsed[256 - 64];
+u32 g_CoopBodySpills; // entities its frame put in the stage's slots, taken out (tests read it)
 
 // The game's one copy of each hand weapon's overlay (0x8017A000, 0x8017D000) and of the familiar's
 // (0x80170000) is player 1's, with statics of its own: the body never runs them (its weapon code
@@ -215,13 +218,19 @@ static void GfxAfter(void) {
 
 // The partner's sounds (step 4): the requests its frame added to DRA's ring are quieter (the host's
 // setting) and panned to where it is. A sound of the player's own bank (VAB 1: Alucard's or
-// Richter's and Maria's voice) is another character's here: dropped (volume 0).
+// Richter's and Maria's voice) is another character's here: dropped (volume 0). Its sound
+// commands (music, and the XA voices streamed from the disc: Richter's and Maria's) are all
+// dropped: they're its game's, and an XA stream takes our drive (a load that started while one
+// played read the stream's sectors as the stage's code, and the game jumped into them).
 extern s16 g_sfxRingBufferWritePos;            // DRA
 extern SfxRingBufferItem g_SfxRingBuffer[0x100]; // DRA
 extern Unkstruct_800BF554 g_SfxData[];         // DRA
 #define PARTNER_VOL 60 // % of its volume, unless the host says otherwise
 #define PLAYER_VAB 1
 static s16 s_SfxPos;
+static s16 s_CmdPos;
+extern s16 g_SoundCommandRingBufferWritePos;  // DRA
+extern s16 g_SoundCommandRingBuffer[0x100];  // DRA
 
 static void PartnerSounds(void) {
     s32 pct = (g_CoopLink.control >> CONTROL_PARTNER_VOL_SHIFT) & 0xFF, vol, pan;
@@ -231,6 +240,10 @@ static void PartnerSounds(void) {
     pct = pct ? pct : PARTNER_VOL;
     pan = (PLAYER.posX.i.hi - 128) / 16;
     pan = pan < -8 ? -8 : pan > 8 ? 8 : pan;
+    for (pos = s_CmdPos; pos != g_SoundCommandRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        g_SoundCommandRingBuffer[pos] = 0;
+    }
+    g_SoundCommandRingBufferWritePos = s_CmdPos;
     for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
         it = &g_SfxRingBuffer[pos];
         if (s_Char != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
@@ -553,6 +566,7 @@ static void SwapIn(void) {
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
     s_SfxPos = g_sfxRingBufferWritePos;
+    s_CmdPos = g_SoundCommandRingBufferWritePos;
     WeaponsOff();
     RandOff();
     g_CoopCharacter = s_Code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
@@ -735,12 +749,17 @@ void PartnerFrame(void) {
     if (ArriveCardSaving()) {
         return; // the game is frozen while its card is written (the card and pads share the port)
     }
-    if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep == Engine_Init) {
-        // A load (a stage, a save, a teleport's arrival) frees every primitive and replaces the
-        // stage's sprite-bank table: the body goes with it, and is made again in play. Engine_Init
-        // is the load's end, in Play_Default: it frees every primitive too (a body made before it
-        // lost its own, walked the chains that replaced them to their end and wrote through NULL:
-        // the BIOS's pad driver died).
+    // A load (a stage, a save, a teleport's arrival) frees every primitive and replaces the stage's
+    // sprite-bank table: the body goes with it, and is made again in play. The load ends in
+    // Play_Default with Engine_Init, which frees every primitive too: until that's run, no body (one
+    // made before it lost its primitives, walked the chains that replaced them to their end and
+    // wrote through NULL: the BIOS's pad driver died).
+    if (g_GameState != Game_Play || g_GameStep != Play_Default) {
+        s_AfterLoad = true;
+    } else if (s_AfterLoad && g_GameEngineStep != Engine_Init) {
+        s_AfterLoad = false;
+    }
+    if (s_AfterLoad) {
         s_Reloaded = true;
         s_Made = false;
         s_PrimCount = 0;
@@ -806,6 +825,9 @@ void PartnerFrame(void) {
             PLAYER.velocityX = PLAYER.velocityY = 0;
         }
     }
+    for (i = 64; i < 256; i++) { // the stage's slots in use before its frame (Spills)
+        s_StageUsed[i - 64] = g_Entities[i].entityId != 0;
+    }
     pad0 = g_pads[0];
     g_pads[0].pressed = pad;
     g_pads[0].tapped = pad & ~s_PrevPad;
@@ -823,6 +845,14 @@ void PartnerFrame(void) {
     for (i = 1; i < 64; i++) { // its weapons' and familiar's entities: not its to run (WeaponsOff)
         if (g_Entities[i].entityId >= 0xD0) {
             DestroyEntity(&g_Entities[i]);
+        }
+    }
+    // What its code put in the stage's slots (some effects go there): they'd stay in this game's
+    // world, in its hit detection (the Doppleganger died of the partner's death throes).
+    for (i = 64; i < 256; i++) {
+        if (!s_StageUsed[i - 64] && g_Entities[i].entityId) {
+            DestroyEntity(&g_Entities[i]);
+            g_CoopBodySpills++;
         }
     }
     g_CurrentEntity = cur;
@@ -928,7 +958,7 @@ void PartnerDraw(void) {
     s32 i;
 
     if (!PartnerSimulated() || g_GameState != Game_Play || g_GameStep != Play_Default || s_JustMade ||
-        g_GameEngineStep == Engine_Init || ArriveCardSaving()) {
+        s_AfterLoad || ArriveCardSaving()) {
         return;
     }
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;

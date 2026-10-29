@@ -644,3 +644,10 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Not yet:** the inverted castle (its bosses and scenes need their own progress tables and checks).
 - Options considered: savestates in the Savestates menu (couch only, tied to the BIOS and build, can't be hosted); a joint save alone (the wrong spot in the room).
 
+
+**D128: The partner's body is always on and tinted; what its frame changes in our game is put back** (agent-default, 2026-10-29; `design/M13-partner-player.md` steps 4–5)
+- **Always on:** the body (the partner run by their own character's code in our game) is how the partner is drawn; M12's puppet is removed. `OPT_PARTNER_SIM` is only the spike's switch now.
+- **Tint:** raw-texture polygons of the body are drawn blue-grey (0x58, 0x68, 0xA8), so two of the same character can be told apart. Easy to change or put behind a setting.
+- **Isolation:** the body's frame must leave our game as it was. Around each frame: weapon and familiar overlay headers stubbed, sprite banks 0x10–0x17 and a list of DRA statics swapped, the BIOS `rand()` seed exchanged, the screen-flash countdown kept, entities it made in our weapon slots (≥0xD0) or the stage's slots (64–255) destroyed. No body during loads (until the load's `Engine_Init` has run), card saves, or outside `Play_Default`.
+- **Why the load rule matters:** a body made in the frame before `Engine_Init` lost its primitives to the init and wrote through NULL into the BIOS's low RAM; player 1's controller died (`char_select_session`).
+- Options considered: a body only while the partner is in view (needs the puppet kept); running the body in a separate save-and-restore of all of DRA's RAM (too slow: hundreds of KB a frame).
