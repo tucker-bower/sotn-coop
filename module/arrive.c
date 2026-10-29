@@ -25,6 +25,7 @@ void SetGameState(GameState gameState);
 void ClearBackbuffer(void);        // DRA
 void SetStageDisplayBuffer(void);  // DRA
 void PlaySfx(s32 sfxId);
+void MuteSound(void); // DRA
 void SetFadeMode(FadeModes fadeMode);
 void UpdateFade(bool skipFollowup);
 s32 func_801025F4(void); // the fade's progress: nonzero once a fade to black is complete
@@ -508,6 +509,12 @@ static bool CutsceneHold(void) {
 // --- commands from the host
 
 static void LoadSave(void) {
+    // The music stops first, as at the game's own stage change (Play_PrepareNextStage). Playing on,
+    // its loop came due during the load: the stream's restart took the drive, and the stage's code
+    // was read from the music's sectors (char_select_session; any load at the wrong moment).
+    PlaySfx(SET_UNK_12);
+    PlaySfx(SET_UNK_0B);
+    MuteSound();
     ApplySaveData((SaveData*)g_CoopLink.saveIn);
     g_PlayableCharacter = PLAYER_ALUCARD; // the world is Alucard's, whoever saved (design/M8)
     CharacterApply();

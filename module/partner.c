@@ -150,8 +150,6 @@ u32 g_CoopSpikeMax;   // the most it has cost
 u32 g_CoopMakeLines;  // what making the body last cost, in scanlines (tests)
 static bool s_JustMade; // made this frame: its update and drawing start next frame
 static bool s_AfterLoad; // a load, its Engine_Init not run yet: no body
-static u8 s_StageUsed[256 - 64];
-u32 g_CoopBodySpills; // entities its frame put in the stage's slots, taken out (tests read it)
 
 // The game's one copy of each hand weapon's overlay (0x8017A000, 0x8017D000) and of the familiar's
 // (0x80170000) is player 1's, with statics of its own: the body never runs them (its weapon code
@@ -825,9 +823,6 @@ void PartnerFrame(void) {
             PLAYER.velocityX = PLAYER.velocityY = 0;
         }
     }
-    for (i = 64; i < 256; i++) { // the stage's slots in use before its frame (Spills)
-        s_StageUsed[i - 64] = g_Entities[i].entityId != 0;
-    }
     pad0 = g_pads[0];
     g_pads[0].pressed = pad;
     g_pads[0].tapped = pad & ~s_PrevPad;
@@ -845,14 +840,6 @@ void PartnerFrame(void) {
     for (i = 1; i < 64; i++) { // its weapons' and familiar's entities: not its to run (WeaponsOff)
         if (g_Entities[i].entityId >= 0xD0) {
             DestroyEntity(&g_Entities[i]);
-        }
-    }
-    // What its code put in the stage's slots (some effects go there): they'd stay in this game's
-    // world, in its hit detection (the Doppleganger died of the partner's death throes).
-    for (i = 64; i < 256; i++) {
-        if (!s_StageUsed[i - 64] && g_Entities[i].entityId) {
-            DestroyEntity(&g_Entities[i]);
-            g_CoopBodySpills++;
         }
     }
     g_CurrentEntity = cur;

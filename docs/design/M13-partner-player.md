@@ -103,5 +103,12 @@ Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayer
      - The core's VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame. That's a small core patch: rebuild all three cores.
      - A partner's BIOS `rand()` calls shift player 1's.
      - The partner's off-hand items (M12b) share module state with player 1's.
-4. **Familiars, sounds** (the partner's sound effects quieter), **game feel** (fairy revive, respawn effects).
-5. **Turn it on, remove the puppet**, and the acceptance criteria above.
+4. **Familiars, sounds, game feel: done (2026-10-29).**
+   - **Familiars** (`module/familiar.c`): the partner's familiar runs from a kit of its own (its overlay at `FAMILIAR_PARTNER`, 0x807E0000; ours at `FAMILIAR_SELF`), sent by the host (op "familiar") when it changes. All 5: `m13_partner_familiar`.
+   - **Sounds:** what the body queues is quieter (60%, Settings › Partner's sounds, `CONTROL_PARTNER_VOL_SHIFT`) and panned to where it is. Its voice (the player VAB) is dropped when it's another character than ours, and so is every sound command it queues (music; the XA voices streamed from the disc, which would take our drive). `m13_partner_sounds`.
+   - **Hits:** when the partner's HP drops in their game, the body plays its own hit reaction here (`m13_partner_hit_alucard`, `_richter`).
+   - **Revives:** each character's own teleport-in, in both games (presence `FLIP_TELEPORT_IN`; `m13_respawn_effect_*`). The fairy revive (`FairyRevive`, `EV_USED`): `m13_fairy_revive`.
+5. **Turned on, the puppet removed: done (2026-10-29, D128).**
+   - The body is how the partner is drawn; `puppet.c` is gone and `sprites.c` only captures. `OPT_PARTNER_SIM` is only the spike's switch. The body is tinted blue-grey (raw-texture polygons), so two of a kind can be told apart.
+   - **Isolation** (its frame leaves our game as it was): weapon and familiar overlays stubbed, its weapon entities (≥0xD0) destroyed, sprite banks 0x10–0x17 and a list of DRA statics swapped, the BIOS `rand()` seed exchanged, the screen-flash countdown kept, its sound commands taken back. No body during a load (until the load's own `Engine_Init` has run: a body made before it wrote through NULL into the BIOS and killed player 1's pad), during card saves, or outside `Play_Default`.
+   - **Tests:** `m13_pixels_*` (criterion 2, all 9 pairings: body, attack, subweapon). Tests that need the old behaviour switch the body off with `g_CoopBodyOff` (`COOP_BODY_OFF`).
