@@ -93,8 +93,12 @@ Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayer
      - **Her init:** her partner init (the trailer's sixth word) is her load plus `MarInit`. Her own init also patches DRA's HUD and sound data, which would be player 1's.
      - **Queued graphics:** graphics a partner queues for DRA's loader get the bank bit in their entries.
      - **Tests:** `m13_partner_maria`, plus `m13_partner_rr`, `_rm`, `_mr`, `_mm` (Richter's and Maria's games with either partner).
-   - **7 of the 9 pairings** now run the partner's own code. The other two keep the puppet: **3c, an Alucard partner in Richter's or Maria's game.**
-     - **Why:** DRA's `AluInit` registers palette animations (`func_800EA5E4(0x16)`) that DRA then runs every frame on bank 1. In another character's game that is player 1's palettes. It needs DRA's palette-animation list saved and restored around the partner (or kept apart), and Alucard's F_GAME (to read at boot, split across 0x80580000 and 0x806C2000) plus ARC_F's tables rebased into the header swap.
+   - **3c, an Alucard partner in Richter's or Maria's game: done (2026-10-28).**
+     - **Code and tables:** DRA's own Alucard, started by `AluInit`. ARC_F's header and its 218 sprite and 6 bat pointers are rebased onto CoopBoot's copy and swapped in, so the header swap is now 0x388 bytes.
+     - **Graphics:** his F_GAME is read at boot (strips at 0x80580000, palettes at 0x806C2000) and loaded into bank 2, with his init's palette load (op 0x16) applied there.
+     - **Palettes:** DRA's palette-operation list (`D_8006C3C4`) is saved and restored around his frames, because his would work on player 1's palettes.
+     - **Tests:** `m13_partner_ra`, `_ma` (his palette in bank 2 matches his own game's).
+   - **All 9 pairings** run the partner's own code.
    - **Known gaps:**
      - The core's VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame. That's a small core patch: rebuild all three cores.
      - A partner's BIOS `rand()` calls shift player 1's.

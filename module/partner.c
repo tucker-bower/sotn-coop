@@ -25,6 +25,7 @@ void RenderEntities(void);       // DRA
 void RenderPrimitives(void);     // DRA
 u32 CharacterLoaded(void);       // character.c
 void FlushCache(void);           // main.exe (PsyQ)
+void AluInit(void);              // DRA
 extern s16 D_800AC958[];         // DRA: the x of each of F_GAME's 32 strips (src/dra/cd.c)
 
 // Everything that is "the player" (the other project's list, checked against the decomp).
@@ -47,15 +48,18 @@ static const Region s_Regions[] = {
 };
 #define BODY_SIZE (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + 0x48 + 0x34 + 0x30 + 0x40 + 0x40)
 
-// A partner who runs its own player code (Richter): what DRA reads at 0x8013C000 (g_PlOvl: the
-// update functions, then the body's sprite table, which ends at 0x8013C334 in our Richter's file)
-// and the four sprite banks its init installs (RicInit). Swapped with player 1's for its frames.
+// A partner who runs its own player code (Richter, Maria), or an Alucard partner in their game:
+// what DRA reads at 0x8013C000 (g_PlOvl: the update functions, then the body's sprite table, which
+// ends at 0x8013C334 in our Richter's file and 0x8013C388 in Alucard's ARC_F.BIN) and the four
+// sprite banks a Richter or Maria init installs. Swapped with player 1's for its frames.
 #define HDR_ADDR 0x8013C000
-#define HDR_SIZE 0x334
+#define HDR_SIZE 0x388
 static u32 s_Hdr[HDR_SIZE / 4];
 static u32 s_Banks[4];
 static u32 s_Char;    // CHAR_* of the body
 static bool s_Code;   // it runs its own player code (not DRA's Alucard)
+static bool s_AluHere; // an Alucard partner in another character's game (DRA's Alucard, ARC_F swapped in)
+static Unkstruct_8006C3C4 s_PalOps[LEN(D_8006C3C4)]; // DRA's palette operations, kept from it
 static bool s_Banked; // its graphics are in VRAM's second bank (another character than ours)
 static s32 s_SavedChar;
 static u32 s_SavedRandom;
@@ -110,7 +114,7 @@ static void Swap(void) {
     s32 i;
     u32 k, t;
 
-    if (s_Code) {
+    if (s_Code || s_AluHere) {
         u32* ram = (u32*)HDR_ADDR;
         for (k = 0; k < HDR_SIZE / 4; k++) {
             t = ram[k];
@@ -220,7 +224,7 @@ static const FarTrailer* PartnerCode(u32 character) {
 // A character's graphics file in VRAM's second bank, where the game puts its own in the first:
 // 32 strips of 32x128 for x 0x200-0x3FF, y 0x100-0x1FF (src/dra/cd.c), then palettes 0x100-0x1FF
 // (x 0-0xFF, y 0xF0-0xFF).
-static void LoadGraphics(const u8* file) {
+static void LoadGraphics(const u8* file, const u8* palettes) {
     RECT r;
     s32 i;
 
@@ -240,8 +244,56 @@ static void LoadGraphics(const u8* file) {
     r.y = 0xF0 | VRAM_BANK;
     r.w = 0x100;
     r.h = 0x10;
-    LoadImage(&r, (u_long*)(file + 0x40000));
+    LoadImage(&r, (u_long*)palettes);
     DrawSync(0);
+}
+
+// Alucard's ARC_F.BIN as DRA reads it, from CoopBoot's copy (linked at 0x8013C000): its header
+// words point at the sprite table (0x8013C020, swapped in as it is), except the bat's table, and
+// the 218 sprite and 6 bat sprite pointers are rebased onto the copy.
+#define ALU_SHEETS 218
+#define ALU_BATS 6
+static u32 s_AluBats[ALU_BATS];
+
+static void AluHeader(void) {
+    const u32* arc = (const u32*)PUPPET_ALU_ADDR;
+    u32 delta = PUPPET_ALU_ADDR - HDR_ADDR, k;
+
+    for (k = 0; k < HDR_SIZE / 4; k++) {
+        s_Hdr[k] = arc[k];
+    }
+    for (k = 8; k < 8 + ALU_SHEETS; k++) {
+        if (s_Hdr[k]) {
+            s_Hdr[k] += delta;
+        }
+    }
+    for (k = 0; k < ALU_BATS; k++) {
+        s_AluBats[k] = ((const u32*)(arc[1] + delta))[k] + delta;
+    }
+    s_Hdr[1] = (u32)s_AluBats;
+}
+
+// DRA's own palette load for Alucard (op 0x16: palettes 0x100-0x10D, src/dra/4A538.c), into the
+// second bank, as his init would have them in the first.
+extern u_long* D_800A3BB8[]; // DRA
+static void AluPalettes(void) {
+    const u_long* op = D_800A3BB8[0x16];
+    const u16* colors = (const u16*)op[3]; // its colors, where op[3] points
+    u32 first = op[1] / 16, k;
+    RECT r;
+
+    if (op[0] != 1) {
+        return;
+    }
+    for (k = 0; k < op[2] / 16; k++) {
+        u16 clut = g_ClutIds[first + k];
+        r.x = (clut & 0x3F) * 16;
+        r.y = ((clut >> 6) & 0x1FF) | VRAM_BANK;
+        r.w = 16;
+        r.h = 1;
+        LoadImage(&r, (u_long*)(colors + k * 16));
+        DrawSync(0);
+    }
 }
 
 // The partner starts as a copy of player 1, a little to the right.
@@ -262,14 +314,32 @@ static void Make(void) {
     ((Entity*)g_CoopSpikeBody)->posX.i.hi += 32;
     s_Char = PartnerLive() ? g_CoopLink.partner.character : CHAR_ALUCARD;
     s_Code = s_Char != CHAR_ALUCARD;
+    s_AluHere = !s_Code && CharacterLoaded() != CHAR_ALUCARD;
     // A partner build's own uploads always go to the second bank (coop_ric.h): it draws from there.
     s_Banked = s_Code || s_Char != CharacterLoaded();
     s_Reloaded = false;
     s_ScrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Banked && s_BankLoaded != s_Char) { // before the init: Maria's uploads her palettes
-        LoadGraphics((const u8*)FGAME2_ADDR); // Richter's; Maria's runs on it too
+        if (s_Char == CHAR_ALUCARD) {
+            LoadGraphics((const u8*)FGAME_GFX_ADDR, (const u8*)FGAME_PAL_ADDR);
+            AluPalettes();
+        } else {
+            LoadGraphics((const u8*)FGAME2_ADDR, (const u8*)FGAME2_ADDR + 0x40000); // Richter's; Maria's runs on it too
+        }
         s_BankLoaded = s_Char;
+    }
+    if (s_AluHere) { // DRA's Alucard, from his own init, with nothing of player 1's
+        AluHeader();
+        for (k = 0; k < 4; k++) {
+            s_Banks[k] = ((u32*)g_api.o.spriteBanks)[16 + k];
+        }
+        for (k = 0xBC / 4; k < 64 * 0xBC / 4; k++) {
+            g_CoopSpikeBody[k] = 0;
+        }
+        SwapIn();
+        AluInit();
+        SwapOut();
     }
     if (s_Code) { // their own code, started by its own init, with nothing of player 1's
         const FarTrailer* t = PartnerCode(s_Char);
@@ -320,8 +390,13 @@ static void SwapIn(void) {
     Swap();
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
+    g_CoopCharacter = s_Code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
+    if (s_AluHere) { // his palette operations would work on player 1's palettes: none kept
+        for (i = 0; i < LEN(D_8006C3C4); i++) {
+            s_PalOps[i] = D_8006C3C4[i];
+        }
+    }
     if (s_Code) {
-        g_CoopCharacter = PLAYER_RICHTER; // Maria's code runs as Richter's too (coop_api.h)
         s_SavedSfx = g_api.PlaySfx;
         s_SavedSfxVolPan = g_api.PlaySfxVolPan;
         g_api.PlaySfx = NoSfx;
@@ -382,19 +457,24 @@ static void SwapOut(void) {
     }
     g_CoopCharacter = s_SavedChar;
     g_randomNext = s_SavedRandom;
+    if (s_AluHere) {
+        s32 i;
+        for (i = 0; i < LEN(D_8006C3C4); i++) {
+            D_8006C3C4[i] = s_PalOps[i];
+        }
+    }
     Swap();
 }
 
 static bool PartnerLive(void) { return g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES; }
 
-// The partner is in this room, in play, as a character we can run: Alucard in an Alucard game
-// (DRA's code: another character's game has no Alucard graphics to give it yet), Richter or Maria
-// in any (their partner builds).
+// The partner is in this room, in play, as a character we can run: Alucard (DRA's code), Richter or
+// Maria (their partner builds), in any game.
 static bool PartnerHere(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
            (p->flags & PRESENCE_IN_PLAY) && g_PlayableCharacter == 0 &&
-           ((p->character == CHAR_ALUCARD && CharacterLoaded() == CHAR_ALUCARD) || PartnerCode(p->character));
+           (p->character == CHAR_ALUCARD || PartnerCode(p->character));
 }
 
 // The body's primitives (its entities' chains), for its own drawing pass. Up to PRIMS of them.
@@ -604,7 +684,7 @@ void PartnerDraw(void) {
     if (s_Banked) {
         BankPolys(gt4, gt3);
     }
-    if (s_Code) { // its whip and effects (most of Richter's attacks are primitives)
+    if (s_Banked) { // its whip and effects (most of Richter's attacks are primitives), from the bank
         DrawPrims();
     }
     SwapOut();

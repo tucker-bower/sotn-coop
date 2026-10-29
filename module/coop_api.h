@@ -29,6 +29,10 @@
 // Richter linked to run as the partner (richter/ric_partner.ld), and our Maria's (later).
 #define FGAME2_ADDR 0x80680000
 #define FGAME_SIZE 0x42000
+// ...and Alucard's (F_GAME.BIN), for an Alucard partner in another character's game: its strips
+// and its palettes apart (no room for the two together).
+#define FGAME_GFX_ADDR 0x80580000
+#define FGAME_PAL_ADDR 0x806C2000
 #define PARTNER_RIC_ADDR 0x80740000
 #define PARTNER_MAR_ADDR 0x80780000
 #define PARTNER_PLAYER_SIZE 0x40000

@@ -320,6 +320,11 @@ def _partner_pair(run, ca, cb):
             shots.mkdir(parents=True, exist_ok=True)
             a.screenshot().save(shots / f"m13_partner_{ca}{cb}.png")
     run.expect(a.read(body, "<h", 0x54) == b.read("g_Entities", "<h", 0x54), "A's copy of B has B's animation set")
+    if cb == CHAR_ALUCARD and ca != CHAR_ALUCARD:  # his body's palette, in A's second bank, as in B's game
+        cid = a.read("g_ClutIds", "<H", 2 * (a.read(body, "<H", 0x16) & 0x7FFF))
+        x, y = (cid & 0x3F) * 16, (cid >> 6) & 0x1FF
+        run.expect(a.vram_rect(x, y + 512, 16, 1) == b.vram_rect(x, y, 16, 1),
+                   "Alucard's palette is in A's second bank, as in his own game")
     run.expect(samples > 10 and worst <= 48, "A's copy follows B", worst_px=worst, samples=samples)
     run.expect(len(poses) > 8, "and animates", poses=len(poses))
     run.expect((a.read("g_Entities", "<h", 0x54), a.read(0x80280020)) == mine and a.snapshot()["hp"] > 0,
@@ -348,3 +353,16 @@ def m13_partner_mr(run):
 def m13_partner_mm(run):
     """M13 step 3: Maria's game, a Maria partner (a second Maria)."""
     _partner_pair(run, 2, 2)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_ALUCARD))
+def m13_partner_ra(run):
+    """M13 step 3c: Richter's game, an Alucard partner (DRA's Alucard, ARC_F's tables swapped in,
+    his graphics in the second bank, none of his palette operations kept)."""
+    _partner_pair(run, CHAR_RICHTER, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(2, CHAR_ALUCARD))
+def m13_partner_ma(run):
+    """M13 step 3c: Maria's game, an Alucard partner."""
+    _partner_pair(run, 2, CHAR_ALUCARD)
