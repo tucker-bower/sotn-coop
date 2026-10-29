@@ -249,3 +249,43 @@ def m13_partner_richter(run):
     run.expect(a.read(0x80280020) == 0, "A's player is still Alucard (g_CoopCharacter)")
     run.expect(a.read_bytes(banks_at + 0x40, 16) == banks, "A's sprite banks 16-19 are its own")
     run.expect(a.snapshot()["hp"] > 0 and a.read("g_Entities", "<h", 0x54) != -0x7FF0, "A plays on as Alucard")
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, 2))
+def m13_partner_maria(run):
+    """M13 step 3: B plays Maria, and A (Alucard) runs B's body with our partner Maria (her own
+    build, MARIAP.BIN, from her blob): it's Maria's body (B's animation set), it follows and
+    animates as B does, and A's own game is untouched."""
+    from link.mailbox import CHAR_MARIA, OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == CHAR_MARIA, "B plays Maria")
+    run.step(60)
+    banks_at = a.read("g_api", "<I", 0x10)
+    banks = a.read_bytes(banks_at + 0x40, 16)
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(30)
+    body = symbols()["g_CoopSpikeBody"]
+    run.expect(a.read(body, "<h", 0x54) == b.read("g_Entities", "<h", 0x54),
+               "A's copy of B is Maria (B's animation set)", a=hex(a.read(body, "<H", 0x54)), b=hex(b.read("g_Entities", "<H", 0x54)))
+    poses, worst, samples = set(), 0, 0
+    pattern = ["right"] * 60 + ["right+cross"] * 14 + ["right"] * 40 + ["left"] * 80 + ["left+square"] * 20 + [""] * 40
+    shots = Path(__file__).resolve().parent.parent / ".env/out/shots"
+    shots.mkdir(parents=True, exist_ok=True)
+    for t, pad in enumerate(pattern):
+        run.step(1, ("", pad))
+        poses.add(a.read(body, "<H", 0x56))
+        if t % 10 == 0:
+            bx = a.read(body, "<h", 2) + a.read("g_Tilemap", "<h", 0x0A)
+            sb = b.snapshot()
+            if sb["room"] == a.snapshot()["room"]:
+                worst = max(worst, abs(bx - sb["world_x"]))
+                samples += 1
+        if t in (160, 200, 206):
+            a.screenshot().save(shots / f"m13_partner_maria_{t}.png")
+            b.screenshot().save(shots / f"m13_partner_maria_{t}_b.png")
+    run.expect(samples > 10 and worst <= 48, "A's copy follows B (within the snap distance)", worst_px=worst, samples=samples)
+    run.expect(len(poses) > 8, "and animates as B moves, jumps and attacks", poses=len(poses))
+    run.expect(a.read(0x80280020) == 0, "A's player is still Alucard (g_CoopCharacter)")
+    run.expect(a.read_bytes(banks_at + 0x40, 16) == banks, "A's sprite banks 16-19 are its own")
+    run.expect(a.snapshot()["hp"] > 0 and a.read("g_Entities", "<h", 0x54) != b.read("g_Entities", "<h", 0x54), "A plays on as Alucard")

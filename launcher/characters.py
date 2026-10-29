@@ -108,15 +108,16 @@ def maria_blob(iso_path, patches, out):
     if not all(files.values()):
         raise DiscError("Maria's files aren't on that disc image. Is it a complete copy?")
     parts = []
-    for name in ("maria.bps", "maria-vh.bps", "maria-vb.bps"):
+    for name in ("maria.bps", "maria-vh.bps", "maria-vb.bps", "maria-partner.bps"):
         try:
             parts.append(bps.apply(files[about["patches"][name]["source"]], (patches / name).read_bytes()))
         except bps.PatchError as e:
             raise DiscError(f"That disc image doesn't match the one Maria was made for ({e}).") from e
-    ovl, vh, vb = parts
+    ovl, vh, vb, partner = parts
     pad = lambda b: b + bytes(-len(b) % 4)  # noqa: E731
-    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_MARIA, len(ovl), len(vh), len(vb), 0, 0, 0)
-    blob += pad(ovl) + pad(vh) + vb
+    # then her partner build (design/M13 step 3: module/link.h CharBlob.partnerSize)
+    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_MARIA, len(ovl), len(vh), len(vb), len(partner), 0, 0)
+    blob += pad(ovl) + pad(vh) + pad(vb) + partner
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)

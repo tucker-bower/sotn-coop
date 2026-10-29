@@ -231,8 +231,9 @@ typedef struct {
     u32 ovlSize;   // bytes, loaded at Richter's overlay address (0x8013C000)
     u32 vhSize;    // the sound bank, replacing SD_RIH (0: keep Richter's)
     u32 vbSize;
-    u32 pad[3];
-} CharBlob; // size = 0x20, then the overlay, the .VH and the .VB, each 4-byte aligned
+    u32 partnerSize; // her build as the partner (design/M13 step 3: MARIAP.BIN), 0: none
+    u32 pad[2];
+} CharBlob; // size = 0x20, then the overlay, the .VH, the .VB and the partner build, each 4-byte aligned
 extern CoopLink g_CoopLink;
 
 #endif

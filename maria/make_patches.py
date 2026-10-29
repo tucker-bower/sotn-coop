@@ -5,7 +5,7 @@ or palettes, which the patches copy from the player's disc (checked here: see `s
 
     make_patches.py <out folder>     (after `make -C maria`)
 
-Writes maria.bps (from PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin), maria-vh.bps and maria-vb.bps
+Writes maria.bps and maria-partner.bps (from PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin), maria-vh.bps and maria-vb.bps
 (from PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk) and maria.json (what the launcher checks).
 """
 
@@ -22,6 +22,7 @@ DXC = ROOT / "disks/pspus/PSP_GAME/USRDIR/res/ps"
 BUILD = ROOT / "build/coop/maria"
 SOURCES = {"maria.bin": "PSPBIN/maria.bin", "sd_mar2.spk": "snd_e/SE/sd_mar2.spk"}
 PATCHES = [("maria.bps", "maria.bin", "MARIA.BIN"),
+           ("maria-partner.bps", "maria.bin", "MARIAP.BIN"),  # her as the partner (design/M13 step 3)
            ("maria-vh.bps", "sd_mar2.spk", "sfx/SD_RIH.VH"),
            ("maria-vb.bps", "sd_mar2.spk", "sfx/SD_RIH.VB")]
 

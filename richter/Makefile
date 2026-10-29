@@ -13,6 +13,9 @@ CFLAGS  += -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompati
 # pl_header first: its .data (the g_PlOvl table DRA jumps through) must sit at 0x8013C000.
 SRCS    := pl_header.c $(filter-out pl_header.c ovl_load.c,$(notdir $(wildcard $(SRC)/*.c)))
 OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS)) $(BUILD)/coop_ric.o
+# The partner's (design/M13 step 3): the same sources with COOP_PARTNER (coop_ric.h).
+PBUILD  := $(BUILD)/partner
+POBJS   := $(patsubst %.c,$(PBUILD)/%.o,$(SRCS)) $(PBUILD)/coop_ric.o $(PBUILD)/coop_partner.o
 
 all: $(BUILD)/COOPRIC.BIN $(BUILD)/COOPRICP.BIN
 
@@ -23,6 +26,14 @@ $(BUILD)/%.o: $(SRC)/%.c coop_ric.h
 $(BUILD)/coop_ric.o: coop_ric.c coop_ric.h
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
+
+$(PBUILD)/%.o: $(SRC)/%.c coop_ric.h
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
+
+$(PBUILD)/%.o: %.c coop_ric.h
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
 
 $(BUILD)/symbols.txt: $(ROOT)/config/symbols.$(VERSION).txt
 	@mkdir -p $(BUILD)
@@ -37,9 +48,9 @@ $(BUILD)/COOPRIC.BIN: $(BUILD)/ric.elf
 	@echo "COOPRIC.BIN: $$(stat -c %s $@) bytes (Richter's slot holds $$((0x80180000 - 0x8013C000)))"
 
 # The partner's Richter (design/M13 step 3): the same objects, all in the 8MB (ric_partner.ld).
-$(BUILD)/ricp.elf: $(OBJS) $(BUILD)/symbols.txt ric_partner.ld coop_player.ld
+$(BUILD)/ricp.elf: $(POBJS) $(BUILD)/symbols.txt ric_partner.ld coop_player.ld
 	$(CROSS)ld -nostdlib -Map=$(BUILD)/ricp.map --build-id=none -T ric_partner.ld \
-	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -T coop_player.ld -o $@ $(OBJS)
+	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -T coop_player.ld -o $@ $(POBJS)
 
 $(BUILD)/COOPRICP.BIN: $(BUILD)/ricp.elf
 	$(CROSS)objcopy -O binary $< $@

@@ -75,6 +75,31 @@ u32 g_CoopSpikePad;   // harness: the partner's buttons (PAD_*)
 u32 g_CoopSpikeLines; // the last partner frame's cost, in scanlines (263 a frame)
 u32 g_CoopSpikeMax;   // the most it has cost
 
+// Graphics a partner's own code queues for DRA's loader (Maria's guardians, HUD): their entries
+// (its own data) get the bank bit in their y, so the loader puts them in the second bank.
+static u8 s_GfxBusy[LEN(g_GfxLoad)];
+
+static void GfxBefore(void) {
+    s32 i;
+
+    for (i = 0; i < LEN(g_GfxLoad); i++) {
+        s_GfxBusy[i] = g_GfxLoad[i].kind != GFX_BANK_NONE;
+    }
+}
+
+static void GfxAfter(void) {
+    GfxEntry* e;
+    s32 i;
+
+    for (i = 0; i < LEN(g_GfxLoad); i++) {
+        if (!s_GfxBusy[i] && g_GfxLoad[i].kind != GFX_BANK_NONE) {
+            for (e = g_GfxLoad[i].next; e->xy != GFX_TERMINATE(); e++) {
+                e->xy = (u_long*)((u32)e->xy | (VRAM_BANK << 16));
+            }
+        }
+    }
+}
+
 // Sounds of a partner's own code: its character's sound bank isn't in this game (step 4).
 static void NoSfx(s32 id) {}
 static s32 NoSfxVolPan(s32 id, s32 vol, s32 pan) { return 0; }
@@ -125,28 +150,71 @@ static void SwapIn(void);
 static bool PartnerLive(void);
 static void SwapOut(void);
 
-// The partner's Richter, as CoopBoot read it (its 'FAR1' trailer: richter/ric_partner.ld). The
-// trailer is where the BSS starts, so it's kept here before the first Make zeroes it.
+// A partner build's 'FAR1' trailer (richter/ric_partner.ld, maria/maria_partner.ld): where the
+// BSS starts, so it's kept before the first Make zeroes it. Maria's has a sixth word, her init.
 typedef struct {
     u32 magic, nearSize, farSize, bssSize, farAddr;
+    void (*init)(u16); // Maria's partner init (coop_maria.c); not in Richter's
 } FarTrailer;
+static bool Trailer(u32 base, u32 size, u32 words, FarTrailer* out) {
+    const FarTrailer* t;
+
+    if (size < words * 4 || size > PARTNER_PLAYER_SIZE) {
+        return false;
+    }
+    t = (const FarTrailer*)(base + ((size - words * 4) & ~3));
+    if (t->magic != 0x31524146 || t->farAddr != base + t->nearSize) {
+        return false;
+    }
+    *out = *t;
+    if (words < 6) {
+        out->init = NULL;
+    }
+    return true;
+}
+
+// The partner's Richter, as CoopBoot read it.
 static const FarTrailer* PartnerRic(void) {
     static FarTrailer s_Trailer;
-    const FarTrailer* t;
-    u32 size = g_CoopRicPartnerFile.size;
+
+    if (!s_Trailer.magic && !Trailer(PARTNER_RIC_ADDR, g_CoopRicPartnerFile.size, 5, &s_Trailer)) {
+        return NULL;
+    }
+    return &s_Trailer;
+}
+
+// The partner's Maria, from her blob (the launcher's, in every game where someone plays her: its
+// last part), put where it runs once.
+static const FarTrailer* PartnerMar(void) {
+    static FarTrailer s_Trailer;
+    const CharBlob* b = (const CharBlob*)CHAR_BLOB_ADDR;
+    const u32* src;
+    u32* dst;
+    u32 n;
 
     if (s_Trailer.magic) {
         return &s_Trailer;
     }
-    if (size < sizeof(FarTrailer) || size > PARTNER_PLAYER_SIZE) {
+    if (b->magic != CHAR_BLOB_MAGIC || b->character != CHAR_MARIA || !b->partnerSize ||
+        b->partnerSize > PARTNER_PLAYER_SIZE) {
         return NULL;
     }
-    t = (const FarTrailer*)(PARTNER_RIC_ADDR + ((size - sizeof(FarTrailer)) & ~3));
-    if (t->magic != 0x31524146 || t->farAddr != PARTNER_RIC_ADDR + t->nearSize) {
+    src = (const u32*)((const u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3) +
+                       ((b->vbSize + 3) & ~3));
+    dst = (u32*)PARTNER_MAR_ADDR;
+    for (n = (b->partnerSize + 3) / 4; n--;) {
+        *dst++ = *src++;
+    }
+    FlushCache(); // new code (D17)
+    if (!Trailer(PARTNER_MAR_ADDR, b->partnerSize, 6, &s_Trailer) || !s_Trailer.init) {
+        s_Trailer.magic = 0;
         return NULL;
     }
-    s_Trailer = *t;
     return &s_Trailer;
+}
+
+static const FarTrailer* PartnerCode(u32 character) {
+    return character == CHAR_RICHTER ? PartnerRic() : character == CHAR_MARIA ? PartnerMar() : NULL;
 }
 
 // A character's graphics file in VRAM's second bank, where the game puts its own in the first:
@@ -194,13 +262,18 @@ static void Make(void) {
     ((Entity*)g_CoopSpikeBody)->posX.i.hi += 32;
     s_Char = PartnerLive() ? g_CoopLink.partner.character : CHAR_ALUCARD;
     s_Code = s_Char != CHAR_ALUCARD;
-    s_Banked = s_Char != CharacterLoaded();
+    // A partner build's own uploads always go to the second bank (coop_ric.h): it draws from there.
+    s_Banked = s_Code || s_Char != CharacterLoaded();
     s_Reloaded = false;
     s_ScrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
     s_ScrollY = g_Tilemap.scrollY.i.hi;
-    if (s_Code) { // Richter: his own code, started by his own init, with nothing of player 1's
-        const FarTrailer* t = PartnerRic();
-        const u32* hdr = (const u32*)PARTNER_RIC_ADDR;
+    if (s_Banked && s_BankLoaded != s_Char) { // before the init: Maria's uploads her palettes
+        LoadGraphics((const u8*)FGAME2_ADDR); // Richter's; Maria's runs on it too
+        s_BankLoaded = s_Char;
+    }
+    if (s_Code) { // their own code, started by its own init, with nothing of player 1's
+        const FarTrailer* t = PartnerCode(s_Char);
+        const u32* hdr = (const u32*)(t->farAddr - t->nearSize);
         u32* bss = (u32*)(t->farAddr + t->farSize);
         u32* banks = (u32*)g_api.o.spriteBanks + 16;
 
@@ -217,12 +290,12 @@ static void Make(void) {
             g_CoopSpikeBody[k] = 0;
         }
         SwapIn();
-        ((PlayerOvl*)HDR_ADDR)->D_8013C004(0);
+        if (t->init) {
+            t->init(0);
+        } else {
+            ((PlayerOvl*)HDR_ADDR)->D_8013C004(0);
+        }
         SwapOut();
-    }
-    if (s_Banked && s_BankLoaded != s_Char) {
-        LoadGraphics((const u8*)FGAME2_ADDR);
-        s_BankLoaded = s_Char;
     }
     // Its sprites go to VRAM's second bank, where player 1's would be (RenderEntities loads each
     // player-sprite frame into its g_PlayerDraw slot as it draws, and clears its edges): y bit 9
@@ -253,6 +326,7 @@ static void SwapIn(void) {
         s_SavedSfxVolPan = g_api.PlaySfxVolPan;
         g_api.PlaySfx = NoSfx;
         g_api.PlaySfxVolPan = NoSfxVolPan;
+        GfxBefore();
     }
     for (i = 0; i < 64; i++) {
         if (i == 0 || g_Entities[i].entityId) {
@@ -302,6 +376,7 @@ static void SwapOut(void) {
     s_ScrollX = g_Tilemap.scrollX.i.hi;
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Code) {
+        GfxAfter();
         g_api.PlaySfx = s_SavedSfx;
         g_api.PlaySfxVolPan = s_SavedSfxVolPan;
     }
@@ -313,13 +388,13 @@ static void SwapOut(void) {
 static bool PartnerLive(void) { return g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES; }
 
 // The partner is in this room, in play, as a character we can run: Alucard in an Alucard game
-// (DRA's code: another character's game has no Alucard graphics to give it yet), Richter in any.
+// (DRA's code: another character's game has no Alucard graphics to give it yet), Richter or Maria
+// in any (their partner builds).
 static bool PartnerHere(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
            (p->flags & PRESENCE_IN_PLAY) && g_PlayableCharacter == 0 &&
-           ((p->character == CHAR_ALUCARD && CharacterLoaded() == CHAR_ALUCARD) ||
-            (p->character == CHAR_RICHTER && PartnerRic()));
+           ((p->character == CHAR_ALUCARD && CharacterLoaded() == CHAR_ALUCARD) || PartnerCode(p->character));
 }
 
 // The body's primitives (its entities' chains), for its own drawing pass. Up to PRIMS of them.
