@@ -329,10 +329,16 @@ static void Make(void) {
         }
         s_BankLoaded = s_Char;
     }
-    if (s_AluHere) { // DRA's Alucard, from his own init, with nothing of player 1's
-        AluHeader();
-        for (k = 0; k < 4; k++) {
-            s_Banks[k] = ((u32*)g_api.o.spriteBanks)[16 + k];
+    if (!s_Code) { // DRA's Alucard, from his own init, with nothing of player 1's (slots 1-63
+                   // hold player 1's afterimages, familiar, weapons: their primitives are player 1's)
+        Entity* pl = (Entity*)g_CoopSpikeBody;
+        s16 x = pl->posX.i.hi, y = pl->posY.i.hi;
+
+        if (s_AluHere) {
+            AluHeader();
+            for (k = 0; k < 4; k++) {
+                s_Banks[k] = ((u32*)g_api.o.spriteBanks)[16 + k];
+            }
         }
         for (k = 0xBC / 4; k < 64 * 0xBC / 4; k++) {
             g_CoopSpikeBody[k] = 0;
@@ -340,6 +346,8 @@ static void Make(void) {
         SwapIn();
         AluInit();
         SwapOut();
+        pl->posX.i.hi = x; // where the copy was (the partner's spot, below, when it's live)
+        pl->posY.i.hi = y;
     }
     if (s_Code) { // their own code, started by its own init, with nothing of player 1's
         const FarTrailer* t = PartnerCode(s_Char);
@@ -391,7 +399,7 @@ static void SwapIn(void) {
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
     g_CoopCharacter = s_Code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
-    if (s_AluHere) { // his palette operations would work on player 1's palettes: none kept
+    if (!s_Code) { // his palette operations would work on player 1's palettes: none kept
         for (i = 0; i < LEN(D_8006C3C4); i++) {
             s_PalOps[i] = D_8006C3C4[i];
         }
@@ -457,7 +465,7 @@ static void SwapOut(void) {
     }
     g_CoopCharacter = s_SavedChar;
     g_randomNext = s_SavedRandom;
-    if (s_AluHere) {
+    if (!s_Code) {
         s32 i;
         for (i = 0; i < LEN(D_8006C3C4); i++) {
             D_8006C3C4[i] = s_PalOps[i];
