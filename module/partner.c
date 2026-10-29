@@ -19,6 +19,7 @@
 #include "partner.h"
 #include "puppet.h"
 #include "familiar.h"
+#include <sfx.h>
 
 void EntityAlucard(void);        // DRA
 void UpdatePlayerEntities(void); // DRA
@@ -64,8 +65,6 @@ static Unkstruct_8006C3C4 s_PalOps[LEN(D_8006C3C4)]; // DRA's palette operations
 static bool s_Banked; // its graphics are in VRAM's second bank (another character than ours)
 static s32 s_SavedChar;
 static u32 s_SavedRandom;
-static void (*s_SavedSfx)(s32);
-static s32 (*s_SavedSfxVolPan)(s32, s32, s32);
 static u32 s_BankLoaded = 0xFF; // CHAR_* whose graphics are in the second bank
 static bool s_Reloaded; // the stage reloaded since Make (its primitives are gone with it)
 CdlFILE g_CoopRicPartnerFile; // CoopBoot: COOPRICP.BIN (coop_api.h)
@@ -105,9 +104,35 @@ static void GfxAfter(void) {
     }
 }
 
-// Sounds of a partner's own code: its character's sound bank isn't in this game (step 4).
-static void NoSfx(s32 id) {}
-static s32 NoSfxVolPan(s32 id, s32 vol, s32 pan) { return 0; }
+// The partner's sounds (step 4): the requests its frame added to DRA's ring are quieter (the host's
+// setting) and panned to where it is. A sound of the player's own bank (VAB 1: Alucard's or
+// Richter's and Maria's voice) is another character's here: dropped (volume 0).
+extern s16 g_sfxRingBufferWritePos;            // DRA
+extern SfxRingBufferItem g_SfxRingBuffer[0x100]; // DRA
+extern Unkstruct_800BF554 g_SfxData[];         // DRA
+#define PARTNER_VOL 60 // % of its volume, unless the host says otherwise
+#define PLAYER_VAB 1
+static s16 s_SfxPos;
+
+static void PartnerSounds(void) {
+    s32 pct = (g_CoopLink.control >> CONTROL_PARTNER_VOL_SHIFT) & 0xFF, vol, pan;
+    SfxRingBufferItem* it;
+    s16 pos;
+
+    pct = pct ? pct : PARTNER_VOL;
+    pan = (PLAYER.posX.i.hi - 128) / 16;
+    pan = pan < -8 ? -8 : pan > 8 ? 8 : pan;
+    for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        it = &g_SfxRingBuffer[pos];
+        if (s_Char != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
+            it->sndVol = 0;
+            continue;
+        }
+        vol = it->sndVol == 0xFFFF ? 0x7F : it->sndVol;
+        it->sndVol = (vol * pct / 100) & 0x7F;
+        it->sndPan = pan;
+    }
+}
 
 // Exchanges the game's copy with the partner's, a word at a time (region 0 first: the slots).
 static void Swap(void) {
@@ -400,6 +425,7 @@ static void SwapIn(void) {
     Swap();
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
+    s_SfxPos = g_sfxRingBufferWritePos;
     g_CoopCharacter = s_Code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
     if (!s_Code) { // his palette operations would work on player 1's palettes: none kept
         for (i = 0; i < LEN(D_8006C3C4); i++) {
@@ -407,10 +433,6 @@ static void SwapIn(void) {
         }
     }
     if (s_Code) {
-        s_SavedSfx = g_api.PlaySfx;
-        s_SavedSfxVolPan = g_api.PlaySfxVolPan;
-        g_api.PlaySfx = NoSfx;
-        g_api.PlaySfxVolPan = NoSfxVolPan;
         GfxBefore();
     }
     for (i = 0; i < 64; i++) {
@@ -462,9 +484,8 @@ static void SwapOut(void) {
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Code) {
         GfxAfter();
-        g_api.PlaySfx = s_SavedSfx;
-        g_api.PlaySfxVolPan = s_SavedSfxVolPan;
     }
+    PartnerSounds(); // the body is still in RAM: its spot pans them
     g_CoopCharacter = s_SavedChar;
     g_randomNext = s_SavedRandom;
     if (!s_Code) {

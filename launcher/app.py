@@ -1067,7 +1067,8 @@ class Launcher:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
-                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self)
+                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
+                        partner_vol=self.settings.get("partner_vol", 60))
         result = view.run()
         if result == "quit":
             raise SystemExit
@@ -1387,6 +1388,7 @@ class Launcher:
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
+                     (f"Partner's sounds: {st.get('partner_vol', 60)}%", "How loud your partner's attacks and steps are, in your game"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
                      ("Open the data folder", str(paths.data_dir()))]
@@ -1402,10 +1404,12 @@ class Launcher:
             elif k == 2:
                 st["aggro"] = (st.get("aggro", 50) + 10) % 110
             elif k == 3:
-                self.game_files()
+                st["partner_vol"] = {20: 40, 40: 60, 60: 80, 80: 100}.get(st.get("partner_vol", 60), 20)
             elif k == 4:
-                self.controls_menu()
+                self.game_files()
             elif k == 5:
+                self.controls_menu()
+            elif k == 6:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

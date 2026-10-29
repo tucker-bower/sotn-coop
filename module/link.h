@@ -227,6 +227,7 @@ typedef struct {
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
+#define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0

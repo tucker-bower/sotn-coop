@@ -397,3 +397,32 @@ def m13_partner_familiar(run):
         sheet = b"".join(struct.pack("<64H", *r) for r in b.vram_rect(0x2C0, 0x100, 64, 128))
         mine = b"".join(struct.pack("<64H", *r) for r in a.vram_rect(0x2C0, 0x100 + 512, 64, 128))
         run.expect(sheet == mine, f"with B's {name} graphics, in A's second bank")
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
+def m13_partner_sounds(run):
+    """M13 step 4 (risks: two players' sounds): A stands still while B's Richter jumps and whips.
+    Every sound request in A's ring from then on is the partner's: at most 60% of its volume, and
+    none from the player's voice bank (Richter's voice isn't in Alucard's game)."""
+    from link.mailbox import OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    run.expect(reload_game(run, b), "B plays Richter")
+    run.step(60)
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(30)
+    ring, wpos, sfx = 0x801390DC, 0x80139000, 0x800BF554  # g_SfxRingBuffer, its write pos, g_SfxData
+    pos, seen, loud, voice = a.read(wpos, "<h"), 0, [], 0
+    for t, pad in enumerate((["right+cross"] * 14 + ["square"] * 20 + [""] * 26) * 4):
+        run.step(1, ("", pad))
+        while pos != a.read(wpos, "<h"):
+            sid, vol, pan = struct.unpack("<hHh", a.read_bytes(ring + 6 * pos, 6))
+            seen += 1
+            if a.read(sfx + 7 * sid, "<B") == 1:  # vabid: the player's bank
+                voice += vol != 0
+            elif vol == 0xFFFF or vol > 0x7F * 60 // 100:
+                loud.append((sid, vol))
+            pos = (pos + 1) & 0xFF
+    run.expect(seen > 0, "the partner's whip and jumps make sounds in A's game", sounds=seen)
+    run.expect(not loud, "all at 60% of their volume or less", loud=loud[:6])
+    run.expect(voice == 0, "none from the player's voice bank", voice=voice)
