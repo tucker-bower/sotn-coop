@@ -66,7 +66,7 @@ static void CapturePresence(CoopPresence* p) {
     p->blendMode = pl->blendMode;
     p->zPriority = pl->zPriority;
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
-    p->flipX = (pl->facingLeft << 1) ^ plDrawFlip;
+    p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0);
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }

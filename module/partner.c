@@ -325,11 +325,18 @@ static void AluPalettes(void) {
 // The partner starts as a copy of player 1, a little to the right.
 #define DRAW_OFS (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)) // g_PlayerDraw in the copy
 
+static bool s_TeleportSeen; // the partner's FLIP_TELEPORT_IN, last frame
+u32 g_CoopBodyTeleports; // bodies made with the partner's teleport-in (tests read it: coop.map)
+
 static void Make(void) {
     u32* body = g_CoopSpikeBody;
     PlayerDraw* draw;
     s32 i;
     u32 k;
+    // just revived: its init plays its character's teleport-in (arrive.c's TeleportIn)
+    s32 how = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) ? 6 : 0;
+
+    g_CoopBodyTeleports += how != 0;
 
     for (i = 0; i < LEN(s_Regions); i++) {
         u32* ram = (u32*)s_Regions[i].addr;
@@ -371,7 +378,9 @@ static void Make(void) {
             g_CoopSpikeBody[k] = 0;
         }
         SwapIn();
+        D_80097C98 = how;
         AluInit();
+        D_80097C98 = 0;
         SwapOut();
         pl->posX.i.hi = x; // where the copy was (the partner's spot, below, when it's live)
         pl->posY.i.hi = y;
@@ -395,11 +404,13 @@ static void Make(void) {
             g_CoopSpikeBody[k] = 0;
         }
         SwapIn();
+        D_80097C98 = how;
         if (t->init) {
             t->init(0);
         } else {
             ((PlayerOvl*)HDR_ADDR)->D_8013C004(0);
         }
+        D_80097C98 = 0;
         SwapOut();
     }
     // Its sprites go to VRAM's second bank, where player 1's would be (RenderEntities loads each
@@ -528,6 +539,33 @@ static void FindPrims(void) {
     }
 }
 
+// A primitive of the body's that covers the screen (its teleport-in's white flash): that's this
+// game's player's screen, not the body's to flash. Hidden from every pass, given back after.
+#define FLASHES 8
+static s16 s_Flash[FLASHES];
+static s32 s_FlashCount;
+
+// As big as most of the screen (the teleport's are two 0xC0 x 0xF0 tiles and a quad: EntityTeleport).
+static bool CoversScreen(const Primitive* p) {
+    if (p->type == PRIM_TILE) {
+        return p->u0 >= 0xC0 && p->v0 >= 0xE0; // w, h in u0, v0
+    }
+    return p->x3 - p->x0 >= 0xC0 && p->y3 - p->y0 >= 0xE0;
+}
+
+static void HideFlashes(void) {
+    Primitive* p;
+    s32 i;
+
+    for (i = 0; i < s_PrimCount && s_FlashCount < FLASHES; i++) {
+        p = &g_PrimBuf[s_Prims[i]];
+        if (!(p->drawMode & DRAW_HIDE) && CoversScreen(p)) {
+            p->drawMode |= DRAW_HIDE;
+            s_Flash[s_FlashCount++] = s_Prims[i];
+        }
+    }
+}
+
 // Back as the body left them, before its frame (hidden from the game's pass after its own).
 static void ShowPrims(void) {
     s32 i;
@@ -537,7 +575,11 @@ static void ShowPrims(void) {
             g_PrimBuf[s_Prims[i]].drawMode &= ~DRAW_HIDE;
         }
     }
+    for (i = 0; i < s_FlashCount; i++) {
+        g_PrimBuf[s_Flash[i]].drawMode &= ~DRAW_HIDE;
+    }
     s_PrimCount = 0;
+    s_FlashCount = 0;
 }
 
 // The body leaves: its primitives go back to the game, unless a stage load freed them all.
@@ -576,9 +618,12 @@ void PartnerFrame(void) {
     if (!(g_CoopOptions & OPT_PARTNER_SIM) || g_GameState != Game_Play || g_GameStep != Play_Default) {
         return;
     }
-    if (s_Made && PartnerLive() && (!PartnerHere() || g_CoopLink.partner.character != s_Char)) {
-        Drop(); // gone from this room: made again where they are when they're back
+    if (s_Made && PartnerLive() &&
+        (!PartnerHere() || g_CoopLink.partner.character != s_Char ||
+         ((g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) && !s_TeleportSeen))) {
+        Drop(); // gone from this room, or just revived: made again where they are now
     }
+    s_TeleportSeen = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN);
     if (PartnerLive() && !PartnerHere()) {
         return;
     }
@@ -665,6 +710,7 @@ static void DrawPrims(void) {
     s32 i;
 
     FindPrims();
+    HideFlashes();
     if (!s_PrimCount) {
         return;
     }
@@ -719,6 +765,10 @@ void PartnerDraw(void) {
     }
     if (s_Banked) { // its whip and effects (most of Richter's attacks are primitives), from the bank
         DrawPrims();
+    } else { // the game draws them (the same graphics): only its screen flashes kept out
+        FindPrims();
+        HideFlashes();
+        s_PrimCount = 0; // nothing of ours to give back but the flashes
     }
     if (PartnerLive()) { // its familiar, beside the body (in RAM now: the copy holds player 1)
         FamiliarDraw(PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - g_CoopLink.partner.x,

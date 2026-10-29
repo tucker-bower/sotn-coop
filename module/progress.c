@@ -277,6 +277,11 @@ static void Apply(const CoopEvent* ev) {
     case EV_ITEM:
         AddToInventory(ev->a, ev->b);
         break;
+    case EV_USED: // the partner used it up (M13's fairy revive): one fewer in the shared bag
+        if (ev->a < LEN(g_Status.equipHandCount) && g_Status.equipHandCount[ev->a]) {
+            g_Status.equipHandCount[ev->a]--;
+        }
+        break;
     case EV_GRANT:
         func_800FE044(ev->b, ev->a);
         // Like the relic orb does: familiar cards arrive switched off.

@@ -87,6 +87,7 @@ def m13_spike_partner_sim(run):
 
 # --- the partner's body in a two-game session ------------------------------------------------
 from session import session_scenario  # noqa: E402
+from session_progress import status  # noqa: E402
 from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER  # noqa: E402
 
 
@@ -426,3 +427,98 @@ def m13_partner_sounds(run):
     run.expect(seen > 0, "the partner's whip and jumps make sounds in A's game", sounds=seen)
     run.expect(not loud, "all at 60% of their volume or less", loud=loud[:6])
     run.expect(voice == 0, "none from the player's voice bank", voice=voice)
+
+
+HALL_SPOT = (0x41, 72, 1331, 199)  # the entrance hall (stage, room, x, y), where die() finds zombies
+
+
+def _respawn_effect(run, ca):
+    """A (playing ca) dies in the entrance hall and is revived at B (in the Alchemy Lab): A's own
+    game plays A's character's teleport-in (its player init, as after a teleporter), A's presence
+    says so, and B's copy of A is made with it too (criterion 6: m13_respawn_effect_*)."""
+    from link.mailbox import FLIP_TELEPORT_IN, OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    from session_travel import die
+    a, b = run.s.a, run.s.b
+    sym = symbols()
+    if ca != CHAR_ALUCARD:
+        run.expect(reload_game(run, a) and a.mailbox("self_presence").character == ca, f"A plays {ca}")
+    b.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(300)
+    if ca != CHAR_ALUCARD:  # a reload puts them in the first room's middle: to the hall's zombies
+        from session_progress import arrive
+        arrive(run, a, *HALL_SPOT)
+    ins0, bodies0 = a.read(sym["g_CoopTeleportIns"]), b.read(sym["g_CoopBodyTeleports"])
+    run.expect(die(run, a) is not None, "A died")
+    flagged = False
+    for i in range(1200):
+        run.step(1)
+        flagged |= bool(a.mailbox("self_presence").flip_x & FLIP_TELEPORT_IN)
+        if b.read(sym["g_CoopBodyTeleports"]) > bodies0 and i > 30:
+            break
+    shots = Path(__file__).resolve().parent.parent / ".env/out/shots"
+    shots.mkdir(parents=True, exist_ok=True)
+    run.step(20)
+    a.screenshot().save(shots / f"m13_respawn_{ca}_a.png")
+    b.screenshot().save(shots / f"m13_respawn_{ca}_b.png")
+    run.expect(a.read(sym["g_CoopTeleportIns"]) > ins0, "A came in with its teleport-in")
+    run.expect(flagged, "A's presence said so")
+    run.expect(b.read(sym["g_CoopBodyTeleports"]) > bodies0, "B's copy of A came in with it too")
+    img = b.screenshot().convert("L").resize((64, 48))
+    white = sum(1 for v in img.getdata() if v > 230) / (64 * 48)
+    run.expect(white < 0.5, "and its white flash isn't on B's screen (that's B's player's)", white=round(white, 2))
+    run.expect(a.snapshot()["hp"] > 0 and b.snapshot()["hp"] > 0, "both play on")
+
+
+@session_scenario(starts=("entrance", "nz0"))
+def m13_respawn_effect_alucard(run):
+    _respawn_effect(run, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("entrance", "nz0"), characters=(CHAR_RICHTER, CHAR_ALUCARD))
+def m13_respawn_effect_richter(run):
+    _respawn_effect(run, CHAR_RICHTER)
+
+
+@session_scenario(starts=("entrance", "nz0"), characters=(2, CHAR_ALUCARD))
+def m13_respawn_effect_maria(run):
+    _respawn_effect(run, 2)
+
+
+LIFE_APPLE = 0x26 + 0x92  # g_Status.equipHandCount[ITEM_LIFE_APPLE], from g_Status
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def m13_fairy_revive(run):
+    """M13 criterion 6: B (Alucard) has the faerie out and a Life Apple is in the shared bag; A
+    dies in B's room (the hall: A is its authority, the zombies are A's) and is revived where it
+    fell, not at B; the apple is gone in both games."""
+    from link.mailbox import OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    from session_shared import into_hall
+    from session_travel import die
+    a, b = run.s.a, run.s.b
+    b.write(0x80097964 + 0x14, 3, "<B")  # the faerie card, on
+    run.expect(reload_game(run, b), "B reloads with the faerie card on")
+    for g in (a, b):
+        g.write("g_Status", 1, "<B", LIFE_APPLE)
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    b.host("set_player", options=OPT_PARTNER_SIM)
+    into_hall(run)
+    run.step(60)
+    run.expect(a.read(0x807E0008) == 3, "A knows B's familiar is the faerie (B's copy of it)", servant=a.read(0x807E0008))
+    room = a.mailbox("self_presence").room
+    run.expect(die(run, a) is not None, "A died")
+    x0 = a.snapshot()["world_x"]
+    for i in range(900):  # the death animation, then the revive (respawn_at_partner's wait)
+        run.step(1)
+        p = a.mailbox("self_presence")
+        if p.flags & 1 and not p.flags & (8 | 16) and status(a)["hp"] == status(a)["hp_max"]:
+            break
+    run.step(30)
+    p = a.mailbox("self_presence")
+    run.expect(p.room == room and abs(a.snapshot()["world_x"] - x0) < 48, "A is revived where it fell",
+               room=str(p.room), was=str(room), x=a.snapshot()["world_x"], x0=x0)
+    run.expect(status(a)["hp"] == status(a)["hp_max"], "with full HP", hp=status(a)["hp"])
+    run.expect(a.read("g_Status", "<B", LIFE_APPLE) == 0 and b.read("g_Status", "<B", LIFE_APPLE) == 0,
+               "the Life Apple is gone in both games", a=a.read("g_Status", "<B", LIFE_APPLE), b=b.read("g_Status", "<B", LIFE_APPLE))

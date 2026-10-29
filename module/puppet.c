@@ -215,7 +215,7 @@ void DrawPuppet(const CoopPresence* p) {
 
     poly = &g_CurrentBuffer->polyGT4[g_GpuUsage.gt4];
     setPolyGT4(poly);
-    if (p->flipX) {
+    if (p->flipX & 3) { // bit 7 is FLIP_TELEPORT_IN
         setXY4(poly, x - w + 1, y, x + 1, y, x - w + 1, y + h, x + 1, y + h);
         setUV4(poly, u + w - 1, v, u - 1, v, u + w - 1, v + h, u - 1, v + h);
     } else {

@@ -16,6 +16,10 @@
 #define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
 #define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
 
+// CoopPresence.flipX's bit 7 (it uses bit 1): this player just came in by teleport (a revive), so
+// the partner's copy of it starts with its character's teleport-in (M13 step 4).
+#define FLIP_TELEPORT_IN 0x80
+
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24
 // ...and their primitives (most attacks draw with them: Alucard's subweapons, Richter's whip):
@@ -148,6 +152,7 @@ typedef struct {
 #define EV_RECORD 11 // a: time attack event (0xFFFF: b is D_8003CB00's bits), b: record
 #define EV_TAKEN 12  // a: slot | entityId << 8: the guest collected that drop; remove it, no reward
 #define EV_EXP 13    // b: XP this game gained from a kill (one shared level, design/M11)
+#define EV_USED 14   // a: item id: used up here (M13's fairy revive: the Life Apple), gone in the shared bag too
 #define EV_SPAWN3 10 // a: slot range (0: 160-191, 1: 224-255) | velocityY >> 14 << 8, b: castleFlag
 
 typedef struct {

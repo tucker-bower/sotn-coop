@@ -14,6 +14,7 @@
 #include "message.h"
 #include "link.h"
 #include "shared.h"
+#include "progress.h"
 
 extern RoomTeleport D_800A245C[]; // DRA: stage teleports (doors between stages)
 extern RoomLoadDef* D_801375BC;   // DRA: the current room's RoomLoadDef (first member)
@@ -62,6 +63,9 @@ static bool s_SaveLoaded; // a save was applied: clear the load mode once back i
 static s32 s_BusyWait;    // dead, waiting for a busy partner to become reachable
 #define PARTNER_BUSY_WAIT 1800 // then the game's own Game Over (the partner seems stuck)
 static bool s_DownForBoss; // dead while the partner fights a boss: respawn once it's over (D24)
+static bool s_Revived;   // the arrival under way is a revive (M13: its teleport-in)
+static void TeleportIn(void);
+static void Revive(void);
 
 // Pulled into the partner's boss fight / cutscene (design/M5): once per fight or cutscene
 static bool s_BossPulled, s_CutscenePulled;
@@ -237,6 +241,10 @@ static void ArriveUpdate(void) {
     case ARRIVE_LOADING:
         if (InNormalPlay() && g_GameEngineStep == Engine_Normal) {
             ArriveFinish();
+            if (s_Revived) {
+                s_Revived = false;
+                TeleportIn();
+            }
         } else if (++s_Timer > ARRIVE_TIMEOUT) {
             D_800A245C[BORROWED_TELEPORT] = s_Saved;
             s_State = ARRIVE_IDLE;
@@ -271,6 +279,53 @@ static void TeleportInput(void) {
 
 // --- death: respawn at the partner instead of Game Over (D24)
 
+// M13 step 4: a revived player comes in with its own character's teleport-in (Alucard's light,
+// Richter's and Maria's own), from its own player init as after the library's teleporter
+// (D_80097C98 6: it also picks the stage at a load, so it's set only around the init). The
+// partner's copy of it plays the same (presence: FLIP_TELEPORT_IN, partner.c).
+void AluInit(void); // DRA
+#define TELEPORT_IN_FRAMES 90
+static u16 s_TeleportIn; // frames left showing it in presence
+
+bool ArriveTeleportIn(void) { return s_TeleportIn != 0; }
+u32 g_CoopTeleportIns; // teleport-ins played (tests read it: coop.map)
+
+static void TeleportIn(void) {
+    s16 x = PLAYER.posX.i.hi, y = PLAYER.posY.i.hi;
+
+    D_80097C98 = 6;
+    if (CharacterLoaded() == CHAR_ALUCARD) {
+        AluInit();
+    } else {
+        g_PlOvl.D_8013C004(0);
+    }
+    D_80097C98 = 0;
+    PLAYER.posX.i.hi = x;
+    PLAYER.posY.i.hi = y;
+    s_TeleportIn = TELEPORT_IN_FRAMES;
+    g_CoopTeleportIns++;
+}
+
+// Fairy revive (design/M13): an Alucard partner in this room with the faerie out, and a Life Apple
+// in the shared bag, revives this player where it fell instead of at the partner. The apple goes,
+// in both games (EV_USED).
+static bool FairyRevive(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopFamiliar* f = (const CoopFamiliar*)FAMILIAR_PARTNER_ADDR;
+
+    if (!PartnerFresh() || (p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) || p->character != CHAR_ALUCARD ||
+        !SameRoomAsPartner() || f->magic != FAMILIAR_MAGIC || f->servant != FAM_ACTIVE_FAERIE ||
+        !g_Status.equipHandCount[ITEM_LIFE_APPLE] || !ProgressEmit(EV_USED, ITEM_LIFE_APPLE, 0)) {
+        return false;
+    }
+    g_Status.equipHandCount[ITEM_LIFE_APPLE]--;
+    s_DeathFade = 0;
+    Revive();
+    TeleportIn(); // the dying player entity, started again where it is
+    CoopMessage("Your partner's faerie revived you");
+    return true;
+}
+
 static void Revive(void) {
     g_Status.hp = g_Status.hpMax;
     g_Status.mp = g_Status.mpMax;
@@ -297,6 +352,9 @@ static bool DeathUpdate(void) {
     // Engine_10 at MENU_STEP_INIT: this frame's update would start the Game Over.
     if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
         return true; // playing alone, the prologue, or the host said so: the game's own Game Over
+    }
+    if (!s_DeathFade && FairyRevive()) {
+        return true;
     }
     if (!(p->flags & PRESENCE_DEAD)) {
         // First the screen fades to black (playtest 1: it used to cut straight to the load,
@@ -326,6 +384,7 @@ static bool DeathUpdate(void) {
         Revive();
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
         s_ArriveText = "Revived by partner";
+        s_Revived = true;
         // Start loading in this same frame: one more frame of the dying player entity would
         // set the death bits (and Engine_10) again. The load replaces the entity.
         ArriveUpdate();
@@ -598,6 +657,9 @@ void ArrivePresence(CoopPresence* p) {
 
 // Once per frame, before UpdateGame. Returns false to skip this frame's game update.
 bool ArriveFrame(void) {
+    if (s_TeleportIn) {
+        s_TeleportIn--;
+    }
     // Mode 1 (D_8003C730) places the player for a save load; only a save room's own code
     // clears it, and left set every later door would place the player the same way.
     if (s_SaveLoaded && InNormalPlay() && g_GameEngineStep == Engine_Normal) {
