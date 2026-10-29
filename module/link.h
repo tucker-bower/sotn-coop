@@ -19,6 +19,9 @@
 // CoopPresence.flipX's bit 7 (it uses bit 1): this player just came in by teleport (a revive), so
 // the partner's copy of it starts with its character's teleport-in (M13 step 4).
 #define FLIP_TELEPORT_IN 0x80
+// Bit 6: this player's one-button moves are on (OPT_SHORTCUTS): the partner's copy of it reads its
+// buttons the same way (Richter's and Maria's moves check the option in their own code).
+#define FLIP_SHORTCUTS 0x40
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24

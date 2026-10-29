@@ -576,8 +576,8 @@ def _pixels_test(ca, cb):
     @session_scenario(characters=(ca, cb))
     def test(run):
         """M13 criterion 2: A (the partner) next to B: B draws A's body, A's attack and A's
-        subweapon (partner_pixels: B's picture with and without its partner), all from A's body
-        in B's game."""
+        subweapon, and an Alucard partner's spell (partner_pixels: B's picture with and without
+        its partner), all from A's body in B's game."""
         from session_m12 import DAGGER, HEARTS_ADDR, SUBWEAPON_ID, attack_pixels
 
         def arm(a):
@@ -594,6 +594,26 @@ def _pixels_test(ca, cb):
         run.expect(hit > idle + 20, "and A's attack", standing=idle, attacking=hit)
         idle2, sub = attack_pixels(run, (ca, cb), "up+square", arm=arm)
         run.expect(sub > idle2 + 20, "and A's subweapon", standing=idle2, throwing=sub)
+        if ca == 0:  # Alucard's spells: Hellfire, cast with the M8b stick shortcut (it plays the
+            # spell's own input into A's pad, which the body in B's game gets over the link)
+            from link.mailbox import OPT_SHORTCUTS, SPELLS, spell_options
+            from scenarios_m8 import MP, MP_MAX, SPELLS_LEARNT
+            hellfire = SPELLS.index("Hellfire")
+            spent = [None]
+
+            def learn(a):
+                if spent[0] is not None:  # A cast it: MP gone since the last refill
+                    spent[0] = max(spent[0], 99 - a.read(MP, "<i"))
+                else:
+                    spent[0] = 0
+                    a.mailbox("set_options", OPT_SHORTCUTS | spell_options([hellfire, None, None, None]))
+                a.write(SPELLS_LEARNT, 0xFF)
+                a.write(MP, 99, "<i")
+                a.write(MP_MAX, 99, "<i")
+            idle3, spell = attack_pixels(run, (ca, cb), "rs_up", every=120, arm=learn,
+                                         samples=tuple(range(16, 110, 6)))
+            run.expect(spent[0] > 0 and spell > idle3 + 20, "and A's spell (Hellfire)", standing=idle3,
+                       casting=spell, mp_spent=spent[0])
     test.__name__ = f"m13_pixels_{PAIR_NAMES[ca]}{PAIR_NAMES[cb]}"
     from session import SESSION_SCENARIOS
     SESSION_SCENARIOS[test.__name__] = SESSION_SCENARIOS.pop("test")

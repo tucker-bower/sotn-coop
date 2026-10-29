@@ -178,12 +178,17 @@ static void WeaponsOff(void) {
     g_CoopWeaponEntity = (void (*)(Entity*))NoWeapon;
 }
 
+// Only the words still stubbed: a weapon's program the disc finished loading during the body's
+// frame (the off-hand's, asynchronous) is the new one. Putting the old header back over it, the
+// next InitWeapon called a stale LoadWeaponPalette, which wrote through NULL into the BIOS.
 static void WeaponsOn(void) {
     s32 hand, k;
 
     for (hand = 0; hand < 2; hand++) {
         for (k = 0; k < WEAPON_HDR_WORDS; k++) {
-            WEAPON_HDR(hand)[k] = s_WeaponHdr[hand][k];
+            if (WEAPON_HDR(hand)[k] == (u32)(k == 6 ? (void*)NoWeaponId : (void*)NoWeapon)) {
+                WEAPON_HDR(hand)[k] = s_WeaponHdr[hand][k];
+            }
         }
     }
     g_CoopWeaponEntity = s_WeaponEntity;
@@ -274,10 +279,13 @@ static void Swap(void) {
             s_Banks[k] = t;
         }
     }
-    // the 64 player slots: only those in use on either side (most are empty)
+    // the 64 player slots: only those in use on either side (most are empty), and always the
+    // player's (0) and its afterimages' (1-3: no id, but set up by AluInit and RicInit, slot 1
+    // holding their primitives). Skipped, those were player 1's and the body's at once: one's
+    // afterimage code walked the other's chain to its end and wrote through NULL, into the BIOS.
     for (i = 0; i < 64; i++, body += 0xBC / 4) {
         u32* ram = (u32*)&g_Entities[i];
-        if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) { // slot 0 (PLAYER) has id 0
+        if (i > E_AFTERIMAGE_3 && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
             continue;
         }
         for (k = 0; k < 0xBC / 4; k++) {
@@ -659,7 +667,7 @@ static void FindPrims(void) {
 
     s_PrimCount = 0;
     for (i = 0; i < 64; i++) {
-        if ((i == 0 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
+        if ((i <= E_AFTERIMAGE_3 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
             for (prim = &g_PrimBuf[g_Entities[i].primIndex]; prim && s_PrimCount < PRIMS; prim = prim->next) {
                 s_Prims[s_PrimCount++] = prim - g_PrimBuf;
             }
@@ -718,7 +726,7 @@ static void Drop(void) {
         ShowPrims();
         SwapIn();
         for (i = 0; i < 64; i++) {
-            if ((i == 0 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
+            if ((i <= E_AFTERIMAGE_3 || g_Entities[i].entityId) && g_Entities[i].flags & FLAG_HAS_PRIMS) {
                 g_api.FreePrimitives(g_Entities[i].primIndex);
                 g_Entities[i].flags &= ~FLAG_HAS_PRIMS;
             }
@@ -736,9 +744,13 @@ bool PartnerSimulated(void) {
     return s_Made && (Spike() || (PartnerLive() && PartnerHere()));
 }
 
+static void Draw(void);
+
+// The partner's frame: its update and its drawing, in one swap. After player 1's RenderEntities.
 void PartnerFrame(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     Pad pad0;
+    u32 options;
     Entity* cur;
     s32 i;
     s32 t0;
@@ -824,6 +836,8 @@ void PartnerFrame(void) {
         }
     }
     pad0 = g_pads[0];
+    options = g_CoopOptions; // its one-button moves are on or off as the partner has them
+    g_CoopOptions = (options & ~OPT_SHORTCUTS) | ((p->flipX & FLIP_SHORTCUTS) ? OPT_SHORTCUTS : 0);
     g_pads[0].pressed = pad;
     g_pads[0].tapped = pad & ~s_PrevPad;
     g_pads[0].repeat = g_pads[0].tapped;
@@ -844,8 +858,10 @@ void PartnerFrame(void) {
     }
     g_CurrentEntity = cur;
     g_pads[0] = pad0;
+    g_CoopOptions = options;
+    Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
     SwapOut();
-    g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter
+    g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter: its update and drawing
     if (g_CoopSpikeLines > g_CoopSpikeMax) {
         g_CoopSpikeMax = g_CoopSpikeLines;
     }
@@ -900,57 +916,60 @@ static void Tint(u32 gt4) {
 
 // The body's primitives, drawn now by themselves (every other one hidden for it), then hidden
 // from the game's pass (ShowPrims puts them back before the body's next frame).
-static void DrawPrims(void) {
-    static u8 s_Others[MAX_PRIM_COUNT]; // DRAW_HIDE we set on others for our pass
-    s32 flash; // D_8003C0EC[3]: a screen flash's frames left (r, g, b before it)
-    u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
+// Its primitives (its whip and effects: most of Richter's attacks) go in the game's own pass: the
+// textured ones with its graphics are tagged with the bank's texture bit, which RenderPrimitives
+// copies into their polygons; after it, PartnerAfterPrims gives those polygons the bank's palette
+// too and takes the tag off again. (A pass of our own, with every other primitive hidden and
+// shown again, cost some 40 scanlines a frame: the mixed soak missed frames.)
+static s16 s_Tagged[PRIMS];
+static s32 s_TagCount;
+
+static void TagPrims(void) {
+    Primitive* p;
     s32 i;
 
     FindPrims();
     HideFlashes();
-    if (!s_PrimCount) {
-        return;
-    }
-    for (i = 0; i < MAX_PRIM_COUNT; i++) {
-        s_Others[i] = !(g_PrimBuf[i].drawMode & DRAW_HIDE);
-        g_PrimBuf[i].drawMode |= DRAW_HIDE;
-    }
     for (i = 0; i < s_PrimCount; i++) {
-        if (s_Others[s_Prims[i]]) {
-            g_PrimBuf[s_Prims[i]].drawMode &= ~DRAW_HIDE;
+        p = &g_PrimBuf[s_Prims[i]];
+        s_PrimHidden[i] = false;
+        if ((p->type == PRIM_GT4 || p->type == PRIM_GT3) && !(p->tpage & TPAGE_BANK) &&
+            BankTpage(p->tpage) != p->tpage) {
+            p->tpage |= TPAGE_BANK;
+            s_Tagged[s_TagCount++] = s_Prims[i];
         }
-    }
-    flash = D_8003C0EC[3]; // a screen flash: the game's own pass draws it, and counts it down
-    D_8003C0EC[3] = 0;
-    RenderPrimitives();
-    D_8003C0EC[3] = flash;
-    if (s_Banked) {
-        BankPolys(gt4, gt3);
-    }
-    for (i = 0; i < MAX_PRIM_COUNT; i++) {
-        if (s_Others[i]) {
-            g_PrimBuf[i].drawMode &= ~DRAW_HIDE;
-        }
-    }
-    for (i = 0; i < s_PrimCount; i++) {
-        s_PrimHidden[i] = s_Others[s_Prims[i]];
-        g_PrimBuf[s_Prims[i]].drawMode |= DRAW_HIDE;
     }
 }
 
-// Draws the partner: its slots swapped in, everything else hidden (animCurFrame 0, which
-// RenderEntities skips), drawn, and all put back. After player 1's RenderEntities.
-void PartnerDraw(void) {
-    static u16 frames[256];
+void PartnerAfterPrims(u32 gt4, u32 gt3) {
     s32 i;
 
-    if (!PartnerSimulated() || g_GameState != Game_Play || g_GameStep != Play_Default || s_JustMade ||
-        s_AfterLoad || ArriveCardSaving()) {
+    if (!s_TagCount) {
         return;
     }
-    u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
+    for (; gt4 < g_GpuUsage.gt4; gt4++) {
+        if (g_CurrentBuffer->polyGT4[gt4].tpage & TPAGE_BANK) {
+            g_CurrentBuffer->polyGT4[gt4].clut = BankClut(g_CurrentBuffer->polyGT4[gt4].clut);
+        }
+    }
+    for (; gt3 < g_GpuUsage.gt3; gt3++) {
+        if (g_CurrentBuffer->polyGT3[gt3].tpage & TPAGE_BANK) {
+            g_CurrentBuffer->polyGT3[gt3].clut = BankClut(g_CurrentBuffer->polyGT3[gt3].clut);
+        }
+    }
+    for (i = 0; i < s_TagCount; i++) {
+        g_PrimBuf[s_Tagged[i]].tpage &= ~TPAGE_BANK;
+    }
+    s_TagCount = 0;
+}
 
-    SwapIn();
+// Draws the partner, right after its update, with its slots still swapped in: everything else
+// hidden (animCurFrame 0, which RenderEntities skips), drawn, and all put back.
+static void Draw(void) {
+    static u16 frames[256];
+    u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
+    s32 i;
+
     for (i = 1; i < 256; i++) {
         frames[i] = g_Entities[i].animCurFrame;
         if (i >= 64 || HiddenWeapon(&g_Entities[i])) {
@@ -965,8 +984,8 @@ void PartnerDraw(void) {
     if (s_Banked) {
         BankPolys(gt4, gt3);
     }
-    if (s_Banked) { // its whip and effects (most of Richter's attacks are primitives), from the bank
-        DrawPrims();
+    if (s_Banked) { // its whip and effects, drawn by the game from the bank
+        TagPrims();
     } else { // the game draws them (the same graphics): only its screen flashes kept out
         FindPrims();
         HideFlashes();
@@ -976,7 +995,6 @@ void PartnerDraw(void) {
         FamiliarDraw(PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - g_CoopLink.partner.x,
                      PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi - g_CoopLink.partner.y);
     }
-    SwapOut();
 }
 
 // Where the partner is (the harness checks it moves as its buttons say).

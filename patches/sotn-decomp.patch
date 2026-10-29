@@ -19,7 +19,7 @@ index 850b8cd58..b5c93e31a 100644
          g_Status.subWeapon = equipped_subweapon;
          if (g_Status.hearts < g_Status.heartsMax) {
 diff --git a/src/dra/42398.c b/src/dra/42398.c
-index 3e7101345..1f59ff30f 100644
+index 3e7101345..b4d54e5cd 100644
 --- a/src/dra/42398.c
 +++ b/src/dra/42398.c
 @@ -2,6 +2,9 @@
@@ -44,7 +44,7 @@ index 3e7101345..1f59ff30f 100644
      InitCARD(1);
      StartCARD();
      _bu_init();
-@@ -883,12 +890,20 @@ loop_5:
+@@ -883,19 +890,31 @@ loop_5:
          g_GpuUsage.sp16 = 0;
          g_GpuUsage.tile = 0;
          g_GpuUsage.sp = 0;
@@ -65,6 +65,17 @@ index 3e7101345..1f59ff30f 100644
              if (g_GameState == Game_Play && g_DebugEnabled) {
                  if (g_DebugHitboxViewMode != 0) {
                      DrawEntitiesHitbox(g_DebugHitboxViewMode);
+                 }
+             }
+         }
++#ifdef COOP
++        CoopRenderPrimitives(); // RenderPrimitives(), then the partner's from VRAM's second bank
++#else
+         RenderPrimitives();
++#endif
+         UpdateCd();
+ #if defined(VERSION_HD)
+         PrintGpuInfo();
 diff --git a/src/dra/4A538.c b/src/dra/4A538.c
 index 4b041d73c..2ec738876 100644
 --- a/src/dra/4A538.c

@@ -40,6 +40,7 @@
 void CoopBoot(void);           // replaces InitializePads()
 bool CoopUpdate(void);         // replaces DebugUpdate(): main loop, before UpdateGame
 void CoopRenderEntities(void); // replaces RenderEntities()
+void CoopRenderPrimitives(void); // replaces the frame's RenderPrimitives() (M13)
 void CoopDrawMapCursor(void);  // replaces DrawMapCursor()
 void CoopStoreSaveData(SaveData* save, s32 block, s32 cardIcon); // replaces the save room's StoreSaveData()
 

@@ -437,10 +437,11 @@ for _b in _bossstarts():
 SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
 
 
-def attack_pixels(run, chars, pad, every=30, arm=None, setup=None):
+def attack_pixels(run, chars, pad, every=30, arm=None, setup=None, samples=(4, 8, 12, 16)):
     """M13 (criterion 2): what A adds to B's screen (partner_pixels: B drawn with and without its
     partner), standing, then mid-attack; A's body in B's game draws its own attacks, so the attack
-    adds to it. arm(a): set A up for the attack (a subweapon) before each press."""
+    adds to it. arm(a): set A up for the attack (a subweapon) before each press. pad: the press
+    (held 2 frames of each `every`), or a function (try, frame) giving A's pad (a sequence)."""
     from link.mailbox import BUSY, IN_PLAY
     from session_m8 import as_characters
     from session_scenarios import partner_pixels
@@ -463,8 +464,9 @@ def attack_pixels(run, chars, pad, every=30, arm=None, setup=None):
     for i in range(4 * every):
         if arm:
             arm(a)
-        run.step(1, (pad if i % every < 2 else "", ""))
-        if i % every in (4, 8, 12, 16):  # the attack's frames (the swing is drawn from the link)
+        now = pad(i // every, i % every) if callable(pad) else pad if i % every < 2 else ""
+        run.step(1, (now, ""))
+        if i % every in samples:  # the attack's frames
             bb, n, _ = partner_pixels(b)
             best = max(best, n)
             wide = max(wide, (bb[2] - bb[0]) - width if bb else 0)
