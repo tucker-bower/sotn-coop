@@ -732,6 +732,14 @@ class Launcher:
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
 
+    def install_test_castles(self):
+        """The test castles, from the debug starts' joint saves (made with them: debugstarts.py)."""
+        import debugstarts
+        from archive import Castle
+        for name, v in debugstarts.load(self.starts_dir(), self.patch_crc()).items():
+            if v.get("save") and (self.starts_dir() / v["save"]).exists():
+                Castle.make_test(name, (self.starts_dir() / v["save"]).read_bytes(), v["start"], v["order"], v["about"])
+
     def make_debug_starts(self):
         import debugstarts
         self.apply_bios()
@@ -746,6 +754,7 @@ class Launcher:
                                     "\nThe game works without them; they're for testing.")
                     return
                 if kind == "done":
+                    self.install_test_castles()
                     return
             if "quit" in self.ui.events():
                 proc.terminate()
@@ -950,17 +959,38 @@ class Launcher:
         from archive import Castle
         while True:
             castles = Castle.all()[:7]
-            if not castles:  # nothing to pick from: a new one
+            # Android can't make them, only get them by joining; a first game goes straight to a new castle
+            tests = Castle.tests() or (castles and not ANDROID)
+            if not castles and not tests:  # nothing to pick from: a new one
                 return self.new_castle()
             items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
+            if tests:
+                items.append(("Test castles", "Outside each boss and before each story scene, with a typical player's progress"))
             k = self.ui.menu(heading, items, subtitle)
             if k is None:
                 return None
-            if k > 0:
+            if 0 < k <= len(castles):
                 return castles[k - 1], False
-            picked = self.new_castle()
+            picked = self.new_castle() if k == 0 else self.pick_test_castle()
             if picked:
                 return picked
+
+    def pick_test_castle(self):
+        """A test castle (Tucker, 2026-10-28): a fresh copy of it, to play like any castle (solo, on
+        the couch, or hosted: the joiner gets it too). Made with the debug starts, from this disc."""
+        from archive import Castle
+        tests = Castle.tests()
+        if not tests:
+            if not self.ui.confirm("Test castles", "One castle outside each boss and before each story scene of the\n"
+                                   "first castle, made from your disc (a few minutes, once). Make them now?"):
+                return None
+            self.make_debug_starts()
+            tests = Castle.tests()
+            if not tests:
+                return None
+        k = self.ui.menu("Test castles", [(t.info["name"], t.info.get("about") or t.summary()) for t in tests],
+                         "Each starts outside its boss or scene, until you save. You play a copy: these stay as they are.")
+        return None if k is None else (tests[k].fresh_copy(), False)
 
     def new_castle(self):
         """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
@@ -1010,6 +1040,7 @@ class Launcher:
         self.load_cards(s, castle)
         if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
             self.apply_players(s)
+            s.joint.start = castle.info.get("start")  # a test castle not saved yet: outside its boss
             s.joint.resume()
 
     # --- playing
@@ -1318,7 +1349,7 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir(), self.patch_crc())
-        if not starts or not any(v.get("scene") for v in starts.values()):
+        if not starts or not any(v.get("save") for v in starts.values()):
             ask = ("They haven't been made for this version yet (about a minute). Make them now?" if not starts else
                    "There are new ones: one before each story scene, and one outside each boss, with the\n"
                    "level and gear a player usually has by then. Make them now (about a minute)?")

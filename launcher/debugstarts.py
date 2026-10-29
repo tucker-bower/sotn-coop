@@ -77,22 +77,22 @@ def _build(disc, out_dir, queue, patch=None):
                 index[name] = {"about": about, "file": file, "where": e.snapshot()}
             queue.put(("progress", 3 + len(STARTS), steps, "Mapping the castle"))
             rooms = _survey(e, bases["entrance"], route, bossstarts)
-            for k, b in enumerate(bossstarts.B):
+            # Boss and scene starts (Tucker, 2026-10-26), in story order. Each also makes its
+            # test castle's joint save (Tucker, 2026-10-28; archive.Castle.make_test).
+            rows = [("boss", b) for b in bossstarts.B] + [("scene", b) for b in bossstarts.S]
+            rows.sort(key=lambda r: bossstarts.story_order(r[1]))
+            for k, (kind, b) in enumerate(rows):
                 queue.put(("progress", 4 + len(STARTS) + k, steps, b["name"]))
-                name = f"Boss: {b['name']}"
-                ok = _boss_start(e, mb, bases["entrance"], b, rooms, bossstarts)
+                name = f"{kind.capitalize()}: {b['name']}"
+                ok, blob = _boss_start(e, mb, bases["entrance"], b, rooms, bossstarts)
                 file = name.replace(":", " -").replace("&", "and") + ".state"
                 e.save_state_file(out / file)
-                about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the boss)")
-                index[name] = {"about": about, "file": file, "where": e.snapshot(), "boss": True, "checked": ok}
-            for k, b in enumerate(bossstarts.S):  # scene starts (Tucker, 2026-10-26)
-                queue.put(("progress", 4 + len(STARTS) + len(bossstarts.B) + k, steps, b["name"]))
-                name = f"Scene: {b['name']}"
-                ok = _boss_start(e, mb, bases["entrance"], b, rooms, bossstarts)
-                file = name.replace(":", " -").replace("&", "and") + ".state"
-                e.save_state_file(out / file)
-                about = bossstarts.about(b) + ("" if ok else " (the check didn't reach the scene)")
-                index[name] = {"about": about, "file": file, "where": e.snapshot(), "scene": True, "checked": ok}
+                (out / (file[:-len(".state")] + ".save")).write_bytes(blob)
+                about = bossstarts.about(b) + ("" if ok else f" (the check didn't reach the {kind})")
+                room, x, y = b["arrive"]
+                index[name] = {"about": about, "file": file, "where": e.snapshot(), kind: True, "checked": ok,
+                               "save": file[:-len(".state")] + ".save", "order": k,
+                               "start": [bossstarts.STAGES[b["stage"]], room, x, y]}
         # The starts hold the co-op module as it was: made for one patch only.
         (out / "index.json").write_text(json.dumps({"patch": patch, "starts": index}, indent=1))
         queue.put(("done", steps, steps, str(out)))
@@ -123,8 +123,9 @@ def _survey(e, entrance, route, bossstarts):
 
 
 def _boss_start(e, mb, entrance, b, rooms, bossstarts):
-    """Leaves the emulator outside boss b with b's progress; True if a bot then reached the boss
-    (for a scene start, b["scene"]: its scene started)."""
+    """Leaves the emulator outside boss b with b's progress. Returns (ok, save): ok if a bot then
+    reached the boss (for a scene start, b["scene"]: its scene started); save, a joint save of
+    that progress (its room the one outside the boss: a test castle's)."""
     from link.mailbox import BOSS, BUSY, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, IN_PLAY
     from bots import walker
     import savestates as route
@@ -155,6 +156,12 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
     route.heal(e)
     e.step(1)
     start = e.save_state()
+    seq, p = mb.save_seq(), mb.self_presence()
+    mb.command(CMD_SAVE_NOW, p.stage, 0, p.room_left, p.room_top)
+    if not _wait(e, lambda: mb.save_seq() != seq, 3000):
+        raise RuntimeError(f"{b['name']}: the castle's save never came")
+    save = mb.save_out()
+    e.load_state(start)
     if b["check"]:
         mb.command(CMD_ARRIVE, stage, *b["check"])
         _wait(e, lambda: mb.self_presence().x != 0 and playing(), 1200)
@@ -167,7 +174,7 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
             break
         e.step(1, bot(e.snapshot(), i))
     e.load_state(start)
-    return ok
+    return ok, save
 
 
 def start(disc, out_dir, patch=None):

@@ -636,3 +636,11 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Why Tucker didn't know where names came from:** his PC's "test" castle (Oct 25) was named at SOTN's name entry. The Thor kept a copy when it joined. Hosting that copy today gave the PC `test_… (2)`, because the PC had played its own copy since (M11's copy rule). This is working as designed, but it wasn't visible.
 - **Join box:** it was pre-filled with the first 24 characters of the clipboard, whatever that was, and Ctrl+V / Square pasted all of it. Now `link/rendezvous.find_connect_code` takes only a room code, connect code or ip:port found in the clipboard (or the whole clipboard if it is one, in any case), and otherwise nothing.
 - Options considered for naming: a name only from SOTN's entry (the M11 design; Tucker wants to name it up front); a required name (blocks controller-only couch play).
+
+**D127: Test castles: one outside each boss and before each story scene, played as fresh copies** (Tucker asked, 2026-10-28; the details agent-default)
+- **Contents:** 18 for the first castle (12 bosses, 6 scenes, in story order), made with the debug starts from the player's own disc: the same progress (level, gear, relics, flags, bosses beaten), plus a joint save of it. They're listed under "Test castles" in every castle list (Solo, Couch, Host). Picking one plays a fresh copy, a normal castle named after it, so the set stays as made.
+- **Where they start:** a joint save alone loads in the room's middle, which can skip a scene's trigger. So the castle keeps its exact start (stage, room, x, y), and both games arrive there once the save has loaded. Online, the host's `load_save` carries the start to the joiner. The start lasts until the first joint save, so until then, Continue and a both-dead reload also put players back at the door.
+- **They're joint saves, not savestates:** they work with any BIOS and any build. The joiner of a hosted one gets a copy, as with any castle (Android can't make them itself).
+- **Not yet:** the inverted castle (its bosses and scenes need their own progress tables and checks).
+- Options considered: savestates in the Savestates menu (couch only, tied to the BIOS and build, can't be hosted); a joint save alone (the wrong spot in the room).
+

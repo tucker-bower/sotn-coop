@@ -20,7 +20,7 @@ import uuid
 import zlib
 from pathlib import Path
 
-from link.jointsave import save_fields
+from link.jointsave import read_session, save_fields, write_session
 from paths import castles_dir, folder_size
 
 try:  # Python 3.14: zstd is in the standard library; it's smaller and faster than zlib
@@ -33,6 +33,7 @@ STAGE_NAMES = {
     0x04: "Olrox's Quarters", 0x05: "Abandoned Mine", 0x06: "Royal Chapel", 0x07: "Castle Entrance",
     0x08: "Center Cube", 0x09: "Underground Caverns", 0x0A: "Colosseum", 0x0B: "Castle Keep",
     0x0C: "Alchemy Laboratory", 0x0D: "Clock Tower", 0x41: "Castle Entrance", 0x1F: "Prologue",
+    0x12: "Nightmare", 0x18: "Castle Keep", 0x1B: "Underground Caverns",  # the boss stages (BO6: Richter, BO3: Scylla)
 }
 
 
@@ -67,6 +68,9 @@ def load_pair(a_file, b_file=None):
 def stage_name(stage):
     inverted = " (inverted)" if stage & 0x20 and stage < 0x40 else ""
     return STAGE_NAMES.get(stage & ~0x20 if inverted else stage, f"stage {stage:#04x}") + inverted
+
+
+TESTS = "Test castles"  # their folder, in castles/ (Castle.all leaves it out: it has no castle.json)
 
 
 def safe(text):
@@ -106,6 +110,38 @@ class Castle:
         return sorted(out, key=lambda c: c.info.get("played", c.info.get("created", 0)), reverse=True)
 
     @classmethod
+    def tests(cls):
+        """The test castles (Tucker, 2026-10-28): one outside each boss and before each story scene,
+        in story order. They're templates: playing one plays a fresh copy (fresh_copy)."""
+        d = castles_dir() / TESTS
+        out = [cls(x) for x in d.iterdir() if (x / "castle.json").exists()] if d.exists() else []
+        return sorted(out, key=lambda c: c.info.get("order", 0))
+
+    @classmethod
+    def make_test(cls, name, save, start, order, about):
+        """A test castle from a debug start's joint save (debugstarts.py): `start` (stage, room,
+        x, y) is where its players arrive, once their save has loaded, until its first save (the
+        save alone would put them in the room's middle)."""
+        folder = castles_dir() / TESTS / safe(name.replace(":", " -"))
+        c = cls(folder)
+        name_in_save, stage, level, _ = save_fields(save)
+        c.info = {"id": uuid.uuid4().hex[:16], "created": time.time(), "name": name, "saves": 0, "stages": [],
+                  "received": False, "test": True, "order": order, "about": about, "start": list(start),
+                  "where": stage_name(stage), "level": level}
+        write_session(c.joint_save, [save])
+        c.save_info()
+        return c
+
+    def fresh_copy(self):
+        """A test castle to play: a new castle with its save and start (the test one stays as made)."""
+        c = Castle.new(name=self.info["name"])
+        write_session(c.joint_save, read_session(self.joint_save))
+        for k in ("start", "where", "level", "about"):
+            c.info[k] = self.info.get(k)
+        c.save_info()
+        return c
+
+    @classmethod
     def receive(cls, meta):
         """The joiner's copy of the host's castle (meta: its id, name, created). The copy that
         only ever received is brought up to date; one this player has played since (solo, or
@@ -141,6 +177,7 @@ class Castle:
         name, stage, level, _ = save_fields(blobs[1] if theirs and len(blobs) > 1 else blobs[0])
         if name and not self.info.get("name"):
             self.info["name"] = name
+        self.info.pop("start", None)  # a test castle: from its first save on, it goes on from there
         self.info["saves"] = self.info.get("saves", 0) + 1
         self.info["where"], self.info["level"] = stage_name(stage), level
         self.save_info()

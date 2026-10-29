@@ -128,6 +128,9 @@ It needs the player's DXC disc, as Maria does.
 ### F9 sends bug reports (D86)
 F9's snapshot plus a short form, sent to a private repo through a small hosted relay, so players who download a release can report problems. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
 
+### A rescue menu for playtesters (Tucker, 2026-10-28)
+"I'm stuck" in the pause menu, to get past a co-op bug and keep playing: back to the door, go to my partner, back to the last save or a moment, skip this boss or scene, warp to a save room. Each rescue also saves a bug report. Design: `design/backlog-rescue-menu.md`.
+
 ### 3–4 players (D48): now M17
 
 ### Power tuning and more characters' testing (D111)
