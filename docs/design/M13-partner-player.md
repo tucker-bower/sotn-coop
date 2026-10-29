@@ -87,7 +87,17 @@ Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayer
      - **Leaving:** a body that leaves frees its primitives, unless a stage load already did.
      - **Test:** `m13_partner_richter` (Alucard's game, a Richter partner: his animation set, follows and animates, whip included; his graphics in bank 2; A's character and sprite banks untouched).
      - **Known gap:** PsyQ's `rand()` is a BIOS call, so its seed can't be kept. A partner's `rand()` calls shift player 1's.
-   - **3b, Maria:** a partner build of her objects (`-DCOOP_PARTNER`, at 0x80780000) whose palette and graphics uploads go to bank 2, made by the launcher from the DXC disc like her player build.
-   - **3c, an Alucard partner in Richter's or Maria's game:** F_GAME (Alucard's) in bank 2, and ARC_F's sprite tables rebased into the header swap.
+   - **3b, a Maria partner: done (2026-10-28).**
+     - **The partner builds:** both are compiled apart with `COOP_PARTNER` (`richter/coop_ric.h`). Their `LoadImage`/`StoreImage` go to bank 2 (`richter/coop_partner.c`), and Maria's palettes go to a `g_Clut` of her own.
+     - **Maria's build:** `MARIAP.BIN` (`maria/maria_partner.ld`, 0x80780000) is made by the launcher from the DXC disc (`maria-partner.bps`) and comes in her blob (`CharBlob.partnerSize`). The module puts it in place once.
+     - **Her init:** her partner init (the trailer's sixth word) is her load plus `MarInit`. Her own init also patches DRA's HUD and sound data, which would be player 1's.
+     - **Queued graphics:** graphics a partner queues for DRA's loader get the bank bit in their entries.
+     - **Tests:** `m13_partner_maria`, plus `m13_partner_rr`, `_rm`, `_mr`, `_mm` (Richter's and Maria's games with either partner).
+   - **7 of the 9 pairings** now run the partner's own code. The other two keep the puppet: **3c, an Alucard partner in Richter's or Maria's game.**
+     - **Why:** DRA's `AluInit` registers palette animations (`func_800EA5E4(0x16)`) that DRA then runs every frame on bank 1. In another character's game that is player 1's palettes. It needs DRA's palette-animation list saved and restored around the partner (or kept apart), and Alucard's F_GAME (to read at boot, split across 0x80580000 and 0x806C2000) plus ARC_F's tables rebased into the header swap.
+   - **Known gaps:**
+     - The core's VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame. That's a small core patch: rebuild all three cores.
+     - A partner's BIOS `rand()` calls shift player 1's.
+     - The partner's off-hand items (M12b) share module state with player 1's.
 4. **Familiars, sounds** (the partner's sound effects quieter), **game feel** (fairy revive, respawn effects).
 5. **Turn it on, remove the puppet**, and the acceptance criteria above.
