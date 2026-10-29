@@ -4,6 +4,7 @@ spike must answer: the partner moves as its buttons say, player 1 is untouched, 
 and determinism."""
 
 import struct
+from pathlib import Path
 
 from link.mailbox import OPT_PARTNER_SIM
 from module import COOP_DISC, symbols
@@ -86,6 +87,7 @@ def m13_spike_partner_sim(run):
 
 # --- the partner's body in a two-game session ------------------------------------------------
 from session import session_scenario  # noqa: E402
+from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER  # noqa: E402
 
 
 @session_scenario(starts=("entrance", "entrance"))
@@ -202,3 +204,48 @@ def m13_partner_weapon_same(run):
     run.expect(ran and a_frames <= body_frames, "B's copy of A swings", frames=ran,
                missing=sorted(a_frames - body_frames))
     run.expect(not drawn and not placed, "drawn by the body alone", real=drawn, sprites=placed)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
+def m13_partner_richter(run):
+    """M13 step 3: B plays Richter, and A (Alucard) runs B's body with our partner Richter (its
+    own code and statics: COOPRICP.BIN), from B's buttons: the body is Richter's (his animation
+    set), moves and animates as B does, and draws from Richter's graphics in VRAM's second bank.
+    A's own game is untouched: its character, its sprite banks, its player."""
+    from link.mailbox import OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == CHAR_RICHTER, "B plays Richter")
+    run.step(60)
+    sym = symbols()
+    banks_at = a.read("g_api", "<I", 0x10)  # g_api.o.spriteBanks (Overlay: +0x10)
+    banks = a.read_bytes(banks_at + 0x40, 16)
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(30)
+    body = sym["g_CoopSpikeBody"]
+    run.expect(a.read(body, "<h", 0x54) == -0x7FF0, "A's copy of B is Richter (his animation set, 0x8010)",
+               anim_set=hex(a.read(body, "<H", 0x54)))
+    poses, worst, samples = set(), 0, 0
+    pattern = ["right"] * 60 + ["right+cross"] * 14 + ["right"] * 40 + ["left"] * 80 + ["left+square"] * 20 + [""] * 40
+    for t, pad in enumerate(pattern):
+        run.step(1, ("", pad))
+        poses.add(a.read(body, "<H", 0x56))  # animCurFrame
+        if t % 10 == 0:
+            bx = a.read(body, "<h", 2) + a.read("g_Tilemap", "<h", 0x0A)
+            sb = b.snapshot()
+            if sb["room"] == a.snapshot()["room"]:
+                worst = max(worst, abs(bx - sb["world_x"]))
+                samples += 1
+        if t in (160, 200, 206):  # for eyes: .env/out/shots/
+            shots = Path(__file__).resolve().parent.parent / ".env/out/shots"
+            shots.mkdir(parents=True, exist_ok=True)
+            a.screenshot().save(shots / f"m13_partner_richter_{t}.png")
+    run.expect(samples > 10 and worst <= 48, "A's copy follows B (within the snap distance)", worst_px=worst, samples=samples)
+    run.expect(len(poses) > 8, "and animates as B moves, jumps and whips", poses=len(poses))
+    # FGAME2_ADDR's strip 4 (32 x 128 at 0x240, 0x100: strips 0-3 hold the player sprites' frames)
+    fgame2 = a.read_bytes(0x80680000 + 4 * 0x2000, 0x2000)
+    strip = b"".join(struct.pack("<32H", *row) for row in a.vram_rect(0x240, 0x100 + 512, 32, 128))
+    run.expect(strip == fgame2, "Richter's graphics are in A's second bank")
+    run.expect(a.read(0x80280020) == 0, "A's player is still Alucard (g_CoopCharacter)")
+    run.expect(a.read_bytes(banks_at + 0x40, 16) == banks, "A's sprite banks 16-19 are its own")
+    run.expect(a.snapshot()["hp"] > 0 and a.read("g_Entities", "<h", 0x54) != -0x7FF0, "A plays on as Alucard")

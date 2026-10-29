@@ -14,7 +14,7 @@ CFLAGS  += -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompati
 SRCS    := pl_header.c $(filter-out pl_header.c ovl_load.c,$(notdir $(wildcard $(SRC)/*.c)))
 OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS)) $(BUILD)/coop_ric.o
 
-all: $(BUILD)/COOPRIC.BIN
+all: $(BUILD)/COOPRIC.BIN $(BUILD)/COOPRICP.BIN
 
 $(BUILD)/%.o: $(SRC)/%.c coop_ric.h
 	@mkdir -p $(BUILD)
@@ -35,6 +35,15 @@ $(BUILD)/ric.elf: $(OBJS) $(BUILD)/symbols.txt ric.ld coop_player.ld
 $(BUILD)/COOPRIC.BIN: $(BUILD)/ric.elf
 	$(CROSS)objcopy -O binary $< $@
 	@echo "COOPRIC.BIN: $$(stat -c %s $@) bytes (Richter's slot holds $$((0x80180000 - 0x8013C000)))"
+
+# The partner's Richter (design/M13 step 3): the same objects, all in the 8MB (ric_partner.ld).
+$(BUILD)/ricp.elf: $(OBJS) $(BUILD)/symbols.txt ric_partner.ld coop_player.ld
+	$(CROSS)ld -nostdlib -Map=$(BUILD)/ricp.map --build-id=none -T ric_partner.ld \
+	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -T coop_player.ld -o $@ $(OBJS)
+
+$(BUILD)/COOPRICP.BIN: $(BUILD)/ricp.elf
+	$(CROSS)objcopy -O binary $< $@
+	@echo "COOPRICP.BIN: $$(stat -c %s $@) bytes, $$(grep -E '^\.bss' $(BUILD)/ricp.map | awk '{print $$3}') of BSS"
 
 clean:
 	rm -rf $(BUILD)
