@@ -118,6 +118,8 @@ class Castle:
                     c.info["name"] = meta["name"]
                 return c
         c = cls.new(meta["id"], meta.get("created"), meta.get("name"), received=True)
+        c.info["joined"] = True  # for the list: it began as the partner's castle
+        c.save_info()
         if same:
             c.info["copy"] = len(same) + 1
             c.save_info()
@@ -168,8 +170,8 @@ class Castle:
         return f"{self.info.get('name') or 'New castle'}_{stamp}{copy}"
 
     def summary(self):
-        """For the castle list: where, level, last played."""
-        bits = [self.info.get("where"), f"Lv {self.info['level']}" if self.info.get("level") else None,
+        """For the castle list: whose (a copy of a partner's), where, level, last played."""
+        bits = ["your partner's" if self.info.get("joined") or self.info.get("received") else None, self.info.get("where"), f"Lv {self.info['level']}" if self.info.get("level") else None,
                 "played " + time.strftime("%b %d, %H:%M", time.localtime(self.info.get("played", 0)))]
         return "  ·  ".join(b for b in bits if b)
 

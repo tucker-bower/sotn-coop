@@ -392,7 +392,8 @@ def _couch(pg, quit_at_end=True):
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
         ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
-        ("until", in_game), ("expect", lambda d: d.inputs <= 14, "home to playing in 14 inputs or fewer (11, plus the detours to Game files and shortcuts)"),
+        ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
+        ("until", in_game), ("expect", lambda d: d.inputs <= 15, "home to playing in 15 inputs or fewer (12, plus the detours to Game files and shortcuts)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
@@ -425,6 +426,7 @@ def _solo(pg):
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
+        ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", in_game), ("expect", lambda d: d.inputs <= 4, "home to playing solo in 4 inputs"),
         ("expect", lambda d: len(castles()) == 1, "a new castle"),
@@ -466,6 +468,7 @@ def _startup(pg):
         ("screen", "Welcome"), ("key", pg.K_RETURN),
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
         ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
         ("until", title), ("shot", "title"), ("call", report),
@@ -552,6 +555,7 @@ def _online_host(pg, code_file):
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host: new game
+            ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
@@ -571,7 +575,7 @@ def _online_join(pg, code_file):
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Join your partner
             ("screen", "Join your partner"),
-            *[("key", pg.K_BACKSPACE)] * 24,  # the box starts with the clipboard (here: the host's code)
+            *[("key", pg.K_BACKSPACE)] * 24,  # the box starts with a code on the clipboard (the host's)
             ("type_file", code_file), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("shot", "join-lobby"),
             # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
@@ -579,7 +583,8 @@ def _online_join(pg, code_file):
             ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
-            ("expect", lambda d: _received_castle(), "the joiner keeps a copy of the host's castle (design/M11)"),
+            ("expect", lambda d: (_received_castle() or "").startswith("Tucker_"),
+             "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
             *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]

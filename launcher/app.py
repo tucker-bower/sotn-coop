@@ -80,8 +80,8 @@ Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboa
 Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
 Save at a coffin: it saves both games. Continue loads both.
 
-Castles: every game is a castle, named after the name you typed and when it began
-(Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
+Castles: every game is a castle, with the name you give it when you start it (or the name you type
+in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
 Whoever joins you online keeps a copy of your castle, to play solo or host later.
 Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
 their normal HP.
@@ -948,14 +948,29 @@ class Launcher:
         """The castle list (design/M11): New castle, then castles by last played. Returns
         (castle, fresh), or None (back)."""
         from archive import Castle
-        castles = Castle.all()[:7]
-        if not castles:  # nothing to pick from: a new one
-            return Castle.new(), True
-        items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
-        k = self.ui.menu(heading, items, subtitle)
-        if k is None:
+        while True:
+            castles = Castle.all()[:7]
+            if not castles:  # nothing to pick from: a new one
+                return self.new_castle()
+            items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
+            k = self.ui.menu(heading, items, subtitle)
+            if k is None:
+                return None
+            if k > 0:
+                return castles[k - 1], False
+            picked = self.new_castle()
+            if picked:
+                return picked
+
+    def new_castle(self):
+        """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
+        SOTN's own name entry, at its first save (design/M11). Returns (castle, True), or None."""
+        from archive import Castle
+        name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
+                             footer="Type a name  ·  Enter: start  ·  Esc: back", limit=24)
+        if name is None:
             return None
-        return (Castle.new(), True) if k == 0 else (castles[k - 1], False)
+        return Castle.new(name=name or None), True
 
     def couch(self, act="couch"):
         from archive import Castle
@@ -963,7 +978,7 @@ class Launcher:
             return
         castles = Castle.all()
         if act == "new" or (act == "continue" and not castles):
-            picked = (Castle.new(), True)
+            picked = self.new_castle()
         elif act == "continue":
             picked = (castles[0], False)
         else:
@@ -1070,14 +1085,24 @@ class Launcher:
         except Exception:  # noqa: BLE001
             pass
 
-    def _clip_get(self):
+    def _clip_code(self):
+        """The room code, connect code or ip:port on the clipboard, or "": never the rest of
+        what's there (Tucker, 2026-10-28: the Join box had filled with text from another app)."""
+        from link.rendezvous import find_connect_code
         try:
-            return (pygame.scrap.get_text() or "").strip()
+            return find_connect_code(pygame.scrap.get_text() or "")
         except Exception:  # noqa: BLE001
             return ""
 
     def ask_code(self, heading, subtitle, initial=""):
         """Prompts for a room code or IP:port. Typing, Ctrl+V, or paste from a controller (□ / X)."""
+        return self.ask_text(heading, subtitle, initial, paste=self._clip_code,
+                             footer="Type the code, or Ctrl+V to paste (Square / X on a controller)"
+                                    "  ·  Enter: join  ·  Esc: back")
+
+    def ask_text(self, heading, subtitle, initial="", paste=None, footer="", limit=64):
+        """A line of text: typed (the on-screen keyboard on a phone), or pasted when `paste` gives
+        it (Ctrl+V; Square / X, or A in an empty box, on a controller). Returns it, or None (back)."""
         text = initial
         pygame.key.start_text_input()
         try:
@@ -1096,19 +1121,19 @@ class Launcher:
                             return None
                         if ev.key == pygame.K_BACKSPACE:
                             text = text[:-1]
-                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL):
-                            text = self._clip_get()[:64]
-                    elif ev.type == pygame.TEXTINPUT and len(text) < 64:
+                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL) and paste:
+                            text = paste()[:limit] or text
+                    elif ev.type == pygame.TEXTINPUT and len(text) < limit:
                         if not (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                            text += ev.text
+                            text += ev.text[:limit - len(text)]
                     elif ev.type == pygame.CONTROLLERBUTTONDOWN:
                         if ev.button == pygame.CONTROLLER_BUTTON_B:
                             return None
-                        if ev.button == pygame.CONTROLLER_BUTTON_X:
-                            text = self._clip_get()[:64]
+                        if ev.button == pygame.CONTROLLER_BUTTON_X and paste:
+                            text = paste()[:limit] or text
                         elif ev.button in (pygame.CONTROLLER_BUTTON_A, pygame.CONTROLLER_BUTTON_START):
-                            if not text:
-                                text = self._clip_get()[:64]
+                            if not text and paste:
+                                text = paste()[:limit]
                             else:
                                 return text.strip()
                 self.ui.frame(heading, subtitle)
@@ -1118,7 +1143,7 @@ class Launcher:
                 shown = text + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
                 t = self.ui.big.render(shown, True, INK)
                 self.screen.blit(t, (box.x + 16, box.y + 10))
-                self.ui.footer("Type the code, or Ctrl+V to paste (Square / X on a controller)  ·  Enter: join  ·  Esc: back")
+                self.ui.footer(footer)
                 self.ui.flip()
                 pygame.time.wait(16)
         finally:
@@ -1209,7 +1234,7 @@ class Launcher:
         while True:
             code = self.ask_code("Join your partner",
                                  "Type the room code your partner gives you (like BAT-7K2Q).",
-                                 initial=code or self._clip_get()[:24])
+                                 initial=code or self._clip_code())
             if code is None:
                 return
             try:

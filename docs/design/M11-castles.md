@@ -20,9 +20,11 @@ Players can finish a playthrough with whoever is around. One night solo, the nex
   - `name` is what the host typed at SOTN's own name entry (`SaveInfo.name`, in every save).
   - `created` is when the castle was started. It never changes, so a castle never renames itself.
 - A brand-new castle is shown as `New castle_2026-10-25-21:40` until its first save carries the typed name.
+- **Naming it (Tucker, 2026-10-28; D126):** "New castle" asks for a name first. Left empty (or A on a controller), the castle takes the name typed at SOTN's name entry, as above.
 - **The folder** uses only file-safe characters (`Tucker_2026-10-25-21-40`), because Windows doesn't allow `:`.
 - **The castle list** sorts by last played and shows each castle's area, level and last-played date.
 - A joiner's copy keeps the host's name ("I played on Tucker's castle").
+  The list marks it "your partner's".
 
 ## Shared level (XP)
 SOTN gives kill XP through one function, `func_800FE044(amount, enemyLevel)` (DRA `5D5BC.c`). It scales the XP by the level gap, then adds it to `g_Status.exp`. The game's own `CheckAndDoLevelUp`, which runs every frame, then levels up and plays the animation.

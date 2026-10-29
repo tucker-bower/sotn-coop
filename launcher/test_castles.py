@@ -67,6 +67,10 @@ def main():
         check(x.dir.name == "Tucker_2026-10-25-21-40" and x.dir.exists(),
               f"its folder is file-safe ({x.dir.name})")
         check(x.info["level"] == 3 and x.info["where"] == "Alchemy Laboratory", f"the list shows where and the level ({x.summary()})")
+        named = Castle.new(created=created, name="Our run")
+        named.saved([blob("Tucker")])
+        check(named.name == "Our run_2026-10-25-21:40", f"a castle named when it's made keeps that name ({named.name})")
+        named.tidy()
         later = Castle.new(created=created + 60)
         later.saved([blob("Ann")])
         x.saved([blob("Tucker")])
@@ -79,6 +83,7 @@ def main():
         check(copy.info["id"] == x.info["id"] and copy.info["received"], "B's copy has A's castle id")
         copy.saved([blob("Sam", tag=1), blob("Tucker", tag=2)], theirs=True)
         check(copy.name == x.name, f"and A's castle's name ({copy.name})")
+        check(copy.summary().startswith("your partner's"), f"the list says whose it is ({copy.summary()})")
         again = Castle.receive(meta)
         check(again.dir == copy.dir, "B joins again: the same copy is brought up to date (it only ever received)")
         copy.played_here()  # B plays it solo
