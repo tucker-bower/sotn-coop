@@ -336,6 +336,9 @@ def _bossstarts():
     return bossstarts.B
 
 
+GAME_TITLE, GAME_ENDING = 1, 9  # Game_Title, Game_Ending (include/game.h)
+
+
 def boss_flow(run, b, limit=24000):
     """A walks into the boss; B, at the door, is pulled in; the boss has twice its HP; both fight it
     (worn down: this tests the flow, not the fight); it falls once, both are fine after, and what
@@ -389,9 +392,24 @@ def boss_flow(run, b, limit=24000):
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
                cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
     w.step(300)
+    if b["name"] == "Richter":
+        # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: its own
+        # scene fades to white and the ending plays (BO6's e_cutscene_actors). The scripted kill
+        # does that; the fade takes some 320 frames, so wait it out: both games, the ending.
+        ended = [False, False]
+
+        def both_ended():
+            for k, g in enumerate((a, g2)):
+                ended[k] |= g.read("g_GameState") in (GAME_ENDING, GAME_TITLE)  # its ending, then the title
+            return all(ended)
+        w.until(both_ended, 2400)
+        run.expect(all(ended), "killing Richter ends the game, in both games (as alone)",
+                   ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
+        return
     for g, n in ((a, "A"), (g2, "B")):
         p = g.mailbox("self_presence")
-        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, f"{n} is in play and alive after", flags=p.flags)
+        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, f"{n} is in play and alive after", flags=p.flags,
+                   state=(g.read("g_GameState"), g.read("g_GameStep"), g.read("g_GameEngineStep"), g.read("g_CutsceneHasControl")), where=g.snapshot())
     flags = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
     diff = [i for i in range(0x300) if (flags[0][i] != flags0[0][i] or flags[1][i] != flags0[1][i])
             and flags[0][i] != flags[1][i]]

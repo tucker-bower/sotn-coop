@@ -735,12 +735,16 @@ void PartnerFrame(void) {
     if (ArriveCardSaving()) {
         return; // the game is frozen while its card is written (the card and pads share the port)
     }
-    if (g_GameState != Game_Play || g_GameStep != Play_Default) {
+    if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep == Engine_Init) {
         // A load (a stage, a save, a teleport's arrival) frees every primitive and replaces the
-        // stage's sprite-bank table: the body goes with it, and is made again in play.
+        // stage's sprite-bank table: the body goes with it, and is made again in play. Engine_Init
+        // is the load's end, in Play_Default: it frees every primitive too (a body made before it
+        // lost its own, walked the chains that replaced them to their end and wrote through NULL:
+        // the BIOS's pad driver died).
         s_Reloaded = true;
         s_Made = false;
         s_PrimCount = 0;
+        s_FlashCount = 0;
         return;
     }
     if (g_CoopBodyOff) { // tests: no body (what a game does without one)
@@ -924,7 +928,7 @@ void PartnerDraw(void) {
     s32 i;
 
     if (!PartnerSimulated() || g_GameState != Game_Play || g_GameStep != Play_Default || s_JustMade ||
-        ArriveCardSaving()) {
+        g_GameEngineStep == Engine_Init || ArriveCardSaving()) {
         return;
     }
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;

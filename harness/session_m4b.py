@@ -377,8 +377,10 @@ def guest_sees_warg_death(run):
             break
     run.expect(stage_entities(a).get(WARG_SLOT, (0,))[0] != warg, "B killed the Warg", frames=i)
     run.expect(checked > 0, "its burning (PRIM_ENV) reached B's world", frames_checked=checked)
-    # The frame the effect starts can differ (its first pass is set up and drawn in one frame).
-    run.expect(bad <= 2, "every mirrored PRIM_ENV has its own pool entry, with A's contents", bad=bad,
+    # The frame the effect starts can differ (its first pass is set up and drawn in one frame). Since
+    # M13 the partner's body (Alucard: his afterimages) takes entries of DRA's 16 too: a frame or two
+    # of the burn can find none left.
+    run.expect(bad <= 4, "every mirrored PRIM_ENV has its own pool entry, with A's contents", bad=bad,
                of=checked)
 
 
