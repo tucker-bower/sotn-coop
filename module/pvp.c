@@ -15,7 +15,7 @@
 #define SLOT_LAST 63
 #define SAFE_FRAMES 180 // no PvP in a player's first 3 s in a room (spawn protection)
 
-u32 g_CoopPvpHits; // hits taken from the partner (tests read it: coop.map)
+u32 g_CoopPvpTouches; // frames a partner's attack touched this player (its own invincibility decides a hit; tests)
 static Entity s_Hitter; // the attack, for the player's knockback (PLAYER.unkB8: its side)
 
 // This game's attacks, for the partner: after RenderEntities, with presence.
@@ -68,6 +68,10 @@ void PvpUpdate(void) {
     s32 i, n, px, py, x, y, w, hh;
     s16 dx = 0, dy = 0;
 
+    // Each list the host writes is used for one frame: one lost after an attack ended (the empty
+    // list that clears it) would otherwise leave the attack in place, and it would hit again.
+    n = g_CoopLink.partnerHitCount < COOP_HITS ? g_CoopLink.partnerHitCount : COOP_HITS;
+    g_CoopLink.partnerHitCount = 0;
     if (!PvpNow() || !(PLAYER.hitboxState & 1) || (PLAYER.hitboxState & 0x80) || !PLAYER.hitboxWidth ||
         !PLAYER.hitboxHeight) {
         return;
@@ -77,7 +81,6 @@ void PvpUpdate(void) {
     }
     px = PLAYER.posX.i.hi + (PLAYER.facingLeft ? -PLAYER.hitboxOffX : PLAYER.hitboxOffX);
     py = PLAYER.posY.i.hi + PLAYER.hitboxOffY;
-    n = g_CoopLink.partnerHitCount < COOP_HITS ? g_CoopLink.partnerHitCount : COOP_HITS;
     for (i = 0; i < n; i++) {
         h = &g_CoopLink.partnerHits[i];
         x = h->x + dx - g_Tilemap.scrollX.i.hi;
@@ -99,6 +102,6 @@ void PvpUpdate(void) {
         // a player's attack has none: a plain hit, knocked back (DAMAGEKIND_1)
         PLAYER.hitParams = (h->element & ~0x1F) | DAMAGEKIND_1;
         PLAYER.hitPoints = h->attack;
-        g_CoopPvpHits++;
+        g_CoopPvpTouches++;
     }
 }
