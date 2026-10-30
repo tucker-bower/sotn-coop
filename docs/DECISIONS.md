@@ -675,6 +675,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Choice:** while a boss is alive in a shared room (either game's presence), the share holds at any camera distance. Forming a share still needs the cameras near.
 - **Options considered:** a wider camera limit (arenas vary, it only moves the edge); keeping the boss through the reload (each game would still fight its own copy after a split).
 - **Risk:** entities that cull themselves outside the authority's camera (some projectiles) may vanish before they reach a guest at the far end. The test's boss hits both players at opposite ends; per-boss checks belong to playtests.
+- **Found through it (2026-10-30 evening):** Olrox's second form (enemy 56, 800 HP) wasn't in the boss list, so it had normal HP, no aggro and no boss rules; added. Before D131 the chain test (`m12_chain_first_castle_long`) passed only because the split-and-reload tore his fight down. The test now also keeps both players healed while it waits for a boss's record: its scripted kill (the bot can't finish Olrox) skips his death, and his unkillable parts (enemy 55) stay and hurt.
 - **Aggro itself (D47, D62) is unchanged:** a 50% re-roll every 3 s. Tucker, 2026-10-30: switching is needed for balance; timed or per-attack, either works.
 
 **D132: PvP hits come from the attacker's real hitboxes, sent over the link** (agent-default, 2026-10-30; M15)
