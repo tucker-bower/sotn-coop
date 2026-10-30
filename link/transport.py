@@ -21,7 +21,7 @@ from collections import OrderedDict
 
 from . import relay  # M14: packets through a relay are sealed (link/relay.py)
 
-WIRE_VERSION = 9
+WIRE_VERSION = 10
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
 TAG_PRESENCE = b"PRES"  # payload: presence (0x2C), then _PRES_TAIL
 TAG_EVENTS = b"EVTS"    # payload: first seq (u32), then events
@@ -32,6 +32,7 @@ TAG_CTRL = b"CTRL"      # payload: seq (u32), last (u8), pad (u8), len (u16), ch
 TAG_CACK = b"CACK"      # payload: highest CTRL seq delivered in order (u32)
 TAG_PRIM = b"PRIM"      # payload: zlib of the sender's attack primitives (sprites.c)
 TAG_SPRT = b"SPRT"      # payload: the sender's sprites (CoopSprite records, sprites.c): its attacks, drawn by the partner
+TAG_HITS = b"HITS"      # payload: the sender's attack hitboxes (CoopHit records, pvp.c, M15)
 TAG_BYE = b"BYE "       # payload: the sender's HELO sid (JSON): it is leaving (the app closed, or back to its menu)
 TAG_HELLO = b"HELO"     # payload: JSON {"link": WIRE_VERSION, "patch": target CRC32 or null}, once a second
 
