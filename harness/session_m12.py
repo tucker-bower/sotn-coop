@@ -394,22 +394,28 @@ def boss_flow(run, b, limit=24000):
     if b["name"] != "Richter":
         w.step(300)
     else:
-        # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: its own
-        # scene fades to white and the ending plays (BO6's e_cutscene_actors). The scripted kill
-        # does that; the fade takes some 320 frames, so wait it out. Only in the game whose world
-        # he died in: no castle flag says so, and the partner's game (its own Richter, a guest's
-        # mirror) brings him back at full HP (STATUS "Decisions needed": should it follow?).
-        ended = [False, False]
+        # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: his death
+        # scene fades to white and the ending plays (BO6's e_cutscene_actors). No castle flag
+        # records it: the game he died in tells the partner's (EV_KILLED, boss.c), whose own Richter
+        # dies too and whose scene plays with it; a partner that can't (dead, elsewhere) follows it
+        # into the ending. Either way, the two endings start together. The fade takes some 320 frames.
+        ended, back = [None, None], []
 
-        def one_ended():
+        def both_ended():
             for k, g in enumerate((a, g2)):
-                ended[k] |= g.read("g_GameState") in (GAME_ENDING, GAME_TITLE)  # its ending, then the title
-                if not ended[k]:  # still kept alive: what's left of his attacks lands in the fade
+                if ended[k] is None and g.read("g_GameState") in (GAME_ENDING, GAME_TITLE):  # its ending, then the title
+                    ended[k] = w.t
+                if ended[k] is None:  # still kept alive: what's left of his attacks lands in the fade
                     g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-            return any(ended)
-        w.until(one_ended, 2400)
-        run.expect(any(ended), "killing Richter ends the game he died in (as alone)",
+                    if boss(g):
+                        back.append("AB"[k])
+            return None not in ended
+        w.until(both_ended, 2400)
+        run.expect(None not in ended, "killing Richter ends the game, in both games (as alone)",
                    ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
+        run.expect(not back, "he doesn't come back in either game", back=sorted(set(back)))
+        run.expect(None not in ended and abs(ended[0] - ended[1]) <= 30, "both endings start together",
+                   ended=ended)
         return
     for g, n in ((a, "A"), (g2, "B")):
         p = g.mailbox("self_presence")

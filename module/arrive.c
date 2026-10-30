@@ -79,6 +79,7 @@ static s16 s_BossPullCooldown;
 // A pulled-in game is a follower: nobody is pulled into a follower's scene (each copy used to
 // pull the other back in when its player left the room, forever). After a scene, a short
 // cooldown before this game can be pulled into another.
+#define RICHTER_END_WAIT 1800 // frames a dead player waits for the partner's ending (boss.c), then as before
 #define CS_HOLD_MAX 600      // frames the leader waits for the partner (10 s)
 #define CS_HOLD_WAY_MAX 3600 // ...or 60 s while the partner is on its way: loading, in the opening
                              // video, or still in the prologue (playtest 2026-10-25: Death's scene at
@@ -353,6 +354,11 @@ static bool DeathUpdate(void) {
         return true;
     }
     // Engine_10 at MENU_STEP_INIT: this frame's update would start the Game Over.
+    // Richter died: the game is ending, here too, when the partner's does (boss.c). Its ending
+    // takes it out of play (not fresh) a moment before it says so: wait for that, not a Game Over.
+    if (BossRichterGone() && !s_AllowGameOver && ++s_BusyWait <= RICHTER_END_WAIT) {
+        return false;
+    }
     if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
         return true; // playing alone, the prologue, or the host said so: the game's own Game Over
     }
@@ -422,6 +428,9 @@ static void PullIn(void) {
     if (s_BossPullCooldown) {
         s_BossPullCooldown--;
     }
+    if (BossRichterGone()) { // the game is ending: never pulled (boss.c)
+        return;
+    }
     if (!PartnerInBossFight()) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
@@ -457,7 +466,7 @@ static void CutsceneTrack(void) {
     if (s_CsCooldown) {
         s_CsCooldown--;
     }
-    if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) &&
+    if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) && !BossRichterGone() &&
         ((PartnerFresh() && !(p->flags & PRESENCE_CUTSCENE) && SAME_WORLD(p) &&
           (p->stage != STAGE_ST0 || g_StageId == STAGE_ST0)) ||
          PartnerOnItsWay())) {
@@ -469,7 +478,7 @@ static void CutsceneTrack(void) {
         s_CsCooldown = CS_COOLDOWN;
         // The partner's copy of the scene is still running in this room: both players get
         // control back together (M12: scenes driven by where each player is drift apart).
-        if (PartnerFresh() && (p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner()) {
+        if (PartnerFresh() && (p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner() && !BossRichterGone()) {
             s_CsEndHold = 1;
         }
     }

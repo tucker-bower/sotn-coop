@@ -15,6 +15,7 @@
 #include "boss.h"
 #include "link.h"
 #include "shared.h"
+#include "progress.h"
 
 #define STAGE_SLOTS (TOTAL_ENTITY_COUNT - STAGE_ENTITY_START)
 #define AGGRO_PERIOD 180 // frames between re-rolls of a boss's target (about one attack)
@@ -69,6 +70,22 @@ static u16 s_Picked[STAGE_SLOTS];
 static u32 s_Seed = 0x2545F491; // own generator: the game's rand() must stay untouched
 static u16 s_Frame;
 static u16 s_Switches; // target switches so far (presence.aggroSwitches: tests)
+
+// Richter (BO6) falls for both, like every boss. Killing him ends the game (his death scene, then
+// the ending) and no castle flag records it, so the partner's game would bring him back at full
+// HP. The game whose Richter dies says so (EV_KILLED, b 0). From then until the game leaves play,
+// he's gone in both:
+// - A Richter in this game's own world (a guest's copy is the authority's) is killed as its hit
+//   detection would: its own death scene plays, started within a few frames of the partner's.
+// - No pulls, no scene holds and no respawn at the partner (arrive.c): an arrival reloads his room,
+//   and the game got a fresh Richter and his intro (killing him in it doesn't take).
+// - The first game to reach the ending says so (EV_KILLED, b 1) and the other follows at once:
+//   also one that can't play the scene itself (dead, elsewhere, a guest's copy when the room split).
+#define ENEMY_RICHTER 307
+static bool s_RicGone;   // Richter died, here or in the partner's game
+static bool s_EndSaid;   // this game's ending is told
+static bool s_FollowEnd; // the partner's game entered the ending: ours does too
+u32 g_CoopRichterState;  // gone | follow << 1 | told << 2 (tests read it: coop.map)
 
 bool IsBossEnemy(u16 enemyId) {
     s32 i;
@@ -196,6 +213,40 @@ PfnEntityUpdate BossRealUpdate(const Entity* e) {
     return e->pfnUpdate;
 }
 
+static void RichterFalls(Entity* e) {
+    bool dead = e->hitPoints <= 0 || (e->flags & FLAG_DEAD);
+
+    if (!dead && s_RicGone) {
+        e->hitPoints = 0;
+        e->flags |= FLAG_DEAD;
+    } else if (dead && !s_RicGone) {
+        s_RicGone = true;
+        ProgressEmit(EV_KILLED, ENEMY_RICHTER, 0);
+    }
+}
+
+void BossKilled(u16 enemyId, u32 ending) {
+    if (enemyId != ENEMY_RICHTER || g_GameState != Game_Play) {
+        return;
+    }
+    s_RicGone = true;
+    s_FollowEnd |= ending != 0;
+}
+
+// The ending Richter's death scene starts (BO6's func_us_801A9208): which one by the castle flag.
+static void FollowEnding(void) {
+    if (g_GameStep != Play_Default) {
+        return; // not mid-load
+    }
+    g_PauseAllowed = true;
+    g_unkGraphicsStruct.pauseEnemies = false;
+    D_800978B4 = g_CastleFlags[0xD8] ? 2 : 1;
+    g_GameState = Game_Ending;
+    g_GameStep = Play_Reset;
+}
+
+bool BossRichterGone(void) { return s_RicGone; }
+
 static void ScanBosses(void) {
     Entity* e;
     s32 i;
@@ -206,6 +257,9 @@ static void ScanBosses(void) {
         e = &g_Entities[STAGE_ENTITY_START + i];
         if (!e->entityId || !e->pfnUpdate || !IsBossEnemy(e->enemyId)) {
             continue;
+        }
+        if (e->enemyId == ENEMY_RICHTER && wrap) {
+            RichterFalls(e);
         }
         if (e->hitPoints > 0 && !(e->flags & FLAG_DEAD)) {
             here = true;
@@ -224,6 +278,19 @@ static void ScanBosses(void) {
 
 void BossUpdate(void) {
     s_Frame++;
+    if (g_GameState == Game_Ending) {
+        if (s_RicGone && !s_EndSaid) {
+            ProgressEmit(EV_KILLED, ENEMY_RICHTER, 1);
+        }
+        s_EndSaid = true;
+    }
+    if (g_GameState != Game_Play) { // the ending, the title, a reload: a new game
+        s_RicGone = s_FollowEnd = false;
+        s_EndSaid &= g_GameState == Game_Ending;
+    } else if (s_FollowEnd) {
+        FollowEnding();
+    }
+    g_CoopRichterState = s_RicGone | s_FollowEnd << 1 | s_EndSaid << 2;
     if (g_GameState != Game_Play || g_GameStep != Play_Default) {
         s_BossHere = false;
         return;

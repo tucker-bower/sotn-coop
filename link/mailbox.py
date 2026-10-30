@@ -27,6 +27,7 @@ RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, C
 EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 EV_HIT, EV_HIT2, EV_SPAWN, EV_SPAWN2, EV_SPAWN3, EV_RECORD, EV_TAKEN, EV_EXP = 6, 7, 8, 9, 10, 11, 12, 13
 EV_USED = 14  # M13: an item used up (the fairy revive's Life Apple)
+EV_KILLED = 15  # a boss died in that game, the partner's dies too (Richter)
 FLIP_TELEPORT_IN = 0x80  # Presence.flip_x bit 7: just came in by teleport (a revive; M13)
 CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x107C, 0x108C, 0x1090, 0x1094, 0x2260
 SAVE_DATA_SIZE = 0x11CC

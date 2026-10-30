@@ -293,6 +293,14 @@ void CharacterFrame(void) {
         OffhandPlaceSheet();
     }
     s_PrevLoadFile = g_LoadFile;
+    // Killing Richter (BO6) freezes the game (Engine_5, unk28 0xFF) until his death scene, a stage
+    // entity, lifts it. DRA's US build runs the stage's entities in that freeze only for Alucard:
+    // as Richter or Maria the scene never started, and the game stayed frozen. Run them, as for
+    // Alucard. Only 0xFF: other freezes (Richter's Stopwatch, 4) stop the stage on purpose.
+    if (g_GameState == Game_Play && g_GameEngineStep == Engine_5 && g_unkGraphicsStruct.unk28 == 0xFF &&
+        g_StageId != STAGE_ST0 && CharacterLoaded() != CHAR_ALUCARD) {
+        g_api.o.UpdateStageEntities();
+    }
     Familiar();
     PoisonWater();
     Growth();
