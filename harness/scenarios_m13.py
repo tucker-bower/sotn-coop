@@ -623,3 +623,40 @@ def _pixels_test(ca, cb):
 for _ca in (0, 1, 2):
     for _cb in (0, 1, 2):
         _pixels_test(_ca, _cb)
+
+
+def _afterimage_prims(g):
+    """Player 1's afterimage primitives (slot 1, AluInit's 8 tiles): (flagged, live types)."""
+    e = g.read_bytes("g_Entities", 0xBC, 0xBC)
+    flagged = bool(struct.unpack_from("<I", e, 0x34)[0] & 0x800000)  # FLAG_HAS_PRIMS
+    p, types = g.addr("g_PrimBuf") + struct.unpack_from("<i", e, 0x64)[0] * 0x34, []
+    while p and len(types) < 16:
+        prim = g.read_bytes(p, 0x34)
+        types.append(prim[7])
+        p = struct.unpack_from("<I", prim, 0)[0]
+    return flagged, types
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def m13_body_drop_keeps_player_afterimages(run):
+    """Two Alucards share the afterimage slots (1-3: Swap), so when A's body of B goes (Drop) and
+    is made again, player 1's afterimage primitives stay player 1's: still flagged, none freed (the
+    10-minute soak's crash, 26,000 frames in: they were freed and written to after)."""
+    from link.mailbox import OPT_PARTNER_SIM
+    a = run.s.a
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    run.step(60)
+    off = symbols()["g_CoopBodyOff"]
+    for i in range(12):  # slot 1's counter wraps every few (the first build failed at the 4th)
+        a.write(off, 1)  # the body goes
+        run.step(10)
+        flagged, types = _afterimage_prims(a)
+        run.expect(flagged and len(types) == 8 and all(types), f"A's afterimages are its own after drop {i + 1}",
+                   flagged=flagged, types=types)
+        a.write(off, 0)  # and is made again
+        for f in range(30):  # checked every frame: the body's own frames could take it too
+            run.step(1, ("right" if i % 2 else "left", ""))
+            flagged, types = _afterimage_prims(a)
+            if not flagged:
+                break
+        run.expect(flagged, f"and while the body is out ({i + 1})", frame=f, types=types)

@@ -284,11 +284,15 @@ static void Swap(void) {
     // player's (0). Its afterimages' (1-3: no id, but set up by AluInit and RicInit, slot 1
     // holding their primitives) too when it's another character than player 1: shared, Alucard's
     // afterimage code (8 primitives) walked Richter's or Maria's chain (6) to its end and wrote
-    // through NULL, into the BIOS. Of the same character, they share them, as they always did.
+    // through NULL, into the BIOS. Of the same character, they share them, as they always did:
+    // never swapped, whatever their id (slot 1's is the afterimages' counter, alu_anim.c: when it
+    // wrapped to 0 in the body's frame, player 1's slot stayed in the copy).
     for (i = 0; i < 64; i++, body += 0xBC / 4) {
         u32* ram = (u32*)&g_Entities[i];
-        if (i && (i > E_AFTERIMAGE_3 || !s_OtherChar) && !((Entity*)ram)->entityId &&
-            !((Entity*)body)->entityId) {
+        if (i && i <= E_AFTERIMAGE_3 && !s_OtherChar) {
+            continue;
+        }
+        if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
             continue;
         }
         for (k = 0; k < 0xBC / 4; k++) {
@@ -589,7 +593,7 @@ static void SwapIn(void) {
         GfxBefore();
     }
     for (i = 0; i < 64; i++) {
-        if (i == 0 || g_Entities[i].entityId) {
+        if (i == 0 || (g_Entities[i].entityId && (i > E_AFTERIMAGE_3 || s_OtherChar))) { // not player 1's (Swap)
             g_Entities[i].posX.i.hi += dx;
             g_Entities[i].posY.i.hi += dy;
         }
@@ -666,18 +670,16 @@ static u8 s_PrimHidden[PRIMS]; // hidden by us from the game's pass (it hadn't h
 static s32 s_PrimCount;
 
 // Slot i (the body's slots swapped in) holds primitives of the body's own: an entity's, or its
-// afterimages' (slot 1: no id) if its init made them. A body made as a copy of player 1 has
-// player 1's afterimage chain there (the same primIndex): never the body's to free or change.
+// afterimages' (slot 1: no id) when they're its own (another character: Swap). Of player 1's
+// character, slots 1-3 aren't swapped: they're player 1's own, never the body's to free.
 static bool OwnPrims(s32 i) {
-    const Entity* mine = (const Entity*)g_CoopSpikeBody + i; // player 1's, while swapped in
-
     if (!(g_Entities[i].flags & FLAG_HAS_PRIMS)) {
         return false;
     }
-    if (i == 0 || g_Entities[i].entityId) {
-        return true;
+    if (i && i <= E_AFTERIMAGE_3) { // no id (slot 1's is the afterimages' counter)
+        return s_OtherChar;
     }
-    return i <= E_AFTERIMAGE_3 && !((mine->flags & FLAG_HAS_PRIMS) && mine->primIndex == g_Entities[i].primIndex);
+    return i == 0 || g_Entities[i].entityId;
 }
 
 static void FindPrims(void) {
