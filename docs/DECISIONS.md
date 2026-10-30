@@ -669,3 +669,10 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Also fixed (any build where you play as Richter or Maria):** his death freezes the game (`Engine_5`, `unk28` 0xFF) until his death scene lifts it. DRA's US build runs stage entities in that freeze only for Alucard, so as Richter or Maria the scene never started and the game stayed frozen. The module runs them (`character.c`).
 - Not covered: freeing him (the Holy Glasses, Shaft's orb), which leads to the inverted castle (out of v1.0, D114).
 - Options considered: a partner pulled into the killer's scene (it reloads the room: a fresh Richter); a shared "Richter killed" castle flag only (his room empty for the partner, no ending).
+
+**D131: A shared boss fight stays shared, however far apart the cameras are** (agent-default, 2026-10-30)
+- **The bug:** a room is shared only while the cameras are within a screen of each other (D50). The Doppleganger's arena is two screens wide, so players at opposite ends split it. The far-apart pull (the Succubus fix) then moved one player to the other, which reloads the room, and the boss fight was gone in both games: no boss, no kill. `boss_aggro_switches` had failed since the M13 fixtures because of this, not because of aggro.
+- **Choice:** while a boss is alive in a shared room (either game's presence), the share holds at any camera distance. Forming a share still needs the cameras near.
+- **Options considered:** a wider camera limit (arenas vary, it only moves the edge); keeping the boss through the reload (each game would still fight its own copy after a split).
+- **Risk:** entities that cull themselves outside the authority's camera (some projectiles) may vanish before they reach a guest at the far end. The test's boss hits both players at opposite ends; per-boss checks belong to playtests.
+- **Aggro itself (D47, D62) is unchanged:** a 50% re-roll every 3 s. Tucker, 2026-10-30: switching is needed for balance; timed or per-attack, either works.
