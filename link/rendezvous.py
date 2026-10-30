@@ -105,6 +105,35 @@ def parse_connect_input(text):
     )
 
 
+_CH = f"[{ALPHABET}]"
+_FIND = (  # most specific first: an endpoint code holds what looks like a room code's tail
+    re.compile(rf"(?<![A-Z0-9]){_CH}{{4}}-{_CH}{{4}}-{_CH}{{2}}(?![A-Z0-9])"),
+    re.compile(rf"(?<![A-Z0-9])(?:{'|'.join(ROOM_WORDS)})-?{_CH}{{4}}(?![A-Z0-9])"),
+    re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}(?!\d)"),
+)
+
+
+def find_connect_code(text):
+    """The first room code, connect code or IP:port in some text (the clipboard: a chat message
+    that carries the code, or anything at all), or "". The Join box takes only that, never the
+    rest of the clipboard (Tucker, 2026-10-28: it had filled with text from another app)."""
+    text = (text or "").strip()
+    if len(text) <= 24 and not re.search(r"\s", text):  # the code alone, as retyped (any case)
+        try:
+            parse_connect_input(text)
+            return text
+        except ConnectError:
+            pass
+    for pattern in _FIND:
+        for m in pattern.finditer(text):
+            try:
+                parse_connect_input(m.group())
+                return m.group()
+            except ConnectError:
+                continue
+    return ""
+
+
 def local_ip():
     """The machine's primary LAN IPv4 address, or 127.0.0.1."""
     try:

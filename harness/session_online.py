@@ -54,6 +54,15 @@ def online_connect_codes(run):
         except ConnectError as exc:
             run.expect(len(str(exc)) > 10, f"plain error for {bad!r}", msg=str(exc))
 
+    # The Join box takes only a code from the clipboard, never the rest of it (2026-10-28)
+    from link.rendezvous import find_connect_code
+    for clip, want in (("BAT-7K2Q", "BAT-7K2Q"), ("bat7k2q", "bat7k2q"), (f"my code is {good}, see you", good),
+                       ("Room code BAT-7K2Q: join me", "BAT-7K2Q"), ("host at 192.168.1.10:47811 now", "192.168.1.10:47811"),
+                       ("Just playtested Thor hosted and pc joining and it worked.", ""), ("Fog lamp", ""),
+                       ("Please look at the CATEGORY", ""), (flipped, ""), ("", "")):
+        got = find_connect_code(clip)
+        run.expect(got == want, f"the clipboard {clip[:30]!r} gives {want!r}", got=got)
+
     # Room codes: two single-game OnlineSessions find each other through the relay (a folder
     # here: link/connect.FileRelay) and hole-punch, as they would across the internet.
     from link.connect import FileRelay

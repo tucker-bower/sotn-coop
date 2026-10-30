@@ -24,7 +24,7 @@ CACHE="$MOD/.env/cache"
 PYZIP="$CACHE/python-3.14.2-embed-amd64.zip"
 WINPY="$EMU/SOTN-Coop/venv/Scripts/python.exe"
 VENV_SP="$EMU/SOTN-Coop/venv/Lib/site-packages"
-DLL="$EMU/SOTN-Coop/app/bin/swanstation_libretro.dll"
+DLL="$MOD/.env/bin/swanstation_libretro.dll"         # our patched core (bootstrap.sh swanstation_win)
 OPENBIOS="$MOD/.env/sys/scph5501.bin"           # OpenBIOS with FASTBOOT, built by scripts/bootstrap.sh
 LEGACY_OPENBIOS="$EMU/PCSX-Redux/openbios.bin"  # PCSX-Redux's build: for savestates made before 0.12
 W() { wslpath -w "$1"; }
@@ -57,7 +57,7 @@ cp "$MOD"/link/*.py "$A/link/"
 cp "$MOD"/patcher/{bps,patcher,sectors}.py "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
 # Maria's patches (design/M8 §4): our changes only; the launcher applies them to the player's DXC disc.
 mkdir -p "$A/patcher/maria"
-cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$A/patcher/maria/"
+cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps} "$A/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"
 cp "$ROOT/build/coop/coop.map" "$A/build/coop/"
 cp "$DLL" "$A/bin/"

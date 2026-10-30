@@ -241,6 +241,13 @@ class Emu:
             "hp": self.read(SYMBOLS["g_Status"] + 0x23C, "<i"),
         }
 
+    # --- VRAM: 1024 x 1024 16-bit pixels, both banks (our SwanStation build, M13)
+    def vram_rect(self, x, y, w, h):
+        """Pixels of a VRAM rectangle (y 512 and up: the second bank), row by row, as u16s."""
+        mem = self._session.core.get_memory(libretro.RETRO_MEMORY_VIDEO_RAM)
+        raw = bytes(mem)
+        return [struct.unpack_from(f"<{w}H", raw, ((y + r) * 1024 + x) * 2) for r in range(h)]
+
     # --- memory card 1 (libretro save RAM: 128KB, the raw card image)
     def card(self):
         return bytes(self._session.core.get_memory(libretro.RETRO_MEMORY_SAVE_RAM))

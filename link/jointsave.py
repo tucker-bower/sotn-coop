@@ -17,7 +17,7 @@ import base64
 import struct
 from pathlib import Path
 
-from .mailbox import CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, DEAD, SAVE_DATA_SIZE
+from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, DEAD, IN_PLAY, SAVE_DATA_SIZE
 
 MAGIC, VERSION = b"COOPSAVE", 1
 _INFO = 0x200                      # SaveData.info (include/game.h)
@@ -27,6 +27,7 @@ _LEVEL, _EXP = 0x238 + 0x284, 0x238 + 0x288  # SaveData.status (PlayerStatus) .l
 BOTH_DEAD_FRAMES = 4               # ticks both must be waiting before the launcher acts
 LINKED_FRAMES = 600                # a partner heard from within 10 s (module: PartnerLinked)
 PARTNER_SAVE_FRAMES = 300          # waiting this long for the partner's save: save alone
+ARRIVE_AFTER_FRAMES = 60           # in play this long after a load before a test castle's arrive
 
 
 def save_room(blob):
@@ -91,6 +92,8 @@ class JointSave:
         self.saves = 0        # joint saves written
         self.resumed = False  # the session file was loaded in this run
         self._pending_frames = 0
+        self.start = None     # (stage, room, x, y): a test castle's start, until its first save
+        self._arrive = []     # [mailbox, frames in play since its save loaded, start]
 
     def _write(self, blobs):
         """blobs: [slot 1 (this machine's player), slot 2 or None (keep the file's)]."""
@@ -101,11 +104,26 @@ class JointSave:
             blobs = [blobs[0]] + old[1:2]
         write_session(self.path, blobs)
         self.saves += 1
+        self.start = None
         if self.on_write:
             self.on_write(blobs)
 
+    def _tick_arrive(self):
+        """After a load with a start: each game goes there once its save has loaded and it has
+        been in play for a moment (an arrive during the load is lost)."""
+        for a in list(self._arrive):
+            q = a[0].self_presence()
+            if not (q.flags & IN_PLAY) or q.flags & BUSY:
+                a[1] = 0 if a[1] is None else a[1]  # loading: from here on, count
+            elif a[1] is not None:
+                a[1] += 1
+                if a[1] >= ARRIVE_AFTER_FRAMES:
+                    a[0].command(CMD_ARRIVE, *a[2])
+                    self._arrive.remove(a)
+
     def tick(self):
         """Once per frame, after the game host(s)."""
+        self._tick_arrive()
         if self.host is not None:
             self._tick_online()
             return
@@ -172,6 +190,8 @@ class JointSave:
                 self.dead_frames = 0
                 m.put_save(yours)
                 m.command(CMD_LOAD_SAVE)
+                if msg.get("start"):  # the host's test castle: arrive where it starts
+                    self._arrive = [[m, None, tuple(msg["start"])]]
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)
@@ -220,11 +240,13 @@ class JointSave:
         """Loads the session file into both games (from the title screen, or in play)."""
         self.resumed = True
         blobs = both_slots(read_session(self.path))
+        self._arrive = [[m, None, tuple(self.start)] for m in self.mb] if self.start else []
         if self.host is not None:
             self.mb[0].put_save(blobs[0])
             self.mb[0].command(CMD_LOAD_SAVE)
             b64 = lambda b: base64.b64encode(b).decode("ascii")
-            self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0])})
+            self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]),
+                                    "start": list(self.start) if self.start else None})
             return
         for m, blob in zip(self.mb, blobs):
             m.put_save(blob)

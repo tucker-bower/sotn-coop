@@ -20,6 +20,8 @@ static char s_CoopFile[] __attribute__((section(".coop-boot-data"))) = "\\COOP.B
 static char s_RicFile[] __attribute__((section(".coop-boot-data"))) = "\\COOPRIC.BIN;1";
 static char s_AluFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\ARC_F.BIN;1";
 static char s_RicHudFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\F_GAME2.BIN;1";
+static char s_RicPartnerFile[] __attribute__((section(".coop-boot-data"))) = "\\COOPRICP.BIN;1";
+static char s_AluHudFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\F_GAME.BIN;1";
 
 // Reads a disc file, or `sectors` of it from sector `skip` (0: all of it), to dst. file gets its
 // CdlFILE (size 0: not on the disc). retry: until it's found (COOP.BIN must be there).
@@ -48,12 +50,20 @@ void BOOT CoopBoot(void) {
     *(volatile u32*)0x1F801060 |= 0xE00; // RAM_SIZE: expose 8MB
     ReadFile(s_CoopFile, (void*)COOP_ADDR, &file, true, 0, 0);
     // Our Richter (design/M8): character.c points Richter's CD load at it, and a copy stays in
-    // 8MB RAM with Alucard's sprites, to draw a partner who plays another character (puppet.c).
+    // 8MB RAM with Alucard's sprites (ARC_F.BIN), for an Alucard partner in another character's
+    // game (partner.c's AluHeader).
     // Now is the only safe time to read them: in play, the CD streams the music.
-    ReadFile(s_RicFile, (void*)PUPPET_RIC_ADDR, &g_CoopRicFile, false, 0, 0);
-    ReadFile(s_AluFile, (void*)PUPPET_ALU_ADDR, &file, false, 0, 0);
-    // Richter's palettes (0x100-0x13F: one sector of his HUD file, from 0x40000).
-    ReadFile(s_RicHudFile, (void*)PUPPET_RICPAL_ADDR, &file, false, 0x40000 >> 11, 1);
+    ReadFile(s_RicFile, (void*)COOPRIC_ADDR, &g_CoopRicFile, false, 0, 0);
+    ReadFile(s_AluFile, (void*)ARC_F_ADDR, &file, false, 0, 0);
+    // Richter's graphics file, for a Richter or Maria partner's own graphics in VRAM's second bank
+    // (design/M13 step 3)...
+    ReadFile(s_RicHudFile, (void*)FGAME2_ADDR, &file, false, 0, 0);
+    // ...and the partner's Richter, linked to run there (richter/ric_partner.ld).
+    ReadFile(s_RicPartnerFile, (void*)PARTNER_RIC_ADDR, &g_CoopRicPartnerFile, false, 0, 0);
+    // Alucard's graphics file, for an Alucard partner in Richter's or Maria's game: its strips,
+    // then its palettes (from 0x40000), apart.
+    ReadFile(s_AluHudFile, (void*)FGAME_GFX_ADDR, &file, false, 0, 0x40000 >> 11);
+    ReadFile(s_AluHudFile, (void*)FGAME_PAL_ADDR, &file, false, 0x40000 >> 11, 0x2000 >> 11);
     FlushCache(); // just loaded code: the I-cache and recompilers only see it after a flush (D17)
     InitializePads();
 }

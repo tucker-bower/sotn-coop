@@ -16,12 +16,22 @@
 #define PRESENCE_CUTSCENE 64 // a cutscene has control (design/M5)
 #define PRESENCE_CS_FOLLOWER 128 // in a cutscene because the partner's pulled it in: never pulled into
 
+// CoopPresence.flipX's bit 7 (it uses bit 1): this player just came in by teleport (a revive), so
+// the partner's copy of it starts with its character's teleport-in (M13 step 4).
+#define FLIP_TELEPORT_IN 0x80
+// Bit 6: this player's one-button moves are on (OPT_SHORTCUTS): the partner's copy of it reads its
+// buttons the same way (Richter's and Maria's moves check the option in their own code).
+#define FLIP_SHORTCUTS 0x40
+
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24
 // ...and their primitives (most attacks draw with them: Alucard's subweapons, Richter's whip):
 // a Primitive without its next pointer, positions in the room.
 #define COOP_PRIMS 32
 #define COOP_PRIM_SIZE 0x30
+#define PRIM_TAG (0x2B - 4)  // its p3 (a pad byte): FAMILIAR_TAG for a familiar's (M13 step 4)
+#define FAMILIAR_TAG 0xFA
+#define FAMILIAR_IDS 0xD0    // the familiars' entity ids, 0xD0-0xDF
 typedef struct {
     /* 0x00 */ s16 animSet;
     /* 0x02 */ u16 animCurFrame;
@@ -47,6 +57,49 @@ typedef struct {
 #define WEAPON_OVL_SIZE 0x3000    // the overlay, as at 0x8017A000 (hand 0) / 0x8017D000 (hand 1)
 #define WEAPON_SHEET_SIZE 0x4000  // its tile sheet: 0x40 x 0x80 VRAM words (256 x 128, 4bpp)
 #define WEAPON_CLUT_SIZE 0x300    // its 24 palettes (0x110 + hand * 24 on)
+// M13: VRAM's second bank (lines 512-1023, our SwanStation build: patches/swanstation.patch),
+// for the partner's graphics. An upload or fill with VRAM_BANK in its y goes there; a primitive
+// with TPAGE_BANK in its tpage reads its texture from there, and one with CLUT_BANK in its clut
+// its palette (rows 512 and up). Drawing and the display stay in the first bank.
+#define VRAM_BANK 0x200
+#define TPAGE_BANK 0x4000
+#define CLUT_BANK 0x8000
+
+// M13: the partner's status (g_Status from hp to statsTotal, and from subWeapon to the elements:
+// stats, level, equipment), for the partner's body (partner.c). The host reads it from the
+// partner's game and writes it here, magic last, when it changes.
+#define STATUS_PARTNER_ADDR 0x80730000
+#define STATUS_MAGIC 0x53544154 // 'STAT'
+#define STATUS_A 0x80097BA0     // g_Status.hp
+#define STATUS_A_SIZE 0x48
+#define STATUS_B 0x80097BFC     // g_Status.subWeapon
+#define STATUS_B_SIZE 0x34
+typedef struct {
+    /* 0x00 */ u32 magic; // STATUS_MAGIC once written
+    /* 0x04 */ u8 a[STATUS_A_SIZE];
+    /* 0x4C */ u8 b[STATUS_B_SIZE];
+} CoopStatus; // size = 0x80
+
+// M13 step 4: a player's familiar, for the partner to draw it (familiar.c): each game copies its
+// familiar's overlay, tile sheet and palettes here when it loads; the host sends the copy when its
+// seq changes and writes the partner's at FAMILIAR_PARTNER_ADDR.
+#define FAMILIAR_SELF_ADDR 0x807C0000
+#define FAMILIAR_PARTNER_ADDR 0x807E0000
+#define FAMILIAR_MAGIC 0x4C4D4146 // 'FAML'
+#define FAMILIAR_OVL_SIZE 0xA000   // as at 0x80170000
+#define FAMILIAR_SHEET_SIZE 0x6000 // (0x2C0, 0x100) 0x40 x 0x80 VRAM words, then (0x2C0, 0x180) 0x20 x 0x80
+#define FAMILIAR_CLUT_SIZE 0x400   // palettes 0x140-0x15F
+typedef struct {
+    /* 0x00 */ u32 magic;   // FAMILIAR_MAGIC once written
+    /* 0x04 */ u32 seq;     // bumped with each new copy
+    /* 0x08 */ u32 servant; // g_ServantLoaded: 0 none
+    /* 0x0C */ u32 bank;    // its sprite bank (g_api.o.spriteBanks[0x14]), as it ran
+    /* 0x10 */ u32 pad[4];
+    /* 0x20 */ u8 ovl[FAMILIAR_OVL_SIZE];
+    /* 0xA020 */ u16 sheet[FAMILIAR_SHEET_SIZE / 2];
+    /* 0x10020 */ u16 clut[FAMILIAR_CLUT_SIZE / 2];
+} CoopFamiliar; // size = 0x10420
+
 typedef struct {
     /* 0x00 */ u32 magic; // WEAPON_MAGIC once written
     /* 0x04 */ u32 seq;   // bumped with each new copy (the host sends on a change)
@@ -102,6 +155,8 @@ typedef struct {
 #define EV_RECORD 11 // a: time attack event (0xFFFF: b is D_8003CB00's bits), b: record
 #define EV_TAKEN 12  // a: slot | entityId << 8: the guest collected that drop; remove it, no reward
 #define EV_EXP 13    // b: XP this game gained from a kill (one shared level, design/M11)
+#define EV_USED 14   // a: item id: used up here (M13's fairy revive: the Life Apple), gone in the shared bag too
+#define EV_KILLED 15  // a: enemy definition: this game's boss died (Richter: no castle flag records it), the partner's dies too; b 1: and this game entered the ending
 #define EV_SPAWN3 10 // a: slot range (0: 160-191, 1: 224-255) | velocityY >> 14 << 8, b: castleFlag
 
 typedef struct {
@@ -173,12 +228,15 @@ typedef struct {
     /* 0x21824 */ u8 selfPrims[COOP_PRIMS][COOP_PRIM_SIZE];
     /* 0x21E24 */ u32 partnerPrimCount;   // host writes
     /* 0x21E28 */ u8 partnerPrims[COOP_PRIMS][COOP_PRIM_SIZE];
-} CoopLink; // size = 0x22428
+    /* 0x22428 */ u32 selfPad;    // game writes every frame: its player's buttons (M13: the partner's
+    /* 0x2242C */ u32 partnerPad; // host writes with each presence   copy runs on them, partner.c)
+} CoopLink; // size = 0x22430
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
+#define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0
@@ -186,6 +244,7 @@ typedef struct {
 #define CHAR_MARIA 2
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
+#define OPT_PARTNER_SIM 2 // M13 spike: the partner simulated by the game's own player code (partner.c)
 // Alucard's spell on each right-stick direction (up, right, down, left): 4 bits each from this
 // bit, SpellIds + 1 (0: none).
 #define OPT_SPELL_SHIFT 8
@@ -205,8 +264,9 @@ typedef struct {
     u32 ovlSize;   // bytes, loaded at Richter's overlay address (0x8013C000)
     u32 vhSize;    // the sound bank, replacing SD_RIH (0: keep Richter's)
     u32 vbSize;
-    u32 pad[3];
-} CharBlob; // size = 0x20, then the overlay, the .VH and the .VB, each 4-byte aligned
+    u32 partnerSize; // her build as the partner (design/M13 step 3: MARIAP.BIN), 0: none
+    u32 pad[2];
+} CharBlob; // size = 0x20, then the overlay, the .VH, the .VB and the partner build, each 4-byte aligned
 extern CoopLink g_CoopLink;
 
 #endif

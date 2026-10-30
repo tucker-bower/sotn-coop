@@ -336,6 +336,9 @@ def _bossstarts():
     return bossstarts.B
 
 
+GAME_TITLE, GAME_ENDING = 1, 9  # Game_Title, Game_Ending (include/game.h)
+
+
 def boss_flow(run, b, limit=24000):
     """A walks into the boss; B, at the door, is pulled in; the boss has twice its HP; both fight it
     (worn down: this tests the flow, not the fight); it falls once, both are fine after, and what
@@ -388,10 +391,36 @@ def boss_flow(run, b, limit=24000):
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
                cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
-    w.step(300)
+    if b["name"] != "Richter":
+        w.step(300)
+    else:
+        # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: his death
+        # scene fades to white and the ending plays (BO6's e_cutscene_actors). No castle flag
+        # records it: the game he died in tells the partner's (EV_KILLED, boss.c), whose own Richter
+        # dies too and whose scene plays with it; a partner that can't (dead, elsewhere) follows it
+        # into the ending. Either way, the two endings start together. The fade takes some 320 frames.
+        ended, back = [None, None], []
+
+        def both_ended():
+            for k, g in enumerate((a, g2)):
+                if ended[k] is None and g.read("g_GameState") in (GAME_ENDING, GAME_TITLE):  # its ending, then the title
+                    ended[k] = w.t
+                if ended[k] is None:  # still kept alive: what's left of his attacks lands in the fade
+                    g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+                    if boss(g):
+                        back.append("AB"[k])
+            return None not in ended
+        w.until(both_ended, 2400)
+        run.expect(None not in ended, "killing Richter ends the game, in both games (as alone)",
+                   ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
+        run.expect(not back, "he doesn't come back in either game", back=sorted(set(back)))
+        run.expect(None not in ended and abs(ended[0] - ended[1]) <= 30, "both endings start together",
+                   ended=ended)
+        return
     for g, n in ((a, "A"), (g2, "B")):
         p = g.mailbox("self_presence")
-        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, f"{n} is in play and alive after", flags=p.flags)
+        run.expect(p.flags & IN_PLAY and not p.flags & DEAD, f"{n} is in play and alive after", flags=p.flags,
+                   state=(g.read("g_GameState"), g.read("g_GameStep"), g.read("g_GameEngineStep"), g.read("g_CutsceneHasControl")), where=g.snapshot())
     flags = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
     diff = [i for i in range(0x300) if (flags[0][i] != flags0[0][i] or flags[1][i] != flags0[1][i])
             and flags[0][i] != flags[1][i]]
@@ -416,92 +445,62 @@ for _b in _bossstarts():
 SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
 
 
-@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice: his whip's sprites are in both games
-def m12_partner_attack_drawn(run):
-    """Note 2, phase 1: A (Richter) whips next to B (Richter): B gets A's sprites and draws them (the
-    same frame of B, from the same state, rendered with and without them differs). DRA's
-    subweapons draw with primitives, not sprites: phase 1b."""
+def attack_pixels(run, chars, pad, every=30, arm=None, setup=None, samples=(4, 8, 12, 16)):
+    """M13 (criterion 2): what A adds to B's screen (partner_pixels: B drawn with and without its
+    partner), standing, then mid-attack; A's body in B's game draws its own attacks, so the attack
+    adds to it. arm(a): set A up for the attack (a subweapon) before each press. pad: the press
+    (held 2 frames of each `every`), or a function (try, frame) giving A's pad (a sequence)."""
+    from link.mailbox import BUSY, IN_PLAY
     from session_m8 import as_characters
+    from session_scenarios import partner_pixels
     from session_shared import into_hall
     a, b = run.s.a, run.s.b
-    as_characters(run, 1, 1)
+    if setup:  # before the load (it loads A's weapon)
+        setup(a)
+    if chars != (0, 0) or setup:
+        as_characters(run, *chars)
     into_hall(run)
-    got = None
-    for i in range(240):
-        run.step(1, ("square" if i % 30 < 2 else "", ""))
-        n = b.mailbox("partner_sprite_count")
-        if n:
-            got = n
+    for _ in range(900):  # B in play in A's room (its arrival can still be loading)
+        run.step(1)
+        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if pa.room == pb.room and pb.flags & IN_PLAY and not pb.flags & BUSY:
             break
-    run.expect(got, "B receives A's sprites (the whip)")
-    run.step(2, ("square", ""))  # a fresh crack...
-    run.step(8)                  # ...held out (the whip's segments are blank when it's in)
-    b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
-    n = b.mailbox("partner_sprite_count")
-    sprites = a.mailbox("self_sprites")
-    state = b.save_state()  # holds the 15 sprites
-    b.mailbox("write_partner_sprites", b"")
-    run.s.b.step(10)  # the screen shows a frame a few frames late
-    shot_without = b.screenshot()
-    without = shot_without.tobytes()
-    b.load_state(state)
-    run.s.b.step(10)
-    from module import symbols
-    placed_with = (b.read(symbols()["g_CoopSpritesDrawn"], "<I"), b.read(symbols()["g_CoopSpritesWhy"], "<I"))
-    shot_with = b.screenshot()
-    with_sprites = shot_with.tobytes()
-    out = TOOLS["out"] / run.name
-    out.mkdir(parents=True, exist_ok=True)
-    shot_with.save(out / "b_with.png")
-    shot_without.save(out / "b_without.png")
-    a.screenshot().save(out / "a.png")
-    from module import symbols
-    run.expect(with_sprites != without, "B draws them", sprites=n,
-               placed_with=placed_with,
-               partner_char=b.mailbox("partner_presence").character, mine=b.mailbox("self_presence").character,
-               sets=sorted({hex(int.from_bytes(sprites[k:k + 2], "little")) for k in range(0, len(sprites), 0x14)}))
+    run.step(30)
+    box, idle, _ = partner_pixels(b)
+    best, wide = 0, 0
+    width = (box[2] - box[0]) if box else 0
+    for i in range(4 * every):
+        if arm:
+            arm(a)
+        now = pad(i // every, i % every) if callable(pad) else pad if i % every < 2 else ""
+        run.step(1, (now, ""))
+        if i % every in samples:  # the attack's frames
+            bb, n, _ = partner_pixels(b)
+            best = max(best, n)
+            wide = max(wide, (bb[2] - bb[0]) - width if bb else 0)
+    # A weapon, a whip, a dagger reach out of the body: wider, or more pixels than standing
+    return idle, best if wide < 8 else max(best, idle + 21)
+
+
+@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice
+def m12_partner_attack_drawn(run):
+    """Note 2 (since M13: the partner's body draws it): A (Richter) whips next to B (Richter), and
+    B's screen shows it: A adds more to B's picture mid-whip than standing."""
+    idle, whip = attack_pixels(run, (1, 1), "square")
+    run.expect(idle > 100, "B draws A", pixels=idle)
+    run.expect(whip > idle + 50, "and A's whip", standing=idle, whipping=whip)
 
 
 @session_scenario()
 def m12_partner_dagger_drawn(run):
-    """Note 2, phase 1b: A (Alucard) throws daggers next to B: B gets the dagger's primitives and
-    draws them (the same frame of B, from the same state, with and without them, differs)."""
-    from session_shared import into_hall
-    a, b = run.s.a, run.s.b
-    into_hall(run)
-    got = 0
-    for i in range(240):
+    """Note 2, phase 1b (since M13: the partner's body throws it): A (Alucard) throws daggers next
+    to B, and B's screen shows them."""
+    def arm(a):
         a.write(SUBWEAPON_ID, DAGGER, "<i")
         a.write(HEARTS_ADDR, 99, "<i")
-        run.step(1, ("up+square" if i % 30 < 2 else "", ""))
-        if i % 30 == 8 and a.mailbox("self_prims"):
-            got = len(a.mailbox("self_prims")) // 0x30
-            break
-    run.expect(got, "A's dagger has primitives to send", n=got)
-    run.step(1)
-    b.unlink()
-    state = b.save_state()  # holds A's primitives
-    b.mailbox("write_partner_prims", b"")
-    run.s.b.step(10)  # the screen shows a frame a few frames late
-    without = b.screenshot()
-    from emu import SYMBOLS
-    buf = b.read_bytes(SYMBOLS["g_PrimBuf"], 0x34 * 0x500)
-    marked = [(k, buf[k * 0x34 + 7], hex(int.from_bytes(buf[k * 0x34 + 0x32:k * 0x34 + 0x34], "little")))
-              for k in range(0x500) if buf[k * 0x34 + 0x2B] == 0xC5]
-    pool_without = (len(marked), sum(1 for m in marked if not int(m[2], 16) & 8), marked[:3])
-    b.load_state(state)
-    run.s.b.step(10)
-    with_prims = b.screenshot()
-    out = TOOLS["out"] / run.name
-    out.mkdir(parents=True, exist_ok=True)
-    with_prims.save(out / "b_with.png")
-    without.save(out / "b_without.png")
-    import struct
-    raw = b.read_bytes("g_Entities", 0xBC * 64)
-    b_own = [(k, hex(struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0])) for k in range(1, 64)
-             if struct.unpack_from("<H", raw, k * 0xBC + 0x26)[0]]
-    run.expect(with_prims.tobytes() != without.tobytes(), "B draws them", prims=got, b_entities=b_own,
-               b_pad_sub=b.read(SUBWEAPON_ID, "<i"), pool_without=pool_without)
+    idle, thrown = attack_pixels(run, (0, 0), "up+square", arm=arm)
+    run.expect(idle > 100, "B draws A", pixels=idle)
+    run.expect(thrown > idle + 20, "and A's daggers", standing=idle, throwing=thrown)
 
 
 # --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------

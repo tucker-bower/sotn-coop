@@ -166,11 +166,25 @@ EXP_NEXT = [0, 0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250, 3850, 
 S = []
 
 
-def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note=""):
+def scene(name, area, stage, arrive, walk, like, unset=(), check=None, note="", undone=()):
+    """undone: events of `like`'s row not done yet (the scene comes before that boss)."""
     row = dict(next(b for b in B if b["name"] == like))
     row.update(name=name, area=area, stage=stage, arrive=arrive, walk=walk, check=check, note=note,
-               unset=tuple(unset), scene=True)
+               unset=tuple(unset), scene=True, done=[d for d in row["done"] if d not in undone],
+               like=like, before=bool(undone))
     S.append(row)
+
+
+def story_order(b):
+    """Where a boss or scene start comes in a playthrough: by its boss; a scene after its boss's
+    fight, or before it if the scene comes first."""
+    k = next(i for i, x in enumerate(B) if x["name"] == b.get("like", b["name"]))
+    return (k, (-1 if b.get("before") else 1) if b.get("scene") else 0)
+
+
+# Walking right meets Maria (the time attack event "maria" is her first meeting).
+scene("Maria in the Marble Gallery", "Marble Gallery", "NO0", (80, 728, 135), "right", "Doppleganger10",
+      undone=["maria"])
 
 
 # From the right: her scene steers Alucard left (from the left he walks straight back out, and

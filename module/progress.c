@@ -11,6 +11,7 @@
 #include "flag_gated.h"
 #include "link.h"
 #include "progress.h"
+#include "boss.h"
 #include "shared.h"
 
 void AddToInventory(u16 id, EquipKind kind);                 // DRA
@@ -276,6 +277,14 @@ static void Apply(const CoopEvent* ev) {
         break;
     case EV_ITEM:
         AddToInventory(ev->a, ev->b);
+        break;
+    case EV_USED: // the partner used it up (M13's fairy revive): one fewer in the shared bag
+        if (ev->a < LEN(g_Status.equipHandCount) && g_Status.equipHandCount[ev->a]) {
+            g_Status.equipHandCount[ev->a]--;
+        }
+        break;
+    case EV_KILLED:
+        BossKilled(ev->a, ev->b);
         break;
     case EV_GRANT:
         func_800FE044(ev->b, ev->a);

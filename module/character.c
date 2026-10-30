@@ -145,9 +145,9 @@ static void CopyOverlay(const CharBlob* b) {
     FlushCache();
 }
 
-// Our Richter's file, as CoopBoot read it into expansion RAM (for the partner's puppet).
+// Our Richter's file, as CoopBoot read it into expansion RAM.
 static const FarTrailer* RicTrailer(void) {
-    return Trailer((const u8*)PUPPET_RIC_ADDR, g_CoopRicFile.size);
+    return Trailer((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
 }
 
 // Richter's load reads our Richter (COOPRIC.BIN) in the castle, and the retail RIC.BIN in the
@@ -264,7 +264,7 @@ void CharacterFrame(void) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
-            PlaceFar((const u8*)PUPPET_RIC_ADDR, g_CoopRicFile.size);
+            PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
         }
     }
     // ...and its sound bank, once the chain that loads Richter's (SD_RIH, then SD_MAR) is done.
@@ -293,6 +293,14 @@ void CharacterFrame(void) {
         OffhandPlaceSheet();
     }
     s_PrevLoadFile = g_LoadFile;
+    // Killing Richter (BO6) freezes the game (Engine_5, unk28 0xFF) until his death scene, a stage
+    // entity, lifts it. DRA's US build runs the stage's entities in that freeze only for Alucard:
+    // as Richter or Maria the scene never started, and the game stayed frozen. Run them, as for
+    // Alucard. Only 0xFF: other freezes (Richter's Stopwatch, 4) stop the stage on purpose.
+    if (g_GameState == Game_Play && g_GameEngineStep == Engine_5 && g_unkGraphicsStruct.unk28 == 0xFF &&
+        g_StageId != STAGE_ST0 && CharacterLoaded() != CHAR_ALUCARD) {
+        g_api.o.UpdateStageEntities();
+    }
     Familiar();
     PoisonWater();
     Growth();

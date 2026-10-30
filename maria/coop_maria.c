@@ -21,6 +21,23 @@ void (*CoopMarHooks[1])(void) = {MARIA_Load};
 
 int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
 
+#ifdef COOP_PARTNER
+// The partner's Maria (design/M13 step 3): her palettes, apart from the game's (coop_maria.h).
+u16 g_CoopPartnerClut[3][0x1000];
+
+// Her init as the partner (maria/maria_partner.ld's trailer: the module calls it). Her own
+// (mariapsp-forpsx's MarPsxInit) also patches DRA's HUD and sound data, once: in another
+// character's game that would be player 1's; here only her load (its uploads go to the second
+// bank) and the damage functions her attacks look up.
+void MarInit(s16 initParam);
+void CoopMarPartnerInit(u16 initParam) {
+    MARIA_Load();
+    g_api.CalcDealDamageMaria = g_api.func_800FD664;
+    g_api.CalcPlayerDamageMaria = g_api.CalcPlayerDamage;
+    MarInit(initParam);
+}
+#endif
+
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
     if (subweapon == COOP_MAR_BASIC) {
         attack += g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;

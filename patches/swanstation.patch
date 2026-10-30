@@ -1,0 +1,287 @@
+diff --git a/src/core/gpu.cpp b/src/core/gpu.cpp
+index bd443b7..0dc77d3 100644
+--- a/src/core/gpu.cpp
++++ b/src/core/gpu.cpp
+@@ -246,7 +246,7 @@ bool GPU::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool upda
+     if (m_blitter_state == BlitterState::WritingVRAM)
+     {
+       const VRAMTransfer& vt = m_vram_transfer;
+-      valid = valid && vt.x <= VRAM_WIDTH_MASK && vt.y <= VRAM_HEIGHT_MASK && vt.width != 0 &&
++      valid = valid && vt.x <= VRAM_WIDTH_MASK && vt.y <= (VRAM_HEIGHT_MASK | VRAM_BANK_FLAG) && vt.width != 0 &&
+               vt.width <= VRAM_WIDTH && vt.height != 0 && vt.height <= VRAM_HEIGHT &&
+               m_blit_buffer.size() + m_blit_remaining_words ==
+                 (static_cast<uint32_t>(vt.width) * static_cast<uint32_t>(vt.height) + 1) / 2;
+@@ -279,11 +279,18 @@ bool GPU::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool upda
+       HeapArray<uint16_t, VRAM_WIDTH * VRAM_HEIGHT> temp;
+       sw.DoBytes(temp.data(), VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t));
+       UpdateVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT, temp.data(), false, false);
++      // co-op: the second bank (states from before it: empty)
++      if (sw.GetVersion() >= 58)
++        sw.DoBytes(temp.data(), VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t));
++      else
++        std::memset(temp.data(), 0, VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t));
++      UpdateVRAM(0, VRAM_BANK_FLAG, VRAM_WIDTH, VRAM_HEIGHT, temp.data(), false, false);
+     }
+     else
+     {
+       ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+       sw.DoBytes(m_vram_ptr, VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t));
++      sw.DoBytes(m_vram_ptr + VRAM_WIDTH * VRAM_BANK_LINES, VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t)); // co-op
+     }
+   }
+ 
+diff --git a/src/core/gpu.h b/src/core/gpu.h
+index 0a0959f..a4c31bc 100644
+--- a/src/core/gpu.h
++++ b/src/core/gpu.h
+@@ -22,6 +22,7 @@ class Timers;
+ class GPU
+ {
+ public:
++  uint16_t* GetVRAMPointer() const { return m_vram_ptr; } // co-op: both banks (libretro VIDEO_RAM, tests)
+   enum class BlitterState : uint8_t
+   {
+     Idle,
+@@ -349,7 +350,7 @@ protected:
+ 
+   struct DrawMode
+   {
+-    static constexpr uint16_t PALETTE_MASK = UINT16_C(0b0111111111111111);
++    static constexpr uint16_t PALETTE_MASK = UINT16_C(0b1111111111111111); // bit 15: VRAM's second bank (co-op)
+     static constexpr uint32_t TEXTURE_WINDOW_MASK = UINT32_C(0b11111111111111111111);
+ 
+     // original values
+diff --git a/src/core/gpu_commands.cpp b/src/core/gpu_commands.cpp
+index 3e2732a..da95365 100644
+--- a/src/core/gpu_commands.cpp
++++ b/src/core/gpu_commands.cpp
+@@ -448,7 +448,7 @@ bool GPU::HandleFillRectangleCommand()
+ 
+   const uint32_t color = FifoPop() & 0x00FFFFFF;
+   const uint32_t dst_x = FifoPeek() & 0x3F0;
+-  const uint32_t dst_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
++  const uint32_t dst_y = (FifoPop() >> 16) & (VRAM_HEIGHT_MASK | VRAM_BANK_FLAG); // co-op: bit 9, the bank
+   const uint32_t width = ((FifoPeek() & VRAM_WIDTH_MASK) + 0xF) & ~0xF;
+   const uint32_t height = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
+ 
+@@ -466,7 +466,7 @@ bool GPU::HandleCopyRectangleCPUToVRAMCommand()
+   m_fifo.RemoveOne();
+ 
+   const uint32_t dst_x = FifoPeek() & VRAM_WIDTH_MASK;
+-  const uint32_t dst_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
++  const uint32_t dst_y = (FifoPop() >> 16) & (VRAM_HEIGHT_MASK | VRAM_BANK_FLAG); // co-op: bit 9, the bank
+   const uint32_t copy_width = ReplaceZero(FifoPeek() & VRAM_WIDTH_MASK, 0x400);
+   const uint32_t copy_height = ReplaceZero((FifoPop() >> 16) & VRAM_HEIGHT_MASK, 0x200);
+   const uint32_t num_pixels = copy_width * copy_height;
+diff --git a/src/core/gpu_sw_backend.cpp b/src/core/gpu_sw_backend.cpp
+index 8d35ce3..066b694 100644
+--- a/src/core/gpu_sw_backend.cpp
++++ b/src/core/gpu_sw_backend.cpp
+@@ -94,7 +94,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
+       {
+         const uint16_t palette_value =
+           GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<uint32_t>(texcoord_x / 4)) % VRAM_WIDTH,
+-                   (cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT);
++                   ((cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT) + cmd->draw_mode.GetTextureBankY());
+         const uint16_t palette_index = (palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu;
+ 
+         texture_color.bits =
+@@ -106,7 +106,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
+       {
+         const uint16_t palette_value =
+           GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<uint32_t>(texcoord_x / 2)) % VRAM_WIDTH,
+-                   (cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT);
++                   ((cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT) + cmd->draw_mode.GetTextureBankY());
+         const uint16_t palette_index = (palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu;
+         texture_color.bits =
+           GetPixel((cmd->palette.GetXBase() + static_cast<uint32_t>(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+@@ -116,7 +116,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
+       default:
+       {
+         texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<uint32_t>(texcoord_x)) % VRAM_WIDTH,
+-                                      (cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT);
++                                      ((cmd->draw_mode.GetTexturePageBaseY() + static_cast<uint32_t>(texcoord_y)) % VRAM_HEIGHT) + cmd->draw_mode.GetTextureBankY());
+       }
+       break;
+     }
+@@ -711,11 +711,14 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
+ void GPU_SW_Backend::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color, GPUBackendCommandParameters params)
+ {
+   const uint16_t color16 = VRAMRGBA8888ToRGBA5551(color);
++  // Co-op: bit 9 of y picks the bank; rows wrap within it.
++  const uint32_t bank = (y & VRAM_BANK_FLAG) ? VRAM_BANK_LINES : 0u;
++  y &= VRAM_HEIGHT_MASK;
+   if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
+   {
+     for (uint32_t yoffs = 0; yoffs < height; yoffs++)
+     {
+-      const uint32_t row = (y + yoffs) % VRAM_HEIGHT;
++      const uint32_t row = bank + (y + yoffs) % VRAM_HEIGHT;
+       std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
+     }
+   }
+@@ -725,8 +728,8 @@ void GPU_SW_Backend::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t h
+     const uint32_t active_field = params.active_line_lsb;
+     for (uint32_t yoffs = 0; yoffs < height; yoffs++)
+     {
+-      const uint32_t row = (y + yoffs) % VRAM_HEIGHT;
+-      if ((row & uint32_t(1)) == active_field)
++      const uint32_t row = bank + (y + yoffs) % VRAM_HEIGHT;
++      if ((row & uint32_t(1)) == active_field) // (the bank is even)
+         continue;
+ 
+       uint16_t* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+@@ -741,7 +744,7 @@ void GPU_SW_Backend::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t h
+   {
+     for (uint32_t yoffs = 0; yoffs < height; yoffs++)
+     {
+-      const uint32_t row = (y + yoffs) % VRAM_HEIGHT;
++      const uint32_t row = bank + (y + yoffs) % VRAM_HEIGHT;
+       uint16_t* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+       for (uint32_t xoffs = 0; xoffs < width; xoffs++)
+       {
+@@ -755,11 +758,15 @@ void GPU_SW_Backend::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t h
+ void GPU_SW_Backend::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data,
+                                 GPUBackendCommandParameters params)
+ {
++  // Co-op: bit 9 of y picks the bank; rows wrap within it.
++  const uint32_t bank = (y & VRAM_BANK_FLAG) ? VRAM_BANK_LINES : 0u;
++  y &= VRAM_HEIGHT_MASK;
++
+   // Fast path when the copy is not oversized.
+   if ((x + width) <= VRAM_WIDTH && (y + height) <= VRAM_HEIGHT && !params.IsMaskingEnabled())
+   {
+     const uint16_t* src_ptr = static_cast<const uint16_t*>(data);
+-    uint16_t* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
++    uint16_t* dst_ptr = &m_vram_ptr[(bank + y) * VRAM_WIDTH + x];
+     for (uint32_t yoffs = 0; yoffs < height; yoffs++)
+     {
+       std::copy_n(src_ptr, width, dst_ptr);
+@@ -776,7 +783,7 @@ void GPU_SW_Backend::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t
+ 
+     for (uint32_t row = 0; row < height;)
+     {
+-      uint16_t* dst_row_ptr = &m_vram_ptr[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
++      uint16_t* dst_row_ptr = &m_vram_ptr[(bank + ((y + row++) % VRAM_HEIGHT)) * VRAM_WIDTH];
+       for (uint32_t col = 0; col < width;)
+       {
+         // TODO: Handle unaligned reads...
+diff --git a/src/core/gpu_sw_backend.h b/src/core/gpu_sw_backend.h
+index 5c3d8da..2bd14b0 100644
+--- a/src/core/gpu_sw_backend.h
++++ b/src/core/gpu_sw_backend.h
+@@ -137,5 +137,5 @@ protected:
+                                                     const GPUBackendDrawLineCommand::Vertex* p1);
+   DrawLineFunction GetDrawLineFunction(bool shading_enable, bool transparency_enable, bool dithering_enable);
+ 
+-  std::array<uint16_t, VRAM_WIDTH * VRAM_HEIGHT> m_vram;
++  std::array<uint16_t, VRAM_WIDTH * VRAM_STORAGE_HEIGHT> m_vram; // both banks (co-op)
+ };
+diff --git a/src/core/gpu_types.h b/src/core/gpu_types.h
+index b7f6643..948a542 100644
+--- a/src/core/gpu_types.h
++++ b/src/core/gpu_types.h
+@@ -4,6 +4,12 @@
+ #include "types.h"
+ #include <array>
+ 
++// SOTN Co-op (design/M13-partner-player.md): a second bank of 512 lines after VRAM, for the
++// partner's textures and palettes. Uploads reach it with bit 9 of their y; a primitive reads
++// its texture page from it with bit 14 of its texpage (E1 for rectangles), and its palette with
++// bit 15 of its palette (rows 512 and up). Drawing and the display stay in bank 0. Software
++// renderer only.
++inline constexpr uint32_t VRAM_BANK_LINES = 512, VRAM_BANK_FLAG = 0x200, VRAM_STORAGE_HEIGHT = 1024;
+ inline constexpr uint32_t VRAM_WIDTH = 1024, VRAM_HEIGHT = 512, VRAM_SIZE = VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t),
+                      VRAM_WIDTH_MASK = VRAM_WIDTH - 1, VRAM_HEIGHT_MASK = VRAM_HEIGHT - 1, TEXTURE_PAGE_WIDTH = 256,
+                      TEXTURE_PAGE_HEIGHT = 256,
+@@ -144,11 +150,11 @@ static constexpr int32_t TruncateGPUVertexPosition(int32_t x)
+ // bits in GP0(E1h) or texpage part of polygon
+ union GPUDrawModeReg
+ {
+-  static constexpr uint16_t MASK = 0b1111111111111;
+-  static constexpr uint16_t TEXTURE_PAGE_MASK = UINT16_C(0b0000000000011111);
++  static constexpr uint16_t MASK = 0b101111111111111; // co-op: bit 14, the texture bank
++  static constexpr uint16_t TEXTURE_PAGE_MASK = UINT16_C(0b0100000000011111);
+ 
+-  // Polygon texpage commands only affect bits 0-8, 11
+-  static constexpr uint16_t POLYGON_TEXPAGE_MASK = 0b0000100111111111;
++  // Polygon texpage commands only affect bits 0-8, 11 (and 14: co-op)
++  static constexpr uint16_t POLYGON_TEXPAGE_MASK = 0b0100100111111111;
+ 
+   // Bits 0..5 are returned in the GPU status register, latched at E1h/polygon draw time.
+   static constexpr uint32_t GPUSTAT_MASK = 0b11111111111;
+@@ -164,6 +170,9 @@ union GPUDrawModeReg
+   BitField<uint16_t, bool, 11, 1> texture_disable;
+   BitField<uint16_t, bool, 12, 1> texture_x_flip;
+   BitField<uint16_t, bool, 13, 1> texture_y_flip;
++  BitField<uint16_t, bool, 14, 1> texture_bank; // co-op: the texture page is in VRAM's second bank
++
++  ALWAYS_INLINE uint32_t GetTextureBankY() const { return texture_bank ? VRAM_BANK_LINES : 0u; }
+ 
+   ALWAYS_INLINE uint16_t GetTexturePageBaseX() const { return static_cast<uint16_t>(texture_page_x_base.GetValue()) * 64; }
+   ALWAYS_INLINE uint16_t GetTexturePageBaseY() const { return static_cast<uint16_t>(texture_page_y_base.GetValue()) * 256; }
+@@ -184,12 +193,12 @@ union GPUDrawModeReg
+ 
+ union GPUTexturePaletteReg
+ {
+-  static constexpr uint16_t MASK = UINT16_C(0b0111111111111111);
++  static constexpr uint16_t MASK = UINT16_C(0b1111111111111111); // bit 15: the second bank (co-op)
+ 
+   uint16_t bits;
+ 
+   BitField<uint16_t, uint16_t, 0, 6> x;
+-  BitField<uint16_t, uint16_t, 6, 9> y;
++  BitField<uint16_t, uint16_t, 6, 10> y; // 512 and up: the second bank
+ 
+   ALWAYS_INLINE uint32_t GetXBase() const { return static_cast<uint32_t>(x) * 16u; }
+   ALWAYS_INLINE uint32_t GetYBase() const { return static_cast<uint32_t>(y); }
+diff --git a/src/core/save_state_version.h b/src/core/save_state_version.h
+index 027db06..0b91ba2 100644
+--- a/src/core/save_state_version.h
++++ b/src/core/save_state_version.h
+@@ -2,7 +2,7 @@
+ #include "types.h"
+ 
+ static constexpr uint32_t SAVE_STATE_MAGIC = 0x43435544;
+-static constexpr uint32_t SAVE_STATE_VERSION = 57;
++static constexpr uint32_t SAVE_STATE_VERSION = 58; // co-op: VRAM's second bank
+ static constexpr uint32_t SAVE_STATE_MINIMUM_VERSION = 42;
+ 
+ #pragma pack(push, 4)
+diff --git a/src/core/system.h b/src/core/system.h
+index dca5e57..ccb0b29 100644
+--- a/src/core/system.h
++++ b/src/core/system.h
+@@ -35,7 +35,7 @@ struct SystemBootParameters
+ namespace System {
+ 
+ // 5 megabytes is sufficient for now, at the moment they're around 4.3MB, or 10.3MB with 8MB RAM enabled.
+-inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 11 * 1024 * 1024;
++inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 12 * 1024 * 1024; // co-op: + VRAM's second bank (was 11 MB)
+ 
+ inline constexpr TickCount MASTER_CLOCK = 44100 * 0x300; // 33868800Hz or 33.8688MHz, also used as CPU clock
+ 
+diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
+index 6f97a84..989933e 100644
+--- a/src/libretro/libretro_host_interface.cpp
++++ b/src/libretro/libretro_host_interface.cpp
+@@ -1153,6 +1153,10 @@ void* HostInterface::retro_get_memory_data(unsigned id)
+       MemoryCardImage::DataArray& data     = card->GetData();
+       return data.data();
+     }
++    case RETRO_MEMORY_VIDEO_RAM: // co-op: both banks, for tests (the software renderer's)
++      if (!System::IsShutdown() && g_gpu)
++        return g_gpu->GetVRAMPointer();
++      break;
+ 
+     default:
+       break;
+@@ -1175,6 +1179,8 @@ size_t HostInterface::retro_get_memory_size(unsigned id)
+         break;
+       return 128 * 1024;
+     }
++    case RETRO_MEMORY_VIDEO_RAM: // co-op
++      return VRAM_WIDTH * VRAM_STORAGE_HEIGHT * sizeof(uint16_t);
+     default:
+       break;
+   }

@@ -316,3 +316,43 @@ def m11_slot2_clone(run):
     run.expect(save_fields(got[0])[2] == save_fields(solo)[2], "at the same level")
     run.expect(p0.stage == p1.stage == NZ0 and p0.room_id == p1.room_id, "both start in the save room",
                a=(p0.stage, p0.room_id), b=(p1.stage, p1.room_id))
+
+
+@session_scenario()
+def m11_test_castle(run):
+    """Test castles (Tucker, 2026-10-28): hosting a fresh copy of one, both players load its save,
+    then arrive at its start (not the save's room); its first joint save ends that."""
+    from archive import Castle
+    from test_castles import pc
+    pa, pb = data("A"), data("B")
+    with pc(pa):
+        x = Castle.new()
+    with online("nz0", 0, x) as s0, online("entrance", 1) as s1:
+        link(s0, s1)
+        run.expect(coffin_save(s0, s1, s0, lambda: x.joint_save.exists()), "a joint save to make the test castle from")
+    shaft = 176
+    start = (NZ0, shaft, 104, 36)  # the lab's elevator shaft (a debug start), away from the save room
+    with pc(pa):
+        t = Castle.make_test("Scene: Test", read_session(x.joint_save)[0], start, 0, "a test")
+        run.expect([c.info["name"] for c in Castle.tests()] == ["Scene: Test"] and
+                   not any(c.info.get("test") for c in Castle.all()), "it's listed with the test castles only")
+        c = t.fresh_copy()
+    run.expect(c.info["start"] == list(start) and c.dir != t.dir and not c.info.get("test"),
+               "playing it plays a fresh copy, with its start")
+
+    def at(s):
+        p = s.local.mailbox("self_presence")
+        return p.stage == NZ0 and p.room_id == shaft and p.flags & IN_PLAY and not p.flags & BUSY
+    with online("entrance", 0, c) as s0, online("entrance", 1) as s1:
+        s0.local.host("set_castle", c.meta())
+        s0.joint.on_write = c.saved
+        link(s0, s1)
+        joiner_copy(run, s0, s1, pb)
+        step_pair(s0, s1, 30)
+        s0.joint.start = c.info["start"]  # as app.continue_castle does
+        s0.joint.resume()
+        run.expect(until(s0, s1, lambda: at(s0) and at(s1), 1500), "both arrive at the test castle's start",
+                   a=s0.local.mailbox("self_presence").room_id, b=s1.local.mailbox("self_presence").room_id)
+        ok = coffin_save(s0, s1, s0, lambda: s0.joint.saves > 0)
+        run.expect(ok and s0.joint.start is None and "start" not in Castle(c.dir).info,
+                   "its first save ends the start: it goes on from the save")

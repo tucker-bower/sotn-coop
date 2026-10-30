@@ -77,7 +77,7 @@ def no_disc_data():
     for data in files.values():
         chunks.update(data[k:k + 64] for k in range(0, len(data) - 63, 4))
     found = total = 0
-    for name in ("maria.bps", "maria-vh.bps", "maria-vb.bps"):
+    for name in ("maria.bps", "maria-vh.bps", "maria-vb.bps", "maria-partner.bps"):
         for _, data in stored((PATCHES / name).read_bytes()):
             total += len(data)
             found += sum(1 for k in range(0, len(data) - 63, 16)

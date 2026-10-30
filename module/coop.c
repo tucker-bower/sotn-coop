@@ -3,13 +3,14 @@
 #include <game.h>
 #include "coop_api.h"
 #include "link.h"
+#include "partner.h"
+#include "familiar.h"
 #include "message.h"
 #include "arrive.h"
 #include "boss.h"
 #include "character.h"
 #include "mist.h"
 #include "progress.h"
-#include "puppet.h"
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
@@ -24,6 +25,8 @@ static bool UpdateHook(void);
 static void RenderEntitiesHook(void);
 static void DrawMapCursorHook(void);
 static void StoreSaveDataHook(SaveData* save, s32 block, s32 cardIcon);
+static void RenderPrimitivesHook(void);
+void RenderPrimitives(void); // DRA
 
 // Fixed addresses: dra_hooks.ld. One jump per DRA hook.
 __asm__(".section .coop-table, \"ax\"\n"
@@ -36,6 +39,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         ".globl g_CoopRicFile\ng_CoopRicFile: .space 24\n" // CdlFILE of COOPRIC.BIN (boot.c)
         ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (richter/coop_ric.h)
         ".globl g_CoopWeaponEntity\ng_CoopWeaponEntity: .word CoopWeaponEntity\n" // offhand.c (D105)
+        "j RenderPrimitivesHook\nnop\n" // M13 (after the words above: their addresses are fixed)
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};
@@ -64,7 +68,8 @@ static void CapturePresence(CoopPresence* p) {
     p->blendMode = pl->blendMode;
     p->zPriority = pl->zPriority;
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
-    p->flipX = (pl->facingLeft << 1) ^ plDrawFlip;
+    p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
+               ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0);
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }
@@ -106,10 +111,14 @@ static void MusicUpdate(void) {
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    PartnerBoot();
     CharacterFrame();
     SpellsUpdate();
+    // M13: the partner's copy of us runs on these: after a spell shortcut has played its input in
+    g_CoopLink.selfPad = g_pads[0].pressed;
     OffhandUpdate();
     WeaponsUpdate();
+    FamiliarUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
@@ -123,6 +132,14 @@ static bool __attribute__((used)) UpdateHook(void) {
     return ArriveFrame();
 }
 
+// The frame's RenderPrimitives: then the partner's primitives get the second bank's palettes.
+static void __attribute__((used)) RenderPrimitivesHook(void) {
+    u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
+
+    RenderPrimitives();
+    PartnerAfterPrims(gt4, gt3);
+}
+
 // The save room's StoreSaveData (src/dra/62DEC.c): the game saved, so post the save.
 static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s32 cardIcon) {
     CoopSaveRoomStore(save, block, cardIcon);
@@ -131,25 +148,23 @@ static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s
 // After RenderEntities, the frame's game state is final: publish it, and draw the partner
 // against it.
 static void __attribute__((used)) RenderEntitiesHook(void) {
-    u16 frame = PLAYER.animCurFrame;
+    u16 frame;
+
+    frame = PLAYER.animCurFrame;
 
     MistStepAfter();
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
-    SpritesPlace();
-    PrimsPlace();
     RenderEntities();
+    PLAYER.animCurFrame = frame; // (the partner's frame swaps PLAYER out and back)
+    PartnerFrame(); // M13: the partner's own update and drawing, after player 1's
     WeaponsDraw();
-    SpritesRemove();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();
     CapturePresence(&g_CoopLink.self);
     SpritesCapture();
     PrimsCapture();
-    if (g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES) {
-        DrawPuppet(&g_CoopLink.partner);
-    }
 }
 
 // After the player's map cursor: a second, blue one on the partner's map cell. Same animation

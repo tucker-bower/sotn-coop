@@ -8,6 +8,12 @@ LINK_VERSION = 11
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
+# Familiars (link.h's CoopFamiliar, module/familiar.c, M13 step 4)
+FAMILIAR_SELF, FAMILIAR_PARTNER = 0x807C0000, 0x807E0000
+FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
+# M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
+STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
+STATUS_RANGES = ((0x80097BA0, 0x48), (0x80097BFC, 0x34))
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -20,6 +26,9 @@ OUT_RING, IN_RING, DROPPED = 0x68, 0x870, 0x1078
 RING_SIZE, EVENT_SIZE = 256, 8                 # CoopRing: u32 head, u32 tail, CoopEvent[256]
 EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 EV_HIT, EV_HIT2, EV_SPAWN, EV_SPAWN2, EV_SPAWN3, EV_RECORD, EV_TAKEN, EV_EXP = 6, 7, 8, 9, 10, 11, 12, 13
+EV_USED = 14  # M13: an item used up (the fairy revive's Life Apple)
+EV_KILLED = 15  # a boss died in that game, the partner's dies too (Richter)
+FLIP_TELEPORT_IN = 0x80  # Presence.flip_x bit 7: just came in by teleport (a revive; M13)
 CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x107C, 0x108C, 0x1090, 0x1094, 0x2260
 SAVE_DATA_SIZE = 0x11CC
 CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CMD_GAME_OVER = 1, 2, 3, 4
@@ -31,9 +40,11 @@ CHARACTER, OPTIONS, PAD_EXTRA = 0x2144C, 0x21450, 0x21454  # host writes (M8)
 SELF_SPRITES, PARTNER_SPRITES = 0x21458, 0x2163C  # u32 count, then CoopSprite[24] (0x14 each): sprites.c (M12)
 SPRITE_SIZE, N_SPRITES = 0x14, 24
 SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] less next (0x30 each)
+SELF_PAD, PARTNER_PAD = 0x22428, 0x2242C  # M13: each player's buttons, with the presence
 PRIM_SIZE, N_PRIMS = 0x30, 32
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
+OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
 
@@ -45,6 +56,7 @@ CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80400000, 0x52414843  # CharBlob (module/lin
 CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
+CONTROL_PARTNER_VOL_SHIFT = 16  # bits 16-23: the partner's sounds, % of their volume (0 = 60; M13)
 SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 
@@ -74,11 +86,12 @@ class Presence:
     scroll_y: int = 0
     role: int = 0
     aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
+    pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 
     SIZE = _PRESENCE.size
 
     def pack(self):
-        return _PRESENCE.pack(*astuple(self))
+        return _PRESENCE.pack(*astuple(self)[:-1])
 
     @classmethod
     def unpack(cls, data):
@@ -109,10 +122,14 @@ class Mailbox:
         return self.header()[2]
 
     def self_presence(self):
-        return Presence.unpack(self.adapter.read_bytes(self.address + SELF, Presence.SIZE))
+        p = Presence.unpack(self.adapter.read_bytes(self.address + SELF, Presence.SIZE))
+        p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PAD, 4))[0]
+        return p
 
     def partner_presence(self):
-        return Presence.unpack(self.adapter.read_bytes(self.address + PARTNER, Presence.SIZE))
+        p = Presence.unpack(self.adapter.read_bytes(self.address + PARTNER, Presence.SIZE))
+        p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_PAD, 4))[0]
+        return p
 
     def partner_age(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_AGE, 4))[0]
@@ -159,8 +176,36 @@ class Mailbox:
         self.adapter.write_bytes(base + 0x20, blob[0x20:])
         self.adapter.write_bytes(base, blob[:0x20])
 
+    # --- familiars (module/familiar.c): each game's copy, and the partner's ---------------------
+    def self_familiar_seq(self):
+        """(magic ok, seq) of this game's copy of its familiar."""
+        magic, seq = struct.unpack("<II", self.adapter.read_bytes(FAMILIAR_SELF, 8))
+        return magic == FAMILIAR_MAGIC, seq
+
+    def self_familiar(self):
+        return self.adapter.read_bytes(FAMILIAR_SELF, FAMILIAR_SIZE)
+
+    def write_partner_familiar(self, blob):
+        """The partner's copy (header last: the game checks its magic)."""
+        if len(blob) != FAMILIAR_SIZE:
+            return
+        self.adapter.write_bytes(FAMILIAR_PARTNER + 0x20, blob[0x20:])
+        self.adapter.write_bytes(FAMILIAR_PARTNER, blob[:0x20])
+
+    def self_status(self):
+        """This game's player status (stats, level, equipment): g_Status's two ranges."""
+        return b"".join(self.adapter.read_bytes(a, n) for a, n in STATUS_RANGES)
+
+    def write_partner_status(self, blob):
+        """The partner's status, for its body (module/partner.c); magic last."""
+        if len(blob) != sum(n for _, n in STATUS_RANGES):
+            return
+        self.adapter.write_bytes(STATUS_PARTNER + 4, blob)
+        self.adapter.write_bytes(STATUS_PARTNER, struct.pack("<I", STATUS_MAGIC))
+
     def write_partner(self, presence):
         self.adapter.write_bytes(self.address + PARTNER, presence.pack())
+        self.adapter.write_bytes(self.address + PARTNER_PAD, struct.pack("<I", presence.pad))
         self.adapter.write_bytes(self.address + PARTNER_AGE, struct.pack("<I", 0))
 
     # --- event rings (module/link.h). Each event is its raw 8 bytes: the host only relays them.

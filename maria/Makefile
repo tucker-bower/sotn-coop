@@ -16,10 +16,13 @@ CFLAGS  += -fno-toplevel-reorder -fdata-sections -DMARIA_SFX_MOD=1 -DCOOP_MARIA 
 CFLAGS  += -I$(CURDIR)/../richter
 SRCS    := $(notdir $(wildcard $(SRC)/*.c))
 OBJS    := $(BUILD)/maria.o $(patsubst %.c,$(BUILD)/%.o,$(SRCS)) $(BUILD)/coop_maria.o
+# The partner's (design/M13 step 3): the same sources with COOP_PARTNER (coop_maria.h, coop_ric.h).
+PBUILD  := $(BUILD)/partner
+POBJS   := $(PBUILD)/maria.o $(patsubst %.c,$(PBUILD)/%.o,$(SRCS)) $(PBUILD)/coop_maria.o $(PBUILD)/coop_partner.o
 # The European HUD languages aren't on the USA disc; only the PSP build uses them.
 EU_ONLY := font_eu hud_sp hud_it hud_ge hud_fr
 
-all: $(BUILD)/MARIA.BIN $(BUILD)/sfx/.built
+all: $(BUILD)/MARIA.BIN $(BUILD)/MARIAP.BIN $(BUILD)/sfx/.built
 
 $(BUILD)/.assets: $(PSPBIN) assets.pspus.maria.yaml splat.pspus.maria.yaml
 	@mkdir -p $(BUILD)
@@ -35,6 +38,19 @@ $(BUILD)/coop_maria.o: coop_maria.c coop_maria.h $(BUILD)/.assets
 $(BUILD)/%.o: $(SRC)/%.c coop_maria.h $(BUILD)/.assets
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 
+$(PBUILD)/maria.o: $(GLUE) coop_maria.h $(BUILD)/.assets
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
+$(PBUILD)/coop_maria.o: coop_maria.c coop_maria.h $(BUILD)/.assets
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
+$(PBUILD)/coop_partner.o: ../richter/coop_partner.c $(BUILD)/.assets
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
+$(PBUILD)/%.o: $(SRC)/%.c coop_maria.h $(BUILD)/.assets
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
+
 $(BUILD)/symbols.txt: $(ROOT)/config/symbols.$(VERSION).txt
 	@mkdir -p $(BUILD)
 	sed 's;//.*;;' $< > $@
@@ -48,6 +64,15 @@ $(BUILD)/maria.elf: $(OBJS) $(BUILD)/symbols.txt maria.ld ../richter/coop_player
 $(BUILD)/MARIA.BIN: $(BUILD)/maria.elf
 	$(CROSS)objcopy -O binary $< $@
 	@echo "MARIA.BIN: $$(stat -c %s $@) bytes (Richter's slot holds $$((0x80180000 - 0x8013C000)))"
+
+$(BUILD)/mariap.elf: $(POBJS) $(BUILD)/symbols.txt maria_partner.ld ../richter/coop_player.ld
+	$(CROSS)ld -nostdlib -Map=$(BUILD)/mariap.map --build-id=none -T $(ROOT)/mods/mariapsp-forpsx/symexport.txt \
+	    -T maria_partner.ld -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt \
+	    -T ../richter/coop_player.ld -o $@ $(POBJS)
+
+$(BUILD)/MARIAP.BIN: $(BUILD)/mariap.elf
+	$(CROSS)objcopy -O binary $< $@
+	@echo "MARIAP.BIN: $$(stat -c %s $@) bytes, $$(grep -E '^\.bss' $(BUILD)/mariap.map | awk '{print $$3}') of BSS"
 
 $(BUILD)/sfx/.built: $(SPK)
 	cargo run --quiet --manifest-path $(ROOT)/tools/maria-sfx/Cargo.toml -- build $< $(BUILD)/sfx

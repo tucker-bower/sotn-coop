@@ -52,7 +52,8 @@ def guest_scenery_matches_solo(run):
     run.expect(shared == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B the guest", roles=shared)
     for i, shot in linked.items():
         x, y = where[i]
-        n = screen_diff(shot, solo[i], (x - 40, y - 56, x + 40, y + 56))
+        # A's body (M13) is within its snap distance of A's real spot (48 px: module/partner.c)
+        n = screen_diff(shot, solo[i], (x - 40 - 48, y - 56 - 48, x + 40 + 48, y + 56 + 48))
         run.expect(n < 50, f"frame {i}: B's screen matches its solo screen (outside A's sprite)", differing=n)
 
 
@@ -376,8 +377,10 @@ def guest_sees_warg_death(run):
             break
     run.expect(stage_entities(a).get(WARG_SLOT, (0,))[0] != warg, "B killed the Warg", frames=i)
     run.expect(checked > 0, "its burning (PRIM_ENV) reached B's world", frames_checked=checked)
-    # The frame the effect starts can differ (its first pass is set up and drawn in one frame).
-    run.expect(bad <= 2, "every mirrored PRIM_ENV has its own pool entry, with A's contents", bad=bad,
+    # The frame the effect starts can differ (its first pass is set up and drawn in one frame). Since
+    # M13 the partner's body (Alucard: his afterimages) takes entries of DRA's 16 too: a frame or two
+    # of the burn can find none left.
+    run.expect(bad <= 4, "every mirrored PRIM_ENV has its own pool entry, with A's contents", bad=bad,
                of=checked)
 
 

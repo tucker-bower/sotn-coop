@@ -80,8 +80,8 @@ Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboa
 Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
 Save at a coffin: it saves both games. Continue loads both.
 
-Castles: every game is a castle, named after the name you typed and when it began
-(Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
+Castles: every game is a castle, with the name you give it when you start it (or the name you type
+in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
 Whoever joins you online keeps a copy of your castle, to play solo or host later.
 Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
 their normal HP.
@@ -732,6 +732,14 @@ class Launcher:
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
 
+    def install_test_castles(self):
+        """The test castles, from the debug starts' joint saves (made with them: debugstarts.py)."""
+        import debugstarts
+        from archive import Castle
+        for name, v in debugstarts.load(self.starts_dir(), self.patch_crc()).items():
+            if v.get("save") and (self.starts_dir() / v["save"]).exists():
+                Castle.make_test(name, (self.starts_dir() / v["save"]).read_bytes(), v["start"], v["order"], v["about"])
+
     def make_debug_starts(self):
         import debugstarts
         self.apply_bios()
@@ -746,6 +754,7 @@ class Launcher:
                                     "\nThe game works without them; they're for testing.")
                     return
                 if kind == "done":
+                    self.install_test_castles()
                     return
             if "quit" in self.ui.events():
                 proc.terminate()
@@ -948,14 +957,50 @@ class Launcher:
         """The castle list (design/M11): New castle, then castles by last played. Returns
         (castle, fresh), or None (back)."""
         from archive import Castle
-        castles = Castle.all()[:7]
-        if not castles:  # nothing to pick from: a new one
-            return Castle.new(), True
-        items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
-        k = self.ui.menu(heading, items, subtitle)
-        if k is None:
+        while True:
+            castles = Castle.all()[:7]
+            # Android can't make them, only get them by joining; a first game goes straight to a new castle
+            tests = Castle.tests() or (castles and not ANDROID)
+            if not castles and not tests:  # nothing to pick from: a new one
+                return self.new_castle()
+            items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
+            if tests:
+                items.append(("Test castles", "Outside each boss and before each story scene, with a typical player's progress"))
+            k = self.ui.menu(heading, items, subtitle)
+            if k is None:
+                return None
+            if 0 < k <= len(castles):
+                return castles[k - 1], False
+            picked = self.new_castle() if k == 0 else self.pick_test_castle()
+            if picked:
+                return picked
+
+    def pick_test_castle(self):
+        """A test castle (Tucker, 2026-10-28): a fresh copy of it, to play like any castle (solo, on
+        the couch, or hosted: the joiner gets it too). Made with the debug starts, from this disc."""
+        from archive import Castle
+        tests = Castle.tests()
+        if not tests:
+            if not self.ui.confirm("Test castles", "One castle outside each boss and before each story scene of the\n"
+                                   "first castle, made from your disc (a few minutes, once). Make them now?"):
+                return None
+            self.make_debug_starts()
+            tests = Castle.tests()
+            if not tests:
+                return None
+        k = self.ui.menu("Test castles", [(t.info["name"], t.info.get("about") or t.summary()) for t in tests],
+                         "Each starts outside its boss or scene, until you save. You play a copy: these stay as they are.")
+        return None if k is None else (tests[k].fresh_copy(), False)
+
+    def new_castle(self):
+        """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
+        SOTN's own name entry, at its first save (design/M11). Returns (castle, True), or None."""
+        from archive import Castle
+        name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
+                             footer="Type a name  ·  Enter: start  ·  Esc: back", limit=24)
+        if name is None:
             return None
-        return (Castle.new(), True) if k == 0 else (castles[k - 1], False)
+        return Castle.new(name=name or None), True
 
     def couch(self, act="couch"):
         from archive import Castle
@@ -963,7 +1008,7 @@ class Launcher:
             return
         castles = Castle.all()
         if act == "new" or (act == "continue" and not castles):
-            picked = (Castle.new(), True)
+            picked = self.new_castle()
         elif act == "continue":
             picked = (castles[0], False)
         else:
@@ -995,6 +1040,7 @@ class Launcher:
         self.load_cards(s, castle)
         if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
             self.apply_players(s)
+            s.joint.start = castle.info.get("start")  # a test castle not saved yet: outside its boss
             s.joint.resume()
 
     # --- playing
@@ -1021,7 +1067,8 @@ class Launcher:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
-                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self)
+                        profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
+                        partner_vol=self.settings.get("partner_vol", 60))
         result = view.run()
         if result == "quit":
             raise SystemExit
@@ -1070,14 +1117,24 @@ class Launcher:
         except Exception:  # noqa: BLE001
             pass
 
-    def _clip_get(self):
+    def _clip_code(self):
+        """The room code, connect code or ip:port on the clipboard, or "": never the rest of
+        what's there (Tucker, 2026-10-28: the Join box had filled with text from another app)."""
+        from link.rendezvous import find_connect_code
         try:
-            return (pygame.scrap.get_text() or "").strip()
+            return find_connect_code(pygame.scrap.get_text() or "")
         except Exception:  # noqa: BLE001
             return ""
 
     def ask_code(self, heading, subtitle, initial=""):
         """Prompts for a room code or IP:port. Typing, Ctrl+V, or paste from a controller (□ / X)."""
+        return self.ask_text(heading, subtitle, initial, paste=self._clip_code,
+                             footer="Type the code, or Ctrl+V to paste (Square / X on a controller)"
+                                    "  ·  Enter: join  ·  Esc: back")
+
+    def ask_text(self, heading, subtitle, initial="", paste=None, footer="", limit=64):
+        """A line of text: typed (the on-screen keyboard on a phone), or pasted when `paste` gives
+        it (Ctrl+V; Square / X, or A in an empty box, on a controller). Returns it, or None (back)."""
         text = initial
         pygame.key.start_text_input()
         try:
@@ -1096,19 +1153,19 @@ class Launcher:
                             return None
                         if ev.key == pygame.K_BACKSPACE:
                             text = text[:-1]
-                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL):
-                            text = self._clip_get()[:64]
-                    elif ev.type == pygame.TEXTINPUT and len(text) < 64:
+                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL) and paste:
+                            text = paste()[:limit] or text
+                    elif ev.type == pygame.TEXTINPUT and len(text) < limit:
                         if not (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                            text += ev.text
+                            text += ev.text[:limit - len(text)]
                     elif ev.type == pygame.CONTROLLERBUTTONDOWN:
                         if ev.button == pygame.CONTROLLER_BUTTON_B:
                             return None
-                        if ev.button == pygame.CONTROLLER_BUTTON_X:
-                            text = self._clip_get()[:64]
+                        if ev.button == pygame.CONTROLLER_BUTTON_X and paste:
+                            text = paste()[:limit] or text
                         elif ev.button in (pygame.CONTROLLER_BUTTON_A, pygame.CONTROLLER_BUTTON_START):
-                            if not text:
-                                text = self._clip_get()[:64]
+                            if not text and paste:
+                                text = paste()[:limit]
                             else:
                                 return text.strip()
                 self.ui.frame(heading, subtitle)
@@ -1118,7 +1175,7 @@ class Launcher:
                 shown = text + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
                 t = self.ui.big.render(shown, True, INK)
                 self.screen.blit(t, (box.x + 16, box.y + 10))
-                self.ui.footer("Type the code, or Ctrl+V to paste (Square / X on a controller)  ·  Enter: join  ·  Esc: back")
+                self.ui.footer(footer)
                 self.ui.flip()
                 pygame.time.wait(16)
         finally:
@@ -1209,7 +1266,7 @@ class Launcher:
         while True:
             code = self.ask_code("Join your partner",
                                  "Type the room code your partner gives you (like BAT-7K2Q).",
-                                 initial=code or self._clip_get()[:24])
+                                 initial=code or self._clip_code())
             if code is None:
                 return
             try:
@@ -1293,7 +1350,7 @@ class Launcher:
     def debug_starts(self):
         import debugstarts
         starts = debugstarts.load(self.starts_dir(), self.patch_crc())
-        if not starts or not any(v.get("scene") for v in starts.values()):
+        if not starts or not any(v.get("save") for v in starts.values()):
             ask = ("They haven't been made for this version yet (about a minute). Make them now?" if not starts else
                    "There are new ones: one before each story scene, and one outside each boss, with the\n"
                    "level and gear a player usually has by then. Make them now (about a minute)?")
@@ -1331,6 +1388,7 @@ class Launcher:
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
+                     (f"Partner's sounds: {st.get('partner_vol', 60)}%", "How loud your partner's attacks and steps are, in your game"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
                      ("Open the data folder", str(paths.data_dir()))]
@@ -1346,10 +1404,12 @@ class Launcher:
             elif k == 2:
                 st["aggro"] = (st.get("aggro", 50) + 10) % 110
             elif k == 3:
-                self.game_files()
+                st["partner_vol"] = {20: 40, 40: 60, 60: 80, 80: 100}.get(st.get("partner_vol", 60), 20)
             elif k == 4:
-                self.controls_menu()
+                self.game_files()
             elif k == 5:
+                self.controls_menu()
+            elif k == 6:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

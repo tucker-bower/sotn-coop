@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sets up a dev/agent machine for SOTN Co-op (Ubuntu or WSL2). Idempotent: re-run any time.
 # Usage: scripts/bootstrap.sh [step...]   (default: all steps)
-# Steps: apt python swanstation openbios decomp
+# Steps: apt python swanstation openbios decomp, and for releases: swanstation_win swanstation_android
 # Afterwards run: scripts/doctor.py
 set -euo pipefail
 
@@ -87,12 +87,44 @@ step_python() {
 }
 
 step_swanstation() {
-    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10}"
+    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10} (+ patches/swanstation.patch: VRAM's second bank)"
     local src="$ENV_DIR/src/swanstation"
     checkout "$SWANSTATION_REPO" "$SWANSTATION_REV" "$src"
+    if git -C "$src" apply --check "$COOP/patches/swanstation.patch" 2>/dev/null; then
+        git -C "$src" apply "$COOP/patches/swanstation.patch"
+    fi
     cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
     cmake --build "$src/build"
     cp "$(find "$src/build" -name swanstation_libretro.so | head -1)" "$ENV_DIR/bin/"
+}
+
+# The release cores, from the same patched source (M13: the PC and Android must run our VRAM
+# bank, and the same core everywhere keeps savestates and the harness alike): the Windows DLL
+# (MinGW, no runtime DLLs needed) and the Android .so for each arch.
+step_swanstation_win() {
+    log "SwanStation for Windows (MinGW)"
+    local src="$ENV_DIR/src/swanstation"
+    command -v x86_64-w64-mingw32-g++-posix >/dev/null || sudo apt-get install -y -q g++-mingw-w64-x86-64-posix
+    cmake -S "$src" -B "$src/build-win" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_TOOLCHAIN_FILE="$COOP/scripts/mingw-w64.cmake" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-static-libgcc -static-libstdc++ -static -s" >/dev/null
+    cmake --build "$src/build-win"
+    cp "$src/build-win/swanstation_libretro.dll" "$ENV_DIR/bin/"
+}
+
+step_swanstation_android() {
+    local A="${ANDROID_HOME:-$HOME/android}" src="$ENV_DIR/src/swanstation" ndk abi
+    ndk="$(ls -d "$A"/ndk/* | sort -V | tail -1)"
+    for abi in arm64-v8a x86_64; do
+        log "SwanStation for Android ($abi, NDK $(basename "$ndk"))"
+        cmake -S "$src" -B "$src/build-android-$abi" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=$abi -DANDROID_PLATFORM=android-24 >/dev/null
+        cmake --build "$src/build-android-$abi"
+        mkdir -p "$A/cores/$abi"
+        "$ndk"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip -o "$A/cores/$abi/swanstation_libretro_android.so" \
+            "$src/build-android-$abi/swanstation_libretro_android.so"
+    done
 }
 
 step_openbios() {

@@ -230,6 +230,12 @@ static bool PartnerShareable(void) {
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
+    // A shared boss fight stays shared, cameras near or not: arenas are up to two screens wide,
+    // and a split would leave each game its own boss (the pull that fixes that reloads the room,
+    // and the fight is gone).
+    if (s_Role != ROLE_NONE && (BossHere() || (p->flags & PRESENCE_BOSS))) {
+        return true;
+    }
     dx = p->scrollX - g_Tilemap.scrollX.i.hi;
     dy = p->scrollY - g_Tilemap.scrollY.i.hi;
     return dx > -CAMERA_NEAR && dx < CAMERA_NEAR && dy > -CAMERA_NEAR && dy < CAMERA_NEAR;

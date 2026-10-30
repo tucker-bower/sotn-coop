@@ -53,3 +53,62 @@ Go/no-go to Tucker if a measurement misses its target.
 
 ## Budget
 About 8–12 usage windows: the spike 1–2, the swap and drawing 4–6, familiars, sound and game feel 2–3, removing the puppet 1.
+
+## Spike notes (2026-10-27, branch `coop-m13-partner-player`)
+- **Where it runs:** DRA's main loop calls `CoopUpdate()` before `UpdateGame()` and `CoopRenderEntities()` right after (`src/dra/42398.c`). The partner's frame goes in the render hook: after the game has updated player 1, before anything is drawn.
+- **What gets swapped** (the other project's list, `mods/shared/CoopCore.cs` `Regions`, checked against ours): entity slots 0–63 (12 KB), `g_Player` (0x3D0), the DRA player statics 0x80137FB4–0x80138454, `g_PlayerDraw` (0x280), `D_800ACF74` (8), 0x8013B5E8 (4), `g_Status` stats (0x48) and gear (0x34), `g_PlayerHud` (0x30), `g_StatBuffTimers` (0x40), `g_ButtonCombo` (0x40): about 14.5 KB, so four copies a frame are about 58 KB. Weapon overlays (24 KB) only when the partner's weapons differ; the familiar overlay (40 KB) only when the familiars differ. Not needed here: their 208 KB player-overlay slot (our Richter and Maria live in the 8 MB area already, D7).
+- **The update:** `EntityAlucard()` (0x8010A5BC) with `g_CurrentEntity = PLAYER`, then `UpdatePlayerEntities()` (0x8011A4D0), with the partner's buttons in `g_pads[0]`. No hit detection (cosmetic in a shared room, as now).
+- **Drawing only the partner:** `RenderEntities()` walks all 256 slots and skips any with `animCurFrame == 0`. For the partner's pass: swap its slots 0–63 in, zero `animCurFrame` of slots 64–255 (192 halfwords, kept aside), call it, put everything back.
+- **The blocker for graphics:** Alucard's current sprite is uploaded to a fixed VRAM spot each frame, so a second player's upload would overwrite the first's. That's the 2 MB VRAM patch (a private bank), or for two Alucards a second upload spot in spare VRAM. The spike measures the simulation first (frame cost, RAM, determinism), graphics second.
+
+## Spike results (2026-10-27, `m13_spike_partner_sim`: all pass)
+Two Alucards in one game, the partner run by `EntityAlucard()` and `UpdatePlayerEntities()` on scripted buttons (`module/partner.c`, behind `OPT_PARTNER_SIM`, off by default).
+1. **Frame cost:** 25 scanlines on a typical frame, 33 at most: **9.5–12.5% of a frame** (target: under 25%). The first version swapped all 64 entity slots (75–88 scanlines); swapping only the slots in use on either side cut it to a third. Measured in PS1 cycles, so it's the same on the Thor's emulator.
+2. **RAM:** 14.5 KB in the 8 MB area (the swapped regions).
+3. **Determinism:** the same inputs give byte-identical 2 MB of RAM in two runs; savestates hold the partner (it lives in the 8 MB area).
+4. **Isolation:** player 1 ends exactly where it does without the partner.
+5. **Drawing two Alucards needs no VRAM patch:** `RenderEntities` uploads each player sprite frame into its `g_PlayerDraw` slot as it draws, so the partner's copy of `g_PlayerDraw` points one VRAM page left (the old puppet's page). Its drawing pass hides slots 64–255 (`animCurFrame` 0) so enemies aren't drawn twice. Screenshot: both Alucards drawn, each in its own pose.
+- **Still for the 2 MB VRAM patch:** a partner of another character, and weapon and familiar graphics that differ from player 1's. The partner's sprite page overlaps D106's VRAM window (x 0x1E0–0x1FF), which the off-hand weapons use: to be laid out with the VRAM patch.
+- **Go:** the approach works within budget. Next, the build proper: the partner's buttons over the link (played out, input option A), its state pulled to its snapshot past 48 px, then other characters with the VRAM bank, and removing the puppet.
+
+## Build status and what's left (2026-10-28)
+**Built** (`coop-m13-partner-player`, behind `OPT_PARTNER_SIM`, off): the simulated body (spike), the partner's buttons over the link (presence tail), the body made where the partner is in our room, dropped when they leave, pulled back past 48 px, moved with our camera; no puppet while it's drawn. Tests: `m13_spike_partner_sim`, `m13_partner_body_follows`.
+
+**Step 1, the partner's gear (2026-10-28): done** (D124). Each host sends its player's `g_Status` ranges (stats, level, equipment; reliable, on a change, at most every 10 frames); the partner's game keeps them at `STATUS_PARTNER_ADDR` and puts them in the body before each frame (`m13_partner_status`). Attacks: the body draws its own (subweapons, spells: DRA code, right with the partner's status), and the partner's attack sprites and primitives from the link aren't placed while the body is (they would double). A hand weapon that isn't ours can't run in the body (B's overlay drops it), so the body strikes the poses and the partner's real swing is drawn from the link, moved to the body (`m13_partner_weapon_differs`, `m13_partner_weapon_same`). No overlay swapping.
+
+**Left, in order:**
+1. ~~**The partner's gear on the body.**~~ The body starts as a copy of player 1, so it holds player 1's equipment, weapons and familiar. Send the partner's equipment ids (and level and stats, for their spells and damage numbers) with a reliable event when they change; load the partner's weapon overlay (24 KB, already sent for M12's drawn swings: D106) into the body's copy of the weapon-overlay region, and swap that region too when the two players' weapons differ.
+2. ~~**The VRAM bank**~~ **done 2026-10-28 (D125):** `patches/swanstation.patch` (software renderer): 1024×1024 VRAM; uploads and fills reach lines 512–1023 with y bit 9, primitives read their texture page there with texpage bit 14 and their palette with clut bit 15 (rows 512+); drawing and display stay in bank 0. States v58 (12 MB), v57 still load. Built for Linux, Windows (MinGW, `bootstrap.sh swanstation_win`) and Android (`swanstation_android`); `harness/core_check.py` gives identical hashes on Linux and Windows. The partner's player sprite now lives in the bank. M17 (more players) needs more banks or a layout within this one; M19 (widescreen) is unaffected (its framebuffer is bank 0). Original plan: **The VRAM bank** (our SwanStation build: 2 MB VRAM, lines 512–1023): needed for a partner of another character, and for weapon and familiar graphics that differ from player 1's. Lay it out once for M17 (a bank per partner) and M19 (the framebuffers): see this design's VRAM section. Software renderer only; built for Windows, Android, Linux.
+3. **Richter and Maria as partners:** their player update (our overlays in the 8 MB area) in place of `EntityAlucard`, with their sprite files (already copied for the puppet).
+   - **3a, a Richter partner: done (2026-10-28).**
+     - **Code:** `COOPRICP.BIN` (`richter/ric_partner.ld`) is our Richter linked whole at 0x80740000, with statics of his own, read at boot together with F_GAME2.BIN (0x80680000).
+     - **The partner's frames:** his `g_PlOvl` and sprite table (0x8013C000–0x8013C334) and sprite banks 16–19 are swapped in, the character is set to Richter, `Random()`'s seed is kept, and his sounds are off (step 4). He starts with his own init and runs through his own update.
+     - **Graphics:** in another character's game, F_GAME2 is in VRAM's second bank, and what he draws is banked after the fact: polygons with F_GAME's texture pages or palette rows get the bank bits. That covers his body, and his primitives, drawn in a pass of their own and hidden from the game's.
+     - **Leaving:** a body that leaves frees its primitives, unless a stage load already did.
+     - **Test:** `m13_partner_richter` (Alucard's game, a Richter partner: his animation set, follows and animates, whip included; his graphics in bank 2; A's character and sprite banks untouched).
+     - **Known gap:** PsyQ's `rand()` is a BIOS call, so its seed can't be kept. A partner's `rand()` calls shift player 1's.
+   - **3b, a Maria partner: done (2026-10-28).**
+     - **The partner builds:** both are compiled apart with `COOP_PARTNER` (`richter/coop_ric.h`). Their `LoadImage`/`StoreImage` go to bank 2 (`richter/coop_partner.c`), and Maria's palettes go to a `g_Clut` of her own.
+     - **Maria's build:** `MARIAP.BIN` (`maria/maria_partner.ld`, 0x80780000) is made by the launcher from the DXC disc (`maria-partner.bps`) and comes in her blob (`CharBlob.partnerSize`). The module puts it in place once.
+     - **Her init:** her partner init (the trailer's sixth word) is her load plus `MarInit`. Her own init also patches DRA's HUD and sound data, which would be player 1's.
+     - **Queued graphics:** graphics a partner queues for DRA's loader get the bank bit in their entries.
+     - **Tests:** `m13_partner_maria`, plus `m13_partner_rr`, `_rm`, `_mr`, `_mm` (Richter's and Maria's games with either partner).
+   - **3c, an Alucard partner in Richter's or Maria's game: done (2026-10-28).**
+     - **Code and tables:** DRA's own Alucard, started by `AluInit`. ARC_F's header and its 218 sprite and 6 bat pointers are rebased onto CoopBoot's copy and swapped in, so the header swap is now 0x388 bytes.
+     - **Graphics:** his F_GAME is read at boot (strips at 0x80580000, palettes at 0x806C2000) and loaded into bank 2, with his init's palette load (op 0x16) applied there.
+     - **Palettes:** DRA's palette-operation list (`D_8006C3C4`) is saved and restored around his frames, because his would work on player 1's palettes.
+     - **Tests:** `m13_partner_ra`, `_ma` (his palette in bank 2 matches his own game's).
+   - **All 9 pairings** run the partner's own code.
+   - **Known gaps:**
+     - The core's VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame. That's a small core patch: rebuild all three cores.
+     - A partner's BIOS `rand()` calls shift player 1's.
+     - The partner's off-hand items (M12b) share module state with player 1's.
+4. **Familiars, sounds, game feel: done (2026-10-29).**
+   - **Familiars** (`module/familiar.c`): the partner's familiar runs from a kit of its own (its overlay at `FAMILIAR_PARTNER`, 0x807E0000; ours at `FAMILIAR_SELF`), sent by the host (op "familiar") when it changes. All 5: `m13_partner_familiar`.
+   - **Sounds:** what the body queues is quieter (60%, Settings › Partner's sounds, `CONTROL_PARTNER_VOL_SHIFT`) and panned to where it is. Its voice (the player VAB) is dropped when it's another character than ours, and so is every sound command it queues (music; the XA voices streamed from the disc, which would take our drive). `m13_partner_sounds`.
+   - **Hits:** when the partner's HP drops in their game, the body plays its own hit reaction here (`m13_partner_hit_alucard`, `_richter`).
+   - **Revives:** each character's own teleport-in, in both games (presence `FLIP_TELEPORT_IN`; `m13_respawn_effect_*`). The fairy revive (`FairyRevive`, `EV_USED`): `m13_fairy_revive`.
+5. **Turned on, the puppet removed: done (2026-10-29, D128).**
+   - The body is how the partner is drawn; `puppet.c` is gone and `sprites.c` only captures. `OPT_PARTNER_SIM` is only the spike's switch. The body is tinted blue-grey (raw-texture polygons), so two of a kind can be told apart.
+   - **Isolation** (its frame leaves our game as it was): weapon and familiar overlays stubbed, its weapon entities (≥0xD0) destroyed, sprite banks 0x10–0x17 and a list of DRA statics swapped, the BIOS `rand()` seed exchanged, the screen-flash countdown kept, its sound commands taken back. No body during a load (until the load's own `Engine_Init` has run: a body made before it wrote through NULL into the BIOS and killed player 1's pad), during card saves, or outside `Play_Default`.
+   - **Tests:** `m13_pixels_*` (criterion 2, all 9 pairings: body, attack, subweapon). Tests that need the old behaviour switch the body off with `g_CoopBodyOff` (`COOP_BODY_OFF`).
