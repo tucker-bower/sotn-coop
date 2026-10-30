@@ -16,6 +16,7 @@
 #include "offhand.h"
 #include "sprites.h"
 #include "weapons.h"
+#include "pvp.h"
 
 bool DebugUpdate(void); // DRA
 void RenderEntities(void);
@@ -128,6 +129,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     MistStepUpdate();
     SharedUpdate();
     BossUpdate();
+    PvpUpdate();
     DebugUpdate();
     return ArriveFrame();
 }
@@ -165,6 +167,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     CapturePresence(&g_CoopLink.self);
     SpritesCapture();
     PrimsCapture();
+    PvpCapture();
 }
 
 // After the player's map cursor: a second, blue one on the partner's map cell. Same animation

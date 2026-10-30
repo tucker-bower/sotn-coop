@@ -28,6 +28,7 @@
 static const u16 s_Bosses[] = {
     23,  // Lesser Demon
     50,  // Olrox
+    56,  // Olrox (second form; 55 is its unkillable parts)
     198, // Galamoth
     203, // Minotaurus
     206, // Werewolf

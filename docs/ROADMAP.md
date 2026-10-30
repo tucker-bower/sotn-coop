@@ -32,7 +32,7 @@ Pro usage limits are measured in rolling 5-hour windows (plus possible weekly ca
 | M12 | Coverage (parts 1–3 built), then **v1.0**: every relic, room and scene per character, licence, release key, launch, known bugs, the first-castle playthrough in segments, then the inverted castle (`design/M12-v1-release.md`) | 12–16 windows (+4–6 inverted castle) | — |
 | M13 | The partner as a real second player; 2 MB VRAM in our core; fairy revive; respawn effects (`design/M13-partner-player.md`) | 8–12 windows | — |
 | M14 | Every pair connects: IPv6, port mapping, port prediction, peer/community relays; never a server of ours (`design/M14-relay.md`) | 3–4 windows | — |
-| M15 | PvP, the host's option (`design/M15-pvp.md`) | 3–4 windows | — |
+| M15 | PvP, the host's option (`design/M15-pvp.md`) | 3–4 windows | built 2026-10-30, ~1 window |
 | M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice (`design/M16-saturn-characters.md`) | 4–6 windows | — |
 | M17 | 3+ players, online then couch (`design/M17-more-players.md`; replaces D48) | 8–10 windows | — |
 | M18 | Mac and Linux (Steam Deck) builds (`design/M18-mac-linux.md`) | 3–5 windows | — |
