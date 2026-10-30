@@ -396,17 +396,19 @@ def boss_flow(run, b, limit=24000):
     else:
         # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: its own
         # scene fades to white and the ending plays (BO6's e_cutscene_actors). The scripted kill
-        # does that; the fade takes some 320 frames, so wait it out: both games, the ending.
+        # does that; the fade takes some 320 frames, so wait it out. Only in the game whose world
+        # he died in: no castle flag says so, and the partner's game (its own Richter, a guest's
+        # mirror) brings him back at full HP (STATUS "Decisions needed": should it follow?).
         ended = [False, False]
 
-        def both_ended():
+        def one_ended():
             for k, g in enumerate((a, g2)):
                 ended[k] |= g.read("g_GameState") in (GAME_ENDING, GAME_TITLE)  # its ending, then the title
                 if not ended[k]:  # still kept alive: what's left of his attacks lands in the fade
                     g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-            return all(ended)
-        w.until(both_ended, 2400)
-        run.expect(all(ended), "killing Richter ends the game, in both games (as alone)",
+            return any(ended)
+        w.until(one_ended, 2400)
+        run.expect(any(ended), "killing Richter ends the game he died in (as alone)",
                    ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
         return
     for g, n in ((a, "A"), (g2, "B")):
