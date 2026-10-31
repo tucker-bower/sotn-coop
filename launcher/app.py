@@ -1098,7 +1098,10 @@ class Launcher:
             info = playthrough.info
 
             def changed():  # the run, kept in the castle: Continue goes on from this boss
-                info["start"] = list(rush.boss["start"])
+                if rush.joint.start:
+                    info["start"] = list(rush.joint.start)
+                else:  # Richter, Dracula: their save is in their room (bossrush.load)
+                    info.pop("start", None)
                 playthrough.save_info()
             rush = bossrush.BossRush(s.joint, s.games, info["rush"], changed)
             goal = goal or f"Boss rush: {len(rush.rows)} bosses. Beat one and you're both at the next."

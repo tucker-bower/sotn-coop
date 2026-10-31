@@ -190,8 +190,9 @@ class JointSave:
                 self.dead_frames = 0
                 m.put_save(yours)
                 m.command(CMD_LOAD_SAVE)
-                if msg.get("start"):  # the host's test castle: arrive where it starts
-                    self._arrive = [[m, None, tuple(msg["start"])]]
+                # the host's test castle: arrive where it starts. A new load replaces any arrival
+                # still waiting: the last one's sent a boss rush's joiner back to the boss before.
+                self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)

@@ -6,7 +6,7 @@ solo, on the couch and online (the host drives; the joiner follows the host's lo
 import json
 from pathlib import Path
 
-from link.jointsave import save_room, write_session
+from link.jointsave import write_session
 
 BUNDLE = Path(__file__).resolve().parent / "assets" / "test-castles"
 GAME_PLAY, GAME_ENDING = 2, 9   # g_GameState
@@ -93,10 +93,9 @@ class BossRush:
         save's file is this boss's)."""
         b = self.boss
         write_session(self.joint.path, [b["save"], b["save"]])
-        # Saved in the boss's own stage (the Succubus, Scylla, Dracula): the save's room is the
-        # start; arriving again would reload it and replay its opening scene.
-        same = save_room(b["save"])[0] == b["start"][0]
-        self.joint.start = None if same else list(b["start"])
+        # Richter's and Dracula's saves are in their rooms, which open with their talk: arriving
+        # after the load would reload the room and play it again.
+        self.joint.start = None if b["name"] in ENDS_GAME else list(b["start"])
         self.joint.resume()
 
     def text(self):

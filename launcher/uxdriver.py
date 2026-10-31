@@ -619,12 +619,15 @@ def _online_host(pg, code_file):
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
-            ("screen", "Host: which castle?"), ("key", pg.K_RETURN),          # New castle (D136)
-            ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN),
+            *(([("screen", "Host: which castle?"), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Boss rush (D137)
+              if RUSH else
+              [("screen", "Host: which castle?"), ("key", pg.K_RETURN),       # New castle (D136)
+               ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            *(_rush_online_host() if RUSH else []),
             *_android_picture("host-playing"),
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
             ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
@@ -648,11 +651,49 @@ def _online_join(pg, code_file):
             ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
-            ("expect", lambda d: (_received_castle() or "").startswith("Tucker_"),
+            ("expect", lambda d: (_received_castle() or "").startswith("Boss rush_" if RUSH else "Tucker_"),
              "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
+            *(_rush_online_join() if RUSH else []),
             *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+
+
+RUSH = bool(os.environ.get("COOP_UX_RUSH"))  # online with a boss rush: uxdriver.py online, COOP_UX_RUSH=1 (D137)
+
+
+def _rush_at(d, k):
+    """d's game is at boss k's start (bossrush.bosses())."""
+    import bossrush
+    start = bossrush.bosses()[k]["start"]
+    p = d.view.games[0].mailbox("self_presence") if d.view and d.view.games else None
+    return p is not None and [p.stage, p.room_id] == start[:2]
+
+
+def _rush_online_host():
+    """The host's rush: at the first boss; its win (its record, written here: the fight is the
+    harness's) loads both players into the second, through the online load."""
+    def win(d):
+        d.view.games[0].write("g_Settings", 1, "<i", 0x30 + 4 * 6)  # Slogra & Gaibon's record
+    def partner_there(d):
+        import bossrush
+        start = bossrush.bosses()[0]["start"]
+        p = d.view.games[0].mailbox("partner_presence")
+        return [p.stage, p.room_id] == start[:2]
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 5000),
+            ("expect", lambda d: _rush_at(d, 0), "the host is at the first boss"),
+            ("until", lambda d: partner_there(d) or d.waited > 5000),  # the joiner too, before the win
+            ("game_frames", 300), ("call", win),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 5000), ("shot", "host-second-boss"),
+            ("expect", lambda d: _rush_at(d, 1) and d.view.rush.text().startswith("Boss rush 2/"),
+             "the host is at the second boss (Boss rush 2/22)")]
+
+
+def _rush_online_join():
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 5000),
+            ("expect", lambda d: _rush_at(d, 0), "the joiner is at the first boss"),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 5000), ("shot", "join-second-boss"),
+            ("expect", lambda d: _rush_at(d, 1), "the joiner followed the host to the second boss")]
 
 
 def _received_castle():
