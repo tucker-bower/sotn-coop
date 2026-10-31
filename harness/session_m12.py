@@ -379,11 +379,13 @@ def boss_flow(run, b, limit=24000):
     # only while a direction is held (like the prologue's)
     w.until(lambda: boss(g2), 3000, ("", walk))
     run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
-    # Into the arena: many fights start (and later record the win) only once the player is well
-    # inside (Akmodan II's manager: x 128-384; the trio's: 224-320), and the fight bot stops near
-    # the boss. The fight's start sets its time-attack event's visited bit (TimeAttackController).
+    # Into the arena (the inverted castle's): some fights start (and later record the win) only
+    # once the player is well inside (Akmodan II's manager: x 128-384; the trio's: 224-320), and
+    # the fight bot stops near the boss. The fight's start sets its time-attack event's visited bit
+    # (TimeAttackController). Not in the first castle: held there, the walk took A through the
+    # Succubus's scene and the chain lost her fight (and it gave no missing record back).
     import bossstarts
-    event = bossstarts.EVENTS.get(b.get("event") or b["name"].lower())
+    event = bossstarts.EVENTS.get(b.get("event")) if b.get("inverted") else None
     if event is not None:
         visited = lambda: a.read("g_Settings", "<I", VISITED) & (1 << event)
         w.until(visited, 600, (walk, ""))  # (not every fight sets it: Death's doesn't)
@@ -400,15 +402,18 @@ def boss_flow(run, b, limit=24000):
         if t % 30 == 0:
             for g in (a, g2):  # the players don't die: this tests the flow, not the bot's fighting
                 g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-            for slot, (eid, _, _, hp) in enemies(auth).items():
-                hp_seen.setdefault(slot, hp)
-                if hp > 8:
-                    auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-                elif free > FIGHT_FREE:  # the bot can't land the last hit (flying bosses): a scripted kill,
-                    # as the game's hit detection does when HP runs out (design/M12 part 2)
-                    auth.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
-                    flags = auth.read("g_Entities", "<I", slot * 0xBC + 0x34)
-                    auth.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
+            # the room's authority runs its enemies; a room that isn't shared (a split, a player
+            # knocked out of the arena), each game its own (else A's boss was never worn down)
+            for g in ((auth,) if pa.role or pb.role else (a, g2)):
+                for slot, (eid, _, _, hp) in enemies(g).items():
+                    hp_seen.setdefault(slot, hp)
+                    if hp > 8:
+                        g.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+                    elif free > FIGHT_FREE:  # the bot can't land the last hit (flying bosses): a scripted
+                        # kill, as the game's hit detection does when HP runs out (design/M12 part 2)
+                        g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+                        flags = g.read("g_Entities", "<I", slot * 0xBC + 0x34)
+                        g.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
         w.step(1, (fight_pad(a, t=t), fight_pad(g2, t=t + 6)))
         fought = 0 if (boss(a) or boss(g2)) else fought + 1
         if fought > 300:
@@ -479,7 +484,7 @@ def boss_alone(run, g, name, limit=12000):
             break
         run.step(1, p1=pad(b["walk"]))
     run.expect(boss(), f"{name} is there")
-    event = bossstarts.EVENTS.get(b.get("event") or name.lower())
+    event = bossstarts.EVENTS.get(b.get("event")) if b.get("inverted") else None
     for _ in range(600 if event is not None else 0):
         if g.read("g_Settings", "<I", VISITED) & (1 << event):
             break
@@ -744,6 +749,19 @@ def m12_chain_first_castle_long(run):
     by teleport, picking up that stretch's relics and story flags (the walks themselves are covered
     by the gate and movement tests, D119). At the end every boss is beaten in both games, by the
     game's own records, and the two castles match."""
+    chain(run, lambda r: not r.get("inverted"))
+
+
+@session_scenario(starts=(str(STARTS / "Boss - The Creature.state"),) * 2)
+def inverted_chain_long(run):
+    """The inverted castle's bosses, chained as the first castle's (m12_chain_first_castle_long),
+    from the Creature to Galamoth (Dracula ends the game: m12_boss_dracula). Each fight must leave
+    its record in both games (boss_flow)."""
+    chain(run, lambda r: r.get("inverted") and r["name"] != "Dracula")
+
+
+def chain(run, which):
+    """The chained playthrough of the boss rows `which` picks (bossstarts.B), in order."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
@@ -752,7 +770,7 @@ def m12_chain_first_castle_long(run):
     a, b = run.s.a, run.s.b
     level0 = [g.read("g_Status", "<i", 0x80097BE8 - 0x80097964) for g in (a, b)]
     beaten, missing = [], set()
-    for boss in [r for r in bossstarts.B if not r.get("inverted")]:
+    for boss in [r for r in bossstarts.B if which(r)]:
         for g in (a, b):  # this stretch's pickups and story; what was earned is kept as it is
             for name in boss["relics"]:
                 k = bossstarts.RELICS.index(name)
@@ -768,6 +786,8 @@ def m12_chain_first_castle_long(run):
         for g in (a, b):
             g.mailbox("command", CMD_ARRIVE, bossstarts.STAGES[boss["stage"]], room, x, y)
         run.step(240)
+        if os.environ.get("BOSS_DEBUG"):
+            print("CHAIN", boss["name"], [g.snapshot() for g in (a, b)], flush=True)
         boss_flow(run, boss)
         beaten.append(boss["name"])
         records = lambda: [[g.read("g_Settings", "<i", bossstarts.RECORDS + 4 * bossstarts.EVENTS[n.lower()])
