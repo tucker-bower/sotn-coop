@@ -30,7 +30,7 @@ def apart(run, gap=24):
             break
         run.step(1, p1=("left", ""))
     run.step(10)
-    run.expect(a.snapshot()["world_y"] == b.snapshot()["world_y"], "A and B stand on the same ground",
+    run.expect(abs(a.snapshot()["world_y"] - b.snapshot()["world_y"]) <= 2, "A and B stand on the same ground",
                a=(a.snapshot()["world_x"], a.snapshot()["world_y"]), b=(b.snapshot()["world_x"], b.snapshot()["world_y"]))
 
 
@@ -49,8 +49,26 @@ def attack(run, pad, frames=90, every=20, arm=None):
             "moved": b.snapshot()["world_x"] - x0, "a_body_hits": a.read(symbols()["g_CoopBodyHits"])}
 
 
+def load_characters(run):
+    """Each game loads as its character: the session's applies from a game's next load (a joint
+    save and its load, as Continue does), and the start is Alucard's. (Before 2026-10-30 these
+    tests didn't, and every "pairing" was two Alucards.)"""
+    from session_m8 import reload_game
+    from session_progress import arrive
+    names = ("Alucard", "Richter", "Maria")
+    p = run.s.a.mailbox("self_presence")  # both start here; a load puts a player at the save's spot
+    for g, c in zip((run.s.a, run.s.b), run.s.characters):
+        if c != CHAR_ALUCARD:
+            run.expect(reload_game(run, g), f"{'AB'[g is run.s.b]} loads as {names[c]}")
+            arrive(run, g, p.stage, p.room_id, p.ground_x, p.ground_y)
+    for g, c in zip((run.s.a, run.s.b), run.s.characters):
+        run.expect(g.mailbox("self_presence").character == c, f"{'AB'[g is run.s.b]} plays {names[c]}",
+                   playing=g.mailbox("self_presence").character)
+
+
 def setup(run, pvp=True, gap=24, options=0):
     a, b = run.s.a, run.s.b
+    load_characters(run)
     for g in (a, b):
         g.mailbox("set_control", CONTROL_PVP if pvp else 0)
         g.host("set_player", options=OPT_PARTNER_SIM | (options if g is a else 0))
@@ -60,24 +78,50 @@ def setup(run, pvp=True, gap=24, options=0):
     run.step(10)
 
 
-def expect_hit(run, r, what):
+def expect_hit(run, r, what, away=1):
     run.expect(r["hits"] > 0 and r["hp"] > 0, f"{what} hurt B (B's own damage code)", **r)
     run.expect(STEP_HIT in r["steps"], "B staggered (its hit step)", **r)
-    run.expect(r["moved"] > 0, "B was knocked away from A (right)", **r)
+    run.expect(r["moved"] * away > 0, f"B was knocked away from A ({'right' if away > 0 else 'left'})", **r)
+
+
+GALLERY = (0x00, 80, 680, 150)  # NO0, "next to Maria" (debugstarts): flat from x 417 to 693 (her scene is to the right)
+
+
+def setup_wide(run, gap, options=0):
+    """setup() for throws that need more floor than the entrance's: both in the Marble Gallery,
+    B walks left until it's `gap` px from A, A faces it (left)."""
+    from session_progress import arrive
+    a, b = run.s.a, run.s.b
+    load_characters(run)
+    for g in (a, b):
+        g.mailbox("set_control", CONTROL_PVP)
+        g.host("set_player", options=OPT_PARTNER_SIM | (options if g is a else 0))
+        arrive(run, g, *GALLERY)
+    run.step(200)  # spawn protection
+    for _ in range(240):
+        if a.snapshot()["world_x"] - b.snapshot()["world_x"] >= gap:
+            break
+        run.step(1, p1=("", "left"))
+    run.step(10)
+    run.expect(abs(a.snapshot()["world_y"] - b.snapshot()["world_y"]) <= 2, "A and B stand on the same ground",
+               a=(a.snapshot()["world_x"], a.snapshot()["world_y"]), b=(b.snapshot()["world_x"], b.snapshot()["world_y"]))
+    run.step(1, p1=("left", ""))  # A faces B
+    run.step(10)
 
 
 def _hand(run):
-    """Criteria 1-2, a hand attack (weapon, fist, whip): A swings at B. B is hit by its own damage code (its HP drops,
+    """Criteria 1-2, a hand attack (weapon, fist, whip): A swings at B (in the Marble Gallery: the
+    entrance's floor is too short once Richter's or Maria's load has moved them). B is hit by its own damage code (its HP drops,
     by less than the attack: its defence), staggers (its hit step) and is knocked away from A;
     A's copy of B shows the hit too."""
     a, b = run.s.a, run.s.b
-    setup(run)
+    setup_wide(run, 24)
     body0 = a.read(symbols()["g_CoopBodyHits"])
-    r = attack(run, "right+square")
+    r = attack(run, "left+square")
     run.expect(r["hits"] > 0, "B's game took A's swing", **r)
     run.expect(r["hp"] > 0, "B lost HP", **r)
     run.expect(STEP_HIT in r["steps"], "B staggered (its hit step)", **r)
-    run.expect(r["moved"] > 0, "B was knocked away from A (right)", **r)
+    run.expect(r["moved"] < 0, "B was knocked away from A (left)", **r)
     run.expect(r["a_body_hits"] > body0, "A's copy of B was hit too", **r)
 
 
@@ -105,36 +149,67 @@ def m15_pvp_off(run):
 
 def _subweapon(run):
     """Criterion 1, a subweapon: A throws the dagger at B, out of a swing's reach (44 px)."""
-    setup(run, gap=44)
+    setup_wide(run, 44)
 
     def arm(a):
         a.write(SUBWEAPON, 1, "<i")  # the dagger
         a.write(HEARTS, 50, "<i")
-    expect_hit(run, attack(run, "up+square", frames=120, every=40, arm=arm), "A's dagger")
+    expect_hit(run, attack(run, "up+square", frames=120, every=40, arm=arm), "A's dagger", away=-1)
 
 
 def _spell(run):
     """Criterion 1, a spell: A (Alucard) casts Hellfire (the right-stick shortcut) at B, 44 px away."""
     from link.mailbox import OPT_SHORTCUTS, SPELLS, spell_options
     from scenarios_m8 import MP, MP_MAX, SPELLS_LEARNT
-    setup(run, gap=44, options=OPT_SHORTCUTS | spell_options([None, SPELLS.index("Hellfire"), None, None]))
+    setup_wide(run, 44, options=OPT_SHORTCUTS | spell_options([None, None, None, SPELLS.index("Hellfire")]))
 
     def arm(a):
         a.write(SPELLS_LEARNT, 0xFF)
         a.write(MP, 99, "<i")
         a.write(MP_MAX, 99, "<i")
-    expect_hit(run, attack(run, "rs_right", frames=240, every=120, arm=arm), "A's Hellfire")
+    expect_hit(run, attack(run, "rs_left", frames=240, every=120, arm=arm), "A's Hellfire", away=-1)
 
 
-# Hand attacks for all 9 pairings; the dagger thrown by Alucard and Richter (Maria's subweapons are
-# her guardians); spells are Alucard's.
+RELICS, AXE, ECHO_OF_BAT = 0x80097964, 2, 2  # g_Status.relics; Maria's code turns the axe into a guardian
+
+
+def _guardian(run):
+    """Criterion 1, Maria's guardians: A (Maria) calls the axe's guardian, which stays around her
+    (a 96 x 80 hitbox), with B next to her. (Her guardians can't be called moving: A stands.)"""
+    setup_wide(run, 24)
+
+    def arm(a):
+        a.write(SUBWEAPON, AXE, "<i")
+        a.write(HEARTS, 50, "<i")
+    expect_hit(run, attack(run, "up+square", frames=180, every=60, arm=arm), "A's guardian", away=-1)
+
+
+def _crash(run):
+    """Criterion 1, an item crash (Echo of Bat on, one-button moves: hearts spent on △):
+    Richter's dagger crash, or Maria's axe guardian's, at B 44 px away."""
+    from link.mailbox import OPT_SHORTCUTS
+    setup_wide(run, 44, options=OPT_SHORTCUTS)
+
+    def arm(a):
+        a.write(RELICS + ECHO_OF_BAT, 3, "<B")  # found and on
+        a.write(SUBWEAPON, 1 if a.mailbox("self_presence").character == CHAR_RICHTER else AXE, "<i")
+        a.write(HEARTS, 50, "<i")
+    expect_hit(run, attack(run, "triangle", frames=240, every=120, arm=arm), "A's crash", away=-1)
+
+
+# Hand attacks for all 9 pairings; the dagger thrown by Alucard and Richter, Maria's guardian (her
+# subweapons are guardians) at each; spells are Alucard's; Richter's and Maria's crashes.
 for _ca in (CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA):
     for _cb in (CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA):
         _pair_test("hand", _hand, _ca, _cb)
         if _ca != CHAR_MARIA:
             _pair_test("dagger", _subweapon, _ca, _cb)
+        else:
+            _pair_test("guardian", _guardian, _ca, _cb)
         if _ca == CHAR_ALUCARD:
             _pair_test("spell", _spell, _ca, _cb)
+    if _ca != CHAR_ALUCARD:
+        _pair_test("crash", _crash, _ca, CHAR_ALUCARD)
 
 
 @session_scenario(starts=("entrance", "entrance"))
@@ -309,3 +384,7 @@ def online_pvp_setting(run):
     run.step(90)
     run.expect((b.host("status").get("partner_hello") or {}).get("pvp") is True, "the joiner hears PvP is on",
                hello=b.host("status").get("partner_hello"))
+
+
+
+

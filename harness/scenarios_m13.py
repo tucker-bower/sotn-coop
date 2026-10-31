@@ -46,6 +46,8 @@ def m13_spike_partner_sim(run):
     x2 = body_x(e)
     run.expect(x1 > x0 + 40 and x2 < x1, "the partner walks right, then left, on its own buttons", x=(x0, x1, x2))
     with_sim = e.snapshot()
+    seed_addr = e.read(symbols()["g_CoopRandSeed"])  # the BIOS rand()'s seed (partner.c: the body's is its own)
+    with_sim["rand"] = e.read(seed_addr) if seed_addr else None
     with_sim_state = e.save_state()
     ram_a = e.read_bytes(0x80000000, 0x200000)
     run.step(1)
@@ -56,6 +58,7 @@ def m13_spike_partner_sim(run):
     e.load_state(start)
     run_partner(run, script, p1, sim=False)
     alone = e.snapshot()
+    alone["rand"] = e.read(seed_addr) if seed_addr else None
     run.step(1)
     shot_off = e.screenshot()
     from PIL import ImageChops
@@ -72,7 +75,8 @@ def m13_spike_partner_sim(run):
     run.step(1)
     bank = e.vram_rect(rx, 512 + ry, max(rw, 1), max(rh, 1))
     run.expect(any(any(row) for row in bank), "its sprite is in VRAM's second bank", rect=(rx, ry, rw, rh))
-    same = {k: (with_sim[k], alone[k]) for k in ("world_x", "world_y", "hp", "room") if with_sim[k] != alone[k]}
+    run.expect(seed_addr, "the BIOS rand()'s seed was found (so the body's calls don't shift player 1's)")
+    same = {k: (with_sim[k], alone[k]) for k in ("world_x", "world_y", "hp", "room", "rand") if with_sim[k] != alone[k]}
     run.expect(not same, "player 1 ends the same with or without the partner", differ=same)
     # 4. determinism: the same inputs, the same RAM
     e.load_state(start)
