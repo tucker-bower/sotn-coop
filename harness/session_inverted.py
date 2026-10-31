@@ -112,3 +112,14 @@ def _final_boss_elsewhere(name, start, limit):
 
 _final_boss_elsewhere("Richter", START, 3000)
 _final_boss_elsewhere("Dracula", str(STARTS / "Boss - Dracula.state"), 6000)
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Medusa.state"),) * 2)
+def online_inverted_boss(run):
+    """Online, across a country (60 ms each way, jitter, 2% loss): Medusa together, as boss_flow
+    checks it on the couch (pulled in, she falls once, both fine, the same flags, her record in
+    both games)."""
+    import bossstarts
+    from session_m12 import boss_flow
+    run.s.set_net("country", 7, delay=60, jitter=4, loss=0.02)
+    boss_flow(run, next(r for r in bossstarts.B if r["name"] == "Medusa"))
