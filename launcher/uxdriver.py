@@ -460,7 +460,8 @@ def _test_castles(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # the last item
+        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
+        ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),
@@ -468,6 +469,36 @@ def _test_castles(pg):
         ("call", lambda d: setattr(d, "arrived", d.view.frame)),  # then past the room's fade in
         ("until", lambda d: d.view.frame > d.arrived + 150 or d.waited > 20000), ("shot", "at-the-boss"),
         ("expect", at_start, "the fresh copy plays from its start, outside Slogra & Gaibon"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
+
+
+def _boss_rush(pg):
+    """Boss rush (docs/design/boss-rush.md): Home > Solo > Boss rush starts at the first boss's
+    door, the status bar counting it (1/22)."""
+    A = pg.CONTROLLER_BUTTON_A
+
+    def at_first(d):
+        from archive import Castle
+        rush = [c for c in Castle.all() if c.info.get("rush") is not None]
+        g = d.view.games[0] if d.view and d.view.games else None
+        if not rush or g is None:
+            return False
+        p, want = g.mailbox("self_presence"), rush[0].info["start"]
+        return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # Boss rush: last
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", lambda d: d.heading == "Game"),
+        ("until", lambda d: at_first(d) or d.waited > 20000),
+        ("call", lambda d: setattr(d, "arrived", d.view.frame)),
+        ("until", lambda d: d.view.frame > d.arrived + 700 or d.waited > 20000), ("shot", "first-boss"),
+        ("expect", at_first, "the rush starts outside Slogra & Gaibon"),
+        ("expect", lambda d: d.view.rush is not None and d.view.rush.text().startswith("Boss rush 1/22"),
+         "the status bar counts it: Boss rush 1/22"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
@@ -777,7 +808,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
