@@ -2,6 +2,8 @@
 (playtest 2026-10-25 note 1: the Richter vs Dracula prologue didn't sync the players for its
 scenes, nor for the scene after it)."""
 
+import os
+
 from coop_env import TOOLS
 from session import session_scenario
 
@@ -337,6 +339,7 @@ def _bossstarts():
 
 
 GAME_TITLE, GAME_ENDING = 1, 9  # Game_Title, Game_Ending (include/game.h)
+VISITED = 0x108  # g_Settings.D_8003CB00: a bit per time-attack event whose fight has started
 
 
 def boss_flow(run, b, limit=24000):
@@ -363,14 +366,24 @@ def boss_flow(run, b, limit=24000):
     # only while a direction is held (like the prologue's)
     w.until(lambda: boss(g2), 3000, ("", walk))
     run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
+    # Into the arena: many fights start (and later record the win) only once the player is well
+    # inside (Akmodan II's manager: x 128-384; the trio's: 224-320), and the fight bot stops near
+    # the boss. The fight's start sets its time-attack event's visited bit (TimeAttackController).
+    import bossstarts
+    event = bossstarts.EVENTS.get(b.get("event") or b["name"].lower())
+    if event is not None:
+        visited = lambda: a.read("g_Settings", "<I", VISITED) & (1 << event)
+        w.until(visited, 600, (walk, ""))  # (not every fight sets it: Death's doesn't)
     hp_seen = {}
     fought = 0
     role_log = []
+    free = 0  # frames of the fight outside scenes (Dracula talks for some 2,900 first)
     for t in range(limit):
         pa, pb = a.mailbox("self_presence"), g2.mailbox("self_presence")
         if not role_log or role_log[-1][1:] != (pa.role, pb.role, pa.flags, pb.flags):
             role_log = (role_log + [(t, pa.role, pb.role, pa.flags, pb.flags)])[-14:]
         auth = a if pa.role == ROLE_AUTHORITY else g2
+        free += not auth.read("g_CutsceneHasControl")
         if t % 30 == 0:
             for g in (a, g2):  # the players don't die: this tests the flow, not the bot's fighting
                 g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
@@ -378,7 +391,7 @@ def boss_flow(run, b, limit=24000):
                 hp_seen.setdefault(slot, hp)
                 if hp > 8:
                     auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-                elif t > 3000:  # the bot can't land the last hit (flying bosses): a scripted kill,
+                elif free > 3000:  # the bot can't land the last hit (flying bosses): a scripted kill,
                     # as the game's hit detection does when HP runs out (design/M12 part 2)
                     auth.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
                     flags = auth.read("g_Entities", "<I", slot * 0xBC + 0x34)
@@ -391,7 +404,7 @@ def boss_flow(run, b, limit=24000):
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
                cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
-    if b["name"] != "Richter":
+    if b["name"] not in ("Richter", "Dracula"):
         w.step(300)
     else:
         # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: his death
@@ -409,9 +422,12 @@ def boss_flow(run, b, limit=24000):
                     g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
                     if boss(g):
                         back.append("AB"[k])
+            if os.environ.get("BOSS_DEBUG") and w.t % 300 == 0:
+                print(w.t, [(g.read("g_GameState"), g.read("g_CutsceneHasControl"), g.mailbox("self_presence").flags,
+                             g.snapshot()["world_x"], g.snapshot()["stage"]) for g in (a, g2)], flush=True)
             return None not in ended
-        w.until(both_ended, 2400)
-        run.expect(None not in ended, "killing Richter ends the game, in both games (as alone)",
+        w.until(both_ended, 2400 if b["name"] == "Richter" else 6000)  # Dracula's last words: some 4,400 frames
+        run.expect(None not in ended, f"killing {b['name']} ends the game, in both games (as alone)",
                    ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
         run.expect(not back, "he doesn't come back in either game", back=sorted(set(back)))
         run.expect(None not in ended and abs(ended[0] - ended[1]) <= 30, "both endings start together",
@@ -425,13 +441,19 @@ def boss_flow(run, b, limit=24000):
     diff = [i for i in range(0x300) if (flags[0][i] != flags0[0][i] or flags[1][i] != flags0[1][i])
             and flags[0][i] != flags[1][i]]
     run.expect(not diff, "what the fight set in the castle flags is the same in both", diff=diff[:10])
+    if b.get("event"):  # the inverted castle's: its own death sequence records it (in both games: EV_RECORD)
+        k = bossstarts.RECORDS + 4 * bossstarts.EVENTS[b["event"]]
+        w.until(lambda: all(g.read("g_Settings", "<i", k) for g in (a, g2)), 1800)
+        rec = [g.read("g_Settings", "<i", k) for g in (a, g2)]
+        run.expect(all(rec), "the boss is beaten in both games, by the game's own record", records=rec,
+                   hp_first=sorted(hp_seen.values())[-3:], t=t)
 
 
 def _boss_test(b):
     name = b["name"].replace(" & ", " and ")
     def test(run):
         boss_flow(run, b)
-    test.__name__ = "m12_boss_" + name.lower().replace(" ", "_")
+    test.__name__ = "m12_boss_" + name.lower().replace(",", "").replace(" ", "_")
     test.__doc__ = f"Every boss, together: {b['name']} ({b['area']})."
     start = str(STARTS / f"Boss - {name}.state")
     session_scenario(starts=(start, start))(test)
@@ -672,7 +694,7 @@ def m12_chain_first_castle_long(run):
     a, b = run.s.a, run.s.b
     level0 = [g.read("g_Status", "<i", 0x80097BE8 - 0x80097964) for g in (a, b)]
     beaten, missing = [], set()
-    for boss in bossstarts.B:
+    for boss in [r for r in bossstarts.B if not r.get("inverted")]:
         for g in (a, b):  # this stretch's pickups and story; what was earned is kept as it is
             for name in boss["relics"]:
                 k = bossstarts.RELICS.index(name)

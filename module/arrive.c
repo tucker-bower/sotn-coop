@@ -79,7 +79,8 @@ static s16 s_BossPullCooldown;
 // A pulled-in game is a follower: nobody is pulled into a follower's scene (each copy used to
 // pull the other back in when its player left the room, forever). After a scene, a short
 // cooldown before this game can be pulled into another.
-#define RICHTER_END_WAIT 1800 // frames a dead player waits for the partner's ending (boss.c), then as before
+#define RICHTER_END_WAIT 4800 // frames a dead player waits for the partner's ending (boss.c; Dracula's
+                              // last words take some 4,400), then as before
 #define CS_HOLD_MAX 600      // frames the leader waits for the partner (10 s)
 #define CS_HOLD_WAY_MAX 3600 // ...or 60 s while the partner is on its way: loading, in the opening
                              // video, or still in the prologue (playtest 2026-10-25: Death's scene at
@@ -174,30 +175,43 @@ void Arrive(u16 stage, u16 roomId, s16 x, s16 y) {
     s_State = ARRIVE_PENDING;
 }
 
+// The game reads the target stage twice (PSX_TO_STAGE_NO_GET: at Play_PrepareNextStage, then at
+// Engine_Init), each time flipped into the castle the player is in (its own table's ids are the
+// first castle's). Written relative to where the game is now, both reads give s_Stage, also from
+// one castle to the other (a partner in the inverted castle): from the first castle, a raw
+// STAGE_RNO1 loaded the inverted stage, then the second read turned it into NO1.
+static u16 TeleportStage(void) {
+    return s_Stage ^ (g_StageId & STAGE_INVERTEDCASTLE_FLAG);
+}
+
+// The game mirrors teleport positions in the inverted castle (func_800F14CC, at the stage's
+// Engine_Init): pre-mirror them, from the target room's size in the stage's room table. For
+// another stage, that table is in once its program has loaded (ArriveUpdate); before, an arrival
+// there from another stage landed mirrored (x 16 at 497 in a two-screen room), beyond what the
+// fine placement after arrival corrects.
+static bool s_Mirrored;
+
+static void PreMirror(RoomTeleport* tele) {
+    RoomHeader* room = (RoomHeader*)((u8*)g_api.o.rooms + s_RoomId);
+
+    tele->x = (((room->right - room->left) + 1) << 8) - s_X;
+    tele->y = (((room->bottom - room->top) + 1) << 8) - s_Y;
+    s_Mirrored = true;
+}
+
 static void ArriveStart(void) {
     RoomTeleport* tele = &D_800A245C[BORROWED_TELEPORT];
-    RoomHeader* room;
-    s32 width, height;
 
     s_Saved = *tele;
     tele->x = s_X;
     tele->y = s_Y;
-    if (s_Stage & STAGE_INVERTEDCASTLE_FLAG) {
-        // The game mirrors teleport positions in the inverted castle (func_800F14CC): pre-mirror.
-        // Its rooms aren't loaded yet, so use the room header from our own copy of the target:
-        // the partner's room offset indexes the same table once the stage is loaded, and the
-        // fine placement after arrival corrects anything this gets wrong.
-        room = (RoomHeader*)((u8*)g_api.o.rooms + s_RoomId);
-        width = ((room->right - room->left) + 1) << 8;
-        height = ((room->bottom - room->top) + 1) << 8;
-        if (s_Stage == g_StageId) {
-            tele->x = width - s_X;
-            tele->y = height - s_Y;
-        }
+    s_Mirrored = !(s_Stage & STAGE_INVERTEDCASTLE_FLAG);
+    if (!s_Mirrored && s_Stage == g_StageId) {
+        PreMirror(tele);
     }
     tele->roomId = s_RoomId;
     tele->unk6 = g_StageId;
-    tele->stageId = s_Stage;
+    tele->stageId = TeleportStage();
     if (g_GameEngineStep == Engine_Map) { // teleporting from the map screen
         D_800974A4 = 0;
     }
@@ -241,6 +255,11 @@ static void ArriveUpdate(void) {
         }
         break;
     case ARRIVE_LOADING:
+        D_800A245C[BORROWED_TELEPORT].stageId = TeleportStage(); // g_StageId has changed
+        if (!s_Mirrored && g_StageId == s_Stage && g_GameStep <= Play_Default &&
+            g_GameEngineStep == Engine_Init) { // the stage's program is in, the player not placed
+            PreMirror(&D_800A245C[BORROWED_TELEPORT]);
+        }
         if (InNormalPlay() && g_GameEngineStep == Engine_Normal) {
             ArriveFinish();
             if (s_Revived) {
@@ -354,9 +373,9 @@ static bool DeathUpdate(void) {
         return true;
     }
     // Engine_10 at MENU_STEP_INIT: this frame's update would start the Game Over.
-    // Richter died: the game is ending, here too, when the partner's does (boss.c). Its ending
+    // Richter or Dracula died: the game is ending, here too, when the partner's does (boss.c). Its ending
     // takes it out of play (not fresh) a moment before it says so: wait for that, not a Game Over.
-    if (BossRichterGone() && !s_AllowGameOver && ++s_BusyWait <= RICHTER_END_WAIT) {
+    if (BossFinalGone() && !s_AllowGameOver && ++s_BusyWait <= RICHTER_END_WAIT) {
         return false;
     }
     if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
@@ -428,7 +447,7 @@ static void PullIn(void) {
     if (s_BossPullCooldown) {
         s_BossPullCooldown--;
     }
-    if (BossRichterGone()) { // the game is ending: never pulled (boss.c)
+    if (BossFinalGone()) { // the game is ending: never pulled (boss.c)
         return;
     }
     if (!PartnerInBossFight()) {
@@ -466,7 +485,7 @@ static void CutsceneTrack(void) {
     if (s_CsCooldown) {
         s_CsCooldown--;
     }
-    if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) && !BossRichterGone() &&
+    if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) && !BossFinalGone() &&
         ((PartnerFresh() && !(p->flags & PRESENCE_CUTSCENE) && SAME_WORLD(p) &&
           (p->stage != STAGE_ST0 || g_StageId == STAGE_ST0)) ||
          PartnerOnItsWay())) {
@@ -478,7 +497,7 @@ static void CutsceneTrack(void) {
         s_CsCooldown = CS_COOLDOWN;
         // The partner's copy of the scene is still running in this room: both players get
         // control back together (M12: scenes driven by where each player is drift apart).
-        if (PartnerFresh() && (p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner() && !BossRichterGone()) {
+        if (PartnerFresh() && (p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner() && !BossFinalGone()) {
             s_CsEndHold = 1;
         }
     }

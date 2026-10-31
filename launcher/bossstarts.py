@@ -19,34 +19,44 @@ import struct
 # Ids from the decomp's include/items.h (hand items and body items are separate lists).
 HAND = {"empty": 0, "leather shield": 5, "knight shield": 6, "herald shield": 9, "shaman shield": 12,
         "basilard": 18, "short sword": 19, "gladius": 86, "cutlass": 88, "bekatowa": 92,
-        "holy sword": 115, "morningstar": 129, "potion": 159, "high potion": 160}
+        "holy sword": 115, "morningstar": 129, "potion": 159, "high potion": 160,
+        "alucard shield": 16, "alucard sword": 123, "elixir": 161}
 BODY = {"no armor": 0, "hide cuirass": 2, "bronze cuirass": 3, "silver plate": 6, "gold plate": 7,
         "platinum mail": 8, "ice mail": 12, "mirror cuirass": 13, "no head": 26, "sunglasses": 27,
         "goggles": 32, "holy glasses": 34, "steel helm": 35, "stone mask": 36, "no cape": 48,
         "cloth cape": 49, "crystal cloak": 52, "blood cloak": 54, "no accessory": 57, "moonstone": 58,
-        "gold ring": 72, "silver ring": 73}
+        "gold ring": 72, "silver ring": 73, "alucard mail": 15, "dragon helm": 45, "twilight cloak": 56,
+        "ring of arcana": 75, "talisman": 83}
 RELICS = ["soul of bat", "fire of bat", "echo of bat", "force of echo", "soul of wolf", "power of wolf",
           "skill of wolf", "form of mist", "power of mist", "gas cloud", "cube of zoe", "spirit orb",
           "gravity boots", "leap stone", "holy symbol", "faerie scroll", "jewel of open", "merman statue",
-          "bat card", "ghost card", "faerie card", "demon card", "sword card"]
+          "bat card", "ghost card", "faerie card", "demon card", "sword card", "jp 0", "jp 1",
+          "heart of vlad", "tooth of vlad", "rib of vlad", "ring of vlad", "eye of vlad"]
 CARDS = {"bat card", "ghost card", "faerie card", "demon card", "sword card"}  # familiars: found, not summoned
 SUBWEAPONS = {"dagger": 1, "axe": 2, "holy water": 3, "cross": 4}
 EVENTS = {  # time attack events (include/game.h): a nonzero record = done
     "olrox": 1, "doppleganger10": 2, "granfaloon": 3, "minotaur & werewolf": 4, "scylla": 5,
     "slogra & gaibon": 6, "hippogryph": 7, "succubus": 9, "karasuman": 10, "cerberus": 13,
     "richter": 14, "lesser demon": 17, "meet death": 23, "holy glasses": 24, "librarian": 25,
-    "maria": 26}
+    "maria": 26,
+    # the inverted castle's
+    "dracula": 0, "beelzebub": 8, "fake trevor, grant & sypha": 11, "death": 12, "medusa": 15,
+    "the creature": 16, "doppleganger40": 18, "akmodan ii": 19, "darkwing bat": 20, "galamoth": 21}
 FLAGS = {  # include/castle_flags.h: story flags set by the time each boss is reached
     "slogra & gaibon": [0x84], "maria in nz0": [0x85], "librarian": [0x72], "maria after hippogryph": [0x62],
     "maria in dai": [0x63], "richter after m&w": [0xB4], "scylla wyrm": [0xC5], "scylla": [0xC3],
     "ferryman": [0xC2, 0xC8, 0xC9], "succubus": [0xD4], "demon switch": [0x50], "cen open": [0x00],
-    "maria in cen": [0xD8], "no4 open": [0x01], "outer wall elevator": [0x10]}
+    "maria in cen": [0xD8], "no4 open": [0x01], "outer wall elevator": [0x10],
+    "inverted castle": [0x96]}  # INVERTED_CASTLE_UNLOCKED
 WARPS = {"NP3": 0x80, "CHI": 0x40, "NO1": 0x20, "TOP": 0x10, "NO2": 0x08}  # WRP_UNLOCKS bits
 
 # Stage ids (include/game.h) and the areas a player has usually explored by each boss.
 STAGES = {"NO0": 0x00, "NO1": 0x01, "LIB": 0x02, "CAT": 0x03, "NO2": 0x04, "CHI": 0x05, "DAI": 0x06,
           "CEN": 0x08, "BO3": 0x1B, "BO6": 0x18, "NO4": 0x09, "ARE": 0x0A, "TOP": 0x0B, "NZ0": 0x0C, "NZ1": 0x0D, "DRE": 0x12,
-          "NO3": 0x41}
+          "NO3": 0x41,
+          # the inverted castle (STAGE_INVERTEDCASTLE_FLAG) and its boss stages
+          "RNZ1": 0x2D, "RBO0": 0x3E, "RBO1": 0x3D, "RBO2": 0x3C, "RBO3": 0x3B, "RBO4": 0x3A, "RBO5": 0x39,
+          "RBO6": 0x38, "RBO7": 0x37, "RBO8": 0x36}
 
 # name: area, stage, arrive (room id, x, y), walk, level, gold, life ups, heart ups,
 #       gear (right hand, left hand, head, body, cape, accessory 1, accessory 2), subweapon,
@@ -145,6 +155,47 @@ boss("Richter", "Castle Keep", "BO6", (0, 240, 179), "left", 38, 40000, (14, 12)
      keep=("holy glasses", "ice mail", "moonstone"),
      note="at his door; Holy Glasses in the bag")
 
+# The inverted castle (v1.1, D114): after freeing Richter (the Holy Glasses on, Shaft's orb).
+# Each start is in its boss's own stage, where the bot finds the boss at once (the boss stages
+# come in from rooms whose doors are all loading zones: arriving there is like coming through
+# them; Darkwing Bat is in the Reverse Clock Tower's own room 0). Positions as the player sees
+# them (Arrive pre-mirrors), found by trying each stage from both sides. The route (relic order)
+# is a typical one; each beaten boss adds its Vlad relic and a level or so.
+INV_GEAR = ("alucard sword", "alucard shield", "dragon helm", "alucard mail", "twilight cloak",
+            "ring of arcana", "talisman")
+INV_KEEP = ("holy sword", "herald shield", "steel helm", "platinum mail", "crystal cloak", "gold ring",
+            "silver ring", "holy glasses")
+R12 = R11 + ["power of wolf", "skill of wolf", "gas cloud", "force of echo", "bat card"]
+F8 = F7 + ["cen open", "maria in cen", "inverted castle"]
+D13 = D12 + ["holy glasses", "richter"]
+INVERTED = []
+
+
+def inverted(name, area, stage, arrive, walk, relic=None, event=None):
+    k = len(INVERTED)
+    done = D13 + [r["event"] for r in INVERTED if r["event"]]
+    relics = R12 + [r["relic"] for r in INVERTED if r["relic"]]
+    row = dict(name=name, area=area, stage=stage, arrive=arrive, walk=walk, level=40 + k, gold=50000 + 6000 * k,
+               vessels=(16 + k, 14 + k), gear=INV_GEAR, sub="holy water", relics=relics, areas=A9 + ["CEN"],
+               flags=F8, done=done, keep=INV_KEEP, check=None, note="", inverted=True, relic=relic, event=event)
+    INVERTED.append(row)
+    B.append(row)
+
+
+inverted("The Creature", "Reverse Outer Wall", "RBO4", (0, 488, 132), "left", "tooth of vlad", "the creature")
+inverted("Darkwing Bat", "Reverse Clock Tower", "RNZ1", (0, 16, 132), "right", "ring of vlad", "darkwing bat")
+inverted("Akmodan II", "Death Wing's Lair", "RBO7", (0, 488, 392), "left", "rib of vlad", "akmodan ii")
+inverted("Medusa", "Anti-Chapel", "RBO3", (0, 488, 132), "left", "heart of vlad", "medusa")
+inverted("Death", "Cave", "RBO2", (0, 488, 132), "left", "eye of vlad", "death")
+inverted("Doppleganger40", "Reverse Caverns", "RBO5", (0, 16, 132), "right", None, "doppleganger40")
+inverted("Fake Trevor, Grant & Sypha", "Reverse Colosseum", "RBO0", (0, 488, 132), "left", None,
+         "fake trevor, grant & sypha")
+inverted("Beelzebub", "Necromancy Laboratory", "RBO1", (0, 1000, 392), "left", None, "beelzebub")
+inverted("Galamoth", "Floating Catacombs", "RBO8", (0, 24, 392), "right", None, "galamoth")
+# His stage, after Shaft (not covered yet: his room in the Reverse Center runs a scene and an
+# elevator a bot doesn't get through). Dracula talks first (about 2,900 frames).
+inverted("Dracula", "Reverse Center", "RBO6", (16, 112, 180), "right", None, "dracula")
+
 STATUS_LEVEL, STATUS_EXP, STATUS_GOLD = 0x284, 0x288, 0x28C
 STATUS_HP, STATUS_HEARTS, STATUS_MP, STATUS_STATS = 0x23C, 0x244, 0x24C, 0x254
 STATUS_SUB, STATUS_EQUIP, STATUS_TIMER = 0x298, 0x29C, 0x2CC
@@ -154,7 +205,8 @@ WRP_UNLOCKS = 0xD0
 LEVEL_HP = [1, 3, 6, 10, 20, 30, 40, 50, 100, 200]  # g_LevelHPIncrease (src/dra/5D5BC.c)
 EXP_NEXT = [0, 0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250, 3850, 4500, 5200, 5950, 6750,
             7600, 8500, 9450, 10450, 11700, 13200, 15100, 17500, 20400, 23700, 27200, 30900, 35000, 39500,
-            44500, 50000, 56000, 61500, 68500, 76000, 84000, 92500, 101500]  # g_ExpNext, levels 0-39
+            44500, 50000, 56000, 61500, 68500, 76000, 84000, 92500, 101500, 110000, 120000, 130000,
+            140000, 150000, 160000, 170000, 180000, 190000, 200000]  # g_ExpNext, levels 0-49
 
 
 # Scene starts (Tucker, 2026-10-26): one before each story scene of the first castle, with the
