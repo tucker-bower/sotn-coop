@@ -763,7 +763,7 @@ def _hud(pg):
              ("until", lambda d: d.heading == "Debug starts"),
              ("call", make_starts),                               # not made yet: Yes, make them
              ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Both")),
-             ("key", pg.K_DOWN), ("key", pg.K_RETURN),            # Places
+             ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Places (after Bosses, Scenes)
              ("screen", "Places"), ("key", pg.K_RETURN),           # the first: the castle entrance
              ("screen", "Press a button"), ("pad", 0, A), ("pad", 101, A), ("pad", 0, A), ("pad", 101, A),
              ("until", lambda d: d.heading == "Game"), ("game_frames", 240)]
