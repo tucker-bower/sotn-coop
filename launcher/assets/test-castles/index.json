@@ -1,0 +1,313 @@
+{
+ "id": "65b8e724281528db",
+ "castles": {
+  "Boss: Slogra & Gaibon": {
+   "about": "Alchemy Laboratory. Level 8, 600 gold, short sword, 1 relic \u2014 walk left",
+   "start": [
+    12,
+    152,
+    200,
+    400
+   ],
+   "order": 0,
+   "save": "Boss - Slogra and Gaibon.save"
+  },
+  "Scene: Maria in the Alchemy Lab": {
+   "about": "Alchemy Laboratory. Level 8, 600 gold, short sword, 1 relic \u2014 walk left",
+   "start": [
+    12,
+    16,
+    40,
+    128
+   ],
+   "order": 1,
+   "save": "Scene - Maria in the Alchemy Lab.save"
+  },
+  "Scene: Maria in the Marble Gallery": {
+   "about": "Marble Gallery. Level 12, 2000 gold, gladius, 2 relics \u2014 walk right",
+   "start": [
+    0,
+    80,
+    728,
+    135
+   ],
+   "order": 2,
+   "save": "Scene - Maria in the Marble Gallery.save"
+  },
+  "Boss: Doppleganger10": {
+   "about": "Outer Wall. Level 12, 2000 gold, gladius, 2 relics \u2014 walk left",
+   "start": [
+    1,
+    96,
+    40,
+    135
+   ],
+   "order": 3,
+   "save": "Boss - Doppleganger10.save"
+  },
+  "Boss: Hippogryph": {
+   "about": "Royal Chapel. Level 16, 5000 gold, gladius, 6 relics \u2014 walk right",
+   "start": [
+    6,
+    24,
+    640,
+    132
+   ],
+   "order": 4,
+   "save": "Boss - Hippogryph.save"
+  },
+  "Boss: Minotaur & Werewolf": {
+   "about": "Colosseum. Level 19, 8000 gold, cutlass, 7 relics \u2014 walk right",
+   "start": [
+    10,
+    32,
+    1150,
+    132
+   ],
+   "order": 5,
+   "save": "Boss - Minotaur and Werewolf.save"
+  },
+  "Scene: Maria in the Royal Chapel": {
+   "about": "Royal Chapel. Level 19, 8000 gold, cutlass, 7 relics \u2014 walk left",
+   "start": [
+    6,
+    8,
+    40,
+    128
+   ],
+   "order": 6,
+   "save": "Scene - Maria in the Royal Chapel.save"
+  },
+  "Boss: Lesser Demon": {
+   "about": "Long Library. Level 21, 10000 gold, cutlass, 8 relics \u2014 mist through the bars",
+   "start": [
+    2,
+    0,
+    1100,
+    700
+   ],
+   "order": 7,
+   "save": "Boss - Lesser Demon.save"
+  },
+  "Scene: The Librarian": {
+   "about": "Long Library. Level 21, 10000 gold, cutlass, 8 relics \u2014 walk left",
+   "start": [
+    2,
+    32,
+    236,
+    120
+   ],
+   "order": 8,
+   "save": "Scene - The Librarian.save"
+  },
+  "Boss: Karasuman": {
+   "about": "Clock Tower. Level 23, 13000 gold, cutlass, 9 relics \u2014 walk left",
+   "start": [
+    13,
+    8,
+    60,
+    132
+   ],
+   "order": 9,
+   "save": "Boss - Karasuman.save"
+  },
+  "Boss: Olrox": {
+   "about": "Olrox's Quarters. Level 26, 17000 gold, bekatowa, 12 relics \u2014 walk left",
+   "start": [
+    4,
+    88,
+    56,
+    132
+   ],
+   "order": 10,
+   "save": "Boss - Olrox.save"
+  },
+  "Boss: Succubus": {
+   "about": "Underground Caverns (Nightmare). Level 28, 21000 gold, holy sword, 15 relics \u2014 walk right",
+   "start": [
+    18,
+    0,
+    16,
+    180
+   ],
+   "order": 11,
+   "save": "Boss - Succubus.save"
+  },
+  "Boss: Scylla": {
+   "about": "Underground Caverns. Level 30, 24000 gold, holy sword, 16 relics \u2014 walk left",
+   "start": [
+    27,
+    0,
+    650,
+    150
+   ],
+   "order": 12,
+   "save": "Boss - Scylla.save"
+  },
+  "Boss: Cerberus": {
+   "about": "Abandoned Mine. Level 32, 28000 gold, holy sword, 17 relics \u2014 walk right",
+   "start": [
+    5,
+    8,
+    390,
+    132
+   ],
+   "order": 13,
+   "save": "Boss - Cerberus.save"
+  },
+  "Boss: Granfaloon": {
+   "about": "Catacombs. Level 34, 32000 gold, holy sword, 18 relics \u2014 walk left",
+   "start": [
+    3,
+    32,
+    56,
+    132
+   ],
+   "order": 14,
+   "save": "Boss - Granfaloon.save"
+  },
+  "Boss: Richter": {
+   "about": "Castle Keep. Level 38, 40000 gold, holy sword, 18 relics \u2014 at his door; Holy Glasses in the bag",
+   "start": [
+    24,
+    0,
+    240,
+    179
+   ],
+   "order": 15,
+   "save": "Boss - Richter.save"
+  },
+  "Scene: Maria in the Center: the Holy Glasses": {
+   "about": "Center. Level 38, 40000 gold, holy sword, 18 relics \u2014 walk left",
+   "start": [
+    8,
+    8,
+    728,
+    455
+   ],
+   "order": 16,
+   "save": "Scene - Maria in the Center - the Holy Glasses.save"
+  },
+  "Scene: The Castle Keep": {
+   "about": "Castle Keep. Level 38, 40000 gold, holy sword, 18 relics \u2014 walk right",
+   "start": [
+    11,
+    16,
+    496,
+    896
+   ],
+   "order": 17,
+   "save": "Scene - The Castle Keep.save"
+  },
+  "Boss: The Creature": {
+   "about": "Reverse Outer Wall. Level 40, 50000 gold, alucard sword, 23 relics \u2014 walk right",
+   "start": [
+    33,
+    96,
+    232,
+    132
+   ],
+   "order": 18,
+   "save": "Boss - The Creature.save"
+  },
+  "Boss: Darkwing Bat": {
+   "about": "Reverse Clock Tower. Level 41, 56000 gold, alucard sword, 24 relics \u2014 walk left",
+   "start": [
+    45,
+    112,
+    24,
+    132
+   ],
+   "order": 19,
+   "save": "Boss - Darkwing Bat.save"
+  },
+  "Boss: Akmodan II": {
+   "about": "Death Wing's Lair. Level 42, 62000 gold, alucard sword, 25 relics \u2014 walk right",
+   "start": [
+    36,
+    88,
+    1000,
+    132
+   ],
+   "order": 20,
+   "save": "Boss - Akmodan II.save"
+  },
+  "Boss: Medusa": {
+   "about": "Anti-Chapel. Level 43, 68000 gold, alucard sword, 26 relics \u2014 walk right",
+   "start": [
+    38,
+    40,
+    744,
+    132
+   ],
+   "order": 21,
+   "save": "Boss - Medusa.save"
+  },
+  "Boss: Death": {
+   "about": "Cave. Level 44, 74000 gold, alucard sword, 27 relics \u2014 walk left",
+   "start": [
+    37,
+    8,
+    24,
+    132
+   ],
+   "order": 22,
+   "save": "Boss - Death.save"
+  },
+  "Boss: Doppleganger40": {
+   "about": "Reverse Caverns. Level 45, 80000 gold, alucard sword, 28 relics \u2014 walk right",
+   "start": [
+    41,
+    232,
+    1256,
+    132
+   ],
+   "order": 23,
+   "save": "Boss - Doppleganger40.save"
+  },
+  "Boss: Fake Trevor, Grant & Sypha": {
+   "about": "Reverse Colosseum. Level 46, 86000 gold, alucard sword, 28 relics \u2014 walk right",
+   "start": [
+    42,
+    48,
+    1256,
+    132
+   ],
+   "order": 24,
+   "save": "Boss - Fake Trevor, Grant and Sypha.save"
+  },
+  "Boss: Beelzebub": {
+   "about": "Necromancy Laboratory. Level 47, 92000 gold, alucard sword, 28 relics \u2014 walk right",
+   "start": [
+    44,
+    152,
+    488,
+    132
+   ],
+   "order": 25,
+   "save": "Boss - Beelzebub.save"
+  },
+  "Boss: Galamoth": {
+   "about": "Floating Catacombs. Level 48, 98000 gold, alucard sword, 28 relics \u2014 walk right",
+   "start": [
+    35,
+    32,
+    232,
+    132
+   ],
+   "order": 26,
+   "save": "Boss - Galamoth.save"
+  },
+  "Boss: Dracula": {
+   "about": "Reverse Center. Level 49, 104000 gold, alucard sword, 28 relics \u2014 walk right",
+   "start": [
+    56,
+    16,
+    112,
+    180
+   ],
+   "order": 27,
+   "save": "Boss - Dracula.save"
+  }
+ }
+}

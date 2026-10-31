@@ -132,6 +132,28 @@ class Castle:
         c.save_info()
         return c
 
+    @classmethod
+    def install_bundled(cls, bundle=None):
+        """The test castles that ship with the app (launcher/assets/test-castles, made by
+        scripts/export_test_castles.py; Tucker, 2026-10-31): installed when the bundled set
+        changes, replacing the test castles there (templates: nobody plays them in place).
+        Returns how many were installed (0: already up to date, or none bundled)."""
+        import shutil
+        bundle = Path(bundle or Path(__file__).resolve().parent / "assets" / "test-castles")
+        if not (bundle / "index.json").exists():
+            return 0
+        index = json.loads((bundle / "index.json").read_text())
+        marker = castles_dir() / TESTS / "bundle.txt"
+        if marker.exists() and marker.read_text().strip() == index["id"]:
+            return 0
+        for c in cls.tests():
+            shutil.rmtree(c.dir, ignore_errors=True)
+        for name, v in index["castles"].items():
+            cls.make_test(name, (bundle / v["save"]).read_bytes(), v["start"], v["order"], v["about"])
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(index["id"] + "\n")
+        return len(index["castles"])
+
     def fresh_copy(self):
         """A test castle to play: a new castle with its save and start (the test one stays as made)."""
         c = Castle.new(name=self.info["name"])

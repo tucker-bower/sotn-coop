@@ -56,6 +56,9 @@ def check_stage(stage):
             bad.append(f"{f}: a .bin that isn't OpenBIOS")
         elif ext in (".cue", ".iso", ".state", ".mcd", ".chd", ".img", ".ecm"):
             bad.append(f"{f}: a disc image, savestate or memory card")
+        elif ext == ".save" and f.parent.name == "test-castles":  # D136: progress only, the card header blank
+            if f.read_bytes()[:0x200] != bytes(0x200):
+                bad.append(f"{f}: a test castle with its memory card header (the game's icon) in it")
         elif ours and ext not in ALLOWED and ext != ".bin":
             bad.append(f"{f}: not on the allow-list ({ext})")
         elif f.stat().st_size > MAX_FILE:
@@ -63,6 +66,9 @@ def check_stage(stage):
     for name in ("README.txt", "AGPL-3.0.txt", "SwanStation-GPL-3.0.txt"):   # NOTICE, LICENSE, the core's GPL
         if not any(f.name == name and f.parent.name == "LICENSES" for f in stage.rglob(name)):
             bad.append(f"LICENSES/{name} missing: no release without the licences (NOTICE, LICENSE, licenses/)")
+    castles = [f for f in stage.rglob("*.save") if f.parent.name == "test-castles"]
+    if len(castles) < 28:  # Tucker, 2026-10-31: they ship, for playtesters (later: the alpha channel only)
+        bad.append(f"test castles: {len(castles)} in the build (launcher/assets/test-castles: 28)")
     if bad:
         raise SystemExit("game data check failed:\n  " + "\n  ".join(bad[:20]))
     n = sum(1 for f in stage.rglob("*") if f.is_file())

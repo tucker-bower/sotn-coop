@@ -462,6 +462,11 @@ class Launcher:
         self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
+        try:  # the test castles that ship with the app, when they changed (playtesters: D136)
+            from archive import Castle
+            Castle.install_bundled()
+        except Exception:  # noqa: BLE001 - the game works without them
+            log.exception("test castles")
         try:
             from gameview import Audio
             self.audio = Audio()

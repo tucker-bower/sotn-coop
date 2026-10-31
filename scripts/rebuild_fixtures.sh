@@ -13,3 +13,4 @@ $PY savestates.py "$DISC" 2>&1 | grep -v "^\[" | tail -1
 $PY fixtures_m12.py 2>&1 | grep -v "^\[" | tail -1
 rm -rf "$ROOT/.env/fixtures/debug-starts"
 $PY "$ROOT/scripts/make_debug_starts.py" 2>&1 | grep -v "^\[" | tail -1
+$PY "$ROOT/scripts/export_test_castles.py" | tail -1  # the test castles the app ships (D136)
