@@ -392,7 +392,8 @@ def _couch(pg, quit_at_end=True):
         ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
-        ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
+        ("pad", 101, A),                                      # both ready
+        ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
         ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
         ("until", in_game), ("expect", lambda d: d.inputs <= 15, "home to playing in 15 inputs or fewer (12, plus the detours to Game files and shortcuts)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
@@ -427,9 +428,10 @@ def _solo(pg):
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
+        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", in_game), ("expect", lambda d: d.inputs <= 4, "home to playing solo in 4 inputs"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 5, "home to playing solo in 5 inputs (4, plus New castle now the test castles ship: D136)"),
         ("expect", lambda d: len(castles()) == 1, "a new castle"),
         ("game_frames", 900), ("shot", "solo-game"),
         ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
@@ -498,6 +500,7 @@ def _startup(pg):
         ("screen", "Welcome"), ("key", pg.K_RETURN),
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
         ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
@@ -584,7 +587,8 @@ def _online_host(pg, code_file):
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
-            ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host: new game
+            ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
+            ("screen", "Host: which castle?"), ("key", pg.K_RETURN),          # New castle (D136)
             ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
@@ -686,6 +690,7 @@ def _characters(pg):
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+              ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("until", lambda d: d.heading == "Game"),
               ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),

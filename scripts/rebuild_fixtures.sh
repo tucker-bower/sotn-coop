@@ -14,3 +14,9 @@ $PY fixtures_m12.py 2>&1 | grep -v "^\[" | tail -1
 rm -rf "$ROOT/.env/fixtures/debug-starts"
 $PY "$ROOT/scripts/make_debug_starts.py" 2>&1 | grep -v "^\[" | tail -1
 $PY "$ROOT/scripts/export_test_castles.py" | tail -1  # the test castles the app ships (D136)
+# The release patch too: the launcher's UI flows (launcher/uxdriver.py) make their disc with it, and
+# a stale one tested an old game (2026-10-31: test_castles failed on the 10-28 patch's mailbox).
+DISKS=$($PY -c "import sys; sys.path.insert(0, '$ROOT/harness'); from coop_env import DISKS; print(DISKS)")
+$PY "$ROOT/patcher/patcher.py" make "$DISKS/Castlevania - Symphony of the Night (USA) (Track 1).bin" \
+    "$ROOT/.env/out/disc/sotn_coop.us.bin" --out "$ROOT/.env/release" \
+    --version "$(grep -oP 'VERSION = "\K[^"]+' "$ROOT/launcher/report.py")" | tail -1
