@@ -90,8 +90,12 @@ void PvpUpdate(void) {
         if (px - x > w || x - px > w || py - y > hh || y - py > hh || PLAYER.hitPoints >= h->attack) {
             continue;
         }
-        // As the stage's hit detection (src/st/collision.h) records an enemy's attack on the player
-        s_Hitter.posX.i.hi = x;
+        // As the stage's hit detection (src/st/collision.h) records an enemy's attack on the player.
+        // The player's hit code knocks it away from the hitter's x: the attacker's, where its body
+        // is. At the hitbox's centre, a whip reaching past the victim knocked it toward the
+        // attacker; by the attack's facing, Hellfire's and Maria's guardians did (theirs don't
+        // follow the caster's).
+        s_Hitter.posX.i.hi = g_CoopLink.partner.x + dx - g_Tilemap.scrollX.i.hi;
         s_Hitter.posY.i.hi = y;
         s_Hitter.hitboxOffX = 0;
         s_Hitter.facingLeft = h->facingLeft;
