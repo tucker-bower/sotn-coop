@@ -346,7 +346,7 @@ def boss_flow(run, b, limit=24000):
     """A walks into the boss; B, at the door, is pulled in; the boss has twice its HP; both fight it
     (worn down: this tests the flow, not the fight); it falls once, both are fine after, and what
     the fight set in the castle flags is the same in both."""
-    from link.mailbox import BOSS, DEAD, IN_PLAY, ROLE_AUTHORITY
+    from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY
     a, g2 = run.s.a, run.s.b
     flags0 = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
     w = SceneWatch(run)
@@ -393,12 +393,22 @@ def boss_flow(run, b, limit=24000):
     fought = 0
     role_log = []
     free = 0  # frames of the fight outside scenes (Dracula talks for some 2,900 first)
+    split, splits = 0, []
     for t in range(limit):
         pa, pb = a.mailbox("self_presence"), g2.mailbox("self_presence")
         if not role_log or role_log[-1][1:] != (pa.role, pb.role, pa.flags, pb.flags):
             role_log = (role_log + [(t, pa.role, pb.role, pa.flags, pb.flags)])[-14:]
         auth = a if pa.role == ROLE_AUTHORITY else g2
         free += not auth.read("g_CutsceneHasControl")
+        # D131: while both are in the boss's room, the fight stays shared (one boss, two players)
+        same_room = (pa.stage, pa.room_id) == (pb.stage, pb.room_id) and pa.flags & pb.flags & IN_PLAY
+        if same_room and bool(pa.flags & BOSS) != bool(pb.flags & BOSS) and not (pa.flags | pb.flags) & BUSY:
+            split += 1
+            if split == 120 and not splits:
+                splits.append({"t": t, "a": a.snapshot(), "b": g2.snapshot(), "roles": (pa.role, pb.role),
+                               "flags": (pa.flags, pb.flags), "role_log": list(role_log)})
+        else:
+            split = 0
         if t % 30 == 0:
             for g in (a, g2):  # the players don't die: this tests the flow, not the bot's fighting
                 g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
@@ -418,6 +428,7 @@ def boss_flow(run, b, limit=24000):
         fought = 0 if (boss(a) or boss(g2)) else fought + 1
         if fought > 300:
             break
+    run.expect(not splits, "the fight stays shared while both are in its room (D131)", split=splits[:1])
     run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:],
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
@@ -788,6 +799,9 @@ def chain(run, which):
         run.step(240)
         if os.environ.get("BOSS_DEBUG"):
             print("CHAIN", boss["name"], [g.snapshot() for g in (a, b)], flush=True)
+        if os.environ.get("CHAIN_SAVE_AT") == boss["name"]:  # both games here, to start a test from
+            for g, n in ((a, "a"), (b, "b")):
+                g.save_state_file(str(TOOLS["out"] / f"chain_at_{n}.state"))
         boss_flow(run, boss)
         beaten.append(boss["name"])
         records = lambda: [[g.read("g_Settings", "<i", bossstarts.RECORDS + 4 * bossstarts.EVENTS[n.lower()])
@@ -811,3 +825,4 @@ def chain(run, which):
                diff=[i for i in range(0x300) if flags[0][i] != flags[1][i]][:10])
     (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
+
