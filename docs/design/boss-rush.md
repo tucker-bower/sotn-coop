@@ -13,6 +13,7 @@ Tucker asked for it directly and said to build it now, so this is a record of th
 - Each boss's own progress, not carried over: carrying level 8 Alucard into Galamoth would be a wall, and balance is the test castles' (D127).
 - Time counts frames in play (not loads, not the ending), shown as m:ss.
 - Richter: his death would start the ending, which a load can't leave; the next boss loads 1.5 s after he falls, before its fade (`g_CoopRichterState`, boss.c).
+- Richter's and Dracula's castles are saved in their rooms: loaded there, without the arrival (it would reload the room and replay their talk).
 - Online, only the host's status bar shows the count and time (the joiner follows the host's loads).
 - No new game code: it's launcher-side (`launcher/bossrush.py`), on the joint save's existing load (`JointSave.resume`), so it works on the couch and online (the host drives it; the joiner follows the host's loads).
 - Scenes aren't in it (Maria, the Librarian...): bosses only.
@@ -22,4 +23,5 @@ Tucker asked for it directly and said to build it now, so this is a record of th
 - `boss_rush_through_richter`: Richter killed → not the ending: both at the Creature's start.
 - `boss_rush_finishes`: Dracula killed → the ending, the run marked finished with its time.
 - `uxdriver boss_rush`: Home > Solo > Boss rush starts at Slogra & Gaibon's door, the bar saying 1/22.
-- All pass. Not tested: online (it uses the same load the online tests cover: `m11_test_castle`).
+- `online_boss_rush` (two hosts over UDP) and `COOP_UX_RUSH=1 uxdriver.py online` (two launchers): the joiner follows the host into the second boss.
+- All pass. The online flow found a real bug: a joiner's arrival still waiting from one load sent it back after the next (`JointSave`, fixed).
