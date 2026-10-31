@@ -55,7 +55,8 @@ STAGES = {"NO0": 0x00, "NO1": 0x01, "LIB": 0x02, "CAT": 0x03, "NO2": 0x04, "CHI"
           "CEN": 0x08, "BO3": 0x1B, "BO6": 0x18, "NO4": 0x09, "ARE": 0x0A, "TOP": 0x0B, "NZ0": 0x0C, "NZ1": 0x0D, "DRE": 0x12,
           "NO3": 0x41,
           # the inverted castle (STAGE_INVERTEDCASTLE_FLAG) and its boss stages
-          "RNZ1": 0x2D, "RBO0": 0x3E, "RBO1": 0x3D, "RBO2": 0x3C, "RBO3": 0x3B, "RBO4": 0x3A, "RBO5": 0x39,
+          "RNO1": 0x21, "RNO2": 0x24, "RCHI": 0x25, "RDAI": 0x26, "RNO4": 0x29, "RARE": 0x2A, "RNZ0": 0x2C,
+          "RCAT": 0x23, "RNZ1": 0x2D, "RBO0": 0x3E, "RBO1": 0x3D, "RBO2": 0x3C, "RBO3": 0x3B, "RBO4": 0x3A, "RBO5": 0x39,
           "RBO6": 0x38, "RBO7": 0x37, "RBO8": 0x36}
 
 # name: area, stage, arrive (room id, x, y), walk, level, gold, life ups, heart ups,
@@ -156,11 +157,12 @@ boss("Richter", "Castle Keep", "BO6", (0, 240, 179), "left", 38, 40000, (14, 12)
      note="at his door; Holy Glasses in the bag")
 
 # The inverted castle (v1.1, D114): after freeing Richter (the Holy Glasses on, Shaft's orb).
-# Each start is in its boss's own stage, where the bot finds the boss at once (the boss stages
-# come in from rooms whose doors are all loading zones: arriving there is like coming through
-# them; Darkwing Bat is in the Reverse Clock Tower's own room 0). Positions as the player sees
-# them (Arrive pre-mirrors), found by trying each stage from both sides. The route (relic order)
-# is a typical one; each beaten boss adds its Vlad relic and a level or so.
+# Each start is in the room next to its boss's door (the door is a map cell of the stage whose
+# room loads the boss's stage: g_RoomBossTeleports), so the boss spawns once the partner is
+# linked, with co-op's 2x HP. Positions as the player sees them (Arrive pre-mirrors), each tried
+# with a bot walking in. Dracula's is in his own stage: the way there is Shaft's room, whose
+# scene and elevator a bot doesn't get through yet. The route (relic order) is a typical one;
+# each beaten boss adds its Vlad relic and a level.
 INV_GEAR = ("alucard sword", "alucard shield", "dragon helm", "alucard mail", "twilight cloak",
             "ring of arcana", "talisman")
 INV_KEEP = ("holy sword", "herald shield", "steel helm", "platinum mail", "crystal cloak", "gold ring",
@@ -182,19 +184,20 @@ def inverted(name, area, stage, arrive, walk, relic=None, event=None):
     B.append(row)
 
 
-inverted("The Creature", "Reverse Outer Wall", "RBO4", (0, 488, 132), "left", "tooth of vlad", "the creature")
-inverted("Darkwing Bat", "Reverse Clock Tower", "RNZ1", (0, 16, 132), "right", "ring of vlad", "darkwing bat")
-inverted("Akmodan II", "Death Wing's Lair", "RBO7", (0, 488, 392), "left", "rib of vlad", "akmodan ii")
-inverted("Medusa", "Anti-Chapel", "RBO3", (0, 488, 132), "left", "heart of vlad", "medusa")
-inverted("Death", "Cave", "RBO2", (0, 488, 132), "left", "eye of vlad", "death")
-inverted("Doppleganger40", "Reverse Caverns", "RBO5", (0, 16, 132), "right", None, "doppleganger40")
-inverted("Fake Trevor, Grant & Sypha", "Reverse Colosseum", "RBO0", (0, 488, 132), "left", None,
+inverted("The Creature", "Reverse Outer Wall", "RNO1", (96, 232, 132), "right", "tooth of vlad", "the creature")
+inverted("Darkwing Bat", "Reverse Clock Tower", "RNZ1", (112, 24, 132), "left", "ring of vlad", "darkwing bat")
+inverted("Akmodan II", "Death Wing's Lair", "RNO2", (88, 1000, 132), "right", "rib of vlad", "akmodan ii")
+inverted("Medusa", "Anti-Chapel", "RDAI", (40, 744, 132), "right", "heart of vlad", "medusa")
+inverted("Death", "Cave", "RCHI", (8, 24, 132), "left", "eye of vlad", "death")
+inverted("Doppleganger40", "Reverse Caverns", "RNO4", (232, 1256, 132), "right", None, "doppleganger40")
+inverted("Fake Trevor, Grant & Sypha", "Reverse Colosseum", "RARE", (48, 1256, 132), "right", None,
          "fake trevor, grant & sypha")
-inverted("Beelzebub", "Necromancy Laboratory", "RBO1", (0, 1000, 392), "left", None, "beelzebub")
-inverted("Galamoth", "Floating Catacombs", "RBO8", (0, 24, 392), "right", None, "galamoth")
-# His stage, after Shaft (not covered yet: his room in the Reverse Center runs a scene and an
-# elevator a bot doesn't get through). Dracula talks first (about 2,900 frames).
+inverted("Beelzebub", "Necromancy Laboratory", "RNZ0", (152, 488, 132), "right", None, "beelzebub")
+inverted("Galamoth", "Floating Catacombs", "RCAT", (32, 232, 132), "right", None, "galamoth")
+# Dracula talks first (about 2,900 frames). Started in his stage, he spawns before the partner is
+# linked, at 1x HP: the tests step out (`out`) and back in first.
 inverted("Dracula", "Reverse Center", "RBO6", (16, 112, 180), "right", None, "dracula")
+INVERTED[-1]["out"] = ("NO0", 80, 728, 135)
 
 STATUS_LEVEL, STATUS_EXP, STATUS_GOLD = 0x284, 0x288, 0x28C
 STATUS_HP, STATUS_HEARTS, STATUS_MP, STATUS_STATS = 0x23C, 0x244, 0x24C, 0x254

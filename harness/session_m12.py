@@ -357,6 +357,19 @@ def boss_flow(run, b, limit=24000):
         room, x, y = b["check"]
         for g in (a, g2):
             arrive(run, g, a.mailbox("self_presence").stage, room, x, y)
+    if b.get("out"):  # started in the arena: out and back, so the boss spawns with co-op's HP
+        import bossstarts
+        from session_progress import arrive
+        stage, room, x, y = b["out"]
+        for g in (a, g2):
+            arrive(run, g, bossstarts.STAGES[stage], room, x, y)
+        run.step(60)
+        from link.mailbox import CMD_ARRIVE
+        stage, (room, x, y) = bossstarts.STAGES[b["stage"]], b["arrive"]
+        for g in (a, g2):  # (his scene starts as they arrive: not back in play until it's done)
+            g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
+        w.until(lambda: all((lambda q: q.stage == stage and q.room_id == room)(g.mailbox("self_presence"))
+                            for g in (a, g2)), 900)
     # B walks too, as a player would (some arenas open with a scene that only moves on while the
     # player holds a direction); it stays where it is otherwise (the door's edge)
     w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""),
@@ -391,7 +404,7 @@ def boss_flow(run, b, limit=24000):
                 hp_seen.setdefault(slot, hp)
                 if hp > 8:
                     auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-                elif free > 3000:  # the bot can't land the last hit (flying bosses): a scripted kill,
+                elif free > FIGHT_FREE:  # the bot can't land the last hit (flying bosses): a scripted kill,
                     # as the game's hit detection does when HP runs out (design/M12 part 2)
                     auth.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
                     flags = auth.read("g_Entities", "<I", slot * 0xBC + 0x34)
@@ -447,6 +460,47 @@ def boss_flow(run, b, limit=24000):
         rec = [g.read("g_Settings", "<i", k) for g in (a, g2)]
         run.expect(all(rec), "the boss is beaten in both games, by the game's own record", records=rec,
                    hp_first=sorted(hp_seen.values())[-3:], t=t)
+
+
+FIGHT_FREE = 3000  # frames of a fight outside scenes before the scripted kill
+
+
+def boss_alone(run, g, name, limit=12000):
+    """g walks into the boss (its start's row in bossstarts) and fights it alone, kept alive and
+    the boss worn down, the last hit scripted if the bot can't land it (as in boss_flow). Returns
+    when no boss has been in g's room for 300 frames."""
+    from link.mailbox import BOSS
+    import bossstarts
+    b = next(r for r in bossstarts.B if r["name"] == name)
+    pad = (lambda p: (p, "")) if g is run.s.a else (lambda p: ("", p))
+    boss = lambda: g.mailbox("self_presence").flags & BOSS
+    for _ in range(4000):
+        if boss():
+            break
+        run.step(1, p1=pad(b["walk"]))
+    run.expect(boss(), f"{name} is there")
+    event = bossstarts.EVENTS.get(b.get("event") or name.lower())
+    for _ in range(600 if event is not None else 0):
+        if g.read("g_Settings", "<I", VISITED) & (1 << event):
+            break
+        run.step(1, p1=pad(b["walk"]))
+    free = gone = 0
+    for t in range(limit):
+        free += not g.read("g_CutsceneHasControl")
+        if t % 30 == 0:
+            g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            for slot, (_, _, _, hp) in enemies(g).items():
+                if hp > 8:
+                    g.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+                elif free > FIGHT_FREE:
+                    g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+                    flags = g.read("g_Entities", "<I", slot * 0xBC + 0x34)
+                    g.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
+        run.step(1, p1=pad(fight_pad(g, t=t)))
+        gone = 0 if boss() else gone + 1
+        if gone > 300:
+            return
+    run.expect(False, f"{name} falls", left=sorted(enemies(g).values())[:4])
 
 
 def _boss_test(b):
@@ -539,6 +593,10 @@ def _boss_pair_test(b, tag, chars):
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
         import bossstarts
         from link.mailbox import CMD_ARRIVE
+        from session_progress import arrive
+        if b.get("out"):  # a start in the arena (Dracula's): the save and its load out of it
+            for g in (run.s.a, run.s.b):
+                arrive(run, g, bossstarts.STAGES[b["out"][0]], *b["out"][1:])
         as_characters(run, *chars)
         # the load puts them back at the save's room, not at the boss's door: back to the start's spot
         stage = bossstarts.STAGES[b["stage"]]
@@ -547,7 +605,7 @@ def _boss_pair_test(b, tag, chars):
             g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
         run.step(240)
         boss_flow(run, b)
-    test.__name__ = f"m12_boss_{tag}_" + name.lower().replace(" ", "_")
+    test.__name__ = f"m12_boss_{tag}_" + name.lower().replace(",", "").replace(" ", "_")
     test.__doc__ = f"{b['name']} together, as {tag.upper()} (Alucard, Richter, Maria)."
     start = str(STARTS / f"Boss - {name}.state")
     session_scenario(starts=(start, start), characters=chars)(test)

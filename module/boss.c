@@ -56,12 +56,13 @@ static const u16 s_Bosses[] = {
     370, // The Creature
     372, // Doppleganger40
     379, // Dracula (final)
-    386, // Minotaur (inverted castle)
-    389, // Werewolf (inverted castle)
 };
+// 386 and 389, the inverted Colosseum's Minotaur and Werewolf, are its ordinary enemies (320 and
+// 280 HP, item drops), not bosses: they were listed, and meeting one pulled the partner in.
 
 static s16 s_BaseHp[LEN(s_Bosses)]; // the table's own values, read once
 static bool s_HpRead, s_HpDoubled;
+static bool s_HpInverted; // the castle the HP were last set for (OrdinaryHere)
 static bool s_BossHere; // a living boss is in this room
 
 // Aggro, per stage slot: the wrapped update, the target, when it was picked
@@ -94,9 +95,20 @@ u32 g_CoopRichterState;  // gone | follow << 1 | told << 2 (tests read it: coop.
 
 static bool IsFinalBoss(u16 enemyId) { return enemyId == ENEMY_RICHTER || enemyId == ENEMY_DRACULA; }
 
+// First-castle bosses that come back in the inverted castle as ordinary enemies, with the same
+// enemy definition: the Lesser Demon (RNZ0), Slogra and Gaibon (RCHI), Karasuman (RNO2). There,
+// no boss rules (no pull-in, no 2x HP) for them.
+static bool OrdinaryHere(u16 enemyId) {
+    return (g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
+           (enemyId == 23 || enemyId == 243 || enemyId == 254 || enemyId == 280);
+}
+
 bool IsBossEnemy(u16 enemyId) {
     s32 i;
 
+    if (OrdinaryHere(enemyId)) {
+        return false;
+    }
     for (i = 0; i < LEN(s_Bosses); i++) {
         if (s_Bosses[i] == enemyId) {
             return true;
@@ -126,6 +138,7 @@ static bool PartnerFighting(void) {
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
     bool want = g_CoopLink.partnerAge < 600; // a partner's game has been heard from (10 s)
+    bool inverted;
     s32 i, hp;
 
     if (!defs) {
@@ -137,14 +150,16 @@ static void UpdateHp(void) {
         }
         s_HpRead = true;
     }
-    if (want == s_HpDoubled || s_BossHere) { // never mid-fight
+    inverted = (g_StageId & STAGE_INVERTEDCASTLE_FLAG) != 0;
+    if ((want == s_HpDoubled && inverted == s_HpInverted) || s_BossHere) { // never mid-fight
         return;
     }
     for (i = 0; i < LEN(s_Bosses); i++) {
-        hp = s_BaseHp[i] * (want ? 2 : 1);
+        hp = s_BaseHp[i] * (want && IsBossEnemy(s_Bosses[i]) ? 2 : 1);
         defs[s_Bosses[i]].hitPoints = hp > HP_MAX ? HP_MAX : hp;
     }
     s_HpDoubled = want;
+    s_HpInverted = inverted;
 }
 
 // --- aggro (D47)
