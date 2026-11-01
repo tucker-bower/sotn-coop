@@ -92,6 +92,9 @@ SOTN Co-op stands on other people's work. Thank you to all of them.
 - **[ntfy.sh](https://ntfy.sh)** by Philipp Heckel: the free relay where room codes meet, with no server of ours.
 - **Python**, **[pygame-ce](https://github.com/pygame-community/pygame-ce)**, **SDL**, **Pillow** and **[python-for-android](https://github.com/kivy/python-for-android)**: the launcher on Windows and Android.
 
+**Playtesting: what made it better**
+- **Zhikajira**: played the beta through the whole first castle, with detailed bug reports and ideas for new mechanics.
+
 *Castlevania* and *Symphony of the Night* are trademarks of Konami. This project is not affiliated with Konami. Buy the game.
 
 ## Licence
