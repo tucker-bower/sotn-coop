@@ -485,7 +485,9 @@ static void PullIn(void) {
     if (BossFinalGone()) { // the game is ending: never pulled (boss.c)
         return;
     }
-    if (!PartnerInBossFight()) {
+    // Once per fight, unless this player left the room mid-fight: knocked back through the door
+    // from the arrival spot at its edge (Karasuman's), they'd never see the boss again.
+    if (!PartnerInBossFight() || (s_BossPulled && !s_BossPullCooldown && !ArriveBusy() && !SameRoomAsPartner())) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
                (CanBePulled(false) ||

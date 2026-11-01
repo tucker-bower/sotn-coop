@@ -251,9 +251,9 @@ scene("Maria in the Alchemy Lab", "Alchemy Laboratory", "NZ0", (16, 40, 128), "l
 scene("The Librarian", "Long Library", "LIB", (32, 236, 120), "left", "Lesser Demon", unset=[0x72])  # MET_LIBRARIAN
 scene("Maria in the Royal Chapel", "Royal Chapel", "DAI", (8, 40, 128), "left", "Minotaur & Werewolf",
       unset=[0x63])  # MET_MARIA_IN_DAI
-# In the Center, at its right edge on Maria's floor (the way in is a door there), out of the
-# camera's reach of the scene (x 384).
-scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (8, 728, 455), "left", "Richter",
+# In the Center, on Maria's floor, right of the lift at x 384 that carries the scene on. (x 728
+# was over a drop: the player fell to the floor below, where the scene can't go on.)
+scene("Maria in the Center: the Holy Glasses", "Center", "CEN", (8, 490, 455), "left", "Richter",
       unset=[0xD8])  # MET_MARIA_IN_CEN
 scene("The Castle Keep", "Castle Keep", "TOP", (16, 496, 896), "right", "Richter")
 

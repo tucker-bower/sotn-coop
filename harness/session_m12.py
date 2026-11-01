@@ -235,14 +235,6 @@ OPEN_SCENES = {
     "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN
     # started once on arrival, then not when both games share the start: what else it needs is open
     "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
-    # (2026-10-27) from its scene start, walking left: the scene takes control at frame 202 and
-    # gives it back at 295 without its last step (MET_MARIA_IN_CEN stays 0), then the game keeps
-    # steering the player (even alone); in two games it never ends. Open: the start's spot, or
-    # the module ending it (D103). Tucker's playtest checks the real way in (the door).
-    # starts as soon as one enters the room and steers Alucard to Maria: the harness's arrival
-    # spots (and the scene start's) are on the wrong floor; idle, Alucard drops to the floor below
-    # and the scene never ends, even in one game
-    "maria_center": ("Boss - Granfaloon", "cen", 1, 384, 544, "left", 0xD8),       # MET_MARIA_IN_CEN
 }
 
 
@@ -803,6 +795,78 @@ def solo_continue_picture_width(run):
         run.expect(a.raw_frame()[0] == 256, "the picture is the game's width", width=a.raw_frame()[0])
 
 
+CENTER_START = str(STARTS / "Scene - Maria in the Center - the Holy Glasses.state")
+MET_MARIA_IN_CEN = 0xD8
+
+
+def maria_center(run, ca, cb):
+    """Issue 62: both players ride the lift to Maria, and her scene ends with her flag set."""
+    as_at_start(run, ca, cb)
+    a, b = run.s.a, run.s.b
+    w = SceneWatch(run)
+    pad = lambda g: "left" if g.snapshot()["world_x"] > 392 and not g.read(DEMO_TIMER, "<i") else ""
+    w.until(lambda: all(g.read("g_CastleFlags", "<B", MET_MARIA_IN_CEN) for g in (a, b)), 6000,
+            lambda i: (pad(a), pad(b)))
+    flags = [g.read("g_CastleFlags", "<B", MET_MARIA_IN_CEN) for g in (a, b)]
+    run.expect(flags == [1, 1], "her scene ends in both games", flags=flags, log=w.log, a=a.snapshot(), b=b.snapshot())
+    w.step(180)
+    control = control_back(run, w)
+    run.expect(all(f is not None for f in control), "both players get control back", control=control)
+
+
+@session_scenario(starts=(CENTER_START, CENTER_START))
+def scene_maria_center_from_start(run):
+    """Maria in the Center, as Alucard twice."""
+    maria_center(run, 0, 0)
+
+
+@session_scenario(starts=(CENTER_START, CENTER_START), characters=(1, 2))
+def scene_maria_center_richter_and_maria(run):
+    """Maria in the Center, with no Alucard."""
+    maria_center(run, 1, 2)
+
+
+def keep_a_long_fight(run):
+    """Issue 60: nobody hits Karasuman, so his fight lasts, and it stays one fight in one room."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import bossstarts
+    from link.mailbox import BOSS, ROLE_AUTHORITY, ROLE_GUEST
+    row = next(r for r in bossstarts.B if r["name"] == "Karasuman")
+    a, b = run.s.a, run.s.b
+    w = SceneWatch(run)
+    boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    w.until(lambda: boss(a), 2000, lambda i: (row["walk"] + ("+cross" if i % 90 < 12 else ""), ""))
+    run.expect(boss(a), "A walks into his fight", at=a.snapshot())
+    w.until(lambda: boss(b), 1200, ("", row["walk"]))
+    run.expect(boss(b), "B is pulled in", at=b.snapshot())
+    w.step(60)
+    apart, longest, run_apart = [], 0, 0
+    for t in range(1800):
+        w.step(1)
+        if t % 30 == 0:
+            for g in (a, b):  # no one dies: the fight is what's being watched
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if not (pa.room_id == pb.room_id and pa.flags & pb.flags & BOSS and
+                {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}):
+            apart.append((t, pa.room_id, pb.room_id, pa.flags, pb.flags, pa.role, pb.role))
+            run_apart += 1
+            longest = max(longest, run_apart)
+        else:
+            run_apart = 0
+    # He can knock a player out of the door: the pull-in brings them back (BOSS_PULL_COOLDOWN: 10 s).
+    run.expect(longest < 780, "a player knocked out is brought back", longest=longest, apart=apart[:6])
+    run.expect(not run_apart, "the fight ends up as one room, one boss, one authority", at=(a.snapshot(), b.snapshot()), apart=apart[-3:])
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Karasuman.state"),) * 2)
+def boss_karasuman_stays_shared(run):
+    """Issue 60, from his boss start."""
+    keep_a_long_fight(run)
+
+
 # --- doors in a shared room (D107) ----------------------------------------------------------
 @session_scenario(starts=("no1", "no1"))
 def guest_opens_red_door(run):
@@ -958,4 +1022,3 @@ def chain(run, which):
                diff=[i for i in range(0x300) if flags[0][i] != flags[1][i]][:10])
     (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
-

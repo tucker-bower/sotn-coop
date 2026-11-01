@@ -149,7 +149,7 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
     room, x, y = b["arrive"]
     mb.command(CMD_ARRIVE, stage, room, x, y)
     here = lambda: (lambda q: q.stage == stage and q.room_id == room)(mb.self_presence())
-    scene = lambda: mb.self_presence().flags & CUTSCENE  # the Nightmare opens with one
+    scene = lambda: e.read("g_CutsceneHasControl")  # the Nightmare opens with one (not every scene is shared)
     if not _wait(e, lambda: here() and (playing() or scene()), 1200):
         raise RuntimeError(f"{b['name']}: never arrived: {e.snapshot()}")
     e.step(90)
