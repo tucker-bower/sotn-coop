@@ -50,7 +50,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 ## Tips
 - **Teleport to your partner:** press Select for the map, then Cross. Your partner's cursor is blue.
 - **Report a bug:** press **F9** the moment something goes wrong. It saves a zip in `Documents\SOTN Co-op\reports`. Please send it to us privately, as it contains game data.
-- **Pause:** Esc. You pause separately, unless you're in the same room.
+- **Pause separately:** unless you're in the same room.
 - **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
 - **Maria:** choose your *Dracula X Chronicles* `.iso` under Settings › Game files.
