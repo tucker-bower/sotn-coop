@@ -6,7 +6,7 @@
 _Updated 2026-10-31._
 
 - **Latest release:** v0.12.0, the public beta of 1.0 (D121). Everything since is only on `main` (0.13.0-dev): the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
-- **Tests:** everyday 211 of 212 (the failure is under "Known issues"); last `--full` 283 of 283.
+- **Tests:** last `--full` 300 of 301 (2026-11-01); `ui_online` failed under full load, then passed 3 of 3 alone.
 - **Next:** release v0.13.0 (the text is in `docs/releases/`, awaiting Tucker's approval), then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
 
 ## Decisions needed
@@ -15,7 +15,7 @@ _Updated 2026-10-31._
 ## Known issues
 **Bugs**
 - **Karasuman:** in the first-castle chain, 15 frames into his fight, B is re-placed and stays in his room with no boss and no shared room, so A fights on alone. Possibly a co-op bug. The chain passes only because the test wears down each game's own boss.
-- **Slow joiner in boss rush:** under full load, the joiner stays at the title after the host's first rush load (`ui_online_boss_rush`). A slow phone could hit it.
+- **Slow joiner:** under full load, the joiner can stay at the title after the host's first rush load (`ui_online_boss_rush`), or never see its partner connect (`ui_online`, once in `--full`; cause unknown). A slow phone could hit it.
 - **Maria in the Center:** her scene gives control back 93 frames in, without its last step or the Holy Glasses, even in one game (`session_m12.OPEN_SCENES`).
 - **Richter's HUD name box** is blank after a save load (retail Richter too).
 - **Partner's body:** Alucard afterimages use some of DRA's 16 DR_ENV entries; the VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame.
