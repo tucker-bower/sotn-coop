@@ -52,7 +52,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 
 ## Tips
 - **Teleport to your partner:** press Select for the map, then Cross. Your partner's cursor is blue.
-- **Report a bug:** press **F9** the moment something goes wrong. It saves a zip in `Documents\SOTN Co-op\reports`. Please send it to us privately, as it contains game data.
+- **Report a bug:** press **F9** the moment something goes wrong, add a note, and choose Send. You can also email the zip from `Documents\SOTN Co-op\reports` to sotncoop@gmail.com. Please don't post it publicly, as it contains game data.
 - **Pause separately:** unless you're in the same room.
 - **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
@@ -91,6 +91,9 @@ SOTN Co-op stands on other people's work. Thank you to all of them.
 - **[BBLauncher](https://github.com/rainmakerv3/BB_Launcher)** by rainmakerv3: a launcher that owns its emulator, backs up saves and explains errors plainly.
 - **[ntfy.sh](https://ntfy.sh)** by Philipp Heckel: the free relay where room codes meet, with no server of ours.
 - **Python**, **[pygame-ce](https://github.com/pygame-community/pygame-ce)**, **SDL**, **Pillow** and **[python-for-android](https://github.com/kivy/python-for-android)**: the launcher on Windows and Android.
+
+**Playtesting: what made it better**
+- **Zhikajira**: played the beta through the whole first castle, with detailed bug reports and ideas for new mechanics.
 
 *Castlevania* and *Symphony of the Night* are trademarks of Konami. This project is not affiliated with Konami. Buy the game.
 

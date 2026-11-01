@@ -3,19 +3,19 @@
 **Final goal (D19):** two players explore the castle **independently** over couch co-op or online with android-pc-linux-mac crossplay capabilities, each on their own screen, with **shared progression**. Boss fights and cutscenes are sync'ed and experienced together.
 
 ## Now
-_Updated 2026-10-31._
+_Updated 2026-11-01._
 
-- **Latest release:** v0.12.0, the public beta of 1.0 (D121). Everything since is only on `main` (0.13.0-dev): the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
-- **Tests:** everyday 211 of 212 (the failure is under "Known issues"); last `--full` 283 of 283.
-- **Next:** by the priority order (D109), M16. v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114), so a new beta probably comes first.
+- **Latest release:** v0.13.0, with v0.12.0 as the fallback if it feels worse (D121). It has the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
+- **Tests:** last `--full` 300 of 301 (2026-11-01); `ui_online` failed under full load, then passed 3 of 3 alone.
+- **Next:** a release with F9's Send button (the Resend key is in `env.toml`, and test reports were accepted), then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
 
 ## Decisions needed
-- **New beta first, or M16?** M13–M15 haven't reached players. A beta needs `--full`, the boot check and a playtest before release; M16 would otherwise build further on unplaytested work. The agent's recommendation: beta first.
+None.
 
 ## Known issues
 **Bugs**
 - **Karasuman:** in the first-castle chain, 15 frames into his fight, B is re-placed and stays in his room with no boss and no shared room, so A fights on alone. Possibly a co-op bug. The chain passes only because the test wears down each game's own boss.
-- **Slow joiner in boss rush:** under full load, the joiner stays at the title after the host's first rush load (`ui_online_boss_rush`). A slow phone could hit it.
+- **Slow joiner:** under full load, the joiner can stay at the title after the host's first rush load (`ui_online_boss_rush`), or never see its partner connect (`ui_online`, once in `--full`; cause unknown). A slow phone could hit it.
 - **Maria in the Center:** her scene gives control back 93 frames in, without its last step or the Holy Glasses, even in one game (`session_m12.OPEN_SCENES`).
 - **Richter's HUD name box** is blank after a save load (retail Richter too).
 - **Partner's body:** Alucard afterimages use some of DRA's 16 DR_ENV entries; the VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame.
@@ -64,7 +64,6 @@ The inverted castle's tests are built (D133), but it ships after v1.0 as v1.1 (D
 Tucker moves one of these into a milestone when he wants it worked on.
 
 - **DXC dialogue and voice acting (D84):** an option to use the *Dracula X Chronicles* English script and voices: converting the PSP's ATRAC3 audio and replacing the cutscene scripts in 8 stages. It needs the player's DXC disc.
-- **F9 sends bug reports (D86):** the snapshot plus a short form, sent to a private repo through a small hosted relay. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
 - **A rescue menu for playtesters:** "I'm stuck" in the pause menu, to get past a co-op bug and keep playing. Design: `design/backlog-rescue-menu.md`.
 - **Power tuning and more characters' testing (D111):** waits for community feedback on v1.0.
 - **AYN Thor dual screen (D111):** top screen you, bottom screen your partner, and a metal bat in place of the blood vial's cork (centred, with a pixel test).

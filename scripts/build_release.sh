@@ -64,6 +64,7 @@ cp "$DLL" "$A/bin/"
 cp "$OPENBIOS" "$A/bios/openbios-fast.bin"
 cp "$LEGACY_OPENBIOS" "$A/bios/openbios.bin"
 cp "$MOD/env.example.toml" "$A/"
+"$PY" "$MOD/scripts/report_key.py" "$A/launcher/report_key.txt"   # F9's Send button (D144)
 cat > "$A/env.toml" <<'TOML'
 # The installed launcher's layout (scripts/build_release.sh): everything relative to app/.
 [paths]

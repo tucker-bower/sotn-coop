@@ -4,7 +4,7 @@ One design per milestone, each with its options, decisions and acceptance criter
 
 | File | What it does |
 |---|---|
-| `backlog-report-sending.md` | Backlog: F9 sends its bug report. |
+| `backlog-report-sending.md` | **Superseded** by D144: a hosted relay for F9 reports. |
 | `backlog-rescue-menu.md` | Backlog: an "I'm stuck" menu for playtesters. |
 | `boss-rush.md` | Boss rush mode. Done. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |

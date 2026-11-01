@@ -1,6 +1,6 @@
 # Backlog design: F9 sends bug reports
 
-**Status:** on the backlog (Tucker, 2026-10-21, D86): it needs a hosted relay Tucker doesn't want to set up yet. Written for M8 and moved out; ready to become a milestone.
+**Status:** **superseded** by D144 (email, with no hosted relay). The form, the partner's snapshot and resending later aren't built.
 
 ## Design
 **Today:** F9 writes a full snapshot zip into the player's `reports/` folder. It only helps if the player finds the zip and sends it somehow.

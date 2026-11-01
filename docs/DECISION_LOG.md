@@ -729,3 +729,6 @@ Local paths, the device workflow and playtest sheets moved to the git-ignored `L
 
 **D143: A README in every folder** (Tucker, 2026-11-01)
 Each holds one sentence and a table of the folder's files, with vestigial and manual files marked. `.github/` has none, because GitHub would show it instead of the root README (agent-default). Vestigial files stay in place for Tucker to decide on.
+
+**D144: F9 reports are sent by email** (Tucker, 2026-11-01; the provider is an agent-default, pending Tucker)
+A Send step after F9 emails the zip to sotncoop@gmail.com, through Resend with a send-only key put in release builds from `env.toml`. Resend's sandbox sender reaches only the account's own address, so a key lifted from the app can only fill that inbox. Options: a Gmail app password in the app (rejected: it opens the whole account to anyone who unpacks the app), and a Cloudflare Worker holding the key (safer, but its free tier's 10 ms of CPU may not cover encoding a report). Home folders and IP addresses are removed from reports. Replaces the private-repo relay in `design/backlog-report-sending.md`.
