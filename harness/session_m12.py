@@ -229,7 +229,7 @@ START_SCENES = {
     "maria_alchemy_lab_from_start": ("Scene - Maria in the Alchemy Lab", "left"),  # from the right: her scene steers Alucard left
     "castle_keep_from_start": ("Scene - The Castle Keep", "right"),
 }
-# Not yet triggered by the harness (docs/ROADMAP.md, Known issues), so not registered:
+# Not yet triggered by the harness (GitHub issues), so not registered:
 OPEN_SCENES = {
     # talking to him (Up next to his chair) didn't start it yet
     "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN

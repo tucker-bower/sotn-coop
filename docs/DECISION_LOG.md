@@ -747,3 +747,6 @@ Folders and typed names are overwritten at the same length in every file, savest
 
 **D149: A muted game with a sequence playing is silent** (agent-default, 2026-11-01)
 The Librarian's music is a sequence, not CD audio, and `SsSeqSetVol` left a third of it audible, so the music-muted game sets the voices' master volume to 0 while a sequence plays. Its sound effects go quiet too, for that game, in his shop only.
+
+**D150: GitHub issues track the project** (Tucker, 2026-11-01)
+The game is mostly built, and what's left is feature requests and bug fixes, so tracking moves from `ROADMAP.md` to GitHub issues and the tracker board. Agents still write design docs for bigger work, because they're useful to future agents. `ROADMAP.md` keeps the goal and the milestones built so far.

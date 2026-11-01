@@ -10,5 +10,5 @@ How the mod works, where it's going and why it's built this way.
 | `link-protocol.md` | The wire protocol, complete enough to write another host. |
 | `releases/` | Release notes. |
 | `research.md` | Game internals, tools and hard-won lessons. |
-| `ROADMAP.md` | Where we are, what's next, known issues and open decisions. |
+| `ROADMAP.md` | The final goal, and the milestones built so far. Tracking is in GitHub issues. |
 | `TECHNICAL_SUMMARY.md` | What exists and how it works; start here. |
