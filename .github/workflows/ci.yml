@@ -23,7 +23,7 @@ jobs:
 
       - name: Link runner environment cache
         run: |
-          CACHE_ROOT="${SOTN_COOP_CACHE:-/home/tucker/sotn-decomp-coop}"
+          CACHE_ROOT="${SOTN_COOP_CACHE:-$HOME/sotn-coop-cache}"
           if [ ! -e .env ] && [ -d "$CACHE_ROOT/mods/co-op/.env" ]; then
             ln -s "$CACHE_ROOT/mods/co-op/.env" .env
           fi

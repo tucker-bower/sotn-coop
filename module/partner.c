@@ -7,7 +7,7 @@
 // body, except in the harness's spike test (OPT_PARTNER_SIM): a copy of player 1 on g_CoopSpikePad.
 //
 // A Richter partner (step 3) runs our Richter linked to run there (PARTNER_RIC_ADDR,
-// richter/ric_partner.ld), with statics of its own: for its frame, its g_PlOvl table and sprite
+// characters/richter-ps1/ric_partner.ld), with statics of its own: for its frame, its g_PlOvl table and sprite
 // table go into 0x8013C000 (where DRA looks), its sprite banks into g_api.o.spriteBanks[16..19],
 // and the character to Richter's. In another character's game, its graphics (F_GAME2.BIN) are in
 // VRAM's second bank, and what it draws reads them there (BankPolys).
@@ -315,7 +315,7 @@ static void SwapIn(void);
 static bool PartnerLive(void);
 static void SwapOut(void);
 
-// A partner build's 'FAR1' trailer (richter/ric_partner.ld, maria/maria_partner.ld): where the
+// A partner build's 'FAR1' trailer (characters/richter-ps1/ric_partner.ld, characters/maria-dx/maria_partner.ld): where the
 // BSS starts, so it's kept before the first Make zeroes it. Maria's has a sixth word, her init.
 typedef struct {
     u32 magic, nearSize, farSize, bssSize, farAddr;

@@ -1,4 +1,4 @@
-"""A real Android device over USB (design/M9: Tucker's playtest on his AYN Thor).
+"""A real Android device over USB (design/M9).
 
     python android/device.py install [apk]   the newest .env/android/*.apk onto the device
     python android/device.py disc            the retail disc into Download/SOTN on the device,
@@ -14,7 +14,7 @@
 
 The device needs USB debugging on (Settings > About > tap Build number 7 times, then
 Developer options > USB debugging), and to allow this PC when it asks. From WSL, the Windows
-adb (Emulators\\android-tools) talks to the device: WSL can't see USB devices itself.
+adb (android-tools in the emulators folder) talks to the device: WSL can't see USB devices itself.
 """
 
 import os

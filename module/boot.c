@@ -58,7 +58,7 @@ void BOOT CoopBoot(void) {
     // Richter's graphics file, for a Richter or Maria partner's own graphics in VRAM's second bank
     // (design/M13 step 3)...
     ReadFile(s_RicHudFile, (void*)FGAME2_ADDR, &file, false, 0, 0);
-    // ...and the partner's Richter, linked to run there (richter/ric_partner.ld).
+    // ...and the partner's Richter, linked to run there (characters/richter-ps1/ric_partner.ld).
     ReadFile(s_RicPartnerFile, (void*)PARTNER_RIC_ADDR, &g_CoopRicPartnerFile, false, 0, 0);
     // Alucard's graphics file, for an Alucard partner in Richter's or Maria's game: its strips,
     // then its palettes (from 0x40000), apart.

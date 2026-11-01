@@ -4,7 +4,7 @@
    From maria.ld: linked at Richter's overlay address, where she runs. MARIA_override
    (the g_PlOvl table DRA jumps through) comes first, then maria_sprites: DRA reads the player's
    sprite table at a fixed address (0x8013C020). Her code and BSS run from the 8MB expansion RAM,
-   as our Richter's do (richter/ric.ld): the module zeroes the BSS (leftovers there kept her
+   as our Richter's do (characters/richter-ps1/ric.ld): the module zeroes the BSS (leftovers there kept her
    init from running). */
 SECTIONS {
     . = 0x80780000;

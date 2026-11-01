@@ -1,151 +1,74 @@
 # Roadmap
 
-**Final goal (D19):** two players explore the castle **independently** over couch co-op or online with android-pc-linux-mac crossplay capabilities, each on their own screen, with **shared progression**. Boss fights and cutscenes are sync'ed and experienced together. 
+**Final goal (D19):** two players explore the castle **independently** over couch co-op or online with android-pc-linux-mac crossplay capabilities, each on their own screen, with **shared progression**. Boss fights and cutscenes are sync'ed and experienced together.
 
-**Architecture (D20):** each player runs their own copy of the game in an emulator. A **co-op link** connects them: an in-game module plus a host program per player. It shares progression, presence, teleports, and the state of any room both players are in. The details are in `research.md` → "Independent exploration".
+## Now
+_Updated 2026-10-31._
 
-- **M4 (shared rooms) is the main risk.** The checkpoints are after M2 and after M4. At each one we decide on scope cuts, or a plan upgrade if needed.
+- **Latest release:** v0.12.0, the public beta of 1.0 (D121). Everything since is only on `main` (0.13.0-dev): the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
+- **Tests:** everyday 211 of 212 (the failure is under "Known issues"); last `--full` 283 of 283.
+- **Next:** by the priority order (D109), M16. v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114), so a new beta probably comes first.
 
-- **Post-month:** Richter and Maria (mixed-character rules), full inverted-castle coverage, speedrun features. Then online PC co-op and the Android port of the launcher (D36).
+## Decisions needed
+- **New beta first, or M16?** M13–M15 haven't reached players. A beta needs `--full`, the boot check and a playtest before release; M16 would otherwise build further on unplaytested work. The agent's recommendation: beta first.
 
-## Budget model
-Pro usage limits are measured in rolling 5-hour windows (plus possible weekly caps), not published token counts. So the budget is a **share of the month's usage**, tracked by elapsed days and by how often limits are hit.
+## Known issues
+**Bugs**
+- **Karasuman:** in the first-castle chain, 15 frames into his fight, B is re-placed and stays in his room with no boss and no shared room, so A fights on alone. Possibly a co-op bug. The chain passes only because the test wears down each game's own boss.
+- **Slow joiner in boss rush:** under full load, the joiner stays at the title after the host's first rush load (`ui_online_boss_rush`). A slow phone could hit it.
+- **Maria in the Center:** her scene gives control back 93 frames in, without its last step or the Holy Glasses, even in one game (`session_m12.OPEN_SCENES`).
+- **Richter's HUD name box** is blank after a save load (retail Richter too).
+- **Partner's body:** Alucard afterimages use some of DRA's 16 DR_ENV entries; the VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame.
+- **Off-hand weapons:** some frames' palette is wrong (a raised blade blue instead of white).
+- **Android:** sound underruns on the emulators (7–38%, CPU-bound); not yet checked on a real device.
 
-| # | Milestone | Budget (share of month) | Target date |
+**Not covered by a test**
+- Shaft, and the inverted castle's scenes.
+- Three first-castle bosses have no time-attack record after a scripted kill: the Lesser Demon, Olrox, Richter.
+- Hit tests check the reaction, not its sound.
+- Power of Wolf and Skill of Wolf; the blue door live (world relics are checked in code only).
+- Leaving the Librarian's shop through his menu; the Succubus pairings (no saving in the Nightmare).
+- `android_pair` and `android_pc_join`: they fail from the emulators' test setup; a real Android device hosting a PC works.
+- A real two-home online test.
+
+## Milestones
+Each milestone's acceptance criteria are in its design doc, in `design/`.
+
+| # | Milestone | State | Design |
 |---|---|---|---|
-| M0 | Test harness + 8MB verification ✅ | 12% | 2026-10-22 (done 10-18) |
-| M1 | Link + presence ✅ | 15% | 2026-10-23 (done 10-18) |
-| M2 | Shared progression (live) ✅ | 12% | 2026-10-26 (done 10-19) |
-| M3 | Teleport, respawn, pause rules, joint save ✅ | 11% | 2026-10-30 (done 10-19) |
-| M3b | The game's own save rooms, end to end (resume from the Load menu) ✅ | 4% | 2026-10-21 (done 10-19) |
-| M4 | Shared rooms: same enemies, fight together ✅ | 25% | 2026-11-04 (done 10-19) |
-| M4b | Playtest 1 fixes, autonomous playtesting ✅ | (from reserve) | 2026-10-19 (done 10-19) |
-| M5 | Bosses and cutscenes together ✅ | 12% | 2026-11-13 (done 10-19) |
-| M6 | Playable build + playtest ✅ | 10% | 2026-11-18 (done 10-19) |
-| — | Reserve | 3% (M3b came out of the M2/M3 savings) | — |
-| R1 | Product emulator: **decided**, our own launcher (D36) | — | — |
-| M7 | Its own repository (`tucker-bower/sotn-coop`, D72/D73), online PC co-op (D74) | post-month | — |
-| M8 | Playable Maria & Richter from the start + DXC alternate dialogue/voices (D75) | post-month | — |
-| M9 | Android port of the launcher and session engine (D36, D75) | post-month | — |
-| M10 | ~~AYN Thor curated dual-screen + true widescreen FOV (D75)~~: dual screen to the backlog, widescreen is M19 (D111) | — | — |
-| M11 | Castles: drop-in saves (any partner continues any castle, the joiner keeps a copy), solo mode, shared level at half XP in duo (`docs/design/M11-castles.md`) | post-month, ~2 windows | — |
-| M12 | Coverage (parts 1–3 built), then **v1.0**: every relic, room and scene per character, licence, release key, launch, known bugs, the first-castle playthrough in segments, then the inverted castle (`design/M12-v1-release.md`) | 12–16 windows (+4–6 inverted castle) | — |
-| M13 | The partner as a real second player; 2 MB VRAM in our core; fairy revive; respawn effects (`design/M13-partner-player.md`) | 8–12 windows | — |
-| M14 | Every pair connects: IPv6, port mapping, port prediction, peer/community relays; never a server of ours (`design/M14-relay.md`) | 3–4 windows | — |
-| M15 | PvP, the host's option (`design/M15-pvp.md`) | 3–4 windows | built 2026-10-30, ~1 window |
-| M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice (`design/M16-saturn-characters.md`) | 4–6 windows | — |
-| M17 | 3+ players, online then couch (`design/M17-more-players.md`; replaces D48) | 8–10 windows | — |
-| M18 | Mac and Linux (Steam Deck) builds (`design/M18-mac-linux.md`) | 3–5 windows | — |
-| M19 | Widescreen (`design/M19-widescreen.md`) | 8–14 windows | — |
+| M0 | Test harness, 8 MB verified | Done | `M0-harness` |
+| M1 | Link and presence | Done | `M1-link-presence` |
+| M2 | Shared progression, live | Done | `M2-shared-progression` |
+| M3 | Teleport, respawn, pause rules, joint saves in the game's save rooms | Done | `M3-teleport-respawn-save`, `M3b-save-rooms` |
+| M4 | Shared rooms: same enemies, fight together | Done | `M4-shared-rooms`, `M4b-playtest-fixes` |
+| M5 | Bosses and cutscenes together | Done | `M5-bosses-cutscenes` |
+| M6 | Playable Windows build | Done | `M6-playable-build` |
+| M7 | Its own repository, online PC co-op, netcode, release | Done | `M7-repo-and-online`, `M7b-netcode`, `M7b-polish` |
+| M8 | Richter and Maria playable | Done | `M8-maria-and-richter`, `M8b-character-balance` |
+| M9 | Android | Done | `M9-android` |
+| M10 | Thor dual screen: moved to the backlog; widescreen is M19 (D111) | Moved | `M10-widescreen-spike` |
+| M11 | Castles: drop-in saves, solo, shared level | Done | `M11-castles` |
+| M12 | Coverage, then v1.0 | 0.12.0 beta released. **Left:** the first-castle playthrough in segments, playtesters' feedback, v1.0 | `M12-coverage`, `M12-v1-release`, `M12b-offhand-like-alucard` |
+| M13 | The partner as a real second player | Done | `M13-partner-player` |
+| M14 | Connect the way Slippi does (cut down, D123) | Done | `M14-relay` |
+| M15 | PvP, the host's option | Done | `M15-pvp` |
+| — | Boss rush | Done | `boss-rush` |
+| M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice | Planned | `M16-saturn-characters` |
+| M17 | 3+ players, online then couch | Planned | `M17-more-players` |
+| M18 | Mac and Linux (Steam Deck) builds | Planned | `M18-mac-linux` |
+| M19 | Widescreen | Planned | `M19-widescreen` |
 
-**Expanded scope (D109, 2026-10-27):** the best, most open, most durable, most complete and easiest version of this idea. The timeline is extended to fit Pro's limits: M12–M19 are about 50–70 usage windows. Dates are set at each milestone's approval, not in advance. M10 (the Thor's dual screen) moves to the backlog; its widescreen part is M19.
+The inverted castle's tests are built (D133), but it ships after v1.0 as v1.1 (D114).
 
-**Platform (D36):** our own launcher around the SwanStation libretro core, which the harness already drives: two processes, since a libretro core can only be loaded once per process. PCSX-Redux stays as a cross-check. Code that talks to the emulator stays in the thin **emulator adapter**.
+## Backlog
+Tucker moves one of these into a milestone when he wants it worked on.
 
-## Acceptance criteria (draft, finalized in each milestone's design doc)
-Every criterion is a **multi-instance harness test**, unless it's marked manual. The harness runs two instances plus the host, with scripted inputs on both and assertions across instances.
-
-### M0: Test harness + 8MB verification ✅
-Done. Results are in `design/M0-harness.md`.
-
-### M1: Link + presence
-- **Loader:** the co-op module loads as an extra DRA section (option B from the withdrawn M1 design, D29). It's resident from boot on a new game, with no familiar trick.
-- **Mailbox:** an in-RAM message buffer in the 8MB area, in each direction, read and written by the host every frame. The emulator adapter is the only emulator-specific code.
-- **Presence:** each instance knows its partner's stage, room, position, facing, pose and character. When both are in the same room, the partner appears as a tinted **puppet** that animates correctly, in both instances.
-- **Map:** the partner's position shows on the map screen.
-- **Latency:** with both instances on one machine, the delay from a partner's movement to the puppet updating is ≤ 2 frames.
-- With `COOP` off, the matching build is still 115/115.
-
-### M2: Shared progression (live)
-Full criteria: `design/M2-shared-progression.md`.
-- **Shared, live:** relics, castle flags (walls, doors, switches, item pickups, bosses), explored map, equipment (picking one up gives *each* player a copy), and max-HP/MP/Hearts upgrades. The partner's instance applies each change within a few frames.
-- **Separate:** level, XP, gold, consumables, the equipped loadout, and current HP/MP.
-- **Live room refresh:** a change that affects the room the partner is standing in shows immediately. For example, a wall breaks, a door opens, or a pickup disappears. The partner doesn't have to re-enter the room.
-- Merges converge after random inputs, so a 30-minute soak with both players exploring ends with identical shared state in both games.
-
-### M3: Teleport, respawn, pause rules, joint save
-Full criteria: `design/M3-teleport-respawn-save.md`.
-- **Teleport to partner** with ✕ on the map screen, across stages and into the inverted castle. It lands at a safe position near the partner.
-- **Death:** the player respawns at the partner's location with full HP instead of getting Game Over. If both players die, they reload the last joint save (D24).
-- **Pause:** each player pauses and uses the menu independently. If both are in the same room, a pause by either one pauses both.
-- Zero softlocks in a teleport fuzz test (random teleports between harness savestates).
-- **Joint save:** saving in either game saves both (`session.coop`). Resuming restores both games and the shared state. Moved here from M2: resuming uses the same "put a player in a room" path as teleport.
-
-### M4: Shared rooms (same enemies, fight together)
-- When both players are in the same room, they see and fight **the same enemies**. Damage from either player counts, and enemies can target and damage either player.
-- The method to pick in the M4 design: room authority (one game runs the enemies and the other mirrors them) vs a lockstep merge. The leading candidate is in `research.md`.
-- Enemies keep normal HP.
-- Players can enter and leave a room in any order without duplicated or lost enemies and without crashes, on the test route: entrance → Alchemy Lab → Marble Gallery → Outer Wall.
-
-### M5: Bosses and cutscenes together
-- When either player enters a boss room, the partner is **teleported in automatically**. Bosses have **2× HP** (regular enemies don't change, D25).
-- **Boss aggro switches between players** (D47): after each boss attack there's a 50% chance it targets the other player next. That's a starting value, to tune by playtest. It's built on M4's targeting patch, plus per-boss handling of the bosses' own direct player reads.
-- When either player triggers a cutscene, the partner is brought in, both see it, and both get credit (flags).
-- **Death during a boss fight:** the player who died stays dead until the boss is killed, then respawns next to the survivor. If both die, they reload the last joint save (D24). Scripted boss fights cover each case with no softlocks.
-
-### M6: Playable build + playtest (design: `design/M6-playable-build.md`)
-- **A Windows installer:** the launcher, the SwanStation core, OpenBIOS (no BIOS hunt) and a disc patcher that builds the co-op disc from the player's own image (D9). There's a first-run wizard, then one big Continue / New game button (the Slippi and BBLauncher model).
-- **Nothing is ever deleted:**
-  - every savestate the launcher makes (on events only, never on a timer) is kept, and the space it uses is always shown, with where to clean it up;
-  - predefined debug starts are made on the player's PC;
-  - F9 makes a full environment snapshot.
-- **Built for what's next:** a headless session engine and a written link protocol, so online (M7) and Android reuse them.
-- Manual (Tucker): install from scratch, then play from a new game through the first few bosses.
-- Online play between two PCs comes next (M7+), then Android (with the disc patched on a PC).
-
-### M7: Its own repository, then online PC co-op (design: `design/M7-repo-and-online.md`)
-- **Its own repository (D72, D73):** the co-op mod moves out of the sotn-decomp fork into `tucker-bower/sotn-coop`, which builds against a pinned `sotn-decomp` commit as a dependency, not a fork. Git history for `mods/co-op/` comes along. Self-hosted CI builds and runs the full harness suite from a clean checkout.
-- **Online PC co-op (D74):** each player runs one game on their own PC, connecting with zero-infrastructure connect codes (STUN + base32 endpoint/room code) and a direct-IP fallback. Shared-room snapshots are compressed and chunked below path MTU for smooth WAN play, joint saves and both-dead reloads sync over the link, and mismatched versions are refused with a clear message.
-
-### M8: Maria and Richter playable (designs: `design/M8-maria-and-richter.md`, `design/M8b-character-balance.md`; D75, D84, D85)
-- **Characters are picked every session** in the lobby, in any combination, with no disc rebuild. Mixed-team puppets run at full speed.
-- **Every character gets the full Alucard castle.** Richter's and Maria's moves unlock with Alucard's relics, and they gain power from levels, equipment and an off-hand weapon, staying within ±20% of Alucard at every boss. The fighting-game inputs get buttons of their own.
-- **Maria comes from the player's own USA *Dracula X Chronicles* disc** (optional), set up on a clear game-files screen.
-- **Both players' HUDs are fully visible**, in every layout.
-- **Optional button shortcuts, per player:** one-button high jump and blade dash for Richter and Maria, and spells on the right stick for Alucard.
-
-### M9: Android port (D36, D75)
-- **Native Android launcher & session engine:** runs the co-op disc on Android using the SwanStation Android arm64 core (`swanstation_libretro_android.so`) and the link protocol (`docs/link-protocol.md`), connecting over Wi-Fi/internet to another Android device or PC, with controller-first UI, event savestates, and F9 snapshots.
-
-### M12–M19
-Acceptance criteria are in each design doc (`design/M12-v1-release.md` … `design/M19-widescreen.md`).
-
-### M10: AYN Thor dual-screen & widescreen (D75): moved to the backlog (D111); widescreen is M19
-- **Curated AYN Thor dual-screen mode:** on the AYN Thor clamshell handheld, the top 6.0" 16:9 AMOLED screen renders your game while the bottom 3.92" screen displays your partner's screen live.
-- **A bat-capped blood vial (Tucker, 2026-10-22):** the progress vial (`UI.bar` in `launcher/app.py`) gets a little metal bat in place of the cork, as if it were a vampire elite's custom vial: wings folded over the neck, centred on it. The cork's off-centre look was fixed in M9 (`odd widths`), and the bat must stay centred too, checked by a pixel test of the render.
-- **True widescreen on the top screen:** expanded horizontal FOV (not stretched 4:3) on the 16:9 top display, widening the draw/clip viewport, room scroll bounds, and entity layout spawn window so rooms and enemies render naturally across the 16:9 frame.
-
-## Backlog (Tucker, 2026-10-21)
-The most ambitious long-term ideas wait here. Tucker moves one into a milestone when he wants it worked on.
-
-### DXC dialogue and voice acting (D84)
-An option to use the *Dracula X Chronicles* (2007) English script and voices instead of the 1997 ones:
-- converting the PSP's ATRAC3 voice audio
-- replacing the cutscene scripts in 8 stages
-
-It needs the player's DXC disc, as Maria does.
-
-### F9 sends bug reports (D86)
-F9's snapshot plus a short form, sent to a private repo through a small hosted relay, so players who download a release can report problems. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
-
-### A rescue menu for playtesters (Tucker, 2026-10-28)
-"I'm stuck" in the pause menu, to get past a co-op bug and keep playing: back to the door, go to my partner, back to the last save or a moment, skip this boss or scene, warp to a save room. Each rescue also saves a bug report. Design: `design/backlog-rescue-menu.md`.
-
-### 3–4 players (D48): now M17
-
-### Power tuning and more characters' testing (D111)
-The M8b power curve (±20% of Alucard at every boss) and testing characters beyond what v1.0 covers wait for community feedback on the v1.0 build.
-
-### AYN Thor dual screen (D111, was M10)
-Top screen you, bottom screen your partner, and the bat-capped blood vial. Only Thor owners benefit, so it waits.
-
-### Community characters (D111)
-A guide, a format and a module interface for adding characters (for example, Soma from *Aria of Sorrow*): a PS1 player overlay in C, built like our Maria (`maria/`), shipped as patches of code only, with its art converted from the player's own files. PS1 overlays are the one character format that also runs on SymphonyRecomp, so community work isn't tied to our engine.
-
-
-### M8 leftovers (2026-10-21)
-- **Off-hand swing poses:** Richter and Maria keep their pose while the weapon swings, and the partner's puppet doesn't show the weapon (its sprites aren't loaded in the partner's game).
-- **Thrown items and the stat/resist potions** from the off hand (TNT, Karma Coin, Str. potion, Resist potions...), and weapon specials (Crissaegrim, Muramasa, Shield Rod spells).
-- **Familiars for Richter/Maria:** only the bat and the ghost are tested; the faerie, demon and sword need a check.
-- **Richter's HUD name box** is blank after a save load (a palette not loaded on that path; retail Richter too).
-- **The M8b audit and balance** if Tucker picks the automated options: the full reachability route bot, and per-boss bots for power-curve tuning.
+- **DXC dialogue and voice acting (D84):** an option to use the *Dracula X Chronicles* English script and voices: converting the PSP's ATRAC3 audio and replacing the cutscene scripts in 8 stages. It needs the player's DXC disc.
+- **F9 sends bug reports (D86):** the snapshot plus a short form, sent to a private repo through a small hosted relay. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
+- **A rescue menu for playtesters:** "I'm stuck" in the pause menu, to get past a co-op bug and keep playing. Design: `design/backlog-rescue-menu.md`.
+- **Power tuning and more characters' testing (D111):** waits for community feedback on v1.0.
+- **AYN Thor dual screen (D111):** top screen you, bottom screen your partner, and a metal bat in place of the blood vial's cork (centred, with a pixel test).
+- **Community characters (D111):** a guide, a format and a module interface for adding characters (for example, Soma from *Aria of Sorrow*): a PS1 player overlay in C, built like our Maria (`characters/maria-dx/`), shipped as patches of code only, with its art converted from the player's own files. PS1 overlays are the one character format that also runs on SymphonyRecomp.
+- **Thrown items and potions from the off hand** (TNT, Karma Coin, Str. potion, Resist potions), and weapon specials (Crissaegrim, Muramasa, Shield Rod spells).
+- **Connecting:** IPv6 and port prediction (deferred from M14).
+- **Installers:** accept `.chd` disc images; a small branded `.exe`, so the firewall prompt doesn't say "Python".

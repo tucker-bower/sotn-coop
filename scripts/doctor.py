@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks that this machine has everything SOTN Co-op needs, and says how to fix what's missing.
 
-Run it first in every session: mods/co-op/scripts/doctor.py   (exit code 0 = all required checks pass)
+Run it first in every session: scripts/doctor.py   (exit code 0 = all required checks pass)
 Paths come from env.example.toml, overridden by env.toml.
 """
 
@@ -74,7 +74,7 @@ for key in ("win_emulators", "win_masters"):
 
 print("== Android release key (D112)")
 ks = Path(os.path.expanduser(ENV.get("android", {}).get("keystore", "-")))
-check(ks.exists(), f"keystore: {ks}", "restore it and password_file from Tucker's password manager (env.example.toml [android])",
+check(ks.exists(), f"keystore: {ks}", "restore it and password_file from your password manager (env.example.toml [android])",
       required=False)
 
 print("== hygiene")

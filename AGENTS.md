@@ -1,64 +1,90 @@
-# AGENTS.md: working on SOTN Co-op
+# AGENTS.md: how we build SOTN Co-op
 
-These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything. The project goal changed on 2026-10-18 to independent exploration with one game per player (`docs/DECISION_LOG.md` D19–D31). Then run `scripts/doctor.py`: it checks the toolchain, discs and build. Every path (discs, emulators, savestates) is in `env.example.toml` / `env.toml`, and setup is in `SETUP.md`.
+This file is how we work together. Before doing anything, read:
+1. `docs/TECHNICAL_SUMMARY.md`: what we've built and how it works.
+2. `docs/ROADMAP.md`, the "Now" section: where we are, what's next, and any open decisions.
+
+Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `DEVELOPER_GUIDE.md`. If `LOCAL.md` exists, read it too: it's git-ignored and covers this machine and its devices.
+
+## Where things live
+Each fact has one home. Read these only when the task needs them, and search the long ones instead of reading them through.
+
+| File | Holds | Update it when |
+|---|---|---|
+| `docs/TECHNICAL_SUMMARY.md` | What exists and how it works | The architecture changes |
+| `docs/ROADMAP.md` | Where we are, what's next, known issues, open decisions | At every checkpoint |
+| `docs/DECISION_LOG.md` | Why we chose what we chose (Dnn) | A decision is made |
+| `docs/research.md` | What we've learned: game internals, tools, hard-won lessons | You learn something a future agent would otherwise rediscover |
+| `docs/design/` | One design per milestone, with its acceptance criteria | Before and while building it |
+| `docs/link-protocol.md` | The wire protocol | The protocol changes |
+| `harness/README.md` | How to write tests | The test API changes |
+| `LOCAL.md` (git-ignored) | This machine, its devices, playtest workflow | The setup changes |
+
+Git and PRs hold the history, so don't write session logs. Replace what's out of date rather than adding to it: less is more.
 
 ## Roles
 - **Tucker (owner):** owns architecture, design, scope and game feel, and approves milestone designs and PRs. He is an experienced engineer, but his time is the scarcest resource on this project. Optimize for minimal owner time, not minimal agent effort.
-- **Agent (implementer):** owns implementation, testing and evidence. You are expected to work autonomously for long stretches.
+- **Agent (implementer):** owns implementation, testing and evidence. Work autonomously for long stretches. Don't stop mid-milestone to report: checkpoint and continue until it's done or truly blocked.
 
 ## The loop (spec-driven)
-1. **Design first.** Before each milestone, write a one-page proposal in `docs/design/Mx-<name>.md`. It should give 2–3 options, a recommendation, risks, and **testable acceptance criteria**. Don't write milestone code until Tucker approves it. Small spikes to de-risk the proposal are fine.
-2. **Build autonomously** on a branch named `coop-mx-<short-name>` (git can't nest under the existing `coop` branch).
-3. **Open a PR** using the template below.
-4. **Playtest** at milestones: deliver a patched disc image and short testing instructions.
+1. **Design first.** Before each milestone, write a one-page proposal in `docs/design/Mx-<name>.md`, with 2–3 options, a recommendation, risks and **testable acceptance criteria**. Don't write milestone code until Tucker approves it. Small spikes to de-risk the proposal are fine.
+2. **Build autonomously** on a branch named `coop-mx-<short-name>`.
+3. **Open a PR** using the template below. If PRs are stacked, confirm the work actually reached `main` after merging.
+4. **Playtest** at milestones: deliver an installer and APK, with a short sheet of what to try.
 
 ## Decisions
-- **Reversible decision:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
-- **Expensive to reverse, or changes game feel / scope:** stop, write up the options in `docs/STATUS.md` under "Decisions needed", and work on something else that isn't blocked.
+- **Reversible:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
+- **Expensive to reverse, or changes game feel or scope:** stop, write up the options in `docs/ROADMAP.md` under "Decisions needed", and work on something else that isn't blocked.
 - Batch questions. Never send Tucker one question at a time.
 
 ## Communication
 - Be brief and lead with outcomes. Tucker wants results and decisions, not narration.
-- Never ask Tucker to read webpages, docs or Discord himself. Read them yourself and summarize into `docs/research.md`.
-- Keep `docs/STATUS.md` current at the end of every work session: done, in flight, next, budget used, decisions needed.
-- Report problems early, especially anything that changes what Tucker will get or what it costs.
+- Never ask Tucker to read webpages or docs himself. Read them yourself and put what matters in `docs/research.md`.
+- Report problems early, especially anything that changes what Tucker will get.
 
 ## Engineering rules
-- **Never end a session with unsaved work.** Before you could run out of tokens or usage (a long task, a usage warning, a big context), document what you did (the design doc, `docs/STATUS.md`, `docs/DECISION_LOG.md`), then commit and push it, even if it's unfinished. Mark unfinished work as such. Do this at every natural checkpoint, not only at the end: work that exists only in the working tree is lost the moment a session is cut off.
-- **Never commit game data.** That covers disc images, extracted files, ROM-derived assets and savestates containing game RAM. Check `git status` before every commit.
-- **Keep each instance deterministic.** No uninitialized reads, and no timing- or emulator-dependent behavior inside the game. Harness reproducibility depends on it, and so may shared rooms (D23). Timing-dependent behavior belongs in the host, never in the game.
-- **Emulator-specific code stays in the adapter.** The product emulator isn't chosen yet (R1, D28). Anything that talks to an emulator (RAM read/write, frame callback, input) goes through one thin adapter.
-- **DRA hooks must be size-neutral** (D33): retarget an existing call, never add code to DRA. **No retail file may move on the disc** (D34): new content goes in `COOP.BIN`. `build_disc.sh` enforces both.
-- **Minimize upstream diffs.** Put mod code in `mods/co-op/` and touch upstream `src/` through small, well-commented hooks. That keeps rebasing on upstream sotn-decomp cheap.
-- **Tooling in Python** where practical (test harness, bots, scripts), so Tucker can read and modify it easily.
-- **Evidence over claims.** "Works" means a harness test passes. Attach the results, plus a short clip or screenshot for anything visual.
+- **Never end a session with unsaved work.** At every natural checkpoint, and before you could run out of usage, update the docs, then commit and push, even if the work is unfinished. Mark unfinished work as such.
+- **Keep the repo clean of personal setup.** Local paths, device workflow and playtest sheets go in `LOCAL.md` and `local/`, which are git-ignored.
+- **Never commit game data:** disc images, extracted files, ROM-derived assets, or savestates containing game RAM. Check `git status` before every commit.
+- **Keep each game deterministic.** Timing-dependent behavior belongs in the host, never in the game.
+- **Emulator calls go through the one thin adapter.**
+- **DRA hooks stay size-neutral, and no retail file moves on the disc.** `build_disc.sh` enforces both.
+- **Minimize upstream diffs.** Mod code lives in this repo. Changes to sotn-decomp and SwanStation go in `patches/`, as small, well-commented hooks, so updating the pinned versions stays cheap.
+- **Tooling in Python** where practical, so Tucker can read and modify it easily.
+- **Evidence over claims.** "Works" means a test passes. Attach the results, plus a short clip or screenshot for anything visual. Prefer reading RAM to reading screenshots: it's cheaper and exact.
+- **Releases:** Tucker publishes them. Upload only to a release that's still a draft, and never replace a published installer: make a new version.
 - Commit messages end with the session attribution lines. PR descriptions end with the Claude Code footer.
 
 ## Testing
-- **Primary:** a headless, frame-stepped harness with savestates, scripted and bot inputs, and RAM assertions.
-- **Multi-instance session tests:** run two game instances plus the host yourself, with scripted inputs on both and assertions across both games. Co-op features count as working only when a session test proves it. Don't wait for Tucker to run a two-player check.
-- **Secondary:** emulators on Tucker's PC at `C:\Users\tucke\OneDrive\Desktop\Emulators`. Install anything needed there and use it for cross-emulator compatibility checks. Ask before installing anything outside that folder.
-- **One runner, three tiers (Tucker, 2026-10-31; D138).** Every test (harness scenarios, launcher checks, UI flows, the patcher) runs through `harness/run.py`, side by side, each in its own process. Pick the smallest tier that covers the change; CI/CD velocity matters.
-  1. **A small change: a handful of relevant tests only.** Name them, or use `-k WORD` (every test whose name has WORD in it), e.g. `run.py -k pvp`, `run.py -k boss_rush ui_boss_rush`. `run.py --list -k WORD` shows what would run. Don't run a whole suite for a small change.
-  2. **Everyday suite** (`run.py`, about 10 minutes on 16 cores): before committing a major change and before opening or updating a PR.
-  3. **Full suite** (`run.py --full`: everyday plus the soaks, fuzz, boss chains and every character pairing): only before a release (any build handed to players, playtest betas included), with the boot checks on the dev platform, PCSX-Redux, and the product emulator once R1 has chosen it. Never as a routine check.
-- **Clear names.** A test's name says what it checks, with no milestone prefix: `<feature>_<what>` and, for character pairings, `_<A>_and_<B>` (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`, `pvp_hand_alucard_vs_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True` in the decorator). Keep the everyday suite at 10 minutes or less: when it grows past that, move repetition to `--full`.
-- After a module change, rebuild the fixtures (`scripts/rebuild_fixtures.sh`) before running any test that loads a savestate.
+Co-op features count as working only when a test proves it, and that usually means two real games. Run those yourself; don't wait for Tucker to do a two-player check.
+
+**Every test runs through one runner**, side by side, each in its own process. That covers one-game scenarios, two-game sessions, launcher checks, UI flows of the real app, and the patcher. Use the bootstrap's venv:
+```
+PY=.env/src/sotn-decomp/.venv/bin/python
+$PY harness/run.py --list -k WORD     # what would run, without running it
+$PY harness/run.py -k pvp -k boss_rush   # every test with a word in its name
+$PY harness/run.py pvp_off            # tests by exact name
+$PY harness/run.py                    # the everyday suite
+$PY harness/run.py --full             # everyday plus the full-only tests
+```
+Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 only if all passed.
+
+**Pick the smallest tier that covers the change** (D138):
+| Tier | About | When |
+|---|---|---|
+| A handful, by name or `-k` | seconds to minutes | A small change |
+| Everyday (212 tests) | 10 minutes | Before committing a major change, and before opening or updating a PR with code changes |
+| `--full` (299 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
+
+**After a module change, rebuild first:** `scripts/rebuild_fixtures.sh` (about 15 minutes) rebuilds the disc, Maria's patches and every savestate, because savestates hold the module's code. Don't rebuild while tests are running.
+
+**New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True`). Keep everyday at 10 minutes or less by moving repetition to `--full`.
 
 ## PR template
 ```
-## What
-<one paragraph, outcome-focused>
 ## Acceptance criteria
 - [x] <criterion>: <evidence: test name / clip / numbers>
 ## Defaults I chose (reversible)
 - <decision>: <why>
 ## Risks / known issues
-## Budget
-<sessions or usage spent vs. milestone budget>
 ```
-
-## Budget
-The project runs on a Claude **Pro** subscription, with a target of **finishing in about a month**. Pro has rolling usage limits (resetting every 5 hours, plus possible weekly caps), so the budget is measured in usage windows, not tokens. See `docs/ROADMAP.md`.
-- Prefer RAM-text state over screenshots, and cache-friendly long sessions over many cold starts.
-- If a milestone runs about 50% over its budget, stop and report in `docs/STATUS.md` before continuing. Tucker may consider a plan upgrade.

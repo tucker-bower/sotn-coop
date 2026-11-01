@@ -13,7 +13,7 @@ own PC opened by sending out first, to that same address. So:
    from then on only that address is listened to.
 4. On the same Wi-Fi, without the relay: both also broadcast HELO to the game's usual port
    (GAME_PORT, which every game tries first), so two games in one house find each other even
-   when the relay or STUN can't be reached (Tucker's Thor test, 2026-10-24).
+   when the relay or STUN can't be reached (a real device test, 2026-10-24).
 The relay only ever sees the room's hashed topic and the two candidate lists."""
 
 import hashlib

@@ -17,7 +17,7 @@
 // Alucard's sprites (BIN/ARC_F.BIN, for an Alucard partner: partner.c), each as linked at 0x8013C000.
 #define COOPRIC_ADDR 0x80500000
 #define ARC_F_ADDR 0x80540000
-// Our Richter's and Maria's code and BSS (richter/ric.ld, maria/maria.ld): only their data is
+// Our Richter's and Maria's code and BSS (characters/richter-ps1/ric.ld, characters/maria-dx/maria.ld): only their data is
 // in Richter's overlay slot, so familiars fit after it (design/M8b §3). Each has its own
 // address here (0x805C0000, 0x80600000): code rewritten at an address an emulator's recompiler
 // has already compiled may not be noticed (Richter then Maria hung).
@@ -25,7 +25,7 @@
 #define COOP_PLAYER_FAR_END 0x80680000
 // M13 step 3: a partner who plays another character. F_GAME2.BIN (Richter's graphics: 32 strips
 // for x 0x200-0x3FF, y 0x100-0x1FF, then palettes 0x100-0x1FF) goes into VRAM's second bank; our
-// Richter linked to run as the partner (richter/ric_partner.ld), and our Maria's (later).
+// Richter linked to run as the partner (characters/richter-ps1/ric_partner.ld), and our Maria's (later).
 #define FGAME2_ADDR 0x80680000
 #define FGAME_SIZE 0x42000
 // ...and Alucard's (F_GAME.BIN), for an Alucard partner in another character's game: its strips
@@ -56,7 +56,7 @@ extern s32 g_CoopCharacter;
 extern CdlFILE g_CoopRicFile;
 // ...and the partner's Richter (COOPRICP.BIN, design/M13 step 3), read to PARTNER_RIC_ADDR.
 extern CdlFILE g_CoopRicPartnerFile;
-// The player's OPT_* settings, for the player overlays (richter/coop_ric.h): mirrors the mailbox.
+// The player's OPT_* settings, for the player overlays (characters/richter-ps1/coop_ric.h): mirrors the mailbox.
 extern u32 g_CoopOptions;
 #endif
 

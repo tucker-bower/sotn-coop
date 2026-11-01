@@ -5,7 +5,7 @@
     python3 scripts/release.py 0.7.1 [--notes docs/releases/v0.7.1.md] [--no-build] [--android] [--target BRANCH]
 
 1. scripts/build_release.sh: the patch (from your disc and our build), the staged app, the
-   installer (SOTN-Coop-setup-<version>.exe, in Emulators\\SOTN-Coop-release).
+   installer (SOTN-Coop-setup-<version>.exe, in SOTN-Coop-release in the emulators folder).
 2. Checks that nothing in the installer's stage is game data: no disc images, savestates or
    memory cards anywhere, the only .bin is OpenBIOS, nothing is disc-sized, and every file of
    ours (app/) is of a kind on the allow-list.

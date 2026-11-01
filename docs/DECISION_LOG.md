@@ -1,5 +1,7 @@
 # Decision log
 
+Why we chose what we chose. Search for a Dnn rather than reading it through: later decisions can supersede earlier ones.
+
 Format: **ID: decision** (owner | agent-default) then the context, the options considered, and why.
 
 **D2: Target the PS1 US build (SLUS-00067)** (owner, 2026-10-18)
@@ -26,10 +28,10 @@ Follow the Maria mod precedent: a Docker image or script that takes the user's o
 The spec-driven loop is in `AGENTS.md`.
 
 **D10: Install DuckStation + PCSX-Redux for cross-checks, using OpenBIOS** (owner, 2026-10-18)
-Install both into `C:\Users\tucke\OneDrive\Desktop\Emulators`, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
+Install both in one emulators folder, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
 
-**D11: Environment layout: one manifest plus a doctor; masters live in the OneDrive Emulators folder** (owner, 2026-10-18)
-`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in `OneDrive\Desktop\Emulators\SOTN\` (Tucker accepted the ~1.5GB of OneDrive sync). Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
+**D11: Environment layout: one manifest plus a doctor; masters live outside the repo** (owner, 2026-10-18)
+`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in the `win_masters` folder. Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
 
 **D12: MIPS cross toolchain from Ubuntu 24.04 via an apt pin** (agent-default, 2026-10-18)
 Ubuntu 26.04 dropped `gcc-mipsel-linux-gnu`. Options considered: pinned noble packages; building gcc from source; clang as the preprocessor. Chose noble because it's the exact compiler upstream's Docker image uses, so matching-build risk is lowest. Pin priority is 50, so nothing else is pulled from noble.
@@ -439,7 +441,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - No pose change for Richter or Maria during the swing: Tucker's rule is existing art only, and their own attack poses bring their whip or guardian.
 
 **D89: Our Richter's and Maria's code runs from the expansion RAM** (agent-default, 2026-10-21)
-- Only their data (the tables DRA reads at fixed addresses, and their sprites) stays in Richter's overlay slot. Their code and BSS go to 0x805C0000, placed by the module after each load (`richter/ric.ld` and `maria/maria.ld` add a trailer with the sizes).
+- Only their data (the tables DRA reads at fixed addresses, and their sprites) stays in Richter's overlay slot. Their code and BSS go to 0x805C0000, placed by the module after each load (`characters/richter-ps1/ric.ld` and `characters/maria-dx/maria.ld` add a trailer with the sizes).
 - **Why:** built with a modern gcc they're 220–237 KB, past 0x80170000, where familiars and the weapon overlays load. With the code moved, the slot ends at 0x801567D4 (Richter) and 0x8015CF50 (Maria), so familiars work for them too. Their entity loops run familiar entities as DRA's does (a COOP change in `pl_blueprints.c`).
 - Options considered: `-Os` plus dropping unused functions (still 1.8 KB over for Richter); familiars kept off for them (a gap in the design's mapping).
 
@@ -613,7 +615,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - Options considered: launchers relaying for each other, opt-in or on by default (each helper's public IP is posted on a public ntfy topic); community relays listed in the repo (may be none at launch). Rejected as complexity for a few percent of pairs. Slippi and Dolphin netplay run no relays; games with relays get them from a platform (Steam, Epic) or a paid server (RetroArch), against D74.
 - `link/relay.py` and the transport's relay mode stay, marked unused and still tested: a starting point for an invested player to run their own (`COOP_RELAYS`). IPv6 and port prediction are deferred until playtest reports say how often pairs get stuck.
 **D122: Richter and Maria get extra jumps, not higher jumps** (Tucker, 2026-10-27; closes the gaps D119 found)
-- Each of the Leap Stone and the Gravity Boots gives Richter and Maria one jump in the air, refilled on landing (`g_CoopAirJumps`, `COOP_AIR_JUMPS` in `richter/coop_ric.h`). The jump heights stay as they are.
+- Each of the Leap Stone and the Gravity Boots gives Richter and Maria one jump in the air, refilled on landing (`g_CoopAirJumps`, `COOP_AIR_JUMPS` in `characters/richter-ps1/coop_ric.h`). The jump heights stay as they are.
 - Richter's backflip keeps its vanilla moment (jump again just after leaving the ground) and costs one; any other press in the air, or falling off a ledge, is a plain jump. Maria's double jump is her Leap Stone jump, and her Gravity Boots jump is her own high jump, done in the air (her double jump alone left her 105 px short); a press uses the double jump first, Up asks for the high jump. The Soul of Bat's climbing re-arm is unchanged.
 - Measured (`movement_envelope_*`): with the Leap Stone, Richter 121 px, Maria 104, Alucard 106; with the Gravity Boots too, Richter 375, Maria 425, Alucard 375.
 
@@ -712,3 +714,15 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Everything in one runner:** the launcher checks (`launcher_*`), the UI flows (`ui_*`, `uxdriver.py`, in a fresh data folder each) and the patcher's round trip (`patcher_round_trip`: it had been broken since M13 without anyone running it) are tests in `harness/commands.py`, everyday tier, run in parallel with the rest. `ui_startup` (it times the first picture) and `ui_online*` (two launchers in real time) run in the real-time phase.
 - **Real-time tests side by side with each other** after the rest, not one by one: a few processes on 16 cores leave their timing alone. Small gain (the 10-minute soak and its baseline still run one after the other, about 7 minutes at the end of `--full`). `mixed_soak_10min` compares itself with `mixed_soak_baseline_10min`'s report, so they're a chain (baseline first); before, it ran first and compared with the previous run's baseline.
 - **Names:** no milestone prefixes (193 renamed: `m12_boss_rm_olrox` is `boss_olrox_richter_and_maria`, `m15_pvp_hand_ar` is `pvp_hand_alucard_vs_richter`, `m11_slot2_clone` is `castle_takes_a_second_player`); the docs follow. Names in the docs from before this that never became tests (`m8b_reachability`, ...) are left as written.
+
+**D139: Character builds live in `characters/<name>-<source>/`** (Tucker, 2026-10-31)
+`richter/` is now `characters/richter-ps1/` and `maria/` is `characters/maria-dx/`, so another version of a character, such as Saturn Maria (M16), can sit beside them. The name part after the character is the game the version comes from. The folder names are ours alone: the build outputs, patches and the player's files keep their names. All six character outputs are byte-identical after the move.
+
+**D140: One home for each fact; STATUS.md removed** (Tucker, 2026-10-31)
+`AGENTS.md` says how we work, `TECHNICAL_SUMMARY.md` what we've built, and `ROADMAP.md` where we are and where we're going, with open decisions and known issues. Decisions go here, and lessons in `research.md`. Git and PRs hold the history, so `STATUS.md`, a 49 KB session log, is gone; what was still true moved to those files. Agents start with less to read.
+
+**D141: No usage budget in the docs** (agent-default, 2026-10-31)
+The month target and Claude Pro budget came out of `AGENTS.md`, the roadmap and the PR template, after Tucker removed them from the roadmap and this log. Options: keep them, or keep only the "50% over budget" stop. Reporting problems early covers what mattered.
+
+**D142: Personal setup stays out of the repo** (Tucker, 2026-10-31)
+Local paths, the device workflow and playtest sheets moved to the git-ignored `LOCAL.md` and `local/`. Machine paths go in `env.toml`, so `env.example.toml` holds neutral defaults. Older decisions and designs still name the Thor where it shaped a product choice.

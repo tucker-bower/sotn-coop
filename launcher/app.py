@@ -61,7 +61,7 @@ OK_GREEN = (140, 200, 120)
 BUNDLED_BIOS = APP / "bios" / "openbios-fast.bin"
 LEGACY_BIOS = APP / "bios" / "openbios.bin"
 PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps")  # COOP_PATCH: dev checkouts
-# Maria's patches (maria/make_patches.py): the installer's, or a dev checkout's build.
+# Maria's patches (characters/maria-dx/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
                       if (d / "maria.json").exists()), APP / "patcher" / "maria")
 CHARACTERS = ("Alucard", "Richter", "Maria")  # index = CHAR_* (module/link.h)
@@ -1264,7 +1264,7 @@ class Launcher:
         if c.get("state") == "failed":
             raise ConnectFailed(c.get("reason") or "")
         if c.get("left_s") is not None:
-            # which step it's on: says at once which side is stuck (Tucker's Thor test, 2026-10-23)
+            # which step it's on: says at once which side is stuck (a real device test, 2026-10-23)
             step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
                     "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
             if c.get("relay_error") and c.get("state") == "waiting":  # say so now, not in five minutes

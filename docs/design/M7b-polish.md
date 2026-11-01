@@ -11,7 +11,7 @@
 | 4 | `window_layouts` | `uxdriver.py window`: every layout (automatic, side by side, stacked, P1, P2, two windows) × both pixel modes, plus 1280×720, 1920×1080, 1080×1920, 700×400, fullscreen and maximized: 34 screenshots. `uxdriver.py perf` on Windows: a steady **60 fps** at every size, in fullscreen at the monitor's native resolution, and with two windows (59.8–60.4). The settings are saved to `settings.json` on every change. |
 | 5 | `menu_bar` | `uxdriver.py menus` on Windows clicks every item through the real menu bar's window procedure (`PostMessage WM_COMMAND`). `win-home.png` shows the native bar. It hides in fullscreen (F11 or the menu). From a controller, the pause menu has Layout, Pixels and How to play, and Settings has everything else. |
 | 6 | `widescreen_spike` | `docs/design/M10-widescreen-spike.md`: the emulator hack gives a pixel-identical picture. True FOV is blocked by VRAM (the framebuffers would overlap the stage textures). Recommendation: drop it, and use the 16:9 bars for co-op info. |
-| 7 | `stranger_playtest` | `docs/playtest/M7b-stranger.md`: 15 friction items, 11 fixed, including **a silent crash when the installer starts the launcher** and a lobby crash with real controllers. README rewritten. |
+| 7 | `stranger_playtest` | the stranger playtest notes: 15 friction items, 11 fixed, including **a silent crash when the installer starts the launcher** and a lobby crash with real controllers. README rewritten. |
 | 8 | `net_profiles` | `docs/design/M7b-netcode.md`: before/after across 6 profiles, and `link/test_connect.py` (16 router pairings). Stutter: transatlantic 24.7% → 1.7%, bad Wi-Fi 36% → 1.8%. Bandwidth 841 → about 250 kbit/s. No hand-over on a 0.4 s blip. The host never waits (under 0.4 ms per frame, p99). |
 | 9 | No regressions | 61/61 harness scenarios, `launcher/smoke.py`, `patcher/test_patcher.py` (final run: see the PR). |
 
@@ -102,7 +102,7 @@ I play the part of a non-technical Windows user, starting from nothing:
 3. **Install interactively and start the launcher.** A new `launcher/uxdriver.py` feeds scripted controller and keyboard input and saves a screenshot of every launcher screen, so each step is reproducible and checkable. Game frames are shown only in the private report and never committed (they're ROM-derived).
 4. **Couch:** two pads join the lobby → New game → both reach the Castle Entrance.
 5. **Online:** two installs on one PC host and join through the real code flow. Then join from WSL across its NAT as the closest stand-in for a second home.
-6. **Output:** `docs/playtest/M7b-stranger.md`. It lists each step, the time taken, the clicks needed and any friction found, each item marked *fixed* or *left (why)*. The friction fixes are part of M7b.
+6. **Output:** the stranger playtest notes. It lists each step, the time taken, the clicks needed and any friction found, each item marked *fixed* or *left (why)*. The friction fixes are part of M7b.
 
 What I can't do is a real internet session between two homes. That stays your playtest, ideally with a friend who has never seen the project.
 

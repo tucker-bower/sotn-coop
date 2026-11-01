@@ -1,4 +1,4 @@
-"""M4b: fixes from playtest 1 (docs/playtest_notes/playtest_1.md, design/M4b-playtest-fixes.md)."""
+"""M4b: fixes from playtest 1 (design/M4b-playtest-fixes.md)."""
 
 import struct
 

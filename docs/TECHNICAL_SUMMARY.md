@@ -45,8 +45,8 @@ Every player's game runs in **SwanStation**, the libretro core forked from DuckS
 - **Shared rooms (D23, D50).** When both players are in the same room, the first one in becomes the room's **authority** and runs the enemies. The other game (the **guest**) stops running its own enemies and mirrors the authority's entity slots 64–255 every frame, along with the primitives and VRAM uploads they draw with (D53, D63–D65). This works because both games run the same binary and the same stage overlay, so raw entity memory, function pointers included, is valid in both. Hits from the guest, and pickups it touches, go back to the authority as events (D57, D66). Scenery is run by each game itself (D56).
 - **Enemy targeting.** Most enemy AI reads the player through a handful of shared helpers in `st_common.h` (`GetSideToPlayer` alone has about 420 call sites). Pointing those at the nearer player gave most enemies two-player awareness in one change. Bosses also switch aggro between players every few seconds (D47, D62).
 - **Bosses and scenes.** A boss pulls the partner in, gets 2× HP, and is fought in one shared world, however far apart the two cameras are (D25, D131). Cutscenes pull the partner in and hold until both players have seen them (D26, D102). Killing Richter or Dracula ends the game for both players (D130, D134).
-- **The partner's body (M13).** At first the partner was a tinted puppet. Now, in your game, the partner is a real second player: each frame the module swaps the partner's player state into the player slots, runs the character's own player code with the partner's buttons from the link, and swaps back. The partner's attacks hit with their real hitboxes, and their graphics come from the second VRAM bank (D124, D128). The partner's body costs about 45 to 60 of a frame's 263 scanlines (D129).
-- **Characters.** Richter and Maria are playable (M8). Our Richter is Alucard's engine plus Richter's code, run from the expansion RAM (D89). Maria's code is compiled from the PSP *Dracula X Chronicles* overlay via the decomp's Maria port and applied as **patches of code only**, so no game art ships (`maria/make_patches.py`).
+- **The partner's body (M13).** In your game, the partner is a real second player: each frame the module swaps the partner's player state into the player slots, runs the character's own player code with the partner's buttons from the link, and swaps back. The partner's attacks hit with their real hitboxes, and their graphics come from the second VRAM bank (D124, D128). The partner's body costs about 45 to 60 of a frame's 263 scanlines (D129).
+- **Characters.** Richter and Maria are playable (M8). Our Richter is Alucard's engine plus Richter's code, run from the expansion RAM (D89). Maria's code is compiled from the PSP *Dracula X Chronicles* overlay via the decomp's Maria port and applied as **patches of code only**, so no game art ships (`characters/maria-dx/make_patches.py`).
 - **PvP** (off by default) uses the attacker's real hitboxes, sent over the link, and the victim's own game decides each hit (D132).
 
 ### Saves
@@ -66,11 +66,7 @@ Everything that "works" has a test that proves it. There are about 300 tests, mo
 - **The harness** (`harness/`) drives SwanStation headless and frame-stepped from Python through [libretro.py](https://github.com/JesseTG/libretro.py), at about 25–30× real time per game. A test starts from a savestate, drives inputs (scripted, random or bot), and asserts on RAM by symbol name (`read("g_Status", ...)`). It writes a report, a clip and a log.
 - **Two-game session tests** (`@session_scenario`) run two games plus their hosts. The driver steps them alternately, one frame each, on a simulated clock. For example: "A picks up a relic, and B has it within N frames", or "both fight the boss, and it dies once in both games, with the same flags after". Because each game is deterministic and the clock is simulated, these tests are reproducible even on a machine loaded with other tests.
 - **Fixtures:** savestates outside every boss and scene, made by script from the built disc (`scripts/rebuild_fixtures.sh`), since savestates contain the module's code.
-- **One runner, three tiers** (`harness/run.py`, D138). Each test runs in its own process, many side by side, longest first. Network tests share one lane, and the few that time the host in real time run after the rest. The tiers:
-  - a handful of relevant tests, by name or `-k word`, for a small change;
-  - the everyday suite, about 10 minutes on 16 cores, before a commit or a PR;
-  - `--full`, which adds the soaks, fuzz, boss chains and every character pairing, before a release.
-  The launcher's own checks, its UI flows (`launcher/uxdriver.py` drives the real app headless, two launchers for online) and the patcher's round trip run in the same runner.
+- **One runner** (`harness/run.py`, D138). Each test runs in its own process, many side by side, longest first. Network tests share one lane, and the few that time the host in real time run after the rest. It also runs the launcher's checks, its UI flows (`launcher/uxdriver.py` drives the real app headless, two launchers for online) and the patcher's round trip. How to run it is in [`AGENTS.md`](../AGENTS.md).
 - **Cross-checks:** PCSX-Redux runs the module headless through Lua (`scripts/redux_check.sh`). `lockstep.py` replays two games on the same inputs and compares RAM hashes, as a determinism check.
 - **Bots and playtests:** `harness/playtest.py` plays both games with bots for minutes at a time and flags stuck games, frozen screens, dropped events and mismatched worlds. Humans playtest each release.
 
@@ -78,17 +74,18 @@ Everything that "works" has a test that proves it. There are about 300 tests, mo
 | Path | What |
 |---|---|
 | `module/` | The in-game co-op module (C, MIPS): link, progress, shared rooms, bosses, the partner's body, characters, PvP |
-| `maria/` | Maria for PS1: her PSP code built against the decomp, shipped as code-only patches |
+| `characters/richter-ps1/` | PS1 Richter: the game's own Richter built with our changes, run from the expansion RAM |
+| `characters/maria-dx/` | Dracula X Chronicles Maria for PS1: her PSP code built against the decomp, shipped as code-only patches |
 | `link/` | The host: mailbox, protocol, transport, joint save, connection, jitter buffer, network simulation |
 | `launcher/` | The app: pygame frontend, two cores, lobby, castles, boss rush, settings |
 | `harness/` | The headless test harness, the scenarios, the runner |
 | `patcher/` | The BPS patcher that builds the co-op disc from the player's own |
 | `android/` | The Android build (python-for-android) |
 | `scripts/` | Bootstrap, doctor, disc build, fixtures, release |
-| `docs/` | Status, roadmap, decisions, designs, the link protocol, research notes |
+| `docs/` | Roadmap, decisions, designs, the link protocol, research notes |
 
 ## How it's made
 The project is developed by an AI coding agent (Claude Code), working from short design proposals that the owner approves. It works in milestones, each with a design doc, testable acceptance criteria, a PR with test evidence, and a playtest build. The working rules are in [`AGENTS.md`](../AGENTS.md).
 
 ## Building
-See [`SETUP.md`](../SETUP.md): `scripts/bootstrap.sh` sets up a Linux (or WSL2) machine with the decomp's toolchain and the core, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc from your own disc image, and `scripts/release.py` builds the installers. Everything is AGPL-3.0, like sotn-decomp.
+See [`DEVELOPER_GUIDE.md`](../DEVELOPER_GUIDE.md): `scripts/bootstrap.sh` sets up a Linux (or WSL2) machine with the decomp's toolchain and the core, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc from your own disc image, and `scripts/release.py` builds the installers. Everything is AGPL-3.0, like sotn-decomp.
