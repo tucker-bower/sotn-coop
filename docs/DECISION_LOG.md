@@ -1,5 +1,7 @@
 # Decision log
 
+Why we chose what we chose. Search for a Dnn rather than reading it through: later decisions can supersede earlier ones.
+
 Format: **ID: decision** (owner | agent-default) then the context, the options considered, and why.
 
 **D2: Target the PS1 US build (SLUS-00067)** (owner, 2026-10-18)
@@ -715,3 +717,9 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D139: Character builds live in `characters/<name>-<source>/`** (Tucker, 2026-10-31)
 `richter/` is now `characters/richter-ps1/` and `maria/` is `characters/maria-dx/`, so another version of a character, such as Saturn Maria (M16), can sit beside them. The name part after the character is the game the version comes from. The folder names are ours alone: the build outputs, patches and the player's files keep their names. All six character outputs are byte-identical after the move.
+
+**D140: One home for each fact; STATUS.md removed** (Tucker, 2026-10-31)
+`AGENTS.md` says how we work, `TECHNICAL_SUMMARY.md` what we've built, and `ROADMAP.md` where we are and where we're going, with open decisions and known issues. Decisions go here, and lessons in `research.md`. Git and PRs hold the history, so `STATUS.md`, a 49 KB session log, is gone; what was still true moved to those files. Agents start with less to read.
+
+**D141: No usage budget in the docs** (agent-default, 2026-10-31)
+The month target and Claude Pro budget came out of `AGENTS.md`, the roadmap and the PR template, after Tucker removed them from the roadmap and this log. Options: keep them, or keep only the "50% over budget" stop. Reporting problems early covers what mattered.

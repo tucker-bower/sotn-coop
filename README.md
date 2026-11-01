@@ -105,7 +105,7 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 
 ## Scope
 
-- Each player sees their partner on the map, and as a tinted puppet when the two are in the same room.
+- Each player sees their partner on the map, and as a real second player when the two are in the same room.
 - **Shared, live:** relics, castle flags, the explored map, items and consumables (each player gets a copy), max-HP/MP/Hearts upgrades, pooled gold, and boss kills.
 - **Separate:** level, XP, hearts and subweapon, and the equipped loadout.
 - Teleport to the partner from the map (✕). A player who dies respawns at the partner's location, except during a boss fight, where the survivor has to finish the boss alone first. Each player can pause on their own, unless both are in the same room.
@@ -134,10 +134,9 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 ## Docs
 - [`docs/TECHNICAL_SUMMARY.md`](docs/TECHNICAL_SUMMARY.md): how it all works, for anyone building on it
 - [`AGENTS.md`](AGENTS.md): how AI agents work on this project
-- [`docs/ROADMAP.md`](docs/ROADMAP.md): milestones and acceptance criteria
-- [`docs/STATUS.md`](docs/STATUS.md): current state, budget, and decisions needed
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): where we are, what's next, known issues
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md): decision log
-- [`docs/research.md`](docs/research.md): notes from the codebase, wiki and Discord
+- [`docs/research.md`](docs/research.md): what we've learned about the game and tools
 
 ## Building
 See [`SETUP.md`](SETUP.md): `scripts/bootstrap.sh` sets up a machine, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc, and `scripts/release.py` builds the installer and a draft GitHub release.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the co-op disc image from the user's own disc (disks/sotn.us.cue, already extracted by bootstrap).
-# Output: mods/co-op/.env/out/disc/sotn_coop.us.cue + .bin   (game data: never commit, never publish)
+# Output: .env/out/disc/sotn_coop.us.cue + .bin   (game data: never commit, never publish)
 #
 # Mirrors upstream's `make disk`, with two changes (module/coop_api.h and boot.c explain why):
 #   - DRA is built with its co-op hooks (COOP=1), and the module's boot stub is appended to

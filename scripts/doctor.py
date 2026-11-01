@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks that this machine has everything SOTN Co-op needs, and says how to fix what's missing.
 
-Run it first in every session: mods/co-op/scripts/doctor.py   (exit code 0 = all required checks pass)
+Run it first in every session: scripts/doctor.py   (exit code 0 = all required checks pass)
 Paths come from env.example.toml, overridden by env.toml.
 """
 

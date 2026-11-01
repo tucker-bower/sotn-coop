@@ -74,5 +74,4 @@ mk "5 Boss fight together" boss
 mk "6 Cutscene together" cutscene
 mk "7 Explore apart (pickups, map)" explore
 mk "8 New game from scratch" newgame --fresh-cards
-cp "$MOD/launcher/PLAYTEST.md" "$DEST/README-playtest.md" 2>/dev/null || true
 echo "== installed in $DEST"
