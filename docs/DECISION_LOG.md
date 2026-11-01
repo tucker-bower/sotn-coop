@@ -31,7 +31,7 @@ The spec-driven loop is in `AGENTS.md`.
 Install both in one emulators folder, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
 
 **D11: Environment layout: one manifest plus a doctor; masters live outside the repo** (owner, 2026-10-18)
-`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in the `win_masters` folder (Tucker accepted the ~1.5GB of OneDrive sync). Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
+`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in the `win_masters` folder. Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
 
 **D12: MIPS cross toolchain from Ubuntu 24.04 via an apt pin** (agent-default, 2026-10-18)
 Ubuntu 26.04 dropped `gcc-mipsel-linux-gnu`. Options considered: pinned noble packages; building gcc from source; clang as the preprocessor. Chose noble because it's the exact compiler upstream's Docker image uses, so matching-build risk is lowest. Pin priority is 50, so nothing else is pulled from noble.
