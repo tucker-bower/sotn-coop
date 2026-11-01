@@ -6,8 +6,10 @@ Online and couch co-op mod for *Castlevania: Symphony of the Night*. Explore the
 
 This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, syncing with each other over a python api. 
 
-### AI Usage disclaimer
-AI agents built this code under my direction. While I am a professional programmer, this is my first gaming mod and I could not have made this by myself without these tools. However, I put a lot of time and love into realizing this mod and I plan to finish it and support it into the future. All code is publically available in this repo and open for anyone to use and all prior work that made this possible is credited.
+### AI usage disclaimer
+AI agents wrote this code under my direction. I'm a professional programmer, but this is my first game mod, and I couldn't have built it alone without these tools.
+
+This isn't a vibecoded project I'm going to abandon, though. I've put a lot of time and love into it: I make the design calls, approve the work, and playtest it myself. I plan to finish this mod and support it into the future. All of the code is public in this repo and open for anyone to use, and all the prior work that made it possible is credited below.
 
 ## Getting started
 You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional.
