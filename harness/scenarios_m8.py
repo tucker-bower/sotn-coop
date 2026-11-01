@@ -331,6 +331,37 @@ def offhand_one_attack_at_a_time_richter(run):
     run.expect(not both, "the whip does nothing during the swing")
 
 
+MENU_STR, ALUCARD_NAME = 0x800A8258, bytes.fromhex("212C3523213224FF")  # g_MenuStr; [0] is the status page's name
+MENU_NAMES = {CHAR_RICHTER: b"\x32\x29\x23\x28\x34\x25\x32\xFF", CHAR_MARIA: b"\x2D\x21\x32\x29\x21\xFF"}
+
+
+@per_character
+def pause_menu_portrait(run, ch):
+    """Issue 27: the status page shows the player's own name and cutscene portrait, and what the
+    portrait overwrote in VRAM comes back when the menu closes."""
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    run.step(120)
+    before = e.vram_rect(0x300, 0x180, 32, 96)
+    run.step(4, "start")
+    run.step(120)
+    run.expect(e.read("g_GameEngineStep") == 2, "the menu is open")
+    name = bytes(e.read_bytes(e.read(MENU_STR), len(MENU_NAMES[ch])))
+    run.expect(name == MENU_NAMES[ch], f"it says {NAMES[ch]}", name=name.hex())
+    run.expect(e.vram_rect(0x300, 0x180, 32, 96) != before, "the portrait is theirs")
+    e.screenshot(TOOLS["out"] / run.name / "menu.png")
+    for _ in range(6):
+        run.step(2, "triangle")
+        run.step(30)
+        if e.read("g_GameEngineStep") == 1:
+            break
+    run.step(30)
+    run.expect(e.read("g_GameEngineStep") == 1, "the menu closes")
+    run.expect(e.vram_rect(0x300, 0x180, 32, 96) == before, "VRAM is as it was")
+    run.expect(bytes(e.read_bytes(e.read(MENU_STR), 8)) == ALUCARD_NAME, "and so is the game's name")
+
+
 SERVANT_LOADED = 0x80073064  # g_ServantLoaded
 HOLY_SYMBOL, BAT_CARD, GHOST_CARD = 14, 18, 19
 FAERIE_CARD, DEMON_CARD, SWORD_CARD = 0x14, 0x15, 0x16

@@ -20,6 +20,8 @@ static char s_CoopFile[] __attribute__((section(".coop-boot-data"))) = "\\COOP.B
 static char s_RicFile[] __attribute__((section(".coop-boot-data"))) = "\\COOPRIC.BIN;1";
 static char s_AluFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\ARC_F.BIN;1";
 static char s_RicHudFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\F_GAME2.BIN;1";
+static char s_St0File[] __attribute__((section(".coop-boot-data"))) = "\\ST\\ST0\\ST0.BIN;1";
+static char s_DaiFile[] __attribute__((section(".coop-boot-data"))) = "\\ST\\DAI\\DAI.BIN;1";
 static char s_RicPartnerFile[] __attribute__((section(".coop-boot-data"))) = "\\COOPRICP.BIN;1";
 static char s_AluHudFile[] __attribute__((section(".coop-boot-data"))) = "\\BIN\\F_GAME.BIN;1";
 
@@ -64,6 +66,11 @@ void BOOT CoopBoot(void) {
     // then its palettes (from 0x40000), apart.
     ReadFile(s_AluHudFile, (void*)FGAME_GFX_ADDR, &file, false, 0, 0x40000 >> 11);
     ReadFile(s_AluHudFile, (void*)FGAME_PAL_ADDR, &file, false, 0x40000 >> 11, 0x2000 >> 11);
+    // Richter's and Maria's cutscene portraits and palettes, for their pause menu (portrait.c).
+    ReadFile(s_St0File, (void*)PORTRAIT_ADDR, &file, false, 0xF000 >> 11, 2);
+    ReadFile(s_St0File, (void*)(PORTRAIT_ADDR + 0x1000), &file, false, 0x1A800 >> 11, 1);
+    ReadFile(s_DaiFile, (void*)(PORTRAIT_ADDR + 0x2000), &file, false, 0x13800 >> 11, 2);
+    ReadFile(s_DaiFile, (void*)(PORTRAIT_ADDR + 0x3000), &file, false, 0x17000 >> 11, 2);
     FlushCache(); // just loaded code: the I-cache and recompilers only see it after a flush (D17)
     InitializePads();
 }

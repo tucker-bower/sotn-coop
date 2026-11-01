@@ -14,6 +14,7 @@
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
+#include "portrait.h"
 #include "sprites.h"
 #include "weapons.h"
 #include "pvp.h"
@@ -126,6 +127,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     OffhandUpdate();
     WeaponsUpdate();
     FamiliarUpdate();
+    PortraitUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
