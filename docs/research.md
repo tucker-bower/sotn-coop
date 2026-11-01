@@ -143,3 +143,7 @@ Android 13 clamshell. Top: 6.0" AMOLED, 1920×1080, 120 Hz. Bottom: 3.92" AMOLED
 
 ## What a savestate costs
 Serializing takes under 2 ms and a copy about 5 ms; the hitch was the 12.5 MB going through a worker's pipe. States that stay in the worker (`Emu.keep_state`) cost about 5 ms for both games together.
+
+## Test starts and fights
+- **A debug start can sit over a drop.** Maria in the Center's did: the player fell to a floor where her scene can't go on. Her scene needs the lift at x 384 on the floor at y 455.
+- **A scripted boss kill hides what a long fight does.** Karasuman's chain fight ended in about 40 frames. Left alone, he can knock a player out of the door they arrived by: `boss_karasuman_stays_shared` keeps him alive for 30 s.

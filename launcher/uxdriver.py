@@ -651,6 +651,11 @@ def _android_picture(name):
             ("expect", _picture_lit, "the game draws (the picture isn't black)")]
 
 
+def _connected(d):
+    bar = d.launcher.display._bar_key
+    return bar and "Partner connected" in bar[0][0]
+
+
 def _online_host(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
 
@@ -667,7 +672,8 @@ def _online_host(pg, code_file):
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
-            ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
+            # Not after a set number of frames: a slower partner is still starting, and leaves later.
+            ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
             *(_rush_online_host() if RUSH else []),
             *_android_picture("host-playing"),
@@ -691,8 +697,9 @@ def _online_join(pg, code_file):
             # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
             # controller (id 0)
             ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
-            ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
+            ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            ("wait", 300),  # the host, a little behind, sees the partner too before this one leaves
             ("expect", lambda d: (_received_castle() or "").startswith("Boss rush_" if RUSH else "Tucker_"),
              "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
             *(_rush_online_join() if RUSH else []),
