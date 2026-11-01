@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 11
+LINK_VERSION = 12
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -42,6 +42,8 @@ SPRITE_SIZE, N_SPRITES = 0x14, 24
 SELF_PRIMS, PARTNER_PRIMS = 0x21820, 0x21E24  # u32 count, then Primitive[32] less next (0x30 each)
 SELF_PAD, PARTNER_PAD = 0x22428, 0x2242C  # M13: each player's buttons, with the presence
 PRIM_SIZE, N_PRIMS = 0x30, 32
+SELF_HITS, PARTNER_HITS = 0x22430, 0x224F4  # M15: u32 count, then CoopHit[16] (0xC each): pvp.c
+HIT_SIZE, N_HITS = 0xC, 16
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
@@ -57,6 +59,7 @@ CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 CONTROL_PARTNER_VOL_SHIFT = 16  # bits 16-23: the partner's sounds, % of their volume (0 = 60; M13)
+CONTROL_PVP = 0x1000000  # the host's PvP setting: the partner's attacks hurt (M15)
 SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 
@@ -149,6 +152,17 @@ class Mailbox:
         if n:
             self.adapter.write_bytes(self.address + PARTNER_PRIMS + 4, data[:n * PRIM_SIZE])
         self.adapter.write_bytes(self.address + PARTNER_PRIMS, struct.pack("<I", n))
+
+    def self_hits(self):
+        """This game's player's attack hitboxes for the partner (pvp.c, M15): raw CoopHit records."""
+        n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_HITS, 4))[0], N_HITS)
+        return self.adapter.read_bytes(self.address + SELF_HITS + 4, n * HIT_SIZE) if n else b""
+
+    def write_partner_hits(self, data):
+        n = min(len(data) // HIT_SIZE, N_HITS)
+        if n:
+            self.adapter.write_bytes(self.address + PARTNER_HITS + 4, data[:n * HIT_SIZE])
+        self.adapter.write_bytes(self.address + PARTNER_HITS, struct.pack("<I", n))
 
     def partner_sprite_count(self):
         return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_SPRITES, 4))[0]

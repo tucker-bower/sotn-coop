@@ -1058,7 +1058,7 @@ class Launcher:
         for i, g in enumerate(s.games):
             g.host("set_player", character=self.characters[i], options=self.options(i), blob=blob)
 
-    def run_view(self, s, playthrough, goal=""):
+    def run_view(self, s, playthrough, goal="", pvp=None):
         from gameview import GameView
         self.apply_players(s)
         if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
@@ -1068,7 +1068,8 @@ class Launcher:
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
                         profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
-                        partner_vol=self.settings.get("partner_vol", 60))
+                        partner_vol=self.settings.get("partner_vol", 60),
+                        pvp=bool(self.settings.get("pvp")) if pvp is None else pvp)
         result = view.run()
         if result == "quit":
             raise SystemExit
@@ -1243,12 +1244,15 @@ class Launcher:
         with self.online_session(None, playthrough, rank=0) as s:
             s.joint.on_write = playthrough.saved
             s.local.host("set_castle", playthrough.meta())  # the joiner keeps a copy (design/M11)
+            pvp = bool(self.settings.get("pvp"))
+            s.local.host("set_pvp", pvp)  # the host's setting covers the session (M15)
             room = make_room_code()
             self._clip_put(room)
             s.local.host("start_connect", room, "host", app=VERSION)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
-                if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them."),
+                pvp_line = "\nPvP is on." if pvp else ""
+                if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them.{pvp_line}"),
                               f"Give your partner the room code {room}: it's on your clipboard.") is None:
                     return
             except ConnectFailed as e:
@@ -1288,13 +1292,16 @@ class Launcher:
                     self.ui.message("Couldn't reach your partner", str(e))
                     continue
                 # The host's castle: this player's copy of it (design/M11)
-                meta = (s.local.host("status").get("partner_hello") or {}).get("castle")
+                theirs = s.local.host("status").get("partner_hello") or {}
+                meta = theirs.get("castle")
+                pvp = bool(theirs.get("pvp"))  # the host's setting (M15)
                 castle = Castle.receive(meta) if meta else Castle.new(received=True)
                 s.joint.path = castle.joint_save
                 s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
                 self.load_cards(s, castle)
                 try:
-                    self.run_view(s, castle)
+                    self.run_view(s, castle, goal="PvP is on (your partner's setting): your attacks hurt each other." if pvp else "",
+                                  pvp=pvp)
                 finally:
                     s.joint.on_write = None
                 castle.tidy()
@@ -1389,6 +1396,7 @@ class Launcher:
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
                      (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
                      (f"Partner's sounds: {st.get('partner_vol', 60)}%", "How loud your partner's attacks and steps are, in your game"),
+                     (f"PvP: {'on' if st.get('pvp') else 'off'}", "Players' attacks hurt each other (online, the host's setting counts)"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
                      ("Open the data folder", str(paths.data_dir()))]
@@ -1406,10 +1414,12 @@ class Launcher:
             elif k == 3:
                 st["partner_vol"] = {20: 40, 40: 60, 60: 80, 80: 100}.get(st.get("partner_vol", 60), 20)
             elif k == 4:
-                self.game_files()
+                st["pvp"] = not st.get("pvp")
             elif k == 5:
-                self.controls_menu()
+                self.game_files()
             elif k == 6:
+                self.controls_menu()
+            elif k == 7:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

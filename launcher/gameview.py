@@ -9,7 +9,7 @@ from array import array
 
 import pygame
 
-from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CUTSCENE, IN_PLAY,
+from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
@@ -262,7 +262,7 @@ class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
     def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60):
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
@@ -274,6 +274,8 @@ class GameView:
         self.aggro = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
         # the partner's sounds, % of their volume (M13: module/partner.c; 0 would mean the default)
         self.aggro |= max(1, min(100, int(partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
+        if pvp:  # M15: the partner's attacks hurt (the host's setting online)
+            self.aggro |= CONTROL_PVP
         self.save_cards = save_cards  # (path A, path B) or (path local,)
         self.frames, self.profile = frames, profile
         self.canvas = display.canvas

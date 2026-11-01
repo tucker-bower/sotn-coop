@@ -695,6 +695,9 @@ def m12_chain_first_castle_long(run):
         for _ in range(1800):  # a boss's own death sequence sets its record (the Lesser Demon's is long)
             if all(all(r) for r in records()):
                 break
+            if _ % 30 == 0:  # kept alive, as in the fight: a scripted kill can leave a boss's parts
+                for g in (a, b):  # behind (Olrox's), still hurting
+                    g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
             run.step(1)
         # Reported, not asserted: a boss the bot can't finish gets a scripted kill (boss_flow), which
         # can skip the death sequence that writes the record (the Lesser Demon: STATUS, playtest list).

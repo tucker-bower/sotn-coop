@@ -1,4 +1,6 @@
-# The co-op link protocol (wire version 9, mailbox version 8)
+# The co-op link protocol (wire version 10, mailbox version 12)
+
+**Not yet described here:** the M12–M13 traffic (`SPRT`, `PRIM`, the hand weapons', familiar's and status copies over `CTRL`) and their mailbox fields; `link/host.py` and `module/link.h` have them.
 
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
@@ -17,7 +19,7 @@ This is everything a **host** needs, so another one can be written without readi
 ## The host's job, once per frame
 0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
 1. **Hello:** every 60 frames, send `HELO`.
-2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 8, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 12, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
 4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below), whose `pad` is `CoopLink.selfPad`.
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
@@ -42,7 +44,8 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `ACK ` | `delivered` (u32): the highest event number received in order | Reliable (below). |
 | `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control/save messages (`save_req`, `save_done`, `load_save`, `game_over`). |
 | `CACK` | `delivered` (u32): the highest `CTRL` chunk number received in order | Reliable ack for `CTRL`. |
-| `HELO` | UTF-8 JSON: `{"link": 9, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs]}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
+| `HITS` | the sender's player's attack hitboxes: N × 12-byte `CoopHit` (below), N ≤ 16 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerHits` (M15). |
+| `HELO` | UTF-8 JSON: `{"link": 10, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "pvp": <the host's PvP setting, online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …
@@ -108,10 +111,10 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 
 Hosts don't interpret events: they move them between rings.
 
-## The mailbox (`g_CoopLink`, 0x2144C bytes)
+## The mailbox (`g_CoopLink`, 0x225B8 bytes)
 | offset | field | written by |
 |---|---|---|
-| 0x0000 | magic `'COOP'`, version (8), heartbeat | game |
+| 0x0000 | magic `'COOP'`, version (12), heartbeat | game |
 | 0x000C | `self`: presence | game |
 | 0x0038 | `partner`: presence | host |
 | 0x0064 | `partnerAge` (u32, frames since `partner` was written) | game counts, host zeroes |
@@ -126,6 +129,10 @@ Hosts don't interpret events: they move them between rings.
 | 0x3434 | `rank` | host |
 | 0x3438 | `snapOutSeq`, `snapOutSize`, `snapOut` (0xF000) | game |
 | 0x12440 | `snapInSeq`, `snapInSize`, `snapIn` (0xF000) | host |
-| 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance | launcher |
+| 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP | launcher |
+| 0x22430 | `selfHitCount` (u32), `selfHits` (16 × `CoopHit`) | game |
+| 0x224F4 | `partnerHitCount` (u32), `partnerHits` (16 × `CoopHit`): the game uses each list for one frame, then zeroes the count | host |
+
+**`CoopHit` (12 bytes, M15):** `x`, `y` (s16: the hitbox's centre in the room, in pixels), `w`, `h` (u8: half its width and height), `hitboxState` (u8), `facingLeft` (u8), `attack` (s16), `element` (u16).
 
 **The rings:** an entry's slot is `count % 256`. The writer adds at `head` and then bumps it; the reader takes at `tail` and then bumps it. Full means `head - tail == 256`.

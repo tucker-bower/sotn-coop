@@ -669,7 +669,7 @@ def _characters(pg):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
              ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
     for path, words, name in wrong:
@@ -686,6 +686,7 @@ def _characters(pg):
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+              ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("until", lambda d: d.heading == "Game"),
               ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),
               ("game_frames", 600), ("shot", "maria-and-richter"),

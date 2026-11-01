@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 11
+#define COOP_LINK_VERSION 12
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -46,6 +46,19 @@ typedef struct {
     /* 0x12 */ u16 weapon; // a hand weapon's sprite: WEAPON_SPRITE | hand (weapons.c), else 0
 } CoopSprite; // size = 0x14
 #define WEAPON_SPRITE 0x100 // CoopSprite.weapon: animSet is its bank (0x10-0x13), palette its own
+
+// A player's attack that can hurt (M15, pvp.c): its hitbox in the room, as hit detection reads it.
+#define COOP_HITS 16
+typedef struct {
+    /* 0x00 */ s16 x; // the hitbox's centre, in the room, in pixels
+    /* 0x02 */ s16 y;
+    /* 0x04 */ u8 w;  // half its width and height (Entity.hitboxWidth/Height)
+    /* 0x05 */ u8 h;
+    /* 0x06 */ u8 hitboxState;
+    /* 0x07 */ u8 facingLeft;
+    /* 0x08 */ s16 attack;
+    /* 0x0A */ u16 element;
+} CoopHit; // size = 0xC
 
 // A player's hand weapons, for the partner to draw their swings (weapons.c, M12 note 2 phase 2):
 // each game copies a weapon's overlay, tile sheet and palettes here when it loads; the host sends
@@ -230,13 +243,18 @@ typedef struct {
     /* 0x21E28 */ u8 partnerPrims[COOP_PRIMS][COOP_PRIM_SIZE];
     /* 0x22428 */ u32 selfPad;    // game writes every frame: its player's buttons (M13: the partner's
     /* 0x2242C */ u32 partnerPad; // host writes with each presence   copy runs on them, partner.c)
-} CoopLink; // size = 0x22430
+    /* 0x22430 */ u32 selfHitCount;    // game writes every frame: its player's attacks (M15, pvp.c)
+    /* 0x22434 */ CoopHit selfHits[COOP_HITS];
+    /* 0x224F4 */ u32 partnerHitCount; // host writes
+    /* 0x224F8 */ CoopHit partnerHits[COOP_HITS];
+} CoopLink; // size = 0x225B8
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 #define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
+#define CONTROL_PVP 0x1000000 // the host's PvP setting: the partner's attacks hurt (M15, pvp.c)
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0

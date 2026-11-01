@@ -10,7 +10,7 @@ import time
 
 from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
 from .playout import Playout
-from .transport import (TAG_ACK, TAG_BYE, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
 
 HELLO_EVERY = 60  # frames
@@ -55,6 +55,7 @@ class Host:
         self.partner_left = False  # the partner said goodbye (its app closed or went back to its menu)
         self._sprites_sent, self._sprites_seq = False, 0  # sprites.c (M12)
         self._prims_sent, self._prims_seq = False, 0
+        self._hits_sent, self._hits_seq = False, 0
         self._weapons_sent = [None, None]  # each hand's weapon copy last sent (module/weapons.c)
         self._familiar_sent = None  # the familiar copy last sent (module/familiar.c)
         self._status_sent, self._status_at = None, -STATUS_EVERY  # M13: this player's status, for the partner's body
@@ -101,6 +102,11 @@ class Host:
         self.hello["castle"] = meta
         return True
 
+    def set_pvp(self, on):
+        """The host's PvP setting (M15), told to the partner in every HELO: it covers the session."""
+        self.hello["pvp"] = bool(on)
+        return True
+
     def start_connect(self, room, role, relay=None, **kw):
         """Find the partner for a room code (role "host" or "join"): link/connect.py."""
         from .connect import Connector, default_relay, room_token
@@ -122,7 +128,7 @@ class Host:
         """The partner's host is a new one (it restarted): numbering starts again both ways."""
         self.restarts += 1
         self.partner_left = False  # back again
-        self._sprites_seq = self._prims_seq = 0
+        self._sprites_seq = self._prims_seq = self._hits_seq = 0
         self._weapons_sent = [None, None]
         self._familiar_sent = None
         self._status_sent = None
@@ -316,6 +322,10 @@ class Host:
         if prims or self._prims_sent:
             self.transport.send(TAG_PRIM, zlib.compress(prims, 1))
         self._prims_sent = bool(prims)
+        hits = self.mailbox.self_hits()
+        if hits or self._hits_sent:
+            self.transport.send(TAG_HITS, hits)
+        self._hits_sent = bool(hits)
         self._send_weapons()
         self._send_familiar()
         self._send_status()
@@ -331,7 +341,7 @@ class Host:
         for ev in mine:
             self._note("out", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
 
-        latest, reliable, ctrl_dgrams, snap, sprites, prims_in = None, [], [], None, None, None
+        latest, reliable, ctrl_dgrams, snap, sprites, prims_in, hits_in = None, [], [], None, None, None, None
         now = self.transport.clock()
         for dgram in self.transport.receive():
             tag, seq, frame, payload, addr = dgram
@@ -352,6 +362,9 @@ class Host:
             elif tag == TAG_PRIM:
                 if seq > self._prims_seq:
                     self._prims_seq, prims_in = seq, payload
+            elif tag == TAG_HITS:
+                if seq > self._hits_seq:
+                    self._hits_seq, hits_in = seq, payload
             elif tag == TAG_SPRT:
                 if seq > self._sprites_seq:  # the newest only
                     self._sprites_seq, sprites = seq, payload
@@ -370,6 +383,8 @@ class Host:
             self.received += 1
         if sprites is not None:
             self.mailbox.write_partner_sprites(sprites)
+        if hits_in is not None:
+            self.mailbox.write_partner_hits(hits_in)
         if prims_in is not None:
             try:
                 self.mailbox.write_partner_prims(zlib.decompress(prims_in))
