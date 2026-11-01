@@ -20,6 +20,8 @@ Each fact has one home. Read these only when the task needs them, and search the
 | `harness/README.md` | How to write tests | The test API changes |
 | `LOCAL.md` (git-ignored) | This machine, its devices, playtest workflow | The setup changes |
 
+Every folder has a `README.md`: one sentence, then a table of its files. Update it when you add, remove, rename or retire a file. Mark a file **Vestigial** when nothing needs it to build, ship or test, and **Manual** when it's a tool no runner includes. `.github/` is the one exception, because a README there would replace the repo's front page on GitHub.
+
 Git and PRs hold the history, so don't write session logs. Replace what's out of date rather than adding to it: less is more.
 
 ## Roles

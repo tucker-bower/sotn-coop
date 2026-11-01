@@ -726,3 +726,6 @@ The month target and Claude Pro budget came out of `AGENTS.md`, the roadmap and 
 
 **D142: Personal setup stays out of the repo** (Tucker, 2026-10-31)
 Local paths, the device workflow and playtest sheets moved to the git-ignored `LOCAL.md` and `local/`. Machine paths go in `env.toml`, so `env.example.toml` holds neutral defaults. Older decisions and designs still name the Thor where it shaped a product choice.
+
+**D143: A README in every folder** (Tucker, 2026-11-01)
+Each holds one sentence and a table of the folder's files, with vestigial and manual files marked. `.github/` has none, because GitHub would show it instead of the root README (agent-default). Vestigial files stay in place for Tucker to decide on.

@@ -1,5 +1,54 @@
 # Test harness
 
+Headless SOTN games for testing, plus the tests that drive them.
+
+## Files
+| File | What it does |
+|---|---|
+| `bots.py` | Scripted players. |
+| `commands.py` | Registers the launcher checks, UI flows and patcher test with the runner. |
+| `coop_env.py` | Loads `env.example.toml` and `env.toml`. |
+| `core_check.py` | **Manual.** Checks a SwanStation core build on this machine. |
+| `data/` | Reference data for the tests. |
+| `emu.py` | One headless, frame-stepped game on SwanStation. |
+| `fixtures_m12.py` | Builds the savestates the coverage tests start from. |
+| `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
+| `module.py` | Reads the co-op module's symbols and state from RAM. |
+| `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |
+| `power_curve.py` | **Vestigial.** One-off balance measurement across the boss starts; nothing runs it. |
+| `redux_check.lua` | Checks the module in PCSX-Redux, run by `scripts/redux_check.sh`. |
+| `replay.py` | **Manual.** Replays a player's F9 report. |
+| `requirements.txt` | Python packages for the harness. |
+| `run.py` | The test runner. |
+| `savestates.py` | Builds the savestate library from the player's own disc. |
+| `scenario.py` | Runs one-game tests and writes their evidence. |
+| `scenarios.py` | Basic one-game tests of the module. |
+| `scenarios_m12.py` | One-game coverage: Maria's guardians, test castles and more. |
+| `scenarios_m13.py` | One-game tests of the partner as a real player. |
+| `scenarios_m8.py` | One-game tests of Richter and Maria in Alucard's castle. |
+| `scenarios_movement.py` | Checks Richter and Maria move at least as far as Alucard at each relic step. |
+| `scenarios_relics.py` | Relics, per character. |
+| `session.py` | Runs two linked games, on the couch or online. |
+| `session_bossrush.py` | Boss rush, end to end. |
+| `session_inverted.py` | Inverted castle: travel and what partners share there. |
+| `session_m11.py` | Castles, solo and the shared level. |
+| `session_m12.py` | Cutscenes, bosses and story scenes together. |
+| `session_m15.py` | PvP. |
+| `session_m4b.py` | Fixes from the first playtest. |
+| `session_m5.py` | Bosses together. |
+| `session_m8.py` | Mixed-character teams. |
+| `session_m9.py` | Android's way of running a game, online with a PC. |
+| `session_net.py` | **Vestigial.** Measures a session over simulated bad networks; left out of `run.py`. |
+| `session_online.py` | Online PC co-op: connect codes and version checks. |
+| `session_progress.py` | Shared progression. |
+| `session_saverooms.py` | Joint saves in the game's save rooms. |
+| `session_scenarios.py` | The link between two games, and presence. |
+| `session_shared.py` | Shared rooms and enemies. |
+| `session_travel.py` | Teleport, respawn, pause rules and joint saves. |
+| `spec_test.py` | A partner written from `docs/link-protocol.md` alone, against a real game. |
+| `vram_survey.py` | **Vestigial.** One-off survey of which VRAM the stages use. |
+
+## Running things
 Headless, frame-stepped SOTN on the SwanStation libretro core, at about 25× real time. Two linked games (`session.py`) run as two processes at about 30× each. Setup is in `../DEVELOPER_GUIDE.md`.
 Run these with the venv: `.env/src/sotn-decomp/.venv/bin/python <script>`. How to run the tests is in `../AGENTS.md`.
 
