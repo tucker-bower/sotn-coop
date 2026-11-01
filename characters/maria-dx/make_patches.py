@@ -3,7 +3,7 @@
 files into our Maria. They hold our code and our build's pointer tables, never her art, voice
 or palettes, which the patches copy from the player's disc (checked here: see `stored`).
 
-    make_patches.py <out folder>     (after `make -C maria`)
+    make_patches.py <out folder>     (after `make -C characters/maria-dx`)
 
 Writes maria.bps and maria-partner.bps (from PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin), maria-vh.bps and maria-vb.bps
 (from PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk) and maria.json (what the launcher checks).
@@ -14,10 +14,10 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "patcher"))
+sys.path.insert(0, str(HERE.parents[1] / "patcher"))
 import bps  # noqa: E402
 
-ROOT = HERE.parent / ".env/src/sotn-decomp"
+ROOT = HERE.parents[1] / ".env/src/sotn-decomp"
 DXC = ROOT / "disks/pspus/PSP_GAME/USRDIR/res/ps"
 BUILD = ROOT / "build/coop/maria"
 SOURCES = {"maria.bin": "PSPBIN/maria.bin", "sd_mar2.spk": "snd_e/SE/sd_mar2.spk"}
@@ -45,4 +45,4 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else HERE.parent / ".env/out/maria")
+    main(sys.argv[1] if len(sys.argv) > 1 else HERE.parents[1] / ".env/out/maria")

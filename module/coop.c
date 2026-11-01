@@ -38,7 +38,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         "j StoreSaveDataHook\nnop\n"
         ".globl g_CoopCharacter\ng_CoopCharacter: .word 0\n" // coop_api.h
         ".globl g_CoopRicFile\ng_CoopRicFile: .space 24\n" // CdlFILE of COOPRIC.BIN (boot.c)
-        ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (richter/coop_ric.h)
+        ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (characters/richter-ps1/coop_ric.h)
         ".globl g_CoopWeaponEntity\ng_CoopWeaponEntity: .word CoopWeaponEntity\n" // offhand.c (D105)
         "j RenderPrimitivesHook\nnop\n" // M13 (after the words above: their addresses are fixed)
         ".set pop\n.previous");

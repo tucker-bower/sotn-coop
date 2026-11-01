@@ -24,7 +24,7 @@ extern int g_CoopAirJumps;
 
 // The partner's builds (design/M13 step 3: COOPRICP.BIN, MARIAP.BIN, built with COOP_PARTNER):
 // a second Richter or Maria beside player 1. What its code writes to or reads from VRAM is in the
-// second bank (richter/coop_partner.c), never player 1's graphics.
+// second bank (characters/richter-ps1/coop_partner.c), never player 1's graphics.
 #ifdef COOP_PARTNER
 #define LoadImage CoopPartnerLoadImage
 #define StoreImage CoopPartnerStoreImage

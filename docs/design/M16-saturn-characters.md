@@ -17,7 +17,7 @@ Nothing new is needed by anyone who doesn't have these discs: they're added on t
 | B. Our own ports from the decomp | Port Saturn Maria and Richter's Saturn code ourselves | ❌ Weeks, for the same result |
 
 ## How the player gets them (no Docker, no compiler)
-Our PSP Maria already works this way (`maria/make_patches.py`): we ship **patches of our code only**, and the launcher applies them to the files on the player's own disc.
+Our PSP Maria already works this way (`characters/maria-dx/make_patches.py`): we ship **patches of our code only**, and the launcher applies them to the files on the player's own disc.
 - **Code:** built in our CI, shipped as BPS patches against the disc files they replace, holding no game data.
 - **Art and sound:** the Saturn sprites, palettes, sound effects and voices are converted from the player's disc **by the launcher**, in Python (their converters, `tools/mariasat-*.py`, `richter2-convert.py`, `charselect-convert.py`, adapted to need only Pillow, which we bundle). Not Go, Rust or Docker.
 - **Checks:** each disc is identified by its files' hashes; a wrong release says which one is needed, as Maria's does.

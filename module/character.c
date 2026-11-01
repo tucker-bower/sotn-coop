@@ -6,7 +6,7 @@
 // Play_PrepareDemo, from PL_CHARACTER, so it's set before that step and never mid-play.
 //
 // Maria comes from the launcher (a CharBlob in expansion RAM, link.h), our Richter from the
-// disc (COOPRIC.BIN). Their files are in two parts (richter/ric.ld): the data, loaded into
+// disc (COOPRIC.BIN). Their files are in two parts (characters/richter-ps1/ric.ld): the data, loaded into
 // Richter's overlay slot, and the code, which the module puts in expansion RAM
 // (COOP_PLAYER_FAR) once the slot is filled, zeroing their BSS after it.
 #define COOP_MODULE
@@ -36,10 +36,10 @@ extern CdFile g_LbaBinRichter; // DRA: RIC.BIN's place on the disc
 
 static u32 s_Loaded;        // CHAR_* of the player the last load brought in
 static s32 s_PrevLoadFile;  // g_LoadFile last frame
-#define MAR_GUARDIANS_HOOK 0x8013C1F4 // her MARIA_Load, which uploads the guardians' graphics (maria/maria.ld)
+#define MAR_GUARDIANS_HOOK 0x8013C1F4 // her MARIA_Load, which uploads the guardians' graphics (characters/maria-dx/maria.ld)
 static bool s_RihLoading;   // the disc is loading Richter's sound bank
 
-// The trailer at the end of a two-part player file (richter/ric.ld).
+// The trailer at the end of a two-part player file (characters/richter-ps1/ric.ld).
 typedef struct {
     u32 magic; // 'FAR1'
     u32 nearSize, farSize, bssSize;

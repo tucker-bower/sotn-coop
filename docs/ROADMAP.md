@@ -140,7 +140,7 @@ The M8b power curve (±20% of Alucard at every boss) and testing characters beyo
 Top screen you, bottom screen your partner, and the bat-capped blood vial. Only Thor owners benefit, so it waits.
 
 ### Community characters (D111)
-A guide, a format and a module interface for adding characters (for example, Soma from *Aria of Sorrow*): a PS1 player overlay in C, built like our Maria (`maria/`), shipped as patches of code only, with its art converted from the player's own files. PS1 overlays are the one character format that also runs on SymphonyRecomp, so community work isn't tied to our engine.
+A guide, a format and a module interface for adding characters (for example, Soma from *Aria of Sorrow*): a PS1 player overlay in C, built like our Maria (`characters/maria-dx/`), shipped as patches of code only, with its art converted from the player's own files. PS1 overlays are the one character format that also runs on SymphonyRecomp, so community work isn't tied to our engine.
 
 
 ### M8 leftovers (2026-10-21)

@@ -1,6 +1,6 @@
 // Our Maria's link to the co-op module (design/M8b): included in every file of our build
 // (Makefile: -include). The changes in src/maria are marked COOP_MARIA. Same rules as our
-// Richter's (richter/coop_ric.h).
+// Richter's (characters/richter-ps1/coop_ric.h).
 #ifndef COOP_MARIA_H
 #define COOP_MARIA_H
 

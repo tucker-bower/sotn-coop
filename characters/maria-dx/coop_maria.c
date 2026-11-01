@@ -1,7 +1,7 @@
 // Our Maria's co-op additions (design/M8b): her power grows like Alucard's.
 #include "maria.h"
 
-// Tuning knobs (M8b §5), as for Richter (richter/coop_ric.c).
+// Tuning knobs (M8b §5), as for Richter (characters/richter-ps1/coop_ric.c).
 #define BASIC_STR_PCT 100  // her own attack gains this % of STR
 #define GUARDIAN_INT_DIV 50 // guardians and their crashes: × (1 + INT / this)
 #define FIRE_PCT 125       // Fire of Bat: her attack burns, for this % of its damage
@@ -25,7 +25,7 @@ int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
 // The partner's Maria (design/M13 step 3): her palettes, apart from the game's (coop_maria.h).
 u16 g_CoopPartnerClut[3][0x1000];
 
-// Her init as the partner (maria/maria_partner.ld's trailer: the module calls it). Her own
+// Her init as the partner (characters/maria-dx/maria_partner.ld's trailer: the module calls it). Her own
 // (mariapsp-forpsx's MarPsxInit) also patches DRA's HUD and sound data, once: in another
 // character's game that would be player 1's; here only her load (its uploads go to the second
 // bank) and the damage functions her attacks look up.

@@ -46,7 +46,7 @@ fi
 
 echo "== compile co-op module, and our Richter (design/M8)"
 make -s -C "$MOD/module" ROOT="$ROOT"
-make -s -C "$MOD/richter" ROOT="$ROOT" >/dev/null
+make -s -C "$MOD/characters/richter-ps1" ROOT="$ROOT" >/dev/null
 truncate -s "$DRA_END" build/us/DRA.BIN
 cat build/coop/boot.bin >> build/us/DRA.BIN
 cp build/coop/COOP.BIN build/us/COOP.BIN

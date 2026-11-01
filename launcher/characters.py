@@ -5,7 +5,7 @@ Chronicles (USA) disc image.
     blob_bytes(character) -> bytes or None    what a game's 8MB RAM gets (module/link.h CharBlob)
 
 Our Richter needs nothing here: he's on the co-op disc (COOPRIC.BIN). Maria's overlay and voice
-are rebuilt from the player's DXC files with patches of our changes only (maria/make_patches.py):
+are rebuilt from the player's DXC files with patches of our changes only (characters/maria-dx/make_patches.py):
 nothing of hers is distributed.
 """
 

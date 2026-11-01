@@ -34,7 +34,7 @@ def coop_state(emu):
 
 def maria_blob():
     """Maria's CharBlob for tests (launcher/characters.py), built once from the dev DXC disc
-    (disks/sotn.pspus.iso) and maria/make_patches.py's patches; None if they aren't there."""
+    (disks/sotn.pspus.iso) and characters/maria-dx/make_patches.py's patches; None if they aren't there."""
     out = TOOLS["out"] / "maria"
     blob = out / "maria.blob"
     iso = REPO / "disks/sotn.pspus.iso"

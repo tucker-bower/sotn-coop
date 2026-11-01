@@ -2,7 +2,7 @@
 # disc's COOPRIC.BIN. The retail RIC.BIN stays on the disc for the prologue.
 # Same recipe as upstream's mods/mariapsp-forpsx: a modern gcc, linked at Richter's address.
 VERSION ?= us
-ROOT    ?= $(shell if [ -f ../.env/src/sotn-decomp/sotn.sh ]; then echo ../.env/src/sotn-decomp; else echo ../../..; fi)
+ROOT    ?= $(shell if [ -f ../../.env/src/sotn-decomp/sotn.sh ]; then echo ../../.env/src/sotn-decomp; else echo ../../../..; fi)
 BUILD   := $(ROOT)/build/coop/ric
 SRC     := $(ROOT)/src/ric
 CROSS   := mipsel-linux-gnu-

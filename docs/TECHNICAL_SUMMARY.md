@@ -46,7 +46,7 @@ Every player's game runs in **SwanStation**, the libretro core forked from DuckS
 - **Enemy targeting.** Most enemy AI reads the player through a handful of shared helpers in `st_common.h` (`GetSideToPlayer` alone has about 420 call sites). Pointing those at the nearer player gave most enemies two-player awareness in one change. Bosses also switch aggro between players every few seconds (D47, D62).
 - **Bosses and scenes.** A boss pulls the partner in, gets 2× HP, and is fought in one shared world, however far apart the two cameras are (D25, D131). Cutscenes pull the partner in and hold until both players have seen them (D26, D102). Killing Richter or Dracula ends the game for both players (D130, D134).
 - **The partner's body (M13).** At first the partner was a tinted puppet. Now, in your game, the partner is a real second player: each frame the module swaps the partner's player state into the player slots, runs the character's own player code with the partner's buttons from the link, and swaps back. The partner's attacks hit with their real hitboxes, and their graphics come from the second VRAM bank (D124, D128). The partner's body costs about 45 to 60 of a frame's 263 scanlines (D129).
-- **Characters.** Richter and Maria are playable (M8). Our Richter is Alucard's engine plus Richter's code, run from the expansion RAM (D89). Maria's code is compiled from the PSP *Dracula X Chronicles* overlay via the decomp's Maria port and applied as **patches of code only**, so no game art ships (`maria/make_patches.py`).
+- **Characters.** Richter and Maria are playable (M8). Our Richter is Alucard's engine plus Richter's code, run from the expansion RAM (D89). Maria's code is compiled from the PSP *Dracula X Chronicles* overlay via the decomp's Maria port and applied as **patches of code only**, so no game art ships (`characters/maria-dx/make_patches.py`).
 - **PvP** (off by default) uses the attacker's real hitboxes, sent over the link, and the victim's own game decides each hit (D132).
 
 ### Saves
@@ -78,7 +78,8 @@ Everything that "works" has a test that proves it. There are about 300 tests, mo
 | Path | What |
 |---|---|
 | `module/` | The in-game co-op module (C, MIPS): link, progress, shared rooms, bosses, the partner's body, characters, PvP |
-| `maria/` | Maria for PS1: her PSP code built against the decomp, shipped as code-only patches |
+| `characters/richter-ps1/` | PS1 Richter: the game's own Richter built with our changes, run from the expansion RAM |
+| `characters/maria-dx/` | Dracula X Chronicles Maria for PS1: her PSP code built against the decomp, shipped as code-only patches |
 | `link/` | The host: mailbox, protocol, transport, joint save, connection, jitter buffer, network simulation |
 | `launcher/` | The app: pygame frontend, two cores, lobby, castles, boss rush, settings |
 | `harness/` | The headless test harness, the scenarios, the runner |
