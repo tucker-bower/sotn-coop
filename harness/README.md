@@ -1,6 +1,6 @@
 # Test harness
 
-Headless, frame-stepped SOTN on the SwanStation libretro core, at about 25× real time. Two linked games (`session.py`) run as two processes at about 30× each. Setup is in `../SETUP.md`.
+Headless, frame-stepped SOTN on the SwanStation libretro core, at about 25× real time. Two linked games (`session.py`) run as two processes at about 30× each. Setup is in `../DEVELOPER_GUIDE.md`.
 Run these with the venv: `.env/src/sotn-decomp/.venv/bin/python <script>`. How to run the tests is in `../AGENTS.md`.
 
 | Command | What it does |

@@ -88,4 +88,4 @@ Everything that "works" has a test that proves it. There are about 300 tests, mo
 The project is developed by an AI coding agent (Claude Code), working from short design proposals that the owner approves. It works in milestones, each with a design doc, testable acceptance criteria, a PR with test evidence, and a playtest build. The working rules are in [`AGENTS.md`](../AGENTS.md).
 
 ## Building
-See [`SETUP.md`](../SETUP.md): `scripts/bootstrap.sh` sets up a Linux (or WSL2) machine with the decomp's toolchain and the core, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc from your own disc image, and `scripts/release.py` builds the installers. Everything is AGPL-3.0, like sotn-decomp.
+See [`DEVELOPER_GUIDE.md`](../DEVELOPER_GUIDE.md): `scripts/bootstrap.sh` sets up a Linux (or WSL2) machine with the decomp's toolchain and the core, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc from your own disc image, and `scripts/release.py` builds the installers. Everything is AGPL-3.0, like sotn-decomp.

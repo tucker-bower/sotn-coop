@@ -4,7 +4,7 @@ This file is how we work together. Before doing anything, read:
 1. `docs/TECHNICAL_SUMMARY.md`: what we've built and how it works.
 2. `docs/ROADMAP.md`, the "Now" section: where we are, what's next, and any open decisions.
 
-Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `SETUP.md`. If `LOCAL.md` exists, read it too: it's git-ignored and covers this machine and its devices.
+Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `DEVELOPER_GUIDE.md`. If `LOCAL.md` exists, read it too: it's git-ignored and covers this machine and its devices.
 
 ## Where things live
 Each fact has one home. Read these only when the task needs them, and search the long ones instead of reading them through.

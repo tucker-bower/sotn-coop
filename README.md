@@ -139,7 +139,7 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 - [`docs/research.md`](docs/research.md): what we've learned about the game and tools
 
 ## Building
-See [`SETUP.md`](SETUP.md): `scripts/bootstrap.sh` sets up a machine, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc, and `scripts/release.py` builds the installer and a draft GitHub release.
+See [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md): `scripts/bootstrap.sh` sets up a machine, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc, and `scripts/release.py` builds the installer and a draft GitHub release.
 
 ## Credits and thanks
 SOTN Co-op stands on other people's work. Thank you to all of them.
