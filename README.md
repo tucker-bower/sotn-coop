@@ -2,7 +2,9 @@
 
 *What is a man? A co-operative little pile of friendship.*
 
-**Dracula's castle has risen again, and this time Alucard does not walk its halls alone.** *Castlevania: Symphony of the Night* becomes a two player adventure: each hunter roams the cursed corridors on their own screen. Explore independently, fight bosses together, share progression. See your partner's location on the map and teleport to them at will. This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, communicating with each other over a python api. 
+Online and couch co-op mod for *Castlevania: Symphony of the Night*. Explore the castle independently, fight bosses together, share progression. See your partner's location on the map and teleport to them at will. 
+
+This co-op mod utilizes a custom launcher running *two instances* of PS1 SOTN emulation, syncing with each other over a python api. 
 
 ## Getting started
 **[Download the latest release](https://github.com/tucker-bower/sotn-coop/releases/latest)**: pick the PC or the Android download, then follow its four steps below. Every release is on the [releases page](https://github.com/tucker-bower/sotn-coop/releases).
@@ -59,7 +61,7 @@ Click **Choose my disc image** and pick your game's `.cue` file. In a few second
 
 We never distribute game data: the launcher builds everything from your own disc.
 
-## Play it on Android (preview)
+## Play on Android
 The Android app plays **online co-op**, against another Android device or a PC. Each phone runs one game, so there's no couch co-op on a phone. It's a preview: sound can crackle on slower devices.
 
 ### What you need
@@ -120,16 +122,6 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 ## Non-goals
 - Real PS1 hardware. The mod is emulator-only.
 - Distributing any copyrighted game data.
-
-## Constraints
-- **8MB RAM mode required.** It holds the co-op module and the partner's sprite data.
-- **Our own launcher around the SwanStation libretro core** (D36). PC couch co-op first, then online PC, then Android. PCSX-Redux is a cross-check.
-- **Bring your own disc.** Users build the patched image from their own legally obtained copy, following the Maria mod's precedent. We never publish game data or pre-patched images.
-
-## Testing approach
-- A frame-stepped headless harness with savestates, scripted and bot inputs, and RAM assertions.
-- **Multi-instance session tests:** two games plus the host, with scripted inputs on both and assertions across both games (for example, "P1 picks up a relic, and P2 has it within N frames").
-- Human playtests
 
 ## Docs
 - [`docs/TECHNICAL_SUMMARY.md`](docs/TECHNICAL_SUMMARY.md): how it all works, for anyone building on it
