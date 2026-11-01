@@ -143,7 +143,9 @@ def _moving_ops(out, source, target, lo, hi, region, min_match, state):
             out.extend(_number(((upto - pending - 1) << 2) | TARGET_READ))
             out.extend(target[pending:upto])
 
-    while o < hi:
+    # (A match must start min_match bytes before hi: one keyed on bytes past it was copied whole,
+    # past the run's end, and the patched disc came out a byte long: 2026-10-31, our Richter.)
+    while o + min_match <= hi:
         best_len, best_at = 0, 0
         for at in index.get(bytes(target[o:o + min_match]), ())[:64]:
             n = min_match

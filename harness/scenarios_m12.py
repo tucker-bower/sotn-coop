@@ -21,7 +21,7 @@ def block(v, x, y, w=0x20, h=0x80):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m12_maria_guardians_keep_their_graphics(run):
+def maria_guardians_keep_their_graphics(run):
     """Playtest 2026-10-25 note 4: Maria's birds turned into a skull and a shield. A weapon or shield
     in her other hand must not overwrite her guardians' graphics."""
     e, mb = run.emu, mailbox(run)
@@ -50,7 +50,7 @@ def cardinals(e):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m12_maria_keeps_throwing(run):
+def maria_keeps_throwing(run):
     """Playtest 2026-10-25 note 4: after a while, Maria stopped throwing anything. Her cardinal,
     thrown again and again (hearts kept up), with weapons in and out of her other hand between
     rounds: every throw makes a bird. (Her cardinal, alone of her guardians, can't be thrown while
@@ -179,10 +179,10 @@ def hand_items(run, ch, button, part):
 def _hand_items_test(ch, name, button, part):
     def test(run):
         _against_alucard(run, hand_items(run, ch, button, part))
-    test.__name__ = f"m12_hand_items_{name}_{part + 1}"
+    test.__name__ = f"hand_items_{name}_{part + 1}"
     test.__doc__ = (f"Every other hand weapon (half {part + 1}) in {name.capitalize()}'s hands, against "
                     "Alucard's results (D105; Alucard's: harness/data/hand_items_alucard.json).")
-    scenario(start="entrance", disc=COOP_DISC)(test)
+    scenario(start="entrance", disc=COOP_DISC, full=name != "alucard")(test)  # Richter's, Maria's: --full
 
 
 for _part in (0, 1):
@@ -201,3 +201,60 @@ def _against_alucard(run, results):
     alu = {int(k): v for k, v in ref.items()}
     differ = {i: (alu.get(i), list(r)) for i, r in results.items() if list(r) != alu.get(i)}
     run.expect(not differ, "the same as Alucard's reference, item by item", differ=differ)
+
+
+# --- the test castles the app ships (D136) ---------------------------------------------------
+from pathlib import Path  # noqa: E402
+MOD = Path(__file__).resolve().parent.parent  # this repo (coop_env's REPO is the decomp's)
+from link.mailbox import CMD_LOAD_SAVE  # noqa: E402
+import savestates as route  # noqa: E402
+
+@scenario(start="entrance", disc=COOP_DISC)
+def test_castles_bundled(run):
+    """Every test castle in launcher/assets/test-castles, as a playtester gets it (its memory card
+    header blanked: scripts/export_test_castles.py): its save loads, the player arrives at its
+    start, and a bot walking on meets its boss, or its scene starts. (The Lesser Demon's start
+    needs mist through bars: the bot starts past them, as the debug start's own check does.)"""
+    import json
+    import sys
+    from link.mailbox import BOSS, CUTSCENE, IN_PLAY
+    sys.path.insert(0, str(MOD / "launcher"))
+    import bossstarts
+    from bots import walker
+    e, mb = run.emu, mailbox(run)
+    bundle = MOD / "launcher" / "assets" / "test-castles"
+    index = json.loads((bundle / "index.json").read_text())["castles"]
+    rows = {f"Boss: {b['name']}": b for b in bossstarts.B} | {f"Scene: {b['name']}": b for b in bossstarts.S}
+    base = e.save_state()
+    bad = []
+    playing = lambda: (lambda q: q.flags & IN_PLAY and not q.flags & BUSY)(mb.self_presence())
+    for name, v in sorted(index.items(), key=lambda kv: kv[1]["order"]):
+        b = rows[name]
+        e.load_state(base)
+        mb.put_save((bundle / v["save"]).read_bytes())
+        mb.command(CMD_LOAD_SAVE)
+        if not (wait_for(run, lambda: e.read("g_GameState") == route.GAME_NOW_LOADING, 600) and
+                wait_for(run, lambda: e.read("g_GameState") == route.GAME_PLAY and  # (the Nightmare and
+                         (playing() or mb.self_presence().flags & CUTSCENE), 3000)):  # Dracula's open with a scene)
+            bad.append((name, "the save didn't load"))
+            continue
+        stage, room, x, y = v["start"]
+        if b.get("check"):
+            room, x, y = b["check"]
+        mb.command(CMD_ARRIVE, stage, room, x, y)
+        if not wait_for(run, lambda: mb.self_presence().stage == stage and mb.self_presence().room_id == room, 1200):
+            bad.append((name, "never arrived", e.snapshot()))
+            continue
+        run.step(60)
+        bot, want = walker(b["walk"], attack_every=0), CUTSCENE if b.get("scene") else BOSS
+        if not wait_for(run, lambda: mb.self_presence().flags & want, 7200, bot):
+            bad.append((name, "no boss or scene", e.snapshot()))
+    run.expect(not bad, f"all {len(index)} test castles load and reach their boss or scene", bad=bad)
+
+
+def wait_for(run, cond, frames, bot=None):
+    for i in range(frames):
+        if cond():
+            return True
+        run.step(1, bot(run.emu.snapshot(), i) if bot else "")
+    return False

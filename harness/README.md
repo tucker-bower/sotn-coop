@@ -6,12 +6,13 @@ Run everything with the repo's venv: `../../../.venv/bin/python <script>`.
 | Command | What it does |
 |---|---|
 | `python savestates.py [disc.cue]` | Builds the savestate library for that disc (~20 s): `entrance` (after Death takes the gear), `nz0` Alchemy Lab, `no0` Marble Gallery, `no1` Outer Wall. |
-| `python run.py [-j N] [--full] [scenario...]` | Runs the scenarios (one game, and two linked games), side by side: each test in its own process, about one per two cores (`-j`), longest first; the network tests (real sockets, relays, LAN broadcasts) one at a time in a lane of their own. No names: the everyday suite, all but the long ones (`*_NNmin` soaks, `*_long`); `--full` adds them (before a playtest build). Writes `.env/out/<name>/report.json`, `clip.gif` (side by side for two games) and `log.txt`. |
+| `python run.py [-j N] [--full] [--list] [-k WORD] [name...]` | Runs the tests side by side, each in its own process (`-j`; default the cores less 4), longest first: the scenarios (one game, two linked games) and the programs in `commands.py` (`launcher_*` checks, `ui_*` flows of the real app, `patcher_round_trip`). Names or `-k WORD`: a handful for a small change. No names: the everyday suite (before a major commit or a PR, about 10 minutes). `--full` adds the full-only tests (`full=True`: soaks, fuzz, the boss chains, every character pairing): before a release. Network tests share one lane; real-time ones (`SOLO`) run after the rest, side by side with each other only. Writes `.env/out/<name>/report.json`, `clip.gif` and `log.txt`. |
 | `python lockstep.py --minutes 10` | Determinism check from M0: two processes, same inputs, rollback-style state reloads, RAM hashes compared every second. `--inject-desync N` proves it can fail. It's no longer the netplay model (D20), but it's still useful as a check that each instance is deterministic, and for the M4 lockstep-merge option. |
 | `../scripts/build_disc.sh` | Builds `.env/out/disc/sotn_coop.us.cue`: DRA with its hooks, the boot stub, and `COOP.BIN`. Fails if a hook changes DRA's size or a retail file moves (`check_disc_layout.py`). Then run `savestates.py` on it. |
 | `../scripts/redux_check.sh` | The same module check in the Windows PCSX-Redux, headless, via `redux_check.lua`. |
 
 ## Writing a scenario
+Name it for what it checks (no milestone prefix): `<feature>_<what>`, pairings `_<A>_and_<B>` (`_vs_` for PvP). `@scenario(..., full=True)` / `@session_scenario(..., full=True)` puts it in `--full` only: for soaks and for more pairings of what the everyday suite already covers.
 ```python
 @scenario(start="entrance")                  # savestate name; disc=... for a co-op build
 def my_test(run):

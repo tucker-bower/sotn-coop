@@ -419,11 +419,14 @@ class OnlineSession:
 SESSION_SCENARIOS = {}
 
 
-def session_scenario(starts=("entrance", "entrance"), discs=None, characters=(0, 0)):
+def session_scenario(starts=("entrance", "entrance"), discs=None, characters=(0, 0), full=False):
     """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice.
-    characters: each game's CHAR_* (design/M8), from its next load."""
+    characters: each game's CHAR_* (design/M8), from its next load. full: only in the full suite."""
     def register(fn):
+        from scenario import FULL_ONLY
         SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs, characters)
+        if full:
+            FULL_ONLY.add(fn.__name__)
         return fn
     return register
 

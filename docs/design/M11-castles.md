@@ -61,12 +61,12 @@ SOTN gives kill XP through one function, `func_800FE044(amount, enemyLevel)` (DR
 - **What's kept as is:** joint saves at save rooms, Continue, both-dead reload, the cards, and event savestates. They move from `playthroughs/` into `castles/`, one folder per castle: `castle.json` (id, name, created, played, saves, where it came from) plus `castle.coop` (slot 1, slot 2).
 
 ## Acceptance criteria
-1. **Solo** (`m11_solo`): a solo castle starts, saves, and continues from the launcher's flow. Bosses have 1× HP, the aggro never switches, and a kill gives the game's full XP.
-2. **Shared level** (`m11_shared_xp`, session test): kills by either player add half the XP (minimum 1) to both games. After enough kills for a level-up, both are the same level with the same XP, and the other game showed the level-up too.
-3. **The joiner gets a copy** (`m11_copy`): A hosts castle X, B joins, they joint-save. B's machine now has X: same id and name, with B's state in slot 1. A's X is unchanged except for the save.
+1. **Solo** (`castle_solo_play`): a solo castle starts, saves, and continues from the launcher's flow. Bosses have 1× HP, the aggro never switches, and a kill gives the game's full XP.
+2. **Shared level** (`shared_xp`, session test): kills by either player add half the XP (minimum 1) to both games. After enough kills for a level-up, both are the same level with the same XP, and the other game showed the level-up too.
+3. **The joiner gets a copy** (`castle_joint_save_copies`): A hosts castle X, B joins, they joint-save. B's machine now has X: same id and name, with B's state in slot 1. A's X is unchanged except for the save.
 4. **A copy can be hosted** (`m11_copy_hosted`, three instances in turn): B hosts its copy of X and C joins. B plays slot 1 (its own state), C gets slot 2, and C now has a copy too. A's X is untouched.
 5. **Nothing played is overwritten** (`m11_no_overwrite`): B plays its copy of X solo, then joins A's X again. B ends up with two entries, its solo copy unchanged and `… (2)` from A. When B hasn't played its copy, it's updated in place instead.
-6. **A solo-only castle takes a partner** (`m11_slot2_clone`): slot 2 starts as a copy of slot 1, in the host's save room, at the same level.
+6. **A solo-only castle takes a partner** (`castle_takes_a_second_player`): slot 2 starts as a copy of slot 1, in the host's save room, at the same level.
 7. **Names** (`launcher/test_castles.py`): `Tucker_2026-10-25-21:40` from the typed name, with a file-safe folder, the list sorted by last played, and `New castle_…` before the first save.
 8. **Couch and Android:** couch plays a castle (P1 slot 1, P2 slot 2). The cross-play tests (`android_pc`, `android_room`) pass with a joint save that lands as a copy on the emulator.
 

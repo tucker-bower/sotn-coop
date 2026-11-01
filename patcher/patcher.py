@@ -262,11 +262,15 @@ def make(retail_track1, coop_bin, out_dir, version):
             if n != coop[a:b]:
                 target[a:b] = n
                 sealed.append(i)
-    # Our Richter (COOPRIC.BIN) is built from the decomp with the retail one's art: copied from it.
+    # Our Richters (COOPRIC.BIN, and COOPRICP.BIN: his build as the partner, M13) are built from
+    # the decomp with the retail one's art: copied from the player's RIC.BIN. (Without the
+    # partner's, its art went into the patch as stored data: D71's check caught it.)
     moving = []
-    ours, theirs = find_file(coop, "COOPRIC.BIN"), find_file(retail, "BIN/RIC.BIN")
-    if ours and theirs:
-        moving.append(_span(ours) + _span(theirs))
+    theirs = find_file(retail, "BIN/RIC.BIN")
+    for name in ("COOPRIC.BIN", "COOPRICP.BIN"):
+        ours = find_file(coop, name)
+        if ours and theirs:
+            moving.append(_span(ours) + _span(theirs))
     meta = json.dumps({"game": "SLUS-00067", "mod": "sotn-coop", "version": version,
                        "seal": _ranges(sealed), "disc_crc32": f"{zlib.crc32(coop):08x}"}).encode()
     patch = bps.create(retail, bytes(target), meta, moving=moving)

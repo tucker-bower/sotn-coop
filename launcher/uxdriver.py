@@ -392,7 +392,8 @@ def _couch(pg, quit_at_end=True):
         ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # Richter
-        ("pad", 101, A),                                      # both ready: New game (no playthroughs yet)
+        ("pad", 101, A),                                      # both ready
+        ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
         ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
         ("until", in_game), ("expect", lambda d: d.inputs <= 15, "home to playing in 15 inputs or fewer (12, plus the detours to Game files and shortcuts)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
@@ -427,9 +428,10 @@ def _solo(pg):
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
+        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", in_game), ("expect", lambda d: d.inputs <= 4, "home to playing solo in 4 inputs"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 5, "home to playing solo in 5 inputs (4, plus New castle now the test castles ship: D136)"),
         ("expect", lambda d: len(castles()) == 1, "a new castle"),
         ("game_frames", 900), ("shot", "solo-game"),
         ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
@@ -458,7 +460,8 @@ def _test_castles(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # the last item
+        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
+        ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),
@@ -466,6 +469,36 @@ def _test_castles(pg):
         ("call", lambda d: setattr(d, "arrived", d.view.frame)),  # then past the room's fade in
         ("until", lambda d: d.view.frame > d.arrived + 150 or d.waited > 20000), ("shot", "at-the-boss"),
         ("expect", at_start, "the fresh copy plays from its start, outside Slogra & Gaibon"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+    ]
+
+
+def _boss_rush(pg):
+    """Boss rush (docs/design/boss-rush.md): Home > Solo > Boss rush starts at the first boss's
+    door, the status bar counting it (1/22)."""
+    A = pg.CONTROLLER_BUTTON_A
+
+    def at_first(d):
+        from archive import Castle
+        rush = [c for c in Castle.all() if c.info.get("rush") is not None]
+        g = d.view.games[0] if d.view and d.view.games else None
+        if not rush or g is None:
+            return False
+        p, want = g.mailbox("self_presence"), rush[0].info["start"]
+        return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # Boss rush: last
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", lambda d: d.heading == "Game"),
+        ("until", lambda d: at_first(d) or d.waited > 20000),
+        ("call", lambda d: setattr(d, "arrived", d.view.frame)),
+        ("until", lambda d: d.view.frame > d.arrived + 700 or d.waited > 20000), ("shot", "first-boss"),
+        ("expect", at_first, "the rush starts outside Slogra & Gaibon"),
+        ("expect", lambda d: d.view.rush is not None and d.view.rush.text().startswith("Boss rush 1/22"),
+         "the status bar counts it: Boss rush 1/22"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
@@ -498,6 +531,7 @@ def _startup(pg):
         ("screen", "Welcome"), ("key", pg.K_RETURN),
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
+        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
         ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
@@ -584,12 +618,16 @@ def _online_host(pg, code_file):
     return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
-            ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host: new game
-            ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN),
+            ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
+            *(([("screen", "Host: which castle?"), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Boss rush (D137)
+              if RUSH else
+              [("screen", "Host: which castle?"), ("key", pg.K_RETURN),       # New castle (D136)
+               ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("pad", 100, A), ("pad", 100, A),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            *(_rush_online_host() if RUSH else []),
             *_android_picture("host-playing"),
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
             ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
@@ -613,11 +651,49 @@ def _online_join(pg, code_file):
             ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("game_frames", 900), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
-            ("expect", lambda d: (_received_castle() or "").startswith("Tucker_"),
+            ("expect", lambda d: (_received_castle() or "").startswith("Boss rush_" if RUSH else "Tucker_"),
              "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
+            *(_rush_online_join() if RUSH else []),
             *_android_picture("join-playing"),
             ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+
+
+RUSH = bool(os.environ.get("COOP_UX_RUSH"))  # online with a boss rush: uxdriver.py online, COOP_UX_RUSH=1 (D137)
+
+
+def _rush_at(d, k):
+    """d's game is at boss k's start (bossrush.bosses())."""
+    import bossrush
+    start = bossrush.bosses()[k]["start"]
+    p = d.view.games[0].mailbox("self_presence") if d.view and d.view.games else None
+    return p is not None and [p.stage, p.room_id] == start[:2]
+
+
+def _rush_online_host():
+    """The host's rush: at the first boss; its win (its record, written here: the fight is the
+    harness's) loads both players into the second, through the online load."""
+    def win(d):
+        d.view.games[0].write("g_Settings", 1, "<i", 0x30 + 4 * 6)  # Slogra & Gaibon's record
+    def partner_there(d):
+        import bossrush
+        start = bossrush.bosses()[0]["start"]
+        p = d.view.games[0].mailbox("partner_presence")
+        return [p.stage, p.room_id] == start[:2]
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 20000),
+            ("expect", lambda d: _rush_at(d, 0), "the host is at the first boss"),
+            ("until", lambda d: partner_there(d) or d.waited > 20000),  # the joiner too, before the win
+            ("game_frames", 300), ("call", win),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 20000), ("shot", "host-second-boss"),
+            ("expect", lambda d: _rush_at(d, 1) and d.view.rush.text().startswith("Boss rush 2/"),
+             "the host is at the second boss (Boss rush 2/22)")]
+
+
+def _rush_online_join():
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 20000),
+            ("expect", lambda d: _rush_at(d, 0), "the joiner is at the first boss"),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 20000), ("shot", "join-second-boss"),
+            ("expect", lambda d: _rush_at(d, 1), "the joiner followed the host to the second boss")]
 
 
 def _received_castle():
@@ -686,6 +762,7 @@ def _characters(pg):
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+              ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("until", lambda d: d.heading == "Game"),
               ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),
@@ -758,7 +835,7 @@ def _hud(pg):
              ("until", lambda d: d.heading == "Debug starts"),
              ("call", make_starts),                               # not made yet: Yes, make them
              ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Both")),
-             ("key", pg.K_DOWN), ("key", pg.K_RETURN),            # Places
+             ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Places (after Bosses, Scenes)
              ("screen", "Places"), ("key", pg.K_RETURN),           # the first: the castle entrance
              ("screen", "Press a button"), ("pad", 0, A), ("pad", 101, A), ("pad", 0, A), ("pad", 101, A),
              ("until", lambda d: d.heading == "Game"), ("game_frames", 240)]
@@ -772,7 +849,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

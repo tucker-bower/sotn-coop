@@ -2,9 +2,6 @@
 
 Format: **ID: decision** (owner | agent-default) then the context, the options considered, and why.
 
-**D1: Fork sotn-decomp; mod code lives in `mods/co-op/`** (owner, 2026-10-18)
-We inherit the matching build and all decompiled code, and keep upstream diffs minimal.
-
 **D2: Target the PS1 US build (SLUS-00067)** (owner, 2026-10-18)
 It's the reference build the decomp is most complete for, and PS1 netplay is mature and lockstep-deterministic. PSP has more content but weaker netplay. _(2026-10-18: the target stands. The netplay reason no longer applies, because of D20.)_
 
@@ -20,13 +17,13 @@ DuckStation, RetroArch cores, PCSX-Redux. Real PS1 hardware is no longer a targe
 Playing as Alucard + Richter or Alucard + Maria is a much better experience than two Alucards. Because we build from source, `RIC.BIN` (and the Maria mod's overlay) can be relinked into the 8MB expansion area instead of their normal slot, so they coexist with Alucard. The community already treats 8MB as standard ("most modern emulators have the 8MB available"). Cost: players must enable the emulator's 8MB option, and each target emulator's support must be verified in M0. Maria additionally requires the user to own *Dracula X Chronicles (EU, PSP)*.
 
 **D8: Ship as a patched PS1 disc image now; don't wait for the PC port** (owner, 2026-10-18)
-The PC port has no release date and currently covers 23 of 41 stages. Our co-op code is shared C source, so it carries over to the port if and when that ships, and Android may follow quickly once it does.
+The decompilation effort is not finished and the recomp projects are unhelpful. Our co-op code is shared C source, so it can be ported over to a true PC decomp port when available. 
 
 **D9: Distribution builds from the user's own disc** (owner, 2026-10-18)
 Follow the Maria mod precedent: a Docker image or script that takes the user's own disc image(s) and outputs the patched image. We publish no game data and no pre-patched images. An xdelta/PPF patch is a possible convenience option, subject to an owner decision.
 
 **D6: Dev loop and budget** (owner, 2026-10-18)
-The spec-driven loop is in `AGENTS.md`. Claude Pro subscription, ~1 month target. An upgrade will be considered if needed.
+The spec-driven loop is in `AGENTS.md`.
 
 **D10: Install DuckStation + PCSX-Redux for cross-checks, using OpenBIOS** (owner, 2026-10-18)
 Install both into `C:\Users\tucke\OneDrive\Desktop\Emulators`, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
@@ -503,8 +500,8 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D99: M11 finish: Solo's status bar, its tests, version 0.11.0-dev** (agent-default, 2026-10-25)
 - **Solo's status bar says "Solo"** (no partner, ping or Together/Apart). It had said "Partner connected · ping ? ms" for a solo game: the online status line read a partner age that starts at 0.
 - **The playtest build is 0.11.0-dev**, after the milestone (as 0.9.0-dev was M9's). Its patch differs from 0.9.0's (`EV_EXP`), so a 0.9.0 partner is refused by name.
-- **Criterion 4 and 5's tests:** `m11_copy` covers both halves of criterion 4 (B hosts its copy, C joins). Criterion 5's rule (a played copy is never overwritten; `(2)`) is tested on the castle files in `launcher/test_castles.py`, without games: the games only decide when a save happens, which `m11_copy` covers.
-- **Criterion 8 on Android:** the online join script (used by the Android pair tests) checks the joiner keeps a copy of the host's castle at connect; the save into it is `m11_copy`'s (the same `OnlineSession` code, in-process on Android).
+- **Criterion 4 and 5's tests:** `castle_joint_save_copies` covers both halves of criterion 4 (B hosts its copy, C joins). Criterion 5's rule (a played copy is never overwritten; `(2)`) is tested on the castle files in `launcher/test_castles.py`, without games: the games only decide when a save happens, which `castle_joint_save_copies` covers.
+- **Criterion 8 on Android:** the online join script (used by the Android pair tests) checks the joiner keeps a copy of the host's castle at connect; the save into it is `castle_joint_save_copies`'s (the same `OnlineSession` code, in-process on Android).
 
 **D100: A joiner with a room code only takes a HELO with that room's token** (agent, 2026-10-25)
 - Found by `android_room` while the harness ran on the same PC: the PC joiner's LAN broadcast (D96) was answered by one of the harness's games (no room code), and the joiner took it as its partner. The Android host was left waiting. A real house could do the same with any game joined by ip:port.
@@ -539,14 +536,14 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **The window: x 0x1E0-0x1FF, y 0x100-0x1DF** (32×224 words, in the puppet's page beside its frame slot). Proved unused by corruption: `vram_survey.window_free` fills it with garbage in a savestate and compares 2-3 s of play and of the pause menu, over 29 states (the library, the debug and boss starts): no difference anywhere. The method catches smaller used areas (controls at 0x200 and 0x280: every frame differs).
 
 **D107: A shared-room guest runs its own red and sealed doors** (agent-default, 2026-10-27)
-- Found by `m12_boss_ar_olrox`: when the partner was the room's authority, a guest Alucard was walled in at the sealed door outside Olrox's room. Doors open only for their own game's player, and the guest got the authority's closed door, tiles included (the room's tiles come with the snapshot since M5). A guest couldn't open any red door either: in real play, whoever entered a room second couldn't leave it through a door until the first player did.
+- Found by `boss_olrox_alucard_and_richter`: when the partner was the room's authority, a guest Alucard was walled in at the sealed door outside Olrox's room. Doors open only for their own game's player, and the guest got the authority's closed door, tiles included (the room's tiles come with the snapshot since M5). A guest couldn't open any red door either: in real play, whoever entered a room second couldn't leave it through a door until the first player did.
 - Now `EntityRedDoor` and `EntitySealedDoor` are on each overlay's list of entities a guest runs itself (`scripts/gen_overlay_table.py`). The local door writes its own tiles after the authority's are copied in. What locks a boss room's door (NZ1's `g_bossDoorsLocked`) lives in the BSS, which the guest still gets from the authority. `guest_blocked_by_closed_door` (M5) checks that a locked boss room stays locked for the guest.
 - Cost: each game shows its own door, so a partner can be seen walking through a door that's closed on your screen.
 - Considered: the guest asking the authority to open its door. Rejected because a sealed door also steers the player who opens it (it walks them through), so the authority's player would be moved.
 
 **D108: The everyday suite runs in parallel, the long tests before playtest builds** (agent-default, 2026-10-27; Tucker: the suite was slowing development to a halt)
 - `harness/run.py` runs each test in its own process, the cores less 4 at once (12 on this PC: a few left for its own use), longest first by the last run's time. The tests that time the host in real time (`run.SOLO`: the mixed soaks' p99) run alone at the end: at 14 at once `mixed_soak_short` measured 1.10 ms against its 1 ms budget. Session tests step a simulated clock, so they're deterministic under load; the tests with real sockets, relays or LAN broadcasts (`run.NETWORK_MODULES`) share one lane. Maria's blob is built once before the workers start.
-- **Everyday suite:** everything but the names ending `min` or `_long`. `run.py --full` adds them and is the check before a playtest build (AGENTS.md).
+- **Everyday suite:** everything but the names ending `min` or `_long` (superseded by D138: `full=True`). `run.py --full` adds them and is the check before a playtest build (AGENTS.md).
 - **Trimmed, no coverage lost:** `teleport_fuzz` is 60 teleports (200: `teleport_fuzz_long`). The three 72-weapon sweeps are six halves, and Alucard's reference results are committed (`harness/data/hand_items_alucard.json`: item ids and pass/fail flags, no game data), so Richter's and Maria's halves no longer wait for his.
 - **Removed:** the M12b spike's `m12b_offhand_like_alucard_{richter,maria}` and `m12b_alucard_baseline`: 6 weapons, passing at 5 of 6, fully covered by the hand-item sweeps (all 72, item by item).
 - **Measured (2026-10-27):** 155 tests: about 1.2 h one after another (3300 s of tests plus start-up); in parallel 600 s at 7 at once, 505 s at 10, 486 s at 12 (the default), 454 s at 14. All pass.
@@ -595,17 +592,17 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - The release and the APK ship it as `bios/openbios-fast.bin`, the default. PCSX-Redux's `openbios.bin` stays beside it: a savestate holds the BIOS's RAM, so it only loads on the BIOS that made it. Each new savestate pair gets a `.bios` note; "Go back to a moment" boots the BIOS it names, and pairs from before 0.12 (no note) boot the old one (or the player's own BIOS, if they chose one). Debug starts are kept per BIOS (`<disc>@<bios>`), so they're remade once.
 - Our disc still reaches the title 84 frames (1.4 s) after retail (the co-op module and Richter loading). Left as is.
 
-**D118: Maria keeps her guardian when she picks up a Bible** (agent-default, 2026-10-27; found by `m12_subweapons_maria`)
+**D118: Maria keeps her guardian when she picks up a Bible** (agent-default, 2026-10-27; found by `subweapons_maria`)
 - The Maria port's glue (`mods/mariapsp-forpsx/maria.c`, upstream) turns Alucard's subweapons into her guardians: dagger → cat, axe → cardinal, holy water → turtle, vibhuti → dragon. The cross, stopwatch, rebound stone and agunea keep the guardian she has and give a heart back. The **bible** was mapped to none: picking one up left her nothing to throw.
 - Now the bible is like the other four (`patches/sotn-decomp.patch`, one hunk). Considered: mapping the five to the doll (her fifth guardian), which isn't selectable in the port and would need its graphics loaded.
 
 **D119: "Every room, every character" is proved by movement envelopes, not a tile planner** (agent-default, 2026-10-27; changes the method of `design/M12-v1-release.md` option B)
-- If, with the same relics, Richter and Maria jump at least as high and as far as Alucard, every room Alucard can cross with those relics they can cross too. The room's other gates have per-character tests already (mist grates, low gaps, poison water; blue doors and the ferryman read only the relic). `m12_envelope_{richter,maria}` measures each relic step against Alucard's from the same spot.
+- If, with the same relics, Richter and Maria jump at least as high and as far as Alucard, every room Alucard can cross with those relics they can cross too. The room's other gates have per-character tests already (mist grates, low gaps, poison water; blue doors and the ferryman read only the relic). `movement_envelope_{richter,maria}` measures each relic step against Alucard's from the same spot.
 - **Why:** a collision-tile planner with each character's physics is several usage windows and its own source of false results; the envelope is one test, measured in the real game.
 - It found two gaps (a decision for Tucker, STATUS): with Gravity Boots, Maria's high jump reaches 191 px and Richter's 261 px against Alucard's 331 px; with the Leap Stone only, Richter's backflip adds little height (63 px against 101 px). Climbing with the Soul of Bat is unlimited for both.
 
 **D120: The first-castle playthrough is chained by boss, with teleports between** (agent-default, 2026-10-27; `design/M12-v1-release.md` work item 4)
-- `m12_chain_first_castle_long`: both games play the 12 bosses in route order, carrying what they earn; between bosses, the teleport, and that stretch's relics and story flags. Walking the routes is left to the gate and movement tests (D119): scripted routes for every stretch would be several usage windows and brittle.
+- `boss_chain_first_castle_long`: both games play the 12 bosses in route order, carrying what they earn; between bosses, the teleport, and that stretch's relics and story flags. Walking the routes is left to the gate and movement tests (D119): scripted routes for every stretch would be several usage windows and brittle.
 - Time-attack records are reported, not asserted: a scripted kill can skip the death sequence that writes one.
 
 **D121: Everything planned for 1.0 ships now as 0.12.0, the public beta; 1.0 after playtesters' feedback** (Tucker, 2026-10-27)
@@ -618,7 +615,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 **D122: Richter and Maria get extra jumps, not higher jumps** (Tucker, 2026-10-27; closes the gaps D119 found)
 - Each of the Leap Stone and the Gravity Boots gives Richter and Maria one jump in the air, refilled on landing (`g_CoopAirJumps`, `COOP_AIR_JUMPS` in `richter/coop_ric.h`). The jump heights stay as they are.
 - Richter's backflip keeps its vanilla moment (jump again just after leaving the ground) and costs one; any other press in the air, or falling off a ledge, is a plain jump. Maria's double jump is her Leap Stone jump, and her Gravity Boots jump is her own high jump, done in the air (her double jump alone left her 105 px short); a press uses the double jump first, Up asks for the high jump. The Soul of Bat's climbing re-arm is unchanged.
-- Measured (`m12_envelope_*`): with the Leap Stone, Richter 121 px, Maria 104, Alucard 106; with the Gravity Boots too, Richter 375, Maria 425, Alucard 375.
+- Measured (`movement_envelope_*`): with the Leap Stone, Richter 121 px, Maria 104, Alucard 106; with the Gravity Boots too, Richter 375, Maria 425, Alucard 375.
 
 **D124: The partner's body draws its own attacks; a hand weapon that isn't ours comes from the link** (agent-default, 2026-10-28; `design/M13-partner-player.md` step 1)
 - The body gets the partner's status (stats, level, equipment) from its host, so DRA's own code (subweapons, spells, poses) runs right in it. The partner's attack sprites and primitives from the link (M12) aren't placed while the body is shown: they doubled its own.
@@ -675,7 +672,7 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Choice:** while a boss is alive in a shared room (either game's presence), the share holds at any camera distance. Forming a share still needs the cameras near.
 - **Options considered:** a wider camera limit (arenas vary, it only moves the edge); keeping the boss through the reload (each game would still fight its own copy after a split).
 - **Risk:** entities that cull themselves outside the authority's camera (some projectiles) may vanish before they reach a guest at the far end. The test's boss hits both players at opposite ends; per-boss checks belong to playtests.
-- **Found through it (2026-10-30 evening):** Olrox's second form (enemy 56, 800 HP) wasn't in the boss list, so it had normal HP, no aggro and no boss rules; added. Before D131 the chain test (`m12_chain_first_castle_long`) passed only because the split-and-reload tore his fight down. The test now also keeps both players healed while it waits for a boss's record: its scripted kill (the bot can't finish Olrox) skips his death, and his unkillable parts (enemy 55) stay and hurt.
+- **Found through it (2026-10-30 evening):** Olrox's second form (enemy 56, 800 HP) wasn't in the boss list, so it had normal HP, no aggro and no boss rules; added. Before D131 the chain test (`boss_chain_first_castle_long`) passed only because the split-and-reload tore his fight down. The test now also keeps both players healed while it waits for a boss's record: its scripted kill (the bot can't finish Olrox) skips his death, and his unkillable parts (enemy 55) stay and hurt.
 - **Aggro itself (D47, D62) is unchanged:** a 50% re-roll every 3 s. Tucker, 2026-10-30: switching is needed for balance; timed or per-attack, either works.
 
 **D132: PvP hits come from the attacker's real hitboxes, sent over the link** (agent-default, 2026-10-30; M15)
@@ -685,3 +682,33 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 - **Off** (not checked): in a boss room (either player's presence), a scene (either), paused, dead or arriving, and in either player's first 3 s in the room.
 - **Settings > PvP** (off by default). Couch: both games. Online: the host's setting covers the session (`HELO` `pvp`); the joiner's own is ignored, and its game shows a line saying PvP is on.
 - **Not covered by tests:** Maria's guardians, Richter's and Maria's item crashes, and rotated/scaled hitboxes (there are none in SOTN: hitboxes are axis-aligned).
+
+**D133: Arrivals across the two castles; the inverted castle's boss starts outside each door** (agent-default, 2026-10-30; the hardening pass before M16)
+- **Bugs fixed (`arrive.c`):** the game reads a teleport's target stage twice (Play_PrepareNextStage, then Engine_Init), each time flipped into the castle the player is in. A teleport or revive from the first castle to a partner in the inverted castle landed in the first castle (RNO1 became NO1); `tele->stageId` is now written relative to the current castle, before and during the load. And an arrival in an inverted room from another stage landed mirrored (x 16 at 497), past the fine placement's reach; the position is now pre-mirrored once the target stage's room table is in. `inverted_teleport_into`, `_out`.
+- **Starts (`bossstarts.INVERTED`):** each in the room next to its boss's door (the door cell's room loads the boss's stage, `g_RoomBossTeleports`), so the boss spawns once the partner is linked, with 2x HP. Started inside, it spawned at 1x (HP doubling rightly never changes a live boss) and the first two-Alucard runs fought 1x bosses. Dracula's start is in his stage (the way is Shaft's room); his tests step out and back in.
+- **The tests walk into the arena** until the fight's time-attack "visited" bit is set: Akmodan II's and the trio's managers start (and later record the win) only with the player well inside. Inverted bosses must leave their record in both games.
+- **Not covered:** Shaft (his room's scene and elevator; a bot doesn't get through), the inverted castle's scenes, its regular stages' walks.
+
+**D134: Dracula falls for both, like Richter** (agent-default, 2026-10-30; extends D130)
+- Found by `boss_dracula`: his death scene pulled the partner in, the arrival reloaded his stage, and he came back at full HP with his intro; neither game ended. Now the same rule as Richter's (boss.c): the game whose Dracula dies says so, the other's dies too, no pulls or scene holds, and the first game into the ending tells the other which one (`EV_KILLED` b = 1 | ending << 8; 0 in the high bits from an older build: Richter's rule). A dead player waits up to 80 s for it (his last words take some 4,400 frames). `final_boss_elsewhere_dracula` / `_richter`: the partner, elsewhere in its menu, follows into the same ending.
+
+**D135: Ordinary enemies aren't bosses** (agent-default, 2026-10-30)
+- 386 and 389 (the inverted Colosseum's Minotaur and Werewolf: 320 and 280 HP, item drops) were in the boss list: meeting one pulled the partner in from anywhere, blocked teleports and doubled their HP. Dropped.
+- The Lesser Demon, Slogra, Gaibon and Karasuman come back in the inverted castle as ordinary enemies (RNZ0, RCHI, RNO2) with their first-castle enemy ids: no boss rules for them there (`OrdinaryHere`), their HP doubling set per castle.
+
+**D136: The test castles ship in the repo and the releases** (Tucker, 2026-10-31: "commit the test castles into the repo somewhere so playtesters have it... make sure it builds into the releases for now"; later, with a stable channel, only the alpha keeps them)
+- `launcher/assets/test-castles/`: one joint save per boss and scene start (28: the first castle's and the inverted castle's), with `index.json` (start, order, about). `scripts/export_test_castles.py` makes them from the debug starts (`rebuild_fixtures.sh` runs it); the installer and the APK ship `launcher/assets`, and the launcher installs them under Test castles when the bundle changes (`Castle.install_bundled`).
+- **Not game data:** a save is the player's progress (status, settings, castle flags, map), like a shared memory card save, except its memory card header (the game's icon and palette): blanked in the bundle, and the load doesn't read it. `release.py` refuses a build without the 28 or with a header left in; `launcher/test_castles.py` checks the bundle; `test_castles_bundled` loads every one and reaches its boss or scene.
+- PvP stays optional: `"pvp": False` in the settings defaults (`launcher/test_settings.py`).
+
+**D137: Boss rush** (Tucker, 2026-10-31: "Boss rush mode... I bet you could add this feature in right now"; the choices agent-default, `docs/design/boss-rush.md`)
+- Solo, Couch and Host list **Boss rush** after the test castles: the 22 bosses in story order (first castle, then inverted), each from its test castle's start with that start's progress (not carried over: the fights stay balanced). A beaten boss (its time-attack record; Richter: the module's final-boss flag, before his ending, which a load can't leave) loads both players into the next after 3 s. Both dead: the current boss again. Dracula's ending ends it.
+- Launcher-only (`launcher/bossrush.py`) on the joint save's load, so couch and online work as any castle. The run (boss, time in play, splits, best) is kept in the castle: Continue resumes at its boss.
+- Tests: `boss_rush_advances`, `_through_richter`, `_finishes`, `uxdriver boss_rush`.
+
+**D138: Three test tiers, one parallel runner, clear names** (Tucker, 2026-10-31: "only run a handful of relevant tests when small changes are made. The everyday test should be the quick fully parallelized one... The full suite... reserved for only running before releasing"; the choices agent-default)
+- `run.py NAME... / -k WORD` for small changes; `run.py` (everyday, ~10 min) before major commits and PRs; `run.py --full` before releases only. In AGENTS.md (Testing).
+- **Tiers are explicit:** `full=True` in `@scenario` / `@session_scenario` (`scenario.FULL_ONLY`), not name endings. Full-only: the soaks, `teleport_fuzz_long`, the two boss chains, the 40 boss pairings (`boss_*_richter_and_maria`, `_alucard_and_richter`; each boss stays everyday with two Alucards, and `mixed_party_boss` keeps a mixed team in a boss fight), 6 of the 9 picture pairings (`partner_pixels_*`; everyday keeps one with each character as A and as B), Richter's and Maria's `hand_items_*` (everyday keeps Alucard's, the reference), 24 of the 31 PvP pairings (everyday keeps each character attacking and attacked and each attack kind once: `session_m15.EVERYDAY`), 4 of the 6 partner-body pairings, 4 of the 6 mixed-party room and progression pairings, and the fuzz (`teleport_fuzz`, `chaos_short`). The everyday suite is CPU-bound (a two-game test is 2-3 processes; 12 at once fill 16 cores), so only less work makes it faster: it went from 274 tests and 12+ minutes to 212 tests (15 of them new: launcher, UI, patcher). What's left is mostly unique: every boss once (22), the boss rush, the scenes.
+- **Everything in one runner:** the launcher checks (`launcher_*`), the UI flows (`ui_*`, `uxdriver.py`, in a fresh data folder each) and the patcher's round trip (`patcher_round_trip`: it had been broken since M13 without anyone running it) are tests in `harness/commands.py`, everyday tier, run in parallel with the rest. `ui_startup` (it times the first picture) and `ui_online*` (two launchers in real time) run in the real-time phase.
+- **Real-time tests side by side with each other** after the rest, not one by one: a few processes on 16 cores leave their timing alone. Small gain (the 10-minute soak and its baseline still run one after the other, about 7 minutes at the end of `--full`). `mixed_soak_10min` compares itself with `mixed_soak_baseline_10min`'s report, so they're a chain (baseline first); before, it ran first and compared with the previous run's baseline.
+- **Names:** no milestone prefixes (193 renamed: `m12_boss_rm_olrox` is `boss_olrox_richter_and_maria`, `m15_pvp_hand_ar` is `pvp_hand_alucard_vs_richter`, `m11_slot2_clone` is `castle_takes_a_second_player`); the docs follow. Names in the docs from before this that never became tests (`m8b_reachability`, ...) are left as written.

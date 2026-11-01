@@ -2,6 +2,8 @@
 (playtest 2026-10-25 note 1: the Richter vs Dracula prologue didn't sync the players for its
 scenes, nor for the scene after it)."""
 
+import os
+
 from coop_env import TOOLS
 from session import session_scenario
 
@@ -75,7 +77,7 @@ def stage(g):
 
 
 @session_scenario(starts=("st0_start", "st0_start"))
-def m12_prologue_opening(run):
+def prologue_opening(run):
     """Both players see the prologue's opening scene (Richter meets Dracula) together, though B
     starts 5 s behind A (as online, where one skips the video sooner)."""
     w = SceneWatch(run)
@@ -120,7 +122,7 @@ def fight_pad(g, period=12, t=0):
 
 
 @session_scenario(starts=("st0_fight", "st0_fight"))
-def m12_prologue_fight(run):
+def prologue_fight(run):
     """One Dracula for both (a shared room): when he falls, the scenes after the fight play in
     both games together, and both leave the prologue for the castle together."""
     a, b = run.s.a, run.s.b
@@ -175,7 +177,7 @@ def walk_to_death(run, w, g, other_pad=""):
 
 
 @session_scenario(starts=("no3_start", "st0_end"))
-def m12_death_waits_for_partner(run):
+def death_waits_for_partner(run):
     """Playtest 2026-10-25: whoever finished the prologue first watched Death take Alucard's gear
     alone. Now the scene waits (up to 60 s) for a partner still in the prologue's ending, who is
     then pulled in; both watch it together and both lose their gear."""
@@ -296,7 +298,7 @@ def scene_together(run, pad, limit, flags0=None):
 def _scene_test(name, start, pad, limit):
     def test(run):
         scene_together(run, pad, limit)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
     session_scenario(starts=(str(start), "entrance"))(test)
 
@@ -317,7 +319,7 @@ def _room_scene_test(name, base, stage, layout, x, y, side, flag):
         walk = "right" if side == "left" else "left"
         pad = (lambda i: (walk if i < 60 else ("up" if i % 20 < 2 else ""), "")) if name == "librarian" else walk
         scene_together(run, pad, 1800, flags0)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
     # both from the same progress (their shared flags), B elsewhere in it: B is pulled in
     session_scenario(starts=(str(STARTS / f"{base}.state"),) * 2)(test)
@@ -337,13 +339,14 @@ def _bossstarts():
 
 
 GAME_TITLE, GAME_ENDING = 1, 9  # Game_Title, Game_Ending (include/game.h)
+VISITED = 0x108  # g_Settings.D_8003CB00: a bit per time-attack event whose fight has started
 
 
 def boss_flow(run, b, limit=24000):
     """A walks into the boss; B, at the door, is pulled in; the boss has twice its HP; both fight it
     (worn down: this tests the flow, not the fight); it falls once, both are fine after, and what
     the fight set in the castle flags is the same in both."""
-    from link.mailbox import BOSS, DEAD, IN_PLAY, ROLE_AUTHORITY
+    from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY
     a, g2 = run.s.a, run.s.b
     flags0 = [g.read_bytes("g_CastleFlags", 0x300) for g in (a, g2)]
     w = SceneWatch(run)
@@ -354,6 +357,19 @@ def boss_flow(run, b, limit=24000):
         room, x, y = b["check"]
         for g in (a, g2):
             arrive(run, g, a.mailbox("self_presence").stage, room, x, y)
+    if b.get("out"):  # started in the arena: out and back, so the boss spawns with co-op's HP
+        import bossstarts
+        from session_progress import arrive
+        stage, room, x, y = b["out"]
+        for g in (a, g2):
+            arrive(run, g, bossstarts.STAGES[stage], room, x, y)
+        run.step(60)
+        from link.mailbox import CMD_ARRIVE
+        stage, (room, x, y) = bossstarts.STAGES[b["stage"]], b["arrive"]
+        for g in (a, g2):  # (his scene starts as they arrive: not back in play until it's done)
+            g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
+        w.until(lambda: all((lambda q: q.stage == stage and q.room_id == room)(g.mailbox("self_presence"))
+                            for g in (a, g2)), 900)
     # B walks too, as a player would (some arenas open with a scene that only moves on while the
     # player holds a direction); it stays where it is otherwise (the door's edge)
     w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""),
@@ -363,35 +379,61 @@ def boss_flow(run, b, limit=24000):
     # only while a direction is held (like the prologue's)
     w.until(lambda: boss(g2), 3000, ("", walk))
     run.expect(boss(g2), "B is pulled into the fight", b=g2.snapshot())
+    # Into the arena (the inverted castle's): some fights start (and later record the win) only
+    # once the player is well inside (Akmodan II's manager: x 128-384; the trio's: 224-320), and
+    # the fight bot stops near the boss. The fight's start sets its time-attack event's visited bit
+    # (TimeAttackController). Not in the first castle: held there, the walk took A through the
+    # Succubus's scene and the chain lost her fight (and it gave no missing record back).
+    import bossstarts
+    event = bossstarts.EVENTS.get(b.get("event")) if b.get("inverted") else None
+    if event is not None:
+        visited = lambda: a.read("g_Settings", "<I", VISITED) & (1 << event)
+        w.until(visited, 600, (walk, ""))  # (not every fight sets it: Death's doesn't)
     hp_seen = {}
     fought = 0
     role_log = []
+    free = 0  # frames of the fight outside scenes (Dracula talks for some 2,900 first)
+    split, splits = 0, []
     for t in range(limit):
         pa, pb = a.mailbox("self_presence"), g2.mailbox("self_presence")
         if not role_log or role_log[-1][1:] != (pa.role, pb.role, pa.flags, pb.flags):
             role_log = (role_log + [(t, pa.role, pb.role, pa.flags, pb.flags)])[-14:]
         auth = a if pa.role == ROLE_AUTHORITY else g2
+        free += not auth.read("g_CutsceneHasControl")
+        # D131: while both are in the boss's room, the fight stays shared (one boss, two players)
+        same_room = (pa.stage, pa.room_id) == (pb.stage, pb.room_id) and pa.flags & pb.flags & IN_PLAY
+        if same_room and bool(pa.flags & BOSS) != bool(pb.flags & BOSS) and not (pa.flags | pb.flags) & BUSY:
+            split += 1
+            if split == 120 and not splits:
+                splits.append({"t": t, "a": a.snapshot(), "b": g2.snapshot(), "roles": (pa.role, pb.role),
+                               "flags": (pa.flags, pb.flags), "role_log": list(role_log)})
+        else:
+            split = 0
         if t % 30 == 0:
             for g in (a, g2):  # the players don't die: this tests the flow, not the bot's fighting
                 g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-            for slot, (eid, _, _, hp) in enemies(auth).items():
-                hp_seen.setdefault(slot, hp)
-                if hp > 8:
-                    auth.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-                elif t > 3000:  # the bot can't land the last hit (flying bosses): a scripted kill,
-                    # as the game's hit detection does when HP runs out (design/M12 part 2)
-                    auth.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
-                    flags = auth.read("g_Entities", "<I", slot * 0xBC + 0x34)
-                    auth.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
+            # the room's authority runs its enemies; a room that isn't shared (a split, a player
+            # knocked out of the arena), each game its own (else A's boss was never worn down)
+            for g in ((auth,) if pa.role or pb.role else (a, g2)):
+                for slot, (eid, _, _, hp) in enemies(g).items():
+                    hp_seen.setdefault(slot, hp)
+                    if hp > 8:
+                        g.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+                    elif free > FIGHT_FREE:  # the bot can't land the last hit (flying bosses): a scripted
+                        # kill, as the game's hit detection does when HP runs out (design/M12 part 2)
+                        g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+                        flags = g.read("g_Entities", "<I", slot * 0xBC + 0x34)
+                        g.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
         w.step(1, (fight_pad(a, t=t), fight_pad(g2, t=t + 6)))
         fought = 0 if (boss(a) or boss(g2)) else fought + 1
         if fought > 300:
             break
+    run.expect(not splits, "the fight stays shared while both are in its room (D131)", split=splits[:1])
     run.expect(fought > 300, "the boss falls: no fight in either game", hp_first=sorted(hp_seen.values())[-3:],
                boss=[bool(boss(g)) for g in (a, g2)], roles=[g.mailbox("self_presence").role for g in (a, g2)],
                left=[sorted((v[0], v[3]) for v in enemies(g).values())[:6] for g in (a, g2)],
                cs=[g.read("g_CutsceneHasControl") for g in (a, g2)], role_log=role_log)
-    if b["name"] != "Richter":
+    if b["name"] not in ("Richter", "Dracula"):
         w.step(300)
     else:
         # Killing him (not freeing him: the Holy Glasses, Shaft's orb) ends the game: his death
@@ -409,9 +451,12 @@ def boss_flow(run, b, limit=24000):
                     g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
                     if boss(g):
                         back.append("AB"[k])
+            if os.environ.get("BOSS_DEBUG") and w.t % 300 == 0:
+                print(w.t, [(g.read("g_GameState"), g.read("g_CutsceneHasControl"), g.mailbox("self_presence").flags,
+                             g.snapshot()["world_x"], g.snapshot()["stage"]) for g in (a, g2)], flush=True)
             return None not in ended
-        w.until(both_ended, 2400)
-        run.expect(None not in ended, "killing Richter ends the game, in both games (as alone)",
+        w.until(both_ended, 2400 if b["name"] == "Richter" else 6000)  # Dracula's last words: some 4,400 frames
+        run.expect(None not in ended, f"killing {b['name']} ends the game, in both games (as alone)",
                    ended=ended, states=[g.read("g_GameState") for g in (a, g2)])
         run.expect(not back, "he doesn't come back in either game", back=sorted(set(back)))
         run.expect(None not in ended and abs(ended[0] - ended[1]) <= 30, "both endings start together",
@@ -425,13 +470,60 @@ def boss_flow(run, b, limit=24000):
     diff = [i for i in range(0x300) if (flags[0][i] != flags0[0][i] or flags[1][i] != flags0[1][i])
             and flags[0][i] != flags[1][i]]
     run.expect(not diff, "what the fight set in the castle flags is the same in both", diff=diff[:10])
+    if b.get("event"):  # the inverted castle's: its own death sequence records it (in both games: EV_RECORD)
+        k = bossstarts.RECORDS + 4 * bossstarts.EVENTS[b["event"]]
+        w.until(lambda: all(g.read("g_Settings", "<i", k) for g in (a, g2)), 1800)
+        rec = [g.read("g_Settings", "<i", k) for g in (a, g2)]
+        run.expect(all(rec), "the boss is beaten in both games, by the game's own record", records=rec,
+                   hp_first=sorted(hp_seen.values())[-3:], t=t)
+
+
+FIGHT_FREE = 3000  # frames of a fight outside scenes before the scripted kill
+
+
+def boss_alone(run, g, name, limit=12000):
+    """g walks into the boss (its start's row in bossstarts) and fights it alone, kept alive and
+    the boss worn down, the last hit scripted if the bot can't land it (as in boss_flow). Returns
+    when no boss has been in g's room for 300 frames."""
+    from link.mailbox import BOSS
+    import bossstarts
+    b = next(r for r in bossstarts.B if r["name"] == name)
+    pad = (lambda p: (p, "")) if g is run.s.a else (lambda p: ("", p))
+    boss = lambda: g.mailbox("self_presence").flags & BOSS
+    for _ in range(4000):
+        if boss():
+            break
+        run.step(1, p1=pad(b["walk"]))
+    run.expect(boss(), f"{name} is there")
+    event = bossstarts.EVENTS.get(b.get("event")) if b.get("inverted") else None
+    for _ in range(600 if event is not None else 0):
+        if g.read("g_Settings", "<I", VISITED) & (1 << event):
+            break
+        run.step(1, p1=pad(b["walk"]))
+    free = gone = 0
+    for t in range(limit):
+        free += not g.read("g_CutsceneHasControl")
+        if t % 30 == 0:
+            g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            for slot, (_, _, _, hp) in enemies(g).items():
+                if hp > 8:
+                    g.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
+                elif free > FIGHT_FREE:
+                    g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+                    flags = g.read("g_Entities", "<I", slot * 0xBC + 0x34)
+                    g.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
+        run.step(1, p1=pad(fight_pad(g, t=t)))
+        gone = 0 if boss() else gone + 1
+        if gone > 300:
+            return
+    run.expect(False, f"{name} falls", left=sorted(enemies(g).values())[:4])
 
 
 def _boss_test(b):
     name = b["name"].replace(" & ", " and ")
     def test(run):
         boss_flow(run, b)
-    test.__name__ = "m12_boss_" + name.lower().replace(" ", "_")
+    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_")
     test.__doc__ = f"Every boss, together: {b['name']} ({b['area']})."
     start = str(STARTS / f"Boss - {name}.state")
     session_scenario(starts=(start, start))(test)
@@ -483,7 +575,7 @@ def attack_pixels(run, chars, pad, every=30, arm=None, setup=None, samples=(4, 8
 
 
 @session_scenario(characters=(1, 1))  # CHAR_RICHTER twice
-def m12_partner_attack_drawn(run):
+def partner_attack_drawn(run):
     """Note 2 (since M13: the partner's body draws it): A (Richter) whips next to B (Richter), and
     B's screen shows it: A adds more to B's picture mid-whip than standing."""
     idle, whip = attack_pixels(run, (1, 1), "square")
@@ -492,7 +584,7 @@ def m12_partner_attack_drawn(run):
 
 
 @session_scenario()
-def m12_partner_dagger_drawn(run):
+def partner_dagger_drawn(run):
     """Note 2, phase 1b (since M13: the partner's body throws it): A (Alucard) throws daggers next
     to B, and B's screen shows them."""
     def arm(a):
@@ -505,6 +597,7 @@ def m12_partner_dagger_drawn(run):
 
 # --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------
 PAIRINGS = {"rm": (1, 2), "ar": (0, 1)}  # CHAR_* of A and B
+CHAR_NAMES = ("alucard", "richter", "maria")
 
 
 def _boss_pair_test(b, tag, chars):
@@ -517,6 +610,10 @@ def _boss_pair_test(b, tag, chars):
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
         import bossstarts
         from link.mailbox import CMD_ARRIVE
+        from session_progress import arrive
+        if b.get("out"):  # a start in the arena (Dracula's): the save and its load out of it
+            for g in (run.s.a, run.s.b):
+                arrive(run, g, bossstarts.STAGES[b["out"][0]], *b["out"][1:])
         as_characters(run, *chars)
         # the load puts them back at the save's room, not at the boss's door: back to the start's spot
         stage = bossstarts.STAGES[b["stage"]]
@@ -525,10 +622,10 @@ def _boss_pair_test(b, tag, chars):
             g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
         run.step(240)
         boss_flow(run, b)
-    test.__name__ = f"m12_boss_{tag}_" + name.lower().replace(" ", "_")
+    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_") + "_{}_and_{}".format(*(CHAR_NAMES[c] for c in chars))
     test.__doc__ = f"{b['name']} together, as {tag.upper()} (Alucard, Richter, Maria)."
     start = str(STARTS / f"Boss - {name}.state")
-    session_scenario(starts=(start, start), characters=chars)(test)
+    session_scenario(starts=(start, start), characters=chars, full=True)(test)  # the pairings: --full
 
 
 for _b in _bossstarts():
@@ -541,7 +638,7 @@ for _b in _bossstarts():
 def _start_scene_test(name, start, walk):
     def test(run):
         scene_together(run, walk, 3000)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue, from its scene start: {start}."
     path = str(STARTS / f"{start}.state")
     session_scenario(starts=(path, path))(test)
@@ -552,7 +649,7 @@ for _name, (_start, _walk) in START_SCENES.items():
 
 
 @session_scenario(starts=(str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state")))
-def m12_scene_librarian_from_start(run):
+def scene_librarian_from_start(run):
     """The Librarian's first meeting, together: A walks into his room from its right edge (his
     scene starts and steers A in), B is pulled in; both play it, both set MET_LIBRARIAN, and both
     end in his shop. (His scene keeps control while the player is in his shop and near him: leaving
@@ -576,7 +673,7 @@ def m12_scene_librarian_from_start(run):
 
 # --- doors in a shared room (D107) ----------------------------------------------------------
 @session_scenario(starts=("no1", "no1"))
-def m12_guest_opens_red_door(run):
+def guest_opens_red_door(run):
     """D107: in a shared room, the guest opens a red door itself and walks out through it (it
     used to get the authority's closed door, and was walled in until the authority went through).
     The Outer Wall's first room, with a red door at its left edge."""
@@ -645,25 +742,38 @@ def _swing_drawn(run, chars, button, item_index=0):
 
 
 @session_scenario()
-def m12_partner_swing_drawn(run):
+def partner_swing_drawn(run):
     """Note 2, phase 2: Alucard swings a sword next to Alucard."""
     _swing_drawn(run, (0, 0), "square")
 
 
 @session_scenario(characters=(1, 0))
-def m12_partner_swing_drawn_richter(run):
+def partner_swing_drawn_richter(run):
     """Note 2, phase 2: Richter swings his off-hand sword (D105) next to Alucard."""
     _swing_drawn(run, (1, 0), "circle")
 
 
 # --- the first castle, chained (design/M12-v1-release.md criterion 8; D120) -------------------
-@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2)
-def m12_chain_first_castle_long(run):
+@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2, full=True)
+def boss_chain_first_castle_long(run):
     """Both games play the first castle's 12 bosses in route order, carrying what they earn (level,
     experience, gold, items, castle flags) from each fight to the next. Between bosses they travel
     by teleport, picking up that stretch's relics and story flags (the walks themselves are covered
     by the gate and movement tests, D119). At the end every boss is beaten in both games, by the
     game's own records, and the two castles match."""
+    chain(run, lambda r: not r.get("inverted"))
+
+
+@session_scenario(starts=(str(STARTS / "Boss - The Creature.state"),) * 2, full=True)
+def boss_chain_inverted_castle_long(run):
+    """The inverted castle's bosses, chained as the first castle's (boss_chain_first_castle_long),
+    from the Creature to Galamoth (Dracula ends the game: boss_dracula). Each fight must leave
+    its record in both games (boss_flow)."""
+    chain(run, lambda r: r.get("inverted") and r["name"] != "Dracula")
+
+
+def chain(run, which):
+    """The chained playthrough of the boss rows `which` picks (bossstarts.B), in order."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
@@ -672,7 +782,7 @@ def m12_chain_first_castle_long(run):
     a, b = run.s.a, run.s.b
     level0 = [g.read("g_Status", "<i", 0x80097BE8 - 0x80097964) for g in (a, b)]
     beaten, missing = [], set()
-    for boss in bossstarts.B:
+    for boss in [r for r in bossstarts.B if which(r)]:
         for g in (a, b):  # this stretch's pickups and story; what was earned is kept as it is
             for name in boss["relics"]:
                 k = bossstarts.RELICS.index(name)
@@ -688,6 +798,11 @@ def m12_chain_first_castle_long(run):
         for g in (a, b):
             g.mailbox("command", CMD_ARRIVE, bossstarts.STAGES[boss["stage"]], room, x, y)
         run.step(240)
+        if os.environ.get("BOSS_DEBUG"):
+            print("CHAIN", boss["name"], [g.snapshot() for g in (a, b)], flush=True)
+        if os.environ.get("CHAIN_SAVE_AT") == boss["name"]:  # both games here, to start a test from
+            for g, n in ((a, "a"), (b, "b")):
+                g.save_state_file(str(TOOLS["out"] / f"chain_at_{n}.state"))
         boss_flow(run, boss)
         beaten.append(boss["name"])
         records = lambda: [[g.read("g_Settings", "<i", bossstarts.RECORDS + 4 * bossstarts.EVENTS[n.lower()])
@@ -711,3 +826,4 @@ def m12_chain_first_castle_long(run):
                diff=[i for i in range(0x300) if flags[0][i] != flags[1][i]][:10])
     (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
+

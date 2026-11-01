@@ -113,13 +113,13 @@ def _teleport_fuzz(run, count):
     run.expect(a.snapshot()["game_state"] == GAME_PLAY and b.snapshot()["game_state"] == GAME_PLAY, "both still in play")
 
 
-@session_scenario(starts=("entrance", "nz0"))
+@session_scenario(starts=("entrance", "nz0"), full=True)
 def teleport_fuzz(run):
     """60 teleports (the everyday suite: about 2 minutes)."""
     _teleport_fuzz(run, 60)
 
 
-@session_scenario(starts=("entrance", "nz0"))
+@session_scenario(starts=("entrance", "nz0"), full=True)
 def teleport_fuzz_long(run):
     """M3's 200 teleports (run.py --full)."""
     _teleport_fuzz(run, 200)
@@ -302,11 +302,11 @@ def chaos(run, minutes):
     assert_converged(run)
 
 
-@session_scenario()
+@session_scenario(full=True)
 def chaos_short(run):
     chaos(run, 2)
 
 
-@session_scenario()
+@session_scenario(full=True)
 def chaos_10min(run):
     chaos(run, 10)

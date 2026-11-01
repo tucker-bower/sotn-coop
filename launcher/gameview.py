@@ -262,12 +262,13 @@ class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
     def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False):
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
         self.online = len(self.games) == 1
         self.playthrough, self.goal = playthrough, goal
+        self.rush = rush  # bossrush.BossRush: ticked every frame, its line on the status bar
         self.music_mode, self.music = music, None
         self.solo = 0  # couch: play one game's sound while both make the same (see same_sound)
         chance = max(0, min(255, round(aggro * 256 / 100)))
@@ -619,6 +620,8 @@ class GameView:
             self.frame += 1
             if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
+            if self.rush:
+                self.rush.tick()
             if self.frame % 15 == 0:
                 if self.online:
                     self.games[0].mailbox("set_control", self.aggro)  # online: never mute local music (D55)
@@ -636,6 +639,8 @@ class GameView:
                         self.moment(event, where)
                         self.say(f"Savestate: {event} {where}".strip(), 180)
             text = self.notice if self.frame < self.notice_until else status
+            if self.rush and self.frame >= self.notice_until:
+                text = f"{self.rush.text()}  ·  {status}"
             if self.goal and self.frame < 600:
                 text = self.goal[:150]
             if not self.started:  # the game's boot: say so instead of the black (Tucker, 2026-10-26)

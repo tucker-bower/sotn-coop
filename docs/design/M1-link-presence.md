@@ -117,7 +117,7 @@ Approve the loader, the mailbox (A), the module-drawn puppet (A) and the default
 
 All 10 scenarios: `harness/run.py` (the 10-minute soak runs by name: `run.py soak_10min`).
 
-**What changed from the design (all logged in `DECISIONS.md`):**
+**What changed from the design (all logged in `DECISION_LOG.md`):**
 - **The loader is option C, not B (D32).**
   - DRA has **no spare room**: its code and BSS end exactly where its fixed-address data block begins (`0x8013B6A0`). So the hooks can't add code. Each hook retargets an existing call instead, which is size-neutral (D33).
   - Making `DRA.BIN` bigger than its last CD sector **shifts every later file on the disc**. The FMVs are then read from their old sector positions and boot hangs.

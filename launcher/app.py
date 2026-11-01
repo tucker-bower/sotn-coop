@@ -462,6 +462,11 @@ class Launcher:
         self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
+        try:  # the test castles that ship with the app, when they changed (playtesters: D136)
+            from archive import Castle
+            Castle.install_bundled()
+        except Exception:  # noqa: BLE001 - the game works without them
+            log.exception("test castles")
         try:
             from gameview import Audio
             self.audio = Audio()
@@ -966,11 +971,16 @@ class Launcher:
             items = [("New castle", "A new game, in a castle of its own")] + [(c.name, c.summary()) for c in castles]
             if tests:
                 items.append(("Test castles", "Outside each boss and before each story scene, with a typical player's progress"))
+            rush = self.boss_rush_available()
+            if rush:
+                items.append(("Boss rush", "All 22 bosses back to back, each with a typical player's progress, timed"))
             k = self.ui.menu(heading, items, subtitle)
             if k is None:
                 return None
             if 0 < k <= len(castles):
                 return castles[k - 1], False
+            if rush and k == len(items) - 1:
+                return self.new_boss_rush(), False
             picked = self.new_castle() if k == 0 else self.pick_test_castle()
             if picked:
                 return picked
@@ -991,6 +1001,23 @@ class Launcher:
         k = self.ui.menu("Test castles", [(t.info["name"], t.info.get("about") or t.summary()) for t in tests],
                          "Each starts outside its boss or scene, until you save. You play a copy: these stay as they are.")
         return None if k is None else (tests[k].fresh_copy(), False)
+
+    def boss_rush_available(self):
+        import bossrush
+        return (bossrush.BUNDLE / "index.json").exists()
+
+    def new_boss_rush(self):
+        """A boss rush (docs/design/boss-rush.md): a castle whose save is the first boss's test
+        castle; the run (which boss, the time) is kept in it, so Continue goes on from there."""
+        import bossrush
+        from archive import Castle
+        from link.jointsave import write_session
+        save, start = bossrush.first_save()
+        c = Castle.new(name="Boss rush")
+        write_session(c.joint_save, [save])
+        c.info.update(start=list(start), rush={"index": 0, "frames": 0, "splits": []}, where="Boss rush")
+        c.save_info()
+        return c
 
     def new_castle(self):
         """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
@@ -1065,11 +1092,24 @@ class Launcher:
             cards = (playthrough.card("A"),) if playthrough else None
         else:
             cards = (playthrough.card("A"), playthrough.card("B")) if playthrough else None
+        rush = None
+        if playthrough is not None and getattr(playthrough, "info", {}).get("rush") is not None and s.joint:
+            import bossrush
+            info = playthrough.info
+
+            def changed():  # the run, kept in the castle: Continue goes on from this boss
+                if rush.joint.start:
+                    info["start"] = list(rush.joint.start)
+                else:  # Richter, Dracula: their save is in their room (bossrush.load)
+                    info.pop("start", None)
+                playthrough.save_info()
+            rush = bossrush.BossRush(s.joint, s.games, info["rush"], changed)
+            goal = goal or f"Boss rush: {len(rush.rows)} bosses. Beat one and you're both at the next."
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
                         profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
                         partner_vol=self.settings.get("partner_vol", 60),
-                        pvp=bool(self.settings.get("pvp")) if pvp is None else pvp)
+                        pvp=bool(self.settings.get("pvp")) if pvp is None else pvp, rush=rush)
         result = view.run()
         if result == "quit":
             raise SystemExit

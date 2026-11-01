@@ -203,7 +203,7 @@ def shared_soak_short(run):
     shared_soak(run, 2)
 
 
-@session_scenario()
+@session_scenario(full=True)
 def shared_soak_10min(run):
     shared_soak(run, 10)
 

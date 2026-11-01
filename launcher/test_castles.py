@@ -144,6 +144,28 @@ def main():
     got = read_session(path)
     check(got[0][-1] == 3 and got[1] == low, "a solo save writes slot 1 and keeps slot 2")
 
+    # The test castles the app ships (D136): installed once, again only when the bundle changes,
+    # each a template listed with the test castles, none with the castles; no game graphics.
+    import json
+    from archive import TESTS, Castle
+    bundle = HERE / "assets" / "test-castles"
+    index = json.loads((bundle / "index.json").read_text())
+    import bossstarts
+    want = {f"Boss: {b['name']}" for b in bossstarts.B} | {f"Scene: {b['name']}" for b in bossstarts.S}
+    check(set(index["castles"]) == want, f"the bundle has a test castle per boss and scene start ({len(want)})")
+    check(all((bundle / v["save"]).read_bytes()[:0x200] == bytes(0x200) for v in index["castles"].values()),
+          "every bundled save's memory card header (the game's icon) is blank")
+    with tempfile.TemporaryDirectory() as d, pc(d):
+        n = Castle.install_bundled()
+        tests = Castle.tests()
+        check(n == len(want) and len(tests) == n and not Castle.all(), "installed: all listed as test castles only")
+        check(Castle.install_bundled() == 0 and len(Castle.tests()) == n, "a second start installs nothing")
+        from paths import castles_dir
+        (castles_dir() / TESTS / "bundle.txt").write_text("old\n")
+        check(Castle.install_bundled() == n and len(Castle.tests()) == n, "a changed bundle replaces them (no doubles)")
+        c = tests[0].fresh_copy()
+        check(c.info["start"] == tests[0].info["start"] and len(Castle.all()) == 1, "playing one plays a fresh copy")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 

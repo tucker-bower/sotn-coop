@@ -169,7 +169,7 @@ typedef struct {
 #define EV_TAKEN 12  // a: slot | entityId << 8: the guest collected that drop; remove it, no reward
 #define EV_EXP 13    // b: XP this game gained from a kill (one shared level, design/M11)
 #define EV_USED 14   // a: item id: used up here (M13's fairy revive: the Life Apple), gone in the shared bag too
-#define EV_KILLED 15  // a: enemy definition: this game's boss died (Richter: no castle flag records it), the partner's dies too; b 1: and this game entered the ending
+#define EV_KILLED 15  // a: enemy definition: this game's final boss died (Richter, Dracula: no castle flag records it), the partner's dies too; b 1 | ending << 8: and this game entered that ending
 #define EV_SPAWN3 10 // a: slot range (0: 160-191, 1: 224-255) | velocityY >> 14 << 8, b: castleFlag
 
 typedef struct {

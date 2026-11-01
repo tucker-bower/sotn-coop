@@ -3,8 +3,8 @@ movement envelope against Alucard's, at each step of the relic progression.
 
 If, with the same relics, a character jumps at least as high and as far as Alucard, every room
 Alucard can cross with those relics, they can cross too. The rest of a room's gates have their own
-per-character tests: mist grates (m8b_mist_step), low gaps (the slide, m8b_more_gates), poison water
-(m8b_poison_water), blue doors and the ferryman (they read only the relic). Measured at the castle
+per-character tests: mist grates (mist_step), low gaps (the slide, relic_gates_more), poison water
+(poison_water), blue doors and the ferryman (they read only the relic). Measured at the castle
 entrance's start, open to about 195 px above the player. Report: .env/out/<test>/relics.json."""
 
 from link.mailbox import CHAR_MARIA, CHAR_RICHTER
@@ -21,7 +21,7 @@ KNOWN = {"richter": set(), "maria": set()}  # D122's extra jumps closed the two 
 JUMP = ["cross"] * 16 + [""] * 60
 HIGH = ["down"] * 3 + [""] * 2 + ["up"] * 2 + ["up+cross"] * 2 + [""] * 60
 RUN_JUMP = ["right"] * 20 + ["right+cross"] * 16 + ["right"] * 60
-# Each character's own ways to use a step (scenarios_m8.m8b_more_gates for Richter's and Maria's):
+# Each character's own ways to use a step (scenarios_m8.relic_gates_more for Richter's and Maria's):
 # a step's distance is the best of them.
 SECOND = {0: [["cross"] * 16 + [""] * 2 + ["cross"] * 12 + [""] * 60],
           CHAR_RICHTER: [["cross"] * 2 + [""] * 2 + ["cross"] * 2 + [""] * 60,      # his backflip
@@ -86,7 +86,7 @@ def _test(ch, name):
         fixed = [r["step"] for r in rows if r["ok"] and r["step"] in KNOWN[name]]
         run.expect(not fixed, "a known gap is closed: take it off KNOWN", fixed=fixed)
         run.expect(not bad, f"{name.capitalize()} reaches as high and as far as Alucard at every relic step", bad=bad)
-    test.__name__ = f"m12_envelope_{name}"
+    test.__name__ = f"movement_envelope_{name}"
     test.__doc__ = __doc__.split("\n\n")[0]
     scenario(start="entrance", disc=COOP_DISC)(test)
 

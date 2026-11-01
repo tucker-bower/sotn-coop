@@ -1,7 +1,5 @@
 # The co-op link protocol (wire version 10, mailbox version 12)
 
-**Not yet described here:** the M12–M13 traffic (`SPRT`, `PRIM`, the hand weapons', familiar's and status copies over `CTRL`) and their mailbox fields; `link/host.py` and `module/link.h` have them.
-
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
 - **The game side:** `module/link.h`, which defines the layout.
@@ -42,8 +40,10 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `SNPC` | `snap_id` (u32, 1, 2, 3…), `base_id` (u32, 0 = none), `chunk_idx` (u8), `chunk_cnt` (u8), then a ≤ 1150-byte chunk of the compressed snapshot | A shared-room snapshot (up to 0xF000 bytes, opaque to hosts) in chunks. Best effort: a snapshot is complete when all `chunk_cnt` chunks of one `snap_id` are in; ignore ids at or below the newest complete one. |
 | `EVTS` | `first` (u32, the first record's number), then N × 8-byte events | Reliable (below). At most 128 events per datagram. |
 | `ACK ` | `delivered` (u32): the highest event number received in order | Reliable (below). |
-| `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control/save messages (`save_req`, `save_done`, `load_save`, `game_over`). |
+| `CTRL` | `seq` (u32), `last` (u8), `pad` (u8), `len` (u16), then a ≤ 1000-byte chunk of `zlib.compress(json)` | Reliable online control messages, keyed by `op`: joint saves (`save_req`, `save_done`, `load_save`, `game_over`) and the partner's copies (`weapon`, `familiar`, `status`, below). |
 | `CACK` | `delivered` (u32): the highest `CTRL` chunk number received in order | Reliable ack for `CTRL`. |
+| `SPRT` | the sender's own attack sprites: N × 20-byte `CoopSprite` (below), N ≤ 24 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerSprites` (M12). |
+| `PRIM` | `zlib` of N × 0x30-byte primitives (the sender's attack primitives, below), N ≤ 32 | As `SPRT`. The receiver writes them, decompressed, to `partnerPrims` (M12). |
 | `HITS` | the sender's player's attack hitboxes: N × 12-byte `CoopHit` (below), N ≤ 16 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerHits` (M15). |
 | `HELO` | UTF-8 JSON: `{"link": 10, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "pvp": <the host's PvP setting, online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
@@ -130,8 +130,28 @@ Hosts don't interpret events: they move them between rings.
 | 0x3438 | `snapOutSeq`, `snapOutSize`, `snapOut` (0xF000) | game |
 | 0x12440 | `snapInSeq`, `snapInSize`, `snapIn` (0xF000) | host |
 | 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP | launcher |
+| 0x2144C | `character`: the CHAR_* this game's player plays, from its next load (M8) | launcher |
+| 0x21450 | `options`: OPT_* bits, the player's own settings (1 one-button moves, 2 the partner's body; bits 8–23 the spell on each right-stick direction) | launcher |
+| 0x21454 | `padExtra`: buttons a PlayStation pad lacks (right stick: 1 up, 2 right, 4 down, 8 left), every frame | launcher |
+| 0x21458 | `selfSpriteCount` (u32), `selfSprites` (24 × `CoopSprite`) | game |
+| 0x2163C | `partnerSpriteCount` (u32), `partnerSprites` (24 × `CoopSprite`) | host |
+| 0x21820 | `selfPrimCount` (u32), `selfPrims` (32 × 0x30) | game |
+| 0x21E24 | `partnerPrimCount` (u32), `partnerPrims` (32 × 0x30) | host |
+| 0x22428 | `selfPad`: this player's buttons this frame | game |
+| 0x2242C | `partnerPad`: the partner's buttons, written with each presence (the partner's body runs on them, M13) | host |
 | 0x22430 | `selfHitCount` (u32), `selfHits` (16 × `CoopHit`) | game |
 | 0x224F4 | `partnerHitCount` (u32), `partnerHits` (16 × `CoopHit`): the game uses each list for one frame, then zeroes the count | host |
+
+**The partner's copies (CTRL, M12–M13):** each is JSON `{"op": …, "data": base64(zlib(blob))}`, sent when the sender's copy changes. The receiver writes the blob, magic last, to the partner's address in expansion RAM.
+- `weapon` (plus `"hand"`: 0 or 1): the `CoopWeapon` (0x7320 bytes: magic `'WPNS'`, seq, item, then the hand's overlay, 256×128 tile sheet and 24 palettes) from `0x80710000 + hand × 0x8000`, to `0x80720000 + hand × 0x8000`. Sent when its seq changes (the game copies a weapon when it loads). The partner draws the swing from it (`weapons.c`).
+- `familiar`: the `CoopFamiliar` (0x10420 bytes: magic `'FAML'`, seq, servant, sprite bank, then its overlay, tile sheet and palettes 0x140–0x15F) from `0x807C0000`, to `0x807E0000` (`familiar.c`).
+- `status`: the sender's `g_Status` from `hp` (0x48 bytes) and from `subWeapon` (0x34 bytes), at most every 10 frames and only when changed, to a `CoopStatus` (magic `'STAT'`) at `0x80730000`. The partner's body runs with these stats, level and equipment (`partner.c`).
+
+**`CoopSprite` (20 bytes, M12):** `animSet` (s16), `animCurFrame` (u16), `x`, `y` (s16, in the room), `palette` (u16), `facingLeft`, `blendMode` (u8), `zPriority`, `drawFlags`, `unk5A` (u16), `weapon` (u16: `0x100 | hand` for a hand weapon's sprite, whose `animSet` is then its bank, 0x10–0x13; else 0).
+
+**Primitives (0x30 bytes each, M12):** a `Primitive` as the game keeps it, with its `next` pointer left out and positions in the room. Byte 0x27 (a pad byte) is `0xFA` for a familiar's primitive (M13).
+
+**Presence `flipX`, high bits (M13):** bit 7, this player just came in by teleport (a revive): the partner's copy plays its character's teleport-in; bit 6, this player's one-button moves are on.
 
 **`CoopHit` (12 bytes, M15):** `x`, `y` (s16: the hitbox's centre in the room, in pixels), `w`, `h` (u8: half its width and height), `hitboxState` (u8), `facingLeft` (u8), `attack` (s16), `element` (u16).
 

@@ -56,12 +56,13 @@ static const u16 s_Bosses[] = {
     370, // The Creature
     372, // Doppleganger40
     379, // Dracula (final)
-    386, // Minotaur (inverted castle)
-    389, // Werewolf (inverted castle)
 };
+// 386 and 389, the inverted Colosseum's Minotaur and Werewolf, are its ordinary enemies (320 and
+// 280 HP, item drops), not bosses: they were listed, and meeting one pulled the partner in.
 
 static s16 s_BaseHp[LEN(s_Bosses)]; // the table's own values, read once
 static bool s_HpRead, s_HpDoubled;
+static bool s_HpInverted; // the castle the HP were last set for (OrdinaryHere)
 static bool s_BossHere; // a living boss is in this room
 
 // Aggro, per stage slot: the wrapped update, the target, when it was picked
@@ -72,25 +73,42 @@ static u32 s_Seed = 0x2545F491; // own generator: the game's rand() must stay un
 static u16 s_Frame;
 static u16 s_Switches; // target switches so far (presence.aggroSwitches: tests)
 
-// Richter (BO6) falls for both, like every boss. Killing him ends the game (his death scene, then
-// the ending) and no castle flag records it, so the partner's game would bring him back at full
-// HP. The game whose Richter dies says so (EV_KILLED, b 0). From then until the game leaves play,
-// he's gone in both:
-// - A Richter in this game's own world (a guest's copy is the authority's) is killed as its hit
-//   detection would: its own death scene plays, started within a few frames of the partner's.
+// Richter (BO6) and Dracula (RBO6) fall for both, like every boss. Killing either ends the game
+// (a death scene, then the ending) and no castle flag records it, so the partner's game would
+// bring him back at full HP. The game whose final boss dies says so (EV_KILLED, b 0). From then
+// until the game leaves play, he's gone in both:
+// - The same boss in this game's own world (a guest's copy is the authority's) is killed as its
+//   hit detection would: its own death scene plays, started within a few frames of the partner's.
 // - No pulls, no scene holds and no respawn at the partner (arrive.c): an arrival reloads his room,
-//   and the game got a fresh Richter and his intro (killing him in it doesn't take).
-// - The first game to reach the ending says so (EV_KILLED, b 1) and the other follows at once:
-//   also one that can't play the scene itself (dead, elsewhere, a guest's copy when the room split).
+//   and the game got a fresh boss and his intro (killing him in it doesn't take). Dracula's death
+//   scene pulled the partner in this way, and his intro played again (the inverted castle's tests).
+// - The first game to reach the ending says so (EV_KILLED, b 1 | the ending << 8) and the other
+//   follows at once into the same ending: also one that can't play the scene itself (dead,
+//   elsewhere, a guest's copy when the room split).
 #define ENEMY_RICHTER 307
-static bool s_RicGone;   // Richter died, here or in the partner's game
+#define ENEMY_DRACULA 379
+static u16 s_FinalGone;  // the final boss that died (Richter or Dracula), here or in the partner's game
 static bool s_EndSaid;   // this game's ending is told
 static bool s_FollowEnd; // the partner's game entered the ending: ours does too
+static u8 s_Ending;      // the partner's ending (D_800978B4), 0: not told
 u32 g_CoopRichterState;  // gone | follow << 1 | told << 2 (tests read it: coop.map)
+
+static bool IsFinalBoss(u16 enemyId) { return enemyId == ENEMY_RICHTER || enemyId == ENEMY_DRACULA; }
+
+// First-castle bosses that come back in the inverted castle as ordinary enemies, with the same
+// enemy definition: the Lesser Demon (RNZ0), Slogra and Gaibon (RCHI), Karasuman (RNO2). There,
+// no boss rules (no pull-in, no 2x HP) for them.
+static bool OrdinaryHere(u16 enemyId) {
+    return (g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
+           (enemyId == 23 || enemyId == 243 || enemyId == 254 || enemyId == 280);
+}
 
 bool IsBossEnemy(u16 enemyId) {
     s32 i;
 
+    if (OrdinaryHere(enemyId)) {
+        return false;
+    }
     for (i = 0; i < LEN(s_Bosses); i++) {
         if (s_Bosses[i] == enemyId) {
             return true;
@@ -120,6 +138,7 @@ static bool PartnerFighting(void) {
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
     bool want = g_CoopLink.partnerAge < 600; // a partner's game has been heard from (10 s)
+    bool inverted;
     s32 i, hp;
 
     if (!defs) {
@@ -131,14 +150,16 @@ static void UpdateHp(void) {
         }
         s_HpRead = true;
     }
-    if (want == s_HpDoubled || s_BossHere) { // never mid-fight
+    inverted = (g_StageId & STAGE_INVERTEDCASTLE_FLAG) != 0;
+    if ((want == s_HpDoubled && inverted == s_HpInverted) || s_BossHere) { // never mid-fight
         return;
     }
     for (i = 0; i < LEN(s_Bosses); i++) {
-        hp = s_BaseHp[i] * (want ? 2 : 1);
+        hp = s_BaseHp[i] * (want && IsBossEnemy(s_Bosses[i]) ? 2 : 1);
         defs[s_Bosses[i]].hitPoints = hp > HP_MAX ? HP_MAX : hp;
     }
     s_HpDoubled = want;
+    s_HpInverted = inverted;
 }
 
 // --- aggro (D47)
@@ -214,39 +235,43 @@ PfnEntityUpdate BossRealUpdate(const Entity* e) {
     return e->pfnUpdate;
 }
 
-static void RichterFalls(Entity* e) {
+static void FinalBossFalls(Entity* e) {
     bool dead = e->hitPoints <= 0 || (e->flags & FLAG_DEAD);
 
-    if (!dead && s_RicGone) {
+    if (!dead && s_FinalGone == e->enemyId) {
         e->hitPoints = 0;
         e->flags |= FLAG_DEAD;
-    } else if (dead && !s_RicGone) {
-        s_RicGone = true;
-        ProgressEmit(EV_KILLED, ENEMY_RICHTER, 0);
+    } else if (dead && !s_FinalGone) {
+        s_FinalGone = e->enemyId;
+        ProgressEmit(EV_KILLED, e->enemyId, 0);
     }
 }
 
 void BossKilled(u16 enemyId, u32 ending) {
-    if (enemyId != ENEMY_RICHTER || g_GameState != Game_Play) {
+    if (!IsFinalBoss(enemyId) || g_GameState != Game_Play) {
         return;
     }
-    s_RicGone = true;
-    s_FollowEnd |= ending != 0;
+    s_FinalGone = enemyId;
+    if (ending & 1) {
+        s_FollowEnd = true;
+        s_Ending = ending >> 8; // 0 from a build before Dracula's: Richter's, below
+    }
 }
 
-// The ending Richter's death scene starts (BO6's func_us_801A9208): which one by the castle flag.
+// The ending the death scene starts: the partner's, else Richter's (BO6's func_us_801A9208)
+// by the castle flag.
 static void FollowEnding(void) {
     if (g_GameStep != Play_Default) {
         return; // not mid-load
     }
     g_PauseAllowed = true;
     g_unkGraphicsStruct.pauseEnemies = false;
-    D_800978B4 = g_CastleFlags[0xD8] ? 2 : 1;
+    D_800978B4 = s_Ending ? s_Ending : g_CastleFlags[0xD8] ? 2 : 1;
     g_GameState = Game_Ending;
     g_GameStep = Play_Reset;
 }
 
-bool BossRichterGone(void) { return s_RicGone; }
+bool BossFinalGone(void) { return s_FinalGone != 0; }
 
 static void ScanBosses(void) {
     Entity* e;
@@ -259,8 +284,8 @@ static void ScanBosses(void) {
         if (!e->entityId || !e->pfnUpdate || !IsBossEnemy(e->enemyId)) {
             continue;
         }
-        if (e->enemyId == ENEMY_RICHTER && wrap) {
-            RichterFalls(e);
+        if (IsFinalBoss(e->enemyId) && wrap) {
+            FinalBossFalls(e);
         }
         if (e->hitPoints > 0 && !(e->flags & FLAG_DEAD)) {
             here = true;
@@ -280,18 +305,20 @@ static void ScanBosses(void) {
 void BossUpdate(void) {
     s_Frame++;
     if (g_GameState == Game_Ending) {
-        if (s_RicGone && !s_EndSaid) {
-            ProgressEmit(EV_KILLED, ENEMY_RICHTER, 1);
+        if (s_FinalGone && !s_EndSaid) {
+            ProgressEmit(EV_KILLED, s_FinalGone, 1 | D_800978B4 << 8);
         }
         s_EndSaid = true;
     }
     if (g_GameState != Game_Play) { // the ending, the title, a reload: a new game
-        s_RicGone = s_FollowEnd = false;
+        s_FinalGone = 0;
+        s_FollowEnd = false;
+        s_Ending = 0;
         s_EndSaid &= g_GameState == Game_Ending;
     } else if (s_FollowEnd) {
         FollowEnding();
     }
-    g_CoopRichterState = s_RicGone | s_FollowEnd << 1 | s_EndSaid << 2;
+    g_CoopRichterState = (s_FinalGone != 0) | s_FollowEnd << 1 | s_EndSaid << 2;
     if (g_GameState != Game_Play || g_GameStep != Play_Default) {
         s_BossHere = false;
         return;

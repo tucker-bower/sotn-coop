@@ -1,7 +1,7 @@
 """M12 v1.0 coverage (design/M12-v1-release.md criterion 1): relics, per character.
 
-Richter's and Maria's relic-gated moves are M8b's (`m8b_relic_gates`, `m8b_more_gates`,
-`m8b_mist_step`, `m8b_poison_water`). Here: Alucard's own relics (his forms and their upgrades),
+Richter's and Maria's relic-gated moves are M8b's (`relic_gates`, `relic_gates_more`,
+`mist_step`, `poison_water`). Here: Alucard's own relics (his forms and their upgrades),
 the Vlad relics for everyone, and every familiar card for everyone. Each relic is measured without
 it and with it, from the same savestate; a report per test lands in .env/out/<test>/relics.json."""
 
@@ -120,7 +120,7 @@ def measure_rows(run, start, rows):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m12_relics_alucard(run):
+def relics_alucard(run):
     """Alucard's own relics: each form and each of its upgrades does nothing without its relic and
     works with it (the game's own code; a regression check for everything the module hooks)."""
     e, mb = run.emu, mailbox(run)
@@ -146,7 +146,7 @@ def per_character(fn):
 
 
 @per_character
-def m12_vlad_relics(run, ch):
+def vlad_relics(run, ch):
     """Dracula's relics, for every character: +10 to a stat each (Tooth STR, Rib CON, Ring INT, Eye
     LCK), and the Heart makes the player immune to curses."""
     e, mb = run.emu, mailbox(run)
@@ -174,7 +174,7 @@ def m12_vlad_relics(run, ch):
 
 
 @per_character
-def m12_familiars(run, ch):
+def familiars(run, ch):
     """Every familiar card, for every character (M8b §3 tested the bat and the ghost): with the card
     on and a load, the familiar is loaded, comes out, and the player still plays."""
     e, mb = run.emu, mailbox(run)
@@ -247,7 +247,7 @@ def subweapon_sweep(run, ch, inputs, relics=()):
 
 
 @per_character
-def m12_subweapons(run, ch):
+def subweapons(run, ch):
     """Every subweapon the castle has (1-9), thrown by every character (up + attack): it costs
     hearts, makes its entities, and the game plays on. For Maria, each is picked up while she holds
     the cat: four become a guardian, the rest leave her the cat (MARIA_GUARDIAN, D118)."""
@@ -267,6 +267,6 @@ def _crashes(run, ch):
 for _ch in (CHAR_RICHTER, CHAR_MARIA):
     def _one(run, ch=_ch):
         return _crashes(run, ch)
-    _one.__name__ = f"m12_crashes_{NAMES[_ch]}"
+    _one.__name__ = f"crashes_{NAMES[_ch]}"
     _one.__doc__ = _crashes.__doc__
     scenario(start="entrance", disc=COOP_DISC)(_one)

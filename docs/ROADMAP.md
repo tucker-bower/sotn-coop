@@ -1,11 +1,11 @@
 # Roadmap
 
-**Final goal (D19):** two players explore the castle **independently**, each on their own screen, with **shared progression**. They meet up to fight the same enemies, beat bosses together, and watch cutscenes together. It should still be fun after tens of hours and on repeat playthroughs, including co-op speedruns.
+**Final goal (D19):** two players explore the castle **independently** over couch co-op or online with android-pc-linux-mac crossplay capabilities, each on their own screen, with **shared progression**. Boss fights and cutscenes are sync'ed and experienced together. 
 
 **Architecture (D20):** each player runs their own copy of the game in an emulator. A **co-op link** connects them: an in-game module plus a host program per player. It shares progression, presence, teleports, and the state of any room both players are in. The details are in `research.md` → "Independent exploration".
 
-**Month target (by 2026-11-18, Claude Pro):** a playable "explore together" build, M1–M6. This scope is much bigger than the old "P2 Lite" plan.
 - **M4 (shared rooms) is the main risk.** The checkpoints are after M2 and after M4. At each one we decide on scope cuts, or a plan upgrade if needed.
+
 - **Post-month:** Richter and Maria (mixed-character rules), full inverted-castle coverage, speedrun features. Then online PC co-op and the Android port of the launcher (D36).
 
 ## Budget model

@@ -1,6 +1,6 @@
 # AGENTS.md: working on SOTN Co-op
 
-These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything. The project goal changed on 2026-10-18 to independent exploration with one game per player (`docs/DECISIONS.md` D19–D31). Then run `scripts/doctor.py`: it checks the toolchain, discs and build. Every path (discs, emulators, savestates) is in `env.example.toml` / `env.toml`, and setup is in `SETUP.md`.
+These instructions are for any AI coding agent working in `mods/co-op/`. Read this file, then `docs/STATUS.md`, before doing anything. The project goal changed on 2026-10-18 to independent exploration with one game per player (`docs/DECISION_LOG.md` D19–D31). Then run `scripts/doctor.py`: it checks the toolchain, discs and build. Every path (discs, emulators, savestates) is in `env.example.toml` / `env.toml`, and setup is in `SETUP.md`.
 
 ## Roles
 - **Tucker (owner):** owns architecture, design, scope and game feel, and approves milestone designs and PRs. He is an experienced engineer, but his time is the scarcest resource on this project. Optimize for minimal owner time, not minimal agent effort.
@@ -13,7 +13,7 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 4. **Playtest** at milestones: deliver a patched disc image and short testing instructions.
 
 ## Decisions
-- **Reversible decision:** pick a sensible default, log it in `docs/DECISIONS.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
+- **Reversible decision:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
 - **Expensive to reverse, or changes game feel / scope:** stop, write up the options in `docs/STATUS.md` under "Decisions needed", and work on something else that isn't blocked.
 - Batch questions. Never send Tucker one question at a time.
 
@@ -24,7 +24,7 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 - Report problems early, especially anything that changes what Tucker will get or what it costs.
 
 ## Engineering rules
-- **Never end a session with unsaved work.** Before you could run out of tokens or usage (a long task, a usage warning, a big context), document what you did (the design doc, `docs/STATUS.md`, `docs/DECISIONS.md`), then commit and push it, even if it's unfinished. Mark unfinished work as such. Do this at every natural checkpoint, not only at the end: work that exists only in the working tree is lost the moment a session is cut off.
+- **Never end a session with unsaved work.** Before you could run out of tokens or usage (a long task, a usage warning, a big context), document what you did (the design doc, `docs/STATUS.md`, `docs/DECISION_LOG.md`), then commit and push it, even if it's unfinished. Mark unfinished work as such. Do this at every natural checkpoint, not only at the end: work that exists only in the working tree is lost the moment a session is cut off.
 - **Never commit game data.** That covers disc images, extracted files, ROM-derived assets and savestates containing game RAM. Check `git status` before every commit.
 - **Keep each instance deterministic.** No uninitialized reads, and no timing- or emulator-dependent behavior inside the game. Harness reproducibility depends on it, and so may shared rooms (D23). Timing-dependent behavior belongs in the host, never in the game.
 - **Emulator-specific code stays in the adapter.** The product emulator isn't chosen yet (R1, D28). Anything that talks to an emulator (RAM read/write, frame callback, input) goes through one thin adapter.
@@ -38,8 +38,12 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 - **Primary:** a headless, frame-stepped harness with savestates, scripted and bot inputs, and RAM assertions.
 - **Multi-instance session tests:** run two game instances plus the host yourself, with scripted inputs on both and assertions across both games. Co-op features count as working only when a session test proves it. Don't wait for Tucker to run a two-player check.
 - **Secondary:** emulators on Tucker's PC at `C:\Users\tucke\OneDrive\Desktop\Emulators`. Install anything needed there and use it for cross-emulator compatibility checks. Ask before installing anything outside that folder.
-- **Everyday:** `harness/run.py` (parallel, about 8 minutes; D108).
-- **Before any playtest build:** `harness/run.py --full` (adds the long soaks and fuzz), boot-and-run checks on the dev platform, plus PCSX-Redux, and on the product emulator once R1 has chosen it.
+- **One runner, three tiers (Tucker, 2026-10-31; D138).** Every test (harness scenarios, launcher checks, UI flows, the patcher) runs through `harness/run.py`, side by side, each in its own process. Pick the smallest tier that covers the change; CI/CD velocity matters.
+  1. **A small change: a handful of relevant tests only.** Name them, or use `-k WORD` (every test whose name has WORD in it), e.g. `run.py -k pvp`, `run.py -k boss_rush ui_boss_rush`. `run.py --list -k WORD` shows what would run. Don't run a whole suite for a small change.
+  2. **Everyday suite** (`run.py`, about 10 minutes on 16 cores): before committing a major change and before opening or updating a PR.
+  3. **Full suite** (`run.py --full`: everyday plus the soaks, fuzz, boss chains and every character pairing): only before a release (any build handed to players, playtest betas included), with the boot checks on the dev platform, PCSX-Redux, and the product emulator once R1 has chosen it. Never as a routine check.
+- **Clear names.** A test's name says what it checks, with no milestone prefix: `<feature>_<what>` and, for character pairings, `_<A>_and_<B>` (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`, `pvp_hand_alucard_vs_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True` in the decorator). Keep the everyday suite at 10 minutes or less: when it grows past that, move repetition to `--full`.
+- After a module change, rebuild the fixtures (`scripts/rebuild_fixtures.sh`) before running any test that loads a savestate.
 
 ## PR template
 ```

@@ -132,14 +132,41 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 - Human playtests
 
 ## Docs
+- [`docs/TECHNICAL_SUMMARY.md`](docs/TECHNICAL_SUMMARY.md): how it all works, for anyone building on it
 - [`AGENTS.md`](AGENTS.md): how AI agents work on this project
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): milestones and acceptance criteria
 - [`docs/STATUS.md`](docs/STATUS.md): current state, budget, and decisions needed
-- [`docs/DECISIONS.md`](docs/DECISIONS.md): decision log
+- [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md): decision log
 - [`docs/research.md`](docs/research.md): notes from the codebase, wiki and Discord
 
 ## Building
 See [`SETUP.md`](SETUP.md): `scripts/bootstrap.sh` sets up a machine, `scripts/doctor.py` checks it, `scripts/build_disc.sh` builds the co-op disc, and `scripts/release.py` builds the installer and a draft GitHub release.
+
+## Credits and thanks
+SOTN Co-op stands on other people's work. Thank you to all of them.
+
+**Foundations: what the mod is built from**
+- **[sotn-decomp](https://github.com/Xeeynamo/sotn-decomp)**, by Xeeynamo and its contributors. The matching decompilation of *Symphony of the Night* is what made a mod of this depth possible: named symbols, the game's own headers, its build toolchain and asset tools. The co-op module is compiled against it. The decomp community's Discord answered our first questions: 8 MB RAM mode, hooking DRA, how enemies see the player.
+- **The Maria mod** (`mariapsp-forpsx`, in sotn-decomp's `mods/`), by its authors in the decomp community. It ports *Dracula X Chronicles*' Maria to the PS1 and is our Maria's base. It also set the precedent we follow: build from the player's own discs, and never distribute game data.
+- **[SwanStation](https://github.com/libretro/swanstation)**, the libretro PlayStation core, and **[DuckStation](https://github.com/stenzek/duckstation)** by Stenzek, which it's forked from. Every game in SOTN Co-op runs in it: on the couch two cores at once, online one per player. Its 8 MB RAM support and accuracy are what the module lives in.
+- **[PCSX-Redux](https://github.com/grumpycoders/pcsx-redux)** by the Grumpycoders. Its **OpenBIOS** ships in every release, so nobody needs a BIOS dump. The emulator itself is our cross-check, and its Lua scripting lets us run the module headless.
+- **[libretro.py](https://github.com/JesseTG/libretro.py)** by Jesse Talavera. It drives the core from Python, and the test harness and the launcher are built on it.
+- **[libretro](https://www.libretro.com/)**: the core API that lets one frontend host the emulator.
+- **[splat](https://github.com/ethteck/splat)** by Ethan Roseman, the decomp's binary splitter, which also splits Maria's PSP overlay.
+- **[sotn-player-mmx](https://github.com/Xeeynamo/sotn-player-mmx)** by Xeeynamo: a custom player character, and our reference for injecting palettes (the partner's tint).
+
+**Inspiration: what shaped the design**
+- **[sotn-online-coop](https://github.com/jweyden/sotn-online-coop)** by jweyden: an online co-op mod with the same goal, built on a recompilation of the game. Reading it gave us the partner as a real second player in your game (our M13), PvP decided by the victim's game (M15), fairy revives and per-character respawn effects, more players (M17), and the Saturn characters (M16, on their AGPL ports). It also confirmed our shared-room design: the first player in runs the room.
+- **[Slippi](https://slippi.gg)** (Melee online), by Fizzi and the Slippi team. Its launcher set our bar: point it at your disc once, then one button, short codes to play online. Its netplay showed that direct connections, plus clear advice when they fail, are enough, without running servers (D123).
+- **Ocarina of Time Online**, by the [Hylian Modding](https://github.com/hylian-modding) team on ModLoader64, and the **[Ocarina of Time decompilation](https://github.com/zeldaret/oot)** by Zelda Reverse Engineering Team: an example of what we wanted: each player in their own copy of the game, with flags, items and progression kept in sync, and a decompilation as the foundation for mods like it.
+- **[sm64coopdx](https://github.com/coop-deluxe/sm64coopdx)** and its ancestor **sm64ex-coop** (djoslin0 and contributors): co-op built on a decompilation, and proof that it can feel like the game was made for it. The decomp community compared our idea to it before we started; its netcode practice (compressed snapshots under the MTU) is in our link.
+- **Natan Vishera's** *Modo Multiplayer Co-op com Familiars* for PS1 SOTN, and Pigsy's Genesis port with a two-player mode: earlier SOTN multiplayer that showed people want this.
+- **TalicZealot's [SotnRandoTools](https://github.com/TalicZealot/SotnRandoTools)** and the SOTN randomizer community: tooling around live SOTN memory.
+- **[BBLauncher](https://github.com/rainmakerv3/BB_Launcher)** by rainmakerv3: a launcher that owns its emulator, backs up saves and explains errors plainly.
+- **[ntfy.sh](https://ntfy.sh)** by Philipp Heckel: the free relay where room codes meet, with no server of ours.
+- **Python**, **[pygame-ce](https://github.com/pygame-community/pygame-ce)**, **SDL**, **Pillow** and **[python-for-android](https://github.com/kivy/python-for-android)**: the launcher on Windows and Android.
+
+*Castlevania* and *Symphony of the Night* are trademarks of Konami. This project is not affiliated with Konami. Buy the game.
 
 ## Licence
 SOTN Co-op is free software under the [GNU Affero General Public License v3](LICENSE), like [sotn-decomp](https://github.com/Xeeynamo/sotn-decomp), which it is built on. What the releases bundle (SwanStation, OpenBIOS, Python and others) and under which licences: [NOTICE](NOTICE), with the full texts in [licenses/](licenses). No game data is in this repository or in any release.
