@@ -1,6 +1,6 @@
 # docs/design
 
-One design per milestone, each with its options, decisions and acceptance criteria.
+Designs for bigger work, each with its options, decisions and acceptance criteria. They record what was chosen and why; tracking is in GitHub issues.
 
 | File | What it does |
 |---|---|

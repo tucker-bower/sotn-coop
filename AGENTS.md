@@ -2,7 +2,7 @@
 
 This file is how we work together. Before doing anything, read:
 1. `docs/TECHNICAL_SUMMARY.md`: what we've built and how it works.
-2. `docs/ROADMAP.md`, the "Now" section: where we are, what's next, and any open decisions.
+2. The [tracker](https://github.com/users/tucker-bower/projects/1): where we are and what's next. Critical comes first, then Up Next.
 
 Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `DEVELOPER_GUIDE.md`. If `LOCAL.md` exists, read it too: it's git-ignored and covers this machine and its devices.
 
@@ -12,10 +12,11 @@ Each fact has one home. Read these only when the task needs them, and search the
 | File | Holds | Update it when |
 |---|---|---|
 | `docs/TECHNICAL_SUMMARY.md` | What exists and how it works | The architecture changes |
-| `docs/ROADMAP.md` | Where we are, what's next, known issues, open decisions | At every checkpoint |
+| [GitHub issues](https://github.com/tucker-bower/sotn-coop/issues) | All project tracking: bugs, features, test gaps, open decisions | As the work moves |
+| `docs/ROADMAP.md` | The final goal, and the milestones already built | The goal changes |
 | `docs/DECISION_LOG.md` | Why we chose what we chose (Dnn) | A decision is made |
 | `docs/research.md` | What we've learned: game internals, tools, hard-won lessons | You learn something a future agent would otherwise rediscover |
-| `docs/design/` | One design per milestone, with its acceptance criteria | Before and while building it |
+| `docs/design/` | Designs for bigger work, with their acceptance criteria, for future agents | Before and while building it |
 | `docs/link-protocol.md` | The wire protocol | The protocol changes |
 | `harness/README.md` | How to write tests | The test API changes |
 | `LOCAL.md` (git-ignored) | This machine, its devices, playtest workflow | The setup changes |
@@ -26,17 +27,20 @@ Git and PRs hold the history, so don't write session logs. Replace what's out of
 
 ## Roles
 - **Tucker (owner):** owns architecture, design, scope and game feel, and approves milestone designs and PRs. He is an experienced engineer, but his time is the scarcest resource on this project. Optimize for minimal owner time, not minimal agent effort.
-- **Agent (implementer):** owns implementation, testing and evidence. Work autonomously for long stretches. Don't stop mid-milestone to report: checkpoint and continue until it's done or truly blocked.
+- **Agent (implementer):** owns implementation, testing and evidence. Work autonomously for long stretches. Don't stop mid-task to report: checkpoint and continue until it's done or truly blocked.
 
-## The loop (spec-driven)
-1. **Design first.** Before each milestone, write a one-page proposal in `docs/design/Mx-<name>.md`, with 2–3 options, a recommendation, risks and **testable acceptance criteria**. Don't write milestone code until Tucker approves it. Small spikes to de-risk the proposal are fine.
-2. **Build autonomously** on a branch named `coop-mx-<short-name>`.
-3. **Open a PR** using the template below. If PRs are stacked, confirm the work actually reached `main` after merging.
-4. **Playtest** at milestones: deliver an installer and APK, with a short sheet of what to try.
+## The loop (issue-driven)
+The game is mostly built, so the work is now feature requests and bug fixes, and every piece of it is a GitHub issue.
+1. **Every piece of work has an issue.** Bugs, features and test gaps each get one, labelled `bug`, `feature` or `test coverage`, on the [tracker](https://github.com/users/tucker-bower/projects/1). If you find something and won't fix it now, open an issue rather than writing it in a doc. Don't track work in markdown files.
+2. **Work the tracker in order:** Critical, then Up Next. Tucker owns the columns and moves Backlog items up. Set an issue to In Progress when you start it.
+3. **Design bigger work.** For a new feature or anything hard to reverse, write a one-page `docs/design/<name>.md` with 2–3 options, a recommendation, risks and **testable acceptance criteria**, link it from the issue, and don't write the code until Tucker approves it. Small spikes are fine. Bug fixes and small features need no design: the issue's "Done when" list is the spec. Designs are for future agents: record what was chosen and why, not status.
+4. **Build autonomously** on a branch named `coop-<short-name>`.
+5. **Open a PR** using the template below, with a `Fixes #n` line for each issue: one keyword covers one issue only. If PRs are stacked, confirm the work actually reached `main` after merging. Merging closes the issues; check that it did.
+6. **Playtest** at bigger releases: deliver an installer and APK, with a short sheet of what to try.
 
 ## Decisions
 - **Reversible:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
-- **Expensive to reverse, or changes game feel or scope:** stop, write up the options in `docs/ROADMAP.md` under "Decisions needed", and work on something else that isn't blocked.
+- **Expensive to reverse, or changes game feel or scope:** stop, write up the options in the issue, and work on something else that isn't blocked.
 - Batch questions. Never send Tucker one question at a time.
 
 ## Communication
@@ -84,6 +88,9 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 
 ## PR template
 ```
+Fixes #<issue>
+Fixes #<issue>
+
 ## Acceptance criteria
 - [x] <criterion>: <evidence: test name / clip / numbers>
 ## Defaults I chose (reversible)

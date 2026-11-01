@@ -62,7 +62,8 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 
 ## Docs
 - [`docs/TECHNICAL_SUMMARY.md`](docs/TECHNICAL_SUMMARY.md): how it all works
-- [`docs/ROADMAP.md`](docs/ROADMAP.md): what's next, and known issues
+- [Tracker](https://github.com/users/tucker-bower/projects/1): what's next, and known issues
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): the goal, and the milestones built so far
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md): build it yourself
 - [`AGENTS.md`](AGENTS.md): how we develop it, with AI agents
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md): why we chose what we chose
