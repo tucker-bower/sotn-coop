@@ -604,7 +604,12 @@ def _menus(pg):
              ("screen", "Home"), ("wait", 30), ("winshot", "home")]
     for action, screen in (("help_play", "How to play"), ("help_online", "Online troubleshooting"),
                            ("keys", "Keyboard keys"), ("about", "About")):
-        steps += [("menu", action), ("screen", screen), ("shot", action), ("key", pg.K_RETURN), ("screen", "Home")]
+        steps += [("menu", action), ("screen", screen), ("shot", action)]
+        if action == "help_play":  # issue 25: longer than the window
+            steps += [("key", pg.K_DOWN)] * 40 + [("wait", 5), ("shot", "help_play_end"),
+                      ("expect", lambda d: d.launcher.ui.page_top > 0, "the long help page scrolls"),
+                      ("key", pg.K_UP), ("wait", 5)]
+        steps += [("key", pg.K_RETURN), ("screen", "Home")]
     for action in ("layout:stacked", "netsim:wifi", "netsim:off", "layout:auto"):
         steps += [("menu", action), ("wait", 5)]
     steps += [("expect", lambda d: d.launcher.settings.get("layout") == "auto" and not d.launcher.settings.get("netsim"),

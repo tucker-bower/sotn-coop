@@ -290,7 +290,6 @@ class GameView:
         self.canvas = display.canvas
         self.font = pygame.font.SysFont("consolas", 16)
         self.big = pygame.font.SysFont("georgia", 28)
-        self.rolling = collections.deque(maxlen=2)
         self.journal = report.Journal()
         self.still = {}
         self.inputs = collections.deque(maxlen=60 * REPORT_SECONDS)
@@ -384,7 +383,9 @@ class GameView:
         interactive = note is None
         if interactive:
             note = self.ask_note()
-        path = report.write(self.games, self.playthrough, shot, self.rolling, self.inputs,
+        kept = zip(*(g.kept_states() for g in self.games))  # the same frames in each game
+        rolling = [(states[0][0], *(st for _, st in states)) for states in kept]
+        path = report.write(self.games, self.playthrough, shot, rolling, self.inputs,
                             self.frame_times, self.pads.names(), note, extra={"solo": self.solo},
                             taken=taken, journal=self.journal)
         if self.audio:
@@ -663,7 +664,8 @@ class GameView:
             pads = [self.pads.mask(i, keys) for i in range(len(self.games))]
             self.inputs.append((self.frame, *pads))
             if self.frame % ROLLING_EVERY == 0:
-                self.rolling.append((self.frame, *(g.save_state() for g in self.games)))
+                for g in self.games:
+                    g.keep_state(self.frame)
             for g, pad in zip(self.games, pads):  # both games run their frame at the same time
                 g.frame_start(pad)
             replies = [g.frame_end() for g in self.games]

@@ -140,3 +140,6 @@ Android 13 clamshell. Top: 6.0" AMOLED, 1920×1080, 120 Hz. Bottom: 3.92" AMOLED
 ## Scripts that assume Alucard
 - **The walk after Richter's fight** (top `post_richter_cutscene.c`, step 3) holds Left and Cross once. Richter and Maria can't clear the ledge at x=550, and pause is off. With the Holy Glasses worn, the script lets go at the first landing instead.
 - **The shop's Exit** (lib `e_shop.c`, steps 16 and 9) gives the pad back after 32 frames, but scene control stays on until the player walks past x=0xFF. Debug starts hold Alucard: `as_at_start` in `session_m12.py` puts the characters in play, and without it `characters=` has no effect on them.
+
+## What a savestate costs
+Serializing takes under 2 ms and a copy about 5 ms; the hitch was the 12.5 MB going through a worker's pipe. States that stay in the worker (`Emu.keep_state`) cost about 5 ms for both games together.

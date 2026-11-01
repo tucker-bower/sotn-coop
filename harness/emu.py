@@ -35,6 +35,7 @@ def _video_refresh(self, data, width, height, pitch):
 
 _composite.CompositeEnvironmentDriver.video_refresh = _video_refresh
 
+KEPT_STATES = 2  # keep_state()
 # libretro joypad ids. SwanStation maps cross=B, circle=A, square=Y, triangle=X.
 BUTTONS = {
     "cross": 0, "square": 1, "select": 2, "start": 3, "up": 4, "down": 5, "left": 6, "right": 7,
@@ -145,6 +146,7 @@ class Emu:
                                     assets=self._tmp.name, playlist=self._tmp.name),
         )
         self.frame = 0
+        self._kept = []
         self.pad_extra_addr = None  # CoopLink.padExtra, once the co-op module is known (Mailbox)
         self._extra = 0
 
@@ -191,6 +193,17 @@ class Emu:
         buf = bytearray(self._session.core.serialize_size())
         assert self._session.core.serialize(buf), "serialize failed"
         return struct.pack("<Q", self.frame) + bytes(buf)
+
+    def keep_state(self, tag):
+        """A rolling state for F9 (at most KEPT_STATES, in reused buffers, here in this process):
+        sending 12.5 MB through a worker's pipe every 5 s was a visible hitch (issue 23)."""
+        buf = self._kept.pop(0)[2] if len(self._kept) == KEPT_STATES else bytearray(self._session.core.serialize_size())
+        assert self._session.core.serialize(buf), "serialize failed"
+        self._kept.append((tag, self.frame, buf))
+
+    def kept_states(self):
+        """[(tag, a state load_state takes)], oldest first."""
+        return [(tag, struct.pack("<Q", frame) + bytes(buf)) for tag, frame, buf in self._kept]
 
     def load_state(self, blob):
         self.frame = struct.unpack_from("<Q", blob)[0]
