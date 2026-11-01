@@ -136,7 +136,7 @@ Each player runs their **own copy of the game** in an emulator. A **co-op link**
 - [`AGENTS.md`](AGENTS.md): how AI agents work on this project
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): milestones and acceptance criteria
 - [`docs/STATUS.md`](docs/STATUS.md): current state, budget, and decisions needed
-- [`docs/DECISIONS.md`](docs/DECISIONS.md): decision log
+- [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md): decision log
 - [`docs/research.md`](docs/research.md): notes from the codebase, wiki and Discord
 
 ## Building

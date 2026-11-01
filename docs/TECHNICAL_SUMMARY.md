@@ -1,6 +1,6 @@
 # SOTN Co-op: technical summary
 
-This is for anyone who wants to understand how the mod works, or build on it. Players want the [README](../README.md). The details behind each choice are in [`DECISIONS.md`](DECISIONS.md) (referred to here as Dnn), and each milestone's design is in [`design/`](design/).
+This is for anyone who wants to understand how the mod works, or build on it. Players want the [README](../README.md). The details behind each choice are in [`DECISION_LOG.md`](DECISION_LOG.md) (referred to here as Dnn), and each milestone's design is in [`design/`](design/).
 
 ## The idea in one paragraph
 *Symphony of the Night* can't hold two players in two places. It keeps exactly one stage resident: the stage code always loads at `0x80180000`, VRAM holds one stage's tiles, SPU RAM holds one stage's sounds, and the camera, tilemap and spawner assume one world. So instead of putting a second player into one game, **each player runs their own copy of the game**, and the copies are kept in sync (D19, D20). Every game's engine stays stock; the work is all in the syncing. A small module inside each game reports what happens and applies what the partner did. A host program next to each game carries that between the two, over a local socket on the couch or UDP online.
