@@ -3,14 +3,14 @@
 **Final goal (D19):** two players explore the castle **independently** over couch co-op or online with android-pc-linux-mac crossplay capabilities, each on their own screen, with **shared progression**. Boss fights and cutscenes are sync'ed and experienced together.
 
 ## Now
-_Updated 2026-10-31._
+_Updated 2026-11-01._
 
-- **Latest release:** v0.12.0, the public beta of 1.0 (D121). Everything since is only on `main` (0.13.0-dev): the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
+- **Latest release:** v0.13.0, with v0.12.0 as the fallback if it feels worse (D121). It has the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
 - **Tests:** last `--full` 300 of 301 (2026-11-01); `ui_online` failed under full load, then passed 3 of 3 alone.
-- **Next:** release v0.13.0 (the text is in `docs/releases/`, awaiting Tucker's approval), then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
+- **Next:** a release with F9's Send button (the Resend key is in `env.toml`, and test reports were accepted), then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
 
 ## Decisions needed
-- **F9's Send button needs a Resend key (D144):** a free Resend account on sotncoop@gmail.com, with a send-only key in `env.toml`. Until then, builds tell players to email the zip.
+None.
 
 ## Known issues
 **Bugs**
