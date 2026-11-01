@@ -243,11 +243,11 @@ def soak_short(run):
     soak(run, 1)
 
 
-@session_scenario()
+@session_scenario(full=True)
 def soak_10min(run):
     soak(run, 10)
 
 
-@session_scenario()
+@session_scenario(full=True)
 def soak_30min(run):
     soak(run, 30)

@@ -77,7 +77,7 @@ def stage(g):
 
 
 @session_scenario(starts=("st0_start", "st0_start"))
-def m12_prologue_opening(run):
+def prologue_opening(run):
     """Both players see the prologue's opening scene (Richter meets Dracula) together, though B
     starts 5 s behind A (as online, where one skips the video sooner)."""
     w = SceneWatch(run)
@@ -122,7 +122,7 @@ def fight_pad(g, period=12, t=0):
 
 
 @session_scenario(starts=("st0_fight", "st0_fight"))
-def m12_prologue_fight(run):
+def prologue_fight(run):
     """One Dracula for both (a shared room): when he falls, the scenes after the fight play in
     both games together, and both leave the prologue for the castle together."""
     a, b = run.s.a, run.s.b
@@ -177,7 +177,7 @@ def walk_to_death(run, w, g, other_pad=""):
 
 
 @session_scenario(starts=("no3_start", "st0_end"))
-def m12_death_waits_for_partner(run):
+def death_waits_for_partner(run):
     """Playtest 2026-10-25: whoever finished the prologue first watched Death take Alucard's gear
     alone. Now the scene waits (up to 60 s) for a partner still in the prologue's ending, who is
     then pulled in; both watch it together and both lose their gear."""
@@ -298,7 +298,7 @@ def scene_together(run, pad, limit, flags0=None):
 def _scene_test(name, start, pad, limit):
     def test(run):
         scene_together(run, pad, limit)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
     session_scenario(starts=(str(start), "entrance"))(test)
 
@@ -319,7 +319,7 @@ def _room_scene_test(name, base, stage, layout, x, y, side, flag):
         walk = "right" if side == "left" else "left"
         pad = (lambda i: (walk if i < 60 else ("up" if i % 20 < 2 else ""), "")) if name == "librarian" else walk
         scene_together(run, pad, 1800, flags0)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
     # both from the same progress (their shared flags), B elsewhere in it: B is pulled in
     session_scenario(starts=(str(STARTS / f"{base}.state"),) * 2)(test)
@@ -523,7 +523,7 @@ def _boss_test(b):
     name = b["name"].replace(" & ", " and ")
     def test(run):
         boss_flow(run, b)
-    test.__name__ = "m12_boss_" + name.lower().replace(",", "").replace(" ", "_")
+    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_")
     test.__doc__ = f"Every boss, together: {b['name']} ({b['area']})."
     start = str(STARTS / f"Boss - {name}.state")
     session_scenario(starts=(start, start))(test)
@@ -575,7 +575,7 @@ def attack_pixels(run, chars, pad, every=30, arm=None, setup=None, samples=(4, 8
 
 
 @session_scenario(characters=(1, 1))  # CHAR_RICHTER twice
-def m12_partner_attack_drawn(run):
+def partner_attack_drawn(run):
     """Note 2 (since M13: the partner's body draws it): A (Richter) whips next to B (Richter), and
     B's screen shows it: A adds more to B's picture mid-whip than standing."""
     idle, whip = attack_pixels(run, (1, 1), "square")
@@ -584,7 +584,7 @@ def m12_partner_attack_drawn(run):
 
 
 @session_scenario()
-def m12_partner_dagger_drawn(run):
+def partner_dagger_drawn(run):
     """Note 2, phase 1b (since M13: the partner's body throws it): A (Alucard) throws daggers next
     to B, and B's screen shows them."""
     def arm(a):
@@ -597,6 +597,7 @@ def m12_partner_dagger_drawn(run):
 
 # --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------
 PAIRINGS = {"rm": (1, 2), "ar": (0, 1)}  # CHAR_* of A and B
+CHAR_NAMES = ("alucard", "richter", "maria")
 
 
 def _boss_pair_test(b, tag, chars):
@@ -621,10 +622,10 @@ def _boss_pair_test(b, tag, chars):
             g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
         run.step(240)
         boss_flow(run, b)
-    test.__name__ = f"m12_boss_{tag}_" + name.lower().replace(",", "").replace(" ", "_")
+    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_") + "_{}_and_{}".format(*(CHAR_NAMES[c] for c in chars))
     test.__doc__ = f"{b['name']} together, as {tag.upper()} (Alucard, Richter, Maria)."
     start = str(STARTS / f"Boss - {name}.state")
-    session_scenario(starts=(start, start), characters=chars)(test)
+    session_scenario(starts=(start, start), characters=chars, full=True)(test)  # the pairings: --full
 
 
 for _b in _bossstarts():
@@ -637,7 +638,7 @@ for _b in _bossstarts():
 def _start_scene_test(name, start, walk):
     def test(run):
         scene_together(run, walk, 3000)
-    test.__name__ = f"m12_scene_{name}"
+    test.__name__ = f"scene_{name}"
     test.__doc__ = f"Cutscene catalogue, from its scene start: {start}."
     path = str(STARTS / f"{start}.state")
     session_scenario(starts=(path, path))(test)
@@ -648,7 +649,7 @@ for _name, (_start, _walk) in START_SCENES.items():
 
 
 @session_scenario(starts=(str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state")))
-def m12_scene_librarian_from_start(run):
+def scene_librarian_from_start(run):
     """The Librarian's first meeting, together: A walks into his room from its right edge (his
     scene starts and steers A in), B is pulled in; both play it, both set MET_LIBRARIAN, and both
     end in his shop. (His scene keeps control while the player is in his shop and near him: leaving
@@ -672,7 +673,7 @@ def m12_scene_librarian_from_start(run):
 
 # --- doors in a shared room (D107) ----------------------------------------------------------
 @session_scenario(starts=("no1", "no1"))
-def m12_guest_opens_red_door(run):
+def guest_opens_red_door(run):
     """D107: in a shared room, the guest opens a red door itself and walks out through it (it
     used to get the authority's closed door, and was walled in until the authority went through).
     The Outer Wall's first room, with a red door at its left edge."""
@@ -741,20 +742,20 @@ def _swing_drawn(run, chars, button, item_index=0):
 
 
 @session_scenario()
-def m12_partner_swing_drawn(run):
+def partner_swing_drawn(run):
     """Note 2, phase 2: Alucard swings a sword next to Alucard."""
     _swing_drawn(run, (0, 0), "square")
 
 
 @session_scenario(characters=(1, 0))
-def m12_partner_swing_drawn_richter(run):
+def partner_swing_drawn_richter(run):
     """Note 2, phase 2: Richter swings his off-hand sword (D105) next to Alucard."""
     _swing_drawn(run, (1, 0), "circle")
 
 
 # --- the first castle, chained (design/M12-v1-release.md criterion 8; D120) -------------------
-@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2)
-def m12_chain_first_castle_long(run):
+@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2, full=True)
+def boss_chain_first_castle_long(run):
     """Both games play the first castle's 12 bosses in route order, carrying what they earn (level,
     experience, gold, items, castle flags) from each fight to the next. Between bosses they travel
     by teleport, picking up that stretch's relics and story flags (the walks themselves are covered
@@ -763,10 +764,10 @@ def m12_chain_first_castle_long(run):
     chain(run, lambda r: not r.get("inverted"))
 
 
-@session_scenario(starts=(str(STARTS / "Boss - The Creature.state"),) * 2)
-def inverted_chain_long(run):
-    """The inverted castle's bosses, chained as the first castle's (m12_chain_first_castle_long),
-    from the Creature to Galamoth (Dracula ends the game: m12_boss_dracula). Each fight must leave
+@session_scenario(starts=(str(STARTS / "Boss - The Creature.state"),) * 2, full=True)
+def boss_chain_inverted_castle_long(run):
+    """The inverted castle's bosses, chained as the first castle's (boss_chain_first_castle_long),
+    from the Creature to Galamoth (Dracula ends the game: boss_dracula). Each fight must leave
     its record in both games (boss_flow)."""
     chain(run, lambda r: r.get("inverted") and r["name"] != "Dracula")
 

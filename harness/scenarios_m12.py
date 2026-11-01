@@ -21,7 +21,7 @@ def block(v, x, y, w=0x20, h=0x80):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m12_maria_guardians_keep_their_graphics(run):
+def maria_guardians_keep_their_graphics(run):
     """Playtest 2026-10-25 note 4: Maria's birds turned into a skull and a shield. A weapon or shield
     in her other hand must not overwrite her guardians' graphics."""
     e, mb = run.emu, mailbox(run)
@@ -50,7 +50,7 @@ def cardinals(e):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m12_maria_keeps_throwing(run):
+def maria_keeps_throwing(run):
     """Playtest 2026-10-25 note 4: after a while, Maria stopped throwing anything. Her cardinal,
     thrown again and again (hearts kept up), with weapons in and out of her other hand between
     rounds: every throw makes a bird. (Her cardinal, alone of her guardians, can't be thrown while
@@ -179,10 +179,10 @@ def hand_items(run, ch, button, part):
 def _hand_items_test(ch, name, button, part):
     def test(run):
         _against_alucard(run, hand_items(run, ch, button, part))
-    test.__name__ = f"m12_hand_items_{name}_{part + 1}"
+    test.__name__ = f"hand_items_{name}_{part + 1}"
     test.__doc__ = (f"Every other hand weapon (half {part + 1}) in {name.capitalize()}'s hands, against "
                     "Alucard's results (D105; Alucard's: harness/data/hand_items_alucard.json).")
-    scenario(start="entrance", disc=COOP_DISC)(test)
+    scenario(start="entrance", disc=COOP_DISC, full=name != "alucard")(test)  # Richter's, Maria's: --full
 
 
 for _part in (0, 1):

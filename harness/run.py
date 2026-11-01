@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Runs harness scenarios.
+"""Runs the tests: the harness scenarios (one game, two linked games) and the programs in
+commands.py (launcher checks, UI flows, the patcher).
 
-    python run.py [-j N] [--full] [scenario ...]
+    python run.py [-j N] [--full] [--list] [-k WORD ...] [name ...]
 
-No names: the everyday suite, everything but the long ones (*_NNmin soaks, *_long), which --full
-adds (before a playtest build) or run by name. Tests run side by side, each in its own process
-(-j: how many at once; default the cores less 4: 12 on a 16-core PC, measured about 8 minutes;
--j 1 runs them one after another in this process). The tests that time the host in real time
-(SOLO) run alone at the end. Each test's output goes to
-.env/out/<name>/log.txt. Exit code 0 = all passed."""
+Three ways to run (AGENTS.md, Testing):
+- names, or -k WORD (every test whose name has WORD in it; -k again for more): a handful of tests
+  for a small change, e.g. `run.py -k pvp`, `run.py -k boss_rush boss_olrox`;
+- nothing: the everyday suite, before committing a major change or opening a PR (about 10 minutes);
+- --full: the everyday suite plus the full-only tests (soaks, fuzz, the boss chains, every
+  character pairing of the bosses and pictures), before a release. With -k, --full includes the
+  full-only matches too.
+--list prints the chosen tests (tier, last time) without running them.
+Tests run side by side, each in its own process (-j: how many at once; default the cores less 4,
+12 on a 16-core PC; -j 1 runs them one after another in this process). The tests that time the
+host in real time (SOLO) run after the rest, side by side with each other only. Each test's output
+goes to .env/out/<name>/log.txt. Exit code 0 = all passed."""
 
 import json
 import os
@@ -40,27 +47,37 @@ import session_m15  # noqa: F401
 import session_inverted  # noqa: F401
 import session_bossrush  # noqa: F401
 import spec_test  # noqa: F401
-from scenario import SCENARIOS, run_scenario
+from commands import COMMANDS, run_command
+from scenario import FULL_ONLY, SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario
 
-LONG = ("min", "_long")  # name endings left out of the everyday suite
 # Tests that use real sockets, a room-code relay or LAN broadcasts (fixed port 47811): one at a
 # time, in their own lane, so two of them never hear each other.
 NETWORK_MODULES = {"session_online", "session_m9", "session_m11", "spec_test"}
-# Tests that time the host in real time (its p99 per frame): alone, after the rest, as other
-# tests' load would be in their numbers.
-SOLO = {"mixed_soak_short", "mixed_soak_10min", "mixed_soak_baseline_10min"}
+NETWORK = {"ui_online", "ui_online_boss_rush"}
+# Tests that run in real time (the host's p99 per frame, the app's first picture, two launchers
+# online): after the rest, side by side with each other only, as a full machine's load would be
+# in their numbers (2026-10-31: ui_online_boss_rush's joiner stayed at the title under full load).
+SOLO = {"mixed_soak_short", "mixed_soak_10min", "mixed_soak_baseline_10min", "ui_startup", "ui_online",
+        "ui_online_boss_rush"}
 # Tests that read another's output: (first, then) run in that order, in one lane.
-CHAINS = []
+CHAINS = [("mixed_soak_baseline_10min", "mixed_soak_10min")]
 TEST_TIMEOUT = 1800  # seconds: a test that hangs fails instead of holding up the run
 
 
+ALL = list(SCENARIOS) + list(SESSION_SCENARIOS) + list(COMMANDS)
+
+
 def module_of(name):
+    if name in COMMANDS:
+        return "commands"
     fn = SESSION_SCENARIOS[name][0] if name in SESSION_SCENARIOS else SCENARIOS[name][0]
     return fn.__module__
 
 
 def run_one(name):
+    if name in COMMANDS:
+        return run_command(name)
     return run_session_scenario(name) if name in SESSION_SCENARIOS else run_scenario(name)
 
 
@@ -108,23 +125,37 @@ def in_subprocess(name):
             "checks": [], "seconds": round(time.time() - started, 1)}
 
 
-def run_parallel(names, jobs):
-    from module import maria_blob
-    maria_blob()  # built once here, not by several tests at once
-    lanes, alone = [], []
-    network = [n for n in names if module_of(n) in NETWORK_MODULES]
+def make_lanes(names):
+    """[[name, ...]]: each lane's tests run one after another, the lanes side by side."""
+    lanes = []
+    network = [n for n in names if module_of(n) in NETWORK_MODULES or n in NETWORK]
     if network:
         lanes.append(network)
     chained = {n for chain in CHAINS for n in chain}
     for chain in CHAINS:
         if any(n in names for n in chain):
             lanes.append([n for n in chain if n in names])
+    lanes += [[n] for n in names if n not in set(network) | chained]
+    return sorted(lanes, key=lambda lane: -sum(last_seconds(n) for n in lane))  # longest first
+
+
+def run_parallel(names, jobs):
+    from module import maria_blob
+    maria_blob()  # built once here, not by several tests at once
     solo = [n for n in names if n in SOLO]
-    taken = set(network) | chained | set(solo)
-    lanes += [[n] for n in names if n not in taken]
-    lanes.sort(key=lambda lane: -sum(last_seconds(n) for n in lane))
-    results, lock, queue = {}, threading.Lock(), list(lanes)
+    results, lock = {}, threading.Lock()
     t0 = time.time()
+    run_lanes(make_lanes([n for n in names if n not in SOLO]), jobs, results, lock, t0, len(names))
+    run_lanes(make_lanes(solo), jobs, results, lock, t0, len(names), " real time")
+    failed = [n for n in names if not results[n]["passed"]]
+    print(f"\n{len(names) - len(failed)} of {len(names)} passed in {time.time() - t0:.0f} s ({jobs} at once)")
+    for n in failed:
+        print(f"FAIL {n}")
+    return failed
+
+
+def run_lanes(lanes, jobs, results, lock, t0, total, tag=""):
+    queue = list(lanes)
 
     def worker():
         while True:
@@ -136,22 +167,26 @@ def run_parallel(names, jobs):
                 r = in_subprocess(name)
                 with lock:
                     results[name] = r
-                    print(f"[{len(results)}/{len(names)} {time.time() - t0:.0f}s] " + show(r, name), flush=True)
+                    print(f"[{len(results)}/{total} {time.time() - t0:.0f}s{tag}] " + show(r, name), flush=True)
 
     threads = [threading.Thread(target=worker) for _ in range(min(jobs, len(lanes)))]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
-    for name in solo:
-        r = in_subprocess(name)
-        results[name] = r
-        print(f"[{len(results)}/{len(names)} {time.time() - t0:.0f}s, alone] " + show(r, name), flush=True)
-    failed = [n for n in names if not results[n]["passed"]]
-    print(f"\n{len(names) - len(failed)} of {len(names)} passed in {time.time() - t0:.0f} s ({jobs} at once)")
-    for n in failed:
-        print(f"FAIL {n}")
-    return failed
+
+
+def choose(args, full):
+    """The tests named, or matching a -k word, or the suite; the everyday tier unless full."""
+    words = [args[k + 1] for k, a in enumerate(args) if a == "-k"]
+    named = [a for k, a in enumerate(args) if not a.startswith("-") and (k == 0 or args[k - 1] != "-k")]
+    unknown = [n for n in named if n not in ALL]
+    if unknown:
+        sys.exit(f"no such test: {', '.join(unknown)} (run.py --list shows them)")
+    tier = [n for n in ALL if full or n not in FULL_ONLY]
+    if not words and not named:
+        return tier
+    return named + [n for n in tier if n not in named and any(w in n for w in words)]
 
 
 if __name__ == "__main__":
@@ -164,11 +199,14 @@ if __name__ == "__main__":
         k = args.index("-j")
         jobs = int(args[k + 1])
         del args[k:k + 2]
-    names = [a for a in args if not a.startswith("--")]
+    names = choose(args, full)
+    if "--list" in args:
+        for n in names:
+            print(f"{n:55} {'full' if n in FULL_ONLY else 'everyday':9} {last_seconds(n):6.0f} s")
+        print(f"{len(names)} tests, {sum(map(last_seconds, names)) / 60:.0f} min one after another")
+        sys.exit(0)
     if not names:
-        names = list(SCENARIOS) + list(SESSION_SCENARIOS)
-        if not full:
-            names = [n for n in names if not n.endswith(LONG)]
+        sys.exit("no test matches")
     if jobs > 1 and len(names) > 1:
         sys.exit(1 if run_parallel(names, jobs) else 0)
     failed = 0

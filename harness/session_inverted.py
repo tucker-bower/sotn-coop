@@ -1,5 +1,5 @@
 """The inverted castle, together (v1.1, D114): travel between the two castles and what the partners
-share there. Its bosses are in session_m12 (m12_boss_* from bossstarts.INVERTED)."""
+share there. Its bosses are in session_m12 (boss_* from bossstarts.INVERTED)."""
 
 from session import session_scenario  # first: puts `link` on the path
 

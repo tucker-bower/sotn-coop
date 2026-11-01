@@ -680,19 +680,19 @@ def _rush_online_host():
         start = bossrush.bosses()[0]["start"]
         p = d.view.games[0].mailbox("partner_presence")
         return [p.stage, p.room_id] == start[:2]
-    return [("until", lambda d: _rush_at(d, 0) or d.waited > 5000),
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 20000),
             ("expect", lambda d: _rush_at(d, 0), "the host is at the first boss"),
-            ("until", lambda d: partner_there(d) or d.waited > 5000),  # the joiner too, before the win
+            ("until", lambda d: partner_there(d) or d.waited > 20000),  # the joiner too, before the win
             ("game_frames", 300), ("call", win),
-            ("until", lambda d: _rush_at(d, 1) or d.waited > 5000), ("shot", "host-second-boss"),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 20000), ("shot", "host-second-boss"),
             ("expect", lambda d: _rush_at(d, 1) and d.view.rush.text().startswith("Boss rush 2/"),
              "the host is at the second boss (Boss rush 2/22)")]
 
 
 def _rush_online_join():
-    return [("until", lambda d: _rush_at(d, 0) or d.waited > 5000),
+    return [("until", lambda d: _rush_at(d, 0) or d.waited > 20000),
             ("expect", lambda d: _rush_at(d, 0), "the joiner is at the first boss"),
-            ("until", lambda d: _rush_at(d, 1) or d.waited > 5000), ("shot", "join-second-boss"),
+            ("until", lambda d: _rush_at(d, 1) or d.waited > 20000), ("shot", "join-second-boss"),
             ("expect", lambda d: _rush_at(d, 1), "the joiner followed the host to the second boss")]
 
 

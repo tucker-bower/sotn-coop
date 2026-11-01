@@ -38,8 +38,12 @@ These instructions are for any AI coding agent working in `mods/co-op/`. Read th
 - **Primary:** a headless, frame-stepped harness with savestates, scripted and bot inputs, and RAM assertions.
 - **Multi-instance session tests:** run two game instances plus the host yourself, with scripted inputs on both and assertions across both games. Co-op features count as working only when a session test proves it. Don't wait for Tucker to run a two-player check.
 - **Secondary:** emulators on Tucker's PC at `C:\Users\tucke\OneDrive\Desktop\Emulators`. Install anything needed there and use it for cross-emulator compatibility checks. Ask before installing anything outside that folder.
-- **Everyday:** `harness/run.py` (parallel, about 8 minutes; D108).
-- **Before any playtest build:** `harness/run.py --full` (adds the long soaks and fuzz), boot-and-run checks on the dev platform, plus PCSX-Redux, and on the product emulator once R1 has chosen it.
+- **One runner, three tiers (Tucker, 2026-10-31; D138).** Every test (harness scenarios, launcher checks, UI flows, the patcher) runs through `harness/run.py`, side by side, each in its own process. Pick the smallest tier that covers the change; CI/CD velocity matters.
+  1. **A small change: a handful of relevant tests only.** Name them, or use `-k WORD` (every test whose name has WORD in it), e.g. `run.py -k pvp`, `run.py -k boss_rush ui_boss_rush`. `run.py --list -k WORD` shows what would run. Don't run a whole suite for a small change.
+  2. **Everyday suite** (`run.py`, about 10 minutes on 16 cores): before committing a major change and before opening or updating a PR.
+  3. **Full suite** (`run.py --full`: everyday plus the soaks, fuzz, boss chains and every character pairing): only before a release (any build handed to players, playtest betas included), with the boot checks on the dev platform, PCSX-Redux, and the product emulator once R1 has chosen it. Never as a routine check.
+- **Clear names.** A test's name says what it checks, with no milestone prefix: `<feature>_<what>` and, for character pairings, `_<A>_and_<B>` (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`, `pvp_hand_alucard_vs_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True` in the decorator). Keep the everyday suite at 10 minutes or less: when it grows past that, move repetition to `--full`.
+- After a module change, rebuild the fixtures (`scripts/rebuild_fixtures.sh`) before running any test that loads a savestate.
 
 ## PR template
 ```

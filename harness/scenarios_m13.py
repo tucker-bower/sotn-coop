@@ -31,7 +31,7 @@ def run_partner(run, partner, p1, sim=True):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m13_spike_partner_sim(run):
+def partner_sim_measurements(run):
     """The spike's four measurements, except the VRAM patch (drawing)."""
     e = run.emu
     start = e.save_state()
@@ -96,7 +96,7 @@ from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER  # noqa: E402
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_partner_body_follows(run):
+def partner_body_follows(run):
     """Game A simulates B's body from B's buttons (played out with B's presence) while B walks
     and jumps around the room: A's copy stays with B's real spot (within the snap distance), and
     A's own player is untouched; no puppet is drawn while the body is."""
@@ -122,7 +122,7 @@ def m13_partner_body_follows(run):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_partner_status(run):
+def partner_status(run):
     """The partner's body fights as the partner: B's status (stats, level, equipment) reaches A
     and is in A's copy of B, while A's own status is untouched."""
     from link.mailbox import OPT_PARTNER_SIM, STATUS_RANGES
@@ -191,7 +191,7 @@ def _swing_in_body(run, same):
 
 
 @session_scenario()
-def m13_partner_weapon_differs(run):
+def partner_weapon_differs(run):
     """A's weapon isn't B's: B's copy of A strikes A's poses (its own weapon entity can't run: the
     overlay is B's weapon's, and drops it), and B draws A's real swing from the link, where the
     body is; no other partner sprites on top of the body."""
@@ -203,7 +203,7 @@ def m13_partner_weapon_differs(run):
 
 
 @session_scenario()
-def m13_partner_weapon_same(run):
+def partner_weapon_same(run):
     """The same weapon: B's copy of A strikes A's poses but never runs the weapon's code (B's one
     copy of the overlay is B's own: running it there stopped B's own swing), so A's swing comes from
     the link; and B's own swing still works."""
@@ -220,7 +220,7 @@ def m13_partner_weapon_same(run):
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def m13_partner_richter(run):
+def partner_body_alucard_and_richter(run):
     """M13 step 3: B plays Richter, and A (Alucard) runs B's body with our partner Richter (its
     own code and statics: COOPRICP.BIN), from B's buttons: the body is Richter's (his animation
     set), moves and animates as B does, and draws from Richter's graphics in VRAM's second bank.
@@ -265,7 +265,7 @@ def m13_partner_richter(run):
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, 2))
-def m13_partner_maria(run):
+def partner_body_alucard_and_maria(run):
     """M13 step 3: B plays Maria, and A (Alucard) runs B's body with our partner Maria (her own
     build, MARIAP.BIN, from her blob): it's Maria's body (B's animation set), it follows and
     animates as B does, and A's own game is untouched."""
@@ -344,39 +344,39 @@ def _partner_pair(run, ca, cb):
                "A is still its own character, in play")
 
 
-@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_RICHTER))
-def m13_partner_rr(run):
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_RICHTER), full=True)
+def partner_body_richter_and_richter(run):
     """M13 step 3: Richter's game, a Richter partner (a second Richter, statics of his own)."""
     _partner_pair(run, CHAR_RICHTER, CHAR_RICHTER)
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, 2))
-def m13_partner_rm(run):
+def partner_body_richter_and_maria(run):
     """M13 step 3: Richter's game, a Maria partner."""
     _partner_pair(run, CHAR_RICHTER, 2)
 
 
-@session_scenario(starts=("entrance", "entrance"), characters=(2, CHAR_RICHTER))
-def m13_partner_mr(run):
+@session_scenario(starts=("entrance", "entrance"), characters=(2, CHAR_RICHTER), full=True)
+def partner_body_maria_and_richter(run):
     """M13 step 3: Maria's game, a Richter partner."""
     _partner_pair(run, 2, CHAR_RICHTER)
 
 
-@session_scenario(starts=("entrance", "entrance"), characters=(2, 2))
-def m13_partner_mm(run):
+@session_scenario(starts=("entrance", "entrance"), characters=(2, 2), full=True)
+def partner_body_maria_and_maria(run):
     """M13 step 3: Maria's game, a Maria partner (a second Maria)."""
     _partner_pair(run, 2, 2)
 
 
-@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_ALUCARD))
-def m13_partner_ra(run):
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_ALUCARD), full=True)
+def partner_body_richter_and_alucard(run):
     """M13 step 3c: Richter's game, an Alucard partner (DRA's Alucard, ARC_F's tables swapped in,
     his graphics in the second bank, none of his palette operations kept)."""
     _partner_pair(run, CHAR_RICHTER, CHAR_ALUCARD)
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(2, CHAR_ALUCARD))
-def m13_partner_ma(run):
+def partner_body_maria_and_alucard(run):
     """M13 step 3c: Maria's game, an Alucard partner."""
     _partner_pair(run, 2, CHAR_ALUCARD)
 
@@ -385,7 +385,7 @@ FAMILIAR_CARDS = {"bat": 0x12, "ghost": 0x13, "faerie": 0x14, "demon": 0x15, "sw
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_partner_familiar(run):
+def partner_familiar(run):
     """M13 step 4 (criterion 3): the partner's familiar shows and follows them. B switches each
     card on in turn (its game loads the familiar); A, running B's body, draws B's familiar from
     B's copy (overlay, sheet, palettes: module/familiar.c) in its second bank, beside the body."""
@@ -413,7 +413,7 @@ def m13_partner_familiar(run):
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def m13_partner_sounds(run):
+def partner_sounds(run):
     """M13 step 4 (risks: two players' sounds): A stands still while B's Richter jumps and whips.
     Every sound request in A's ring from then on is the partner's: at most 60% of its volume, and
     none from the player's voice bank (Richter's voice isn't in Alucard's game)."""
@@ -447,7 +447,7 @@ HALL_SPOT = (0x41, 72, 1331, 199)  # the entrance hall (stage, room, x, y), wher
 def _respawn_effect(run, ca):
     """A (playing ca) dies in the entrance hall and is revived at B (in the Alchemy Lab): A's own
     game plays A's character's teleport-in (its player init, as after a teleporter), A's presence
-    says so, and B's copy of A is made with it too (criterion 6: m13_respawn_effect_*)."""
+    says so, and B's copy of A is made with it too (criterion 6: respawn_effect_*)."""
     from link.mailbox import FLIP_TELEPORT_IN, OPT_PARTNER_SIM
     from session_m8 import reload_game
     from session_travel import die
@@ -483,17 +483,17 @@ def _respawn_effect(run, ca):
 
 
 @session_scenario(starts=("entrance", "nz0"))
-def m13_respawn_effect_alucard(run):
+def respawn_effect_alucard(run):
     _respawn_effect(run, CHAR_ALUCARD)
 
 
 @session_scenario(starts=("entrance", "nz0"), characters=(CHAR_RICHTER, CHAR_ALUCARD))
-def m13_respawn_effect_richter(run):
+def respawn_effect_richter(run):
     _respawn_effect(run, CHAR_RICHTER)
 
 
 @session_scenario(starts=("entrance", "nz0"), characters=(2, CHAR_ALUCARD))
-def m13_respawn_effect_maria(run):
+def respawn_effect_maria(run):
     _respawn_effect(run, 2)
 
 
@@ -501,7 +501,7 @@ LIFE_APPLE = 0x26 + 0x92  # g_Status.equipHandCount[ITEM_LIFE_APPLE], from g_Sta
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_fairy_revive(run):
+def fairy_revive(run):
     """M13 criterion 6: B (Alucard) has the faerie out and a Life Apple is in the shared bag; A
     dies in B's room (the hall: A is its authority, the zombies are A's) and is revived where it
     fell, not at B; the apple is gone in both games."""
@@ -563,21 +563,23 @@ def _partner_hit(run, cb):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_partner_hit_alucard(run):
+def partner_hit_alucard(run):
     _partner_hit(run, CHAR_ALUCARD)
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def m13_partner_hit_richter(run):
+def partner_hit_richter(run):
     _partner_hit(run, CHAR_RICHTER)
 
 
 # --- criterion 2: the partner's attacks, drawn by the game's own code, for all 9 pairings --------
-PAIR_NAMES = {0: "a", 1: "r", 2: "m"}
+PAIR_NAMES = {0: "alucard", 1: "richter", 2: "maria"}
+
+
+EVERYDAY_PIXELS = {(0, 1), (1, 2), (2, 0)}  # each character as A and as B; the other 6: --full
 
 
 def _pixels_test(ca, cb):
-    @session_scenario(characters=(ca, cb))
     def test(run):
         """M13 criterion 2: A (the partner) next to B: B draws A's body, A's attack and A's
         subweapon, and an Alucard partner's spell (partner_pixels: B's picture with and without
@@ -618,10 +620,8 @@ def _pixels_test(ca, cb):
                                          samples=tuple(range(16, 110, 6)))
             run.expect(spent[0] > 0 and spell > idle3 + 20, "and A's spell (Hellfire)", standing=idle3,
                        casting=spell, mp_spent=spent[0])
-    test.__name__ = f"m13_pixels_{PAIR_NAMES[ca]}{PAIR_NAMES[cb]}"
-    from session import SESSION_SCENARIOS
-    SESSION_SCENARIOS[test.__name__] = SESSION_SCENARIOS.pop("test")
-    return test
+    test.__name__ = f"partner_pixels_{PAIR_NAMES[ca]}_and_{PAIR_NAMES[cb]}"
+    return session_scenario(characters=(ca, cb), full=(ca, cb) not in EVERYDAY_PIXELS)(test)
 
 
 for _ca in (0, 1, 2):
@@ -642,7 +642,7 @@ def _afterimage_prims(g):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m13_body_drop_keeps_player_afterimages(run):
+def body_drop_keeps_player_afterimages(run):
     """Two Alucards share the afterimage slots (1-3: Swap), so when A's body of B goes (Drop) and
     is made again, player 1's afterimage primitives stay player 1's: still flagged, none freed (the
     10-minute soak's crash, 26,000 frames in: they were freed and written to after)."""

@@ -81,20 +81,20 @@ def mixed_pair(run, ca, cb):
     run.expect(hit, f"{NAMES[cb]}'s hits hurt A's enemies (in A's world)")
 
 
-@session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def mixed_party_shared_room(run):
+@session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER), full=True)
+def mixed_party_shared_room_alucard_and_richter(run):
     """Alucard (A) and Richter (B): mixed_pair."""
     mixed_pair(run, CHAR_ALUCARD, CHAR_RICHTER)
 
 
-@session_scenario(characters=(CHAR_ALUCARD, CHAR_MARIA))
-def mixed_party_shared_room_am(run):
+@session_scenario(characters=(CHAR_ALUCARD, CHAR_MARIA), full=True)
+def mixed_party_shared_room_alucard_and_maria(run):
     """Alucard (A) and Maria (B): mixed_pair."""
     mixed_pair(run, CHAR_ALUCARD, CHAR_MARIA)
 
 
 @session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
-def mixed_party_shared_room_rm(run):
+def mixed_party_shared_room_richter_and_maria(run):
     """Richter (A) and Maria (B): mixed_pair."""
     mixed_pair(run, CHAR_RICHTER, CHAR_MARIA)
 
@@ -169,19 +169,19 @@ def progression(run, ca, cb):
 
 
 @session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
-def mixed_party_progression(run):
+def mixed_party_progression_richter_and_maria(run):
     """Richter finds the relic, Maria the rest: progression()."""
     progression(run, CHAR_RICHTER, CHAR_MARIA)
 
 
-@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER))
-def mixed_party_progression_mr(run):
+@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER), full=True)
+def mixed_party_progression_maria_and_richter(run):
     """Maria finds the relic, Richter the rest (his own vessels): progression()."""
     progression(run, CHAR_MARIA, CHAR_RICHTER)
 
 
-@session_scenario(characters=(CHAR_RICHTER, CHAR_ALUCARD))
-def mixed_party_progression_ra(run):
+@session_scenario(characters=(CHAR_RICHTER, CHAR_ALUCARD), full=True)
+def mixed_party_progression_richter_and_alucard(run):
     """Richter finds the relic, Alucard the rest: progression()."""
     progression(run, CHAR_RICHTER, CHAR_ALUCARD)
 
@@ -309,7 +309,7 @@ def mixed_soak(run, ca, cb, minutes):
 
 
 
-@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
+@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA), full=True)
 def mixed_soak_10min(run):
     """Richter (A) and Maria (B), 10 minutes, against two Alucards' numbers from
     mixed_soak_baseline_10min (run it first): no more missed frames (within 0.5% of play), p99
@@ -326,7 +326,7 @@ def mixed_soak_10min(run):
                mixed=mixed["scanlines_p99"], alucards=base["scanlines_p99"])
 
 
-@session_scenario()
+@session_scenario(full=True)
 def mixed_soak_baseline_10min(run):
     """Two Alucards: mixed_soak's numbers, for mixed_soak_10min to compare with."""
     mixed_soak(run, CHAR_ALUCARD, CHAR_ALUCARD, 10)

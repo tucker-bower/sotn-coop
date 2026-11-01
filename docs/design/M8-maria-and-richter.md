@@ -115,10 +115,10 @@
    - All 9 pairs start from the same save, each game as its chosen character, with working attacks, subweapons and moves.
    - Continuing that save with different characters works.
    - The patched disc's hash is unchanged throughout.
-3. **Mixed-team puppets at full speed** (`mixed_party_shared_room`):
+3. **Mixed-team puppets at full speed** (`mixed_party_shared_room_alucard_and_richter`):
    - Alucard + Maria, Richter + Maria and Alucard + Richter draw each other's animated puppets correctly and fight shared enemies.
    - In a 10-minute shared-room session: no dropped emulated frames, host p99 < 1 ms, and 60 fps on Tucker's PC.
-4. **One world for all** (`mixed_party_progression`):
+4. **One world for all** (`mixed_party_progression_richter_and_maria`):
    - A Richter or Maria player picks up relics and items, beats bosses, and sees Alucard's cutscenes and shops.
    - Everything they get is shared with the partner, as with Alucard, in every combination.
 5. **Game files screen** (`ux_game_files`): a stranger following only the screen sets up both discs. Each wrong file (EU PSP disc, PS1 disc of another region, a random file) gets a plain error that says what's needed.

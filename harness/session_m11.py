@@ -59,14 +59,14 @@ def fight_until_xp(run, frames=1200):
 
 
 @session_scenario()
-def m11_shared_xp(run):
+def shared_xp(run):
     """M11 criterion 2: A's kill gives A half the XP (a partner is linked), and B gains exactly
     what A gained. Then, from just short of the next level, A's kill levels up both games."""
     shared_xp(run)
 
 
 @session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def m11_shared_xp_richter(run):
+def shared_xp_richter(run):
     """M11 risk: a Richter partner levels up from Alucard's kills too (character.c's Growth:
     only Alucard's own code checks EXP)."""
     from session_m8 import reload_game
@@ -189,7 +189,7 @@ def joiner_copy(run, s0, s1, pc_folder):
 
 
 @session_scenario()
-def m11_solo(run):
+def castle_solo_play(run):
     """M11 criterion 1: a solo game (no partner) has 1x boss HP and full kill XP, and its save
     writes slot 1 of its castle."""
     from archive import Castle
@@ -242,7 +242,7 @@ def m11_solo(run):
 
 
 @session_scenario()
-def m11_copy(run):
+def castle_joint_save_copies(run):
     """M11 criteria 3 and 4: A hosts castle X and B joins; their joint save leaves B with a copy
     of X (A's id and name, B in slot 1). Then B hosts its copy and C joins: B loads its own
     slot, C gets slot 2 (the last partner's), and C has a copy too. A's X is untouched."""
@@ -288,7 +288,7 @@ def m11_copy(run):
 
 
 @session_scenario()
-def m11_slot2_clone(run):
+def castle_takes_a_second_player(run):
     """M11 criterion 6: a castle only ever played solo (one slot) takes a partner: slot 2 starts
     as a copy of slot 1, in the same save room, at the same level."""
     from archive import Castle
@@ -319,7 +319,7 @@ def m11_slot2_clone(run):
 
 
 @session_scenario()
-def m11_test_castle(run):
+def test_castle_hosted(run):
     """Test castles (Tucker, 2026-10-28): hosting a fresh copy of one, both players load its save,
     then arrive at its start (not the save's room); its first joint save ends that."""
     from archive import Castle

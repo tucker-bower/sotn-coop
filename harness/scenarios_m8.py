@@ -85,7 +85,7 @@ def per_character(fn):
 
 
 @per_character
-def m8_in_the_castle(run, ch):
+def in_the_castle(run, ch):
     """M8 §1: an Alucard save loads as Richter (our COOPRIC.BIN) or Maria (her blob), the world
     stays Alucard's, and back as Alucard."""
     e, mb = run.emu, mailbox(run)
@@ -112,7 +112,7 @@ def m8_in_the_castle(run, ch):
 
 
 @per_character
-def m8b_relic_gates(run, ch):
+def relic_gates(run, ch):
     """M8b criteria 1 and 6: the high jump needs Gravity Boots; L2 does it only with the player's
     shortcuts on. (The other gates are the same check in our overlays: COOP_CAN.)"""
     e, mb = run.emu, mailbox(run)
@@ -137,7 +137,7 @@ def m8b_relic_gates(run, ch):
 
 
 @per_character
-def m8b_growth(run, ch):
+def level_up(run, ch):
     """M8b criterion 5: Richter and Maria level up from EXP like Alucard (HP grows too)."""
     e, mb = run.emu, mailbox(run)
     reload_as(run, mb, ch)
@@ -149,7 +149,7 @@ def m8b_growth(run, ch):
 
 
 @per_character
-def m8b_mist_step(run, ch):
+def mist_step(run, ch):
     """M8b criterion 2: Richter and Maria pass the bars before the Lesser Demon with Form of Mist,
     and can't without it."""
     e, mb = run.emu, mailbox(run)
@@ -179,7 +179,7 @@ SERVANT, FAM_ACTIVE_SWORD = 0x8006CBC4, 5  # g_Servant (include/game.h)
 
 
 @scenario(start="entrance", disc=COOP_DISC)
-def m8b_spell_shortcuts(run):
+def spell_shortcuts(run):
     """M8b criterion 6 (Alucard): with shortcuts on, a right-stick flick casts the spell the player
     put on that direction, if he knows it, for its MP. Not if he doesn't know it, nor with the
     shortcuts off. Each castable spell, on each direction."""
@@ -239,7 +239,7 @@ def enemies_hp(e):
 
 
 @per_character
-def m8b_offhand(run, ch):
+def offhand_weapons(run, ch):
     """M8b criterion 7: one weapon of every class in the other hand hits with ○, with the game's
     own numbers for that hand (ATK + STR: g_Status.attackHands), drawn with its own sprite (the
     screenshots in the out folder). A shield adds its DEF, a potion and food heal."""
@@ -303,7 +303,7 @@ POISON_WATER = 0x8009744C  # g_unkGraphicsStruct.D_8009744C: the stage marks the
 
 
 @per_character
-def m8b_familiar(run, ch):
+def familiar(run, ch):
     """M8b §3: the familiar cards work for Richter and Maria too. With a card on, the module loads
     the familiar after a load (their code runs from the expansion RAM, so it fits), it comes out,
     and they still play."""
@@ -326,7 +326,7 @@ def m8b_familiar(run, ch):
 
 
 @per_character
-def m8b_poison_water(run, ch):
+def poison_water(run, ch):
     """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and
     not with it."""
     e, mb = run.emu, mailbox(run)
@@ -363,7 +363,7 @@ def travel(run, inputs):
 
 
 @per_character
-def m8b_more_gates(run, ch):
+def relic_gates_more(run, ch):
     """M8b criterion 1 (the other rows of §3): each move needs its relic, for Richter and Maria.
     The second jump (Leap Stone), climbing (Soul of Bat, with the Leap Stone), the slide (Soul of
     Wolf), item / guardian crashes (Echo of Bat: hearts spent on △), the blade dash (Skill of

@@ -18,7 +18,7 @@ An option, set by the host, that lets players hurt each other with their attacks
 - **Not in boss fights, cutscenes or menus:** PvP is off in a locked boss room, while either player is in a scene, and for 3 s after arriving in a room (spawn protection).
 
 ## Acceptance criteria
-1. `m15_pvp_*`: for each character pairing, each attack type (hand weapon, subweapon, spell, familiar) damages the partner with the game's damage (the victim's defence and resistances apply), knockback away from the attacker, and invincibility frames.
+1. `pvp_*`: for each character pairing, each attack type (hand weapon, subweapon, spell, familiar) damages the partner with the game's damage (the victim's defence and resistances apply), knockback away from the attacker, and invincibility frames.
 2. Both games show the same hit (stagger, sound, number) within the playout delay.
 3. PvP off: no damage in the same scenarios (the default, and every M12 test stays green).
 4. No PvP damage in a locked boss room, in a scene, or in the first 3 s in a room.

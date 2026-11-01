@@ -240,17 +240,17 @@ with the same level, gear and relics: one boss debug start, three characters. Ri
 ---
 
 ## 6. Acceptance criteria (M8b)
-1. **Relics gate the moves** (`m8b_relic_gates`): for each row of §3, the move doesn't work without the relic and does with it, for Richter and for Maria.
-2. **Mist Step** (`m8b_mist_step`): Richter and Maria pass the Lesser Demon bars with Form of Mist and can't without it. With Power of Mist they pass a long grate. Shared rooms stay in step (session test, mixed team).
+1. **Relics gate the moves** (`relic_gates`): for each row of §3, the move doesn't work without the relic and does with it, for Richter and for Maria.
+2. **Mist Step** (`mist_step`): Richter and Maria pass the Lesser Demon bars with Form of Mist and can't without it. With Power of Mist they pass a long grate. Shared rooms stay in step (session test, mixed team).
 3. **Reachability audit** (`m8b_reachability`): from the boss debug starts, a route bot shows that every pre-inverted relic, boss and save room can be reached by each character with exactly the relics a player has by then. Nothing is reachable earlier than Alucard can reach it, give or take one room.
 4. **Power curve** (`m8b_power_curve`): at all 12 boss starts, time to kill and damage taken for Richter and Maria are within ±20% of Alucard's. The table goes into this doc.
-5. **Growth works** (`m8b_growth`): Richter and Maria level up and equip armor and accessories, and defense and resistances apply. The whip's and guardians' damage follows STR.
+5. **Growth works** (`level_up`): Richter and Maria level up and equip armor and accessories, and defense and resistances apply. The whip's and guardians' damage follows STR.
 6. **One-button moves** (`m8b_buttons`):
    - With shortcuts on, L2 does the high jump and R2 the blade dash for Richter and Maria, gated by the same relics as the original inputs, which still work. Maria's L1/R1 dashes are unchanged.
    - With them off, L2 and R2 do nothing for them, as in vanilla.
    - For Alucard, with shortcuts on, each right-stick direction casts its chosen spell if he knows it, for its MP.
    - Couch: P1 on and P2 off (and the reverse) works in one session, and the choice is remembered.
-7. **Off-hand weapons** (`m8b_offhand`):
+7. **Off-hand weapons** (`offhand_weapons`):
    - For Richter and Maria, one weapon of every class equips in the other hand and hits with ○. The damage matches DRA's formula for that weapon, ATK + STR, with its element.
    - Each one shows its own sprite (screenshots in the PR).
    - A shield adds its DEF, a potion heals and a thrown item is thrown.

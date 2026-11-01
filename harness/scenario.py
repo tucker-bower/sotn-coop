@@ -13,11 +13,15 @@ from coop_env import DISKS, TOOLS, savestate
 from emu import Emu
 
 SCENARIOS = {}
+FULL_ONLY = set()  # tests only the full suite runs (run.py --full: before a release)
 
 
-def scenario(start, disc=None):
+def scenario(start, disc=None, full=False):
+    """full: only in the full suite (a soak, or one more pairing of what the everyday suite covers)."""
     def register(fn):
         SCENARIOS[fn.__name__] = (fn, start, disc)
+        if full:
+            FULL_ONLY.add(fn.__name__)
         return fn
     return register
 

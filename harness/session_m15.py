@@ -125,22 +125,25 @@ def _hand(run):
     run.expect(r["a_body_hits"] > body0, "A's copy of B was hit too", **r)
 
 
-NAMES = "arm"  # CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA
+NAMES = ("alucard", "richter", "maria")  # CHAR_*
+# The everyday suite's pairings (each character attacking and attacked, each attack kind once);
+# the rest of the matrix: --full.
+EVERYDAY = {("hand", 0, 1), ("hand", 1, 2), ("hand", 2, 0), ("dagger", 0, 2), ("spell", 0, 1),
+            ("guardian", 2, 1), ("crash", 1, 0)}
 
 
 def _pair_test(kind, fn, ca, cb):
-    """m15_pvp_<kind>_<A's character><B's>: A (ca) attacks B (cb)."""
-    @session_scenario(starts=("entrance", "entrance"), characters=(ca, cb))
+    """pvp_<kind>_<A's character>_vs_<B's>: A (ca) attacks B (cb)."""
     def test(run):
         fn(run)
-    test.__name__ = f"m15_pvp_{kind}_{NAMES[ca]}{NAMES[cb]}"
+    test.__name__ = f"pvp_{kind}_{NAMES[ca]}_vs_{NAMES[cb]}"
     test.__doc__ = fn.__doc__
-    from session import SESSION_SCENARIOS
-    SESSION_SCENARIOS[test.__name__] = SESSION_SCENARIOS.pop("test")
+    session_scenario(starts=("entrance", "entrance"), characters=(ca, cb),
+                     full=(kind, ca, cb) not in EVERYDAY)(test)
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m15_pvp_off(run):
+def pvp_off(run):
     """Criterion 3: PvP off (the default), the same swings do nothing."""
     setup(run, pvp=False)
     r = attack(run, "right+square")
@@ -213,7 +216,7 @@ for _ca in (CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m15_pvp_spawn_protection(run):
+def pvp_spawn_protection(run):
     """Criterion 4: no PvP in a player's first 3 s in a room. A leaves the room and comes back,
     walks up to B and swings at once: nothing. After 3 s in the room, the same swings hurt."""
     a, b = run.s.a, run.s.b
@@ -241,7 +244,7 @@ def m15_pvp_spawn_protection(run):
 
 
 @session_scenario(starts=("no1", "entrance"))
-def m15_pvp_not_in_boss_fight(run):
+def pvp_not_in_boss_fight(run):
     """Criterion 4: no PvP in a boss fight. Both in the Doppleganger's room, A swings at B."""
     from session_m5 import into_boss_room, wait_pulled
     a, b = run.s.a, run.s.b
@@ -264,7 +267,7 @@ def m15_pvp_not_in_boss_fight(run):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m15_pvp_not_in_scene(run):
+def pvp_not_in_scene(run):
     """Criterion 4: no PvP while a scene has B's game (g_CutsceneHasControl, set by hand here)."""
     a, b = run.s.a, run.s.b
     setup(run)
@@ -277,7 +280,7 @@ def m15_pvp_not_in_scene(run):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m15_pvp_death(run):
+def pvp_death(run):
     """Criterion 5: B, at 1 HP, dies to A's swing; it respawns at A with full HP, no Game Over,
     and no XP, gold or items change hands."""
     a, b = run.s.a, run.s.b
@@ -346,7 +349,7 @@ def online_pvp_lossy(run):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def m15_pvp_familiar(run):
+def pvp_familiar(run):
     """Criterion 1, a familiar: B has the Sword familiar out and walks into the zombie hall,
     pressing nothing else, with A just behind it. The sword fights the zombies; when its attacks
     catch A, they count."""
