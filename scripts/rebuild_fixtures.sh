@@ -4,7 +4,7 @@
 # them is stale after a rebuild (harness/README.md). About 15 minutes; the starts alone: make_debug_starts.py.
 set -eo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PY=${PY:-/home/tucker/sotn-decomp-coop/.venv/bin/python}
+PY=${PY:-$ROOT/.env/src/sotn-decomp/.venv/bin/python}
 cd "$ROOT" && scripts/build_disc.sh 2>&1 | tail -1
 make -C characters/maria-dx >/dev/null 2>&1 && $PY characters/maria-dx/make_patches.py .env/out/maria 2>&1 | tail -1
 cd "$ROOT/harness"
