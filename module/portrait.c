@@ -1,6 +1,7 @@
 // The pause menu for Richter and Maria: their own name and portrait (issue 27). The menu is
 // Alucard's, so while it's open his portrait's pixels and palette in VRAM hold theirs, from their
-// cutscene art on the player's disc (boot.c), and what was there comes back when it closes.
+// cutscene art on the player's disc (link/portraits.py), and what was there comes back when it
+// closes.
 #define COOP_MODULE
 #include <game.h>
 #include "coop_api.h"
@@ -20,13 +21,13 @@ extern const char* g_MenuStr[]; // DRA: [0] is the status page's name
 #define PAL_COLORS 128 // the rest of the row is the menu's own
 
 typedef struct {
-    u32 pixels, palette; // offsets from PORTRAIT_ADDR: see boot.c
+    u32 pixels, palette; // offsets from PORTRAIT_ADDR: see link/portraits.py
     const char* name;    // in the menu font's encoding: ASCII - 0x20, 0xFF ends it
 } Portrait;
 
 static const Portrait s_Portraits[] = {
-    [CHAR_RICHTER - 1] = {0x130, 0x1030, "\x32\x29\x23\x28\x34\x25\x32\xFF"},
-    [CHAR_MARIA - 1] = {0x21E4, 0x360C, "\x2D\x21\x32\x29\x21\xFF"},
+    [CHAR_RICHTER - 1] = {0x4, 0xD84, "\x32\x29\x23\x28\x34\x25\x32\xFF"},
+    [CHAR_MARIA - 1] = {0xE84, 0x1C04, "\x2D\x21\x32\x29\x21\xFF"},
 };
 
 static void Rects(RECT* pixels, RECT* palette) {
@@ -55,7 +56,7 @@ static void Scale(const u8* art) {
 
 void PortraitUpdate(void) {
     static const char* alucard;
-    static bool open;
+    static bool open, have;
     RECT pixels, palette;
     const Portrait* p;
     bool menu = g_GameState == Game_Play && g_GameEngineStep == Engine_Menu;
@@ -65,23 +66,30 @@ void PortraitUpdate(void) {
     }
     Rects(&pixels, &palette);
     if (!menu) {
-        LoadImage(&pixels, (u_long*)PORTRAIT_SAVED_ADDR);
-        LoadImage(&palette, (u_long*)PORTRAIT_SAVED_CLUT_ADDR);
+        if (have) {
+            LoadImage(&pixels, (u_long*)PORTRAIT_SAVED_ADDR);
+            LoadImage(&palette, (u_long*)PORTRAIT_SAVED_CLUT_ADDR);
+        }
         g_MenuStr[0] = alucard;
         open = false;
         return;
     }
     p = &s_Portraits[CharacterLoaded() - 1];
     if (!open) {
-        StoreImage(&pixels, (u_long*)PORTRAIT_SAVED_ADDR);
-        DrawSync(0);
-        StoreImage(&palette, (u_long*)PORTRAIT_SAVED_CLUT_ADDR);
-        DrawSync(0);
-        Scale((const u8*)(PORTRAIT_ADDR + p->pixels));
         alucard = g_MenuStr[0];
         g_MenuStr[0] = p->name;
+        have = *(u32*)PORTRAIT_ADDR == PORTRAIT_MAGIC;
         open = true;
+        if (have) {
+            StoreImage(&pixels, (u_long*)PORTRAIT_SAVED_ADDR);
+            DrawSync(0);
+            StoreImage(&palette, (u_long*)PORTRAIT_SAVED_CLUT_ADDR);
+            DrawSync(0);
+            Scale((const u8*)(PORTRAIT_ADDR + p->pixels));
+        }
     }
-    LoadImage(&pixels, (u_long*)PORTRAIT_MENU_ADDR); // every frame: the menu's own loads come first
-    LoadImage(&palette, (u_long*)(PORTRAIT_ADDR + p->palette));
+    if (have) {
+        LoadImage(&pixels, (u_long*)PORTRAIT_MENU_ADDR); // every frame: the menu's own loads come first
+        LoadImage(&palette, (u_long*)(PORTRAIT_ADDR + p->palette));
+    }
 }

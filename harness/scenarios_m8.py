@@ -340,8 +340,12 @@ def pause_menu_portrait(run, ch):
     """Issue 27: the status page shows the player's own name and cutscene portrait, and what the
     portrait overwrote in VRAM comes back when the menu closes."""
     from coop_env import TOOLS
+    from link import portraits
     e, mb = run.emu, mailbox(run)
     reload_as(run, mb, ch)
+    data = portraits.read(COOP_DISC)
+    run.expect(data and len(data) == 4 + 2 * (48 * 72 + 256), "they're read from the disc")
+    e.write_bytes(portraits.PORTRAIT_ADDR, data)
     run.step(120)
     before = e.vram_rect(0x300, 0x180, 32, 96)
     run.step(4, "start")

@@ -109,6 +109,7 @@ static void KeepOwn(void) {
     s32 k;
 
     s_HaveOwn = true;
+    Upload();
     UploadBank();
     for (k = 0; k < N_PAL * COLORS_PER_PAL; k++) {
         s_Own[k] = Pal(PAL_WEAPONS)[k];

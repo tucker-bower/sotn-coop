@@ -32,6 +32,7 @@ class _Worker:
         from link.adapter import HarnessAdapter
         from link.host import Host
         from link.mailbox import Mailbox
+        from link import portraits
         from link.transport import UdpTransport
         from module import symbols
 
@@ -54,6 +55,7 @@ class _Worker:
         if not audio:
             self.transport.clock = lambda: self.clock["t"]
         self.host = Host(self.mailbox, self.transport, rank, patch_crc=patch_crc, playout=learn_peer)
+        self.host.set_portraits(portraits.read(disc))
         self.linked = True
         self.host_ms = collections.deque(maxlen=3600)  # the host's time per frame (never waits)
 
