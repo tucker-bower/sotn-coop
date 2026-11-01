@@ -867,6 +867,35 @@ def boss_karasuman_stays_shared(run):
     keep_a_long_fight(run)
 
 
+@session_scenario(starts=(None, None))
+def richter_hud_name_after_load(run):
+    """Issue 63: Richter's name is in his HUD box after Continue from the title."""
+    from PIL import Image
+    from link.mailbox import CMD_LOAD_SAVE, IN_PLAY
+    from session import Session
+    from module import COOP_DISC
+    save = (STARTS / "Scene - The Librarian.save").read_bytes()
+    with Session(COOP_DISC, starts=(None, None), characters=(1, 1)) as s:
+        a = s.a
+        for _ in range(9000):
+            s.step(1)
+            if a.read("g_GameState") == 1 and a.raw_frame()[0] == 512:
+                break
+        a.mailbox("put_save", save)
+        a.mailbox("command", CMD_LOAD_SAVE)
+        for _ in range(3000):
+            s.step(1)
+            p = a.mailbox("self_presence")
+            if p.flags & IN_PLAY and not p.flags & BUSY:
+                break
+        s.step(180)
+        run.expect(p.character == 1, "Richter is in play", character=p.character)
+        w, h, _, pitch, data = a.raw_frame()
+        name = Image.frombuffer("RGB", (pitch // 2, h), bytes(data), "raw", "BGR;16", 0, 1).crop((36, 28, 70, 37))
+        white = sum(min(px) > 180 for px in name.getdata())  # the letters, on the box's blue
+        run.expect(white > 40, "his name is drawn", white_pixels=white)
+
+
 # --- doors in a shared room (D107) ----------------------------------------------------------
 @session_scenario(starts=("no1", "no1"))
 def guest_opens_red_door(run):

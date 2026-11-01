@@ -333,6 +333,7 @@ def offhand_one_attack_at_a_time_richter(run):
 
 SERVANT_LOADED = 0x80073064  # g_ServantLoaded
 HOLY_SYMBOL, BAT_CARD, GHOST_CARD = 14, 18, 19
+FAERIE_CARD, DEMON_CARD, SWORD_CARD = 0x14, 0x15, 0x16
 POISON_WATER = 0x8009744C  # g_unkGraphicsStruct.D_8009744C: the stage marks the player in poison water
 
 
@@ -343,7 +344,7 @@ def familiar(run, ch):
     and they still play."""
     e, mb = run.emu, mailbox(run)
     start = e.save_state()
-    for relic, fam in ((BAT_CARD, 1), (GHOST_CARD, 2)):
+    for relic, fam in ((BAT_CARD, 1), (GHOST_CARD, 2), (FAERIE_CARD, 3), (DEMON_CARD, 4), (SWORD_CARD, 5)):
         e.load_state(start)
         e.write(STATUS, RELIC_ON, "<B", relic)
         reload_as(run, mb, ch)
