@@ -246,8 +246,10 @@ def test_castles_bundled(run):
             bad.append((name, "never arrived", e.snapshot()))
             continue
         run.step(60)
-        bot, want = walker(b["walk"], attack_every=0), CUTSCENE if b.get("scene") else BOSS
-        if not wait_for(run, lambda: mb.self_presence().flags & want, 7200, bot):
+        bot = walker(b["walk"], attack_every=0)
+        reached = ((lambda: e.read("g_CutsceneHasControl")) if b.get("scene")  # (the Librarian's isn't shared)
+                   else (lambda: mb.self_presence().flags & BOSS))
+        if not wait_for(run, reached, 7200, bot):
             bad.append((name, "no boss or scene", e.snapshot()))
     run.expect(not bad, f"all {len(index)} test castles load and reach their boss or scene", bad=bad)
 

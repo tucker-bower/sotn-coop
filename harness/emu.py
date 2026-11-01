@@ -140,6 +140,7 @@ class Emu:
             str(TOOLS["swanstation_core"]), str(disc),
             input=self._input, audio=self._audio,
             options=self._options,
+            log=None,  # libretro.py logs the core's format strings without their values
             path=ExplicitPathDriver(system=str(BIOS.parent if BIOS else TOOLS["bios_dir"]), save=self._tmp.name,
                                     assets=self._tmp.name, playlist=self._tmp.name),
         )

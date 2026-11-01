@@ -6,9 +6,11 @@ import os
 
 from coop_env import TOOLS
 from session import session_scenario
+from link.mailbox import BUSY, CUTSCENE  # noqa: E402 - session puts link on the path
 
 ST0, NO3 = 0x1F, 0x41
 FLAG_DEAD = 0x100  # include/game.h
+PAD_SIM, DEMO_TIMER = 0x80072EF4, 0x80072EFC  # g_Player.padSim, g_Player.demo_timer
 # The prologue's stairs up to the throne room: hold up+left until the opening scene starts.
 CLIMB = "up+left"
 
@@ -648,27 +650,130 @@ for _name, (_start, _walk) in START_SCENES.items():
     _start_scene_test(_name, _start, _walk)
 
 
-@session_scenario(starts=(str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state")))
-def scene_librarian_from_start(run):
-    """The Librarian's first meeting, together: A walks into his room from its right edge (his
-    scene starts and steers A in), B is pulled in; both play it, both set MET_LIBRARIAN, and both
-    end in his shop. (His scene keeps control while the player is in his shop and near him: leaving
-    it through the menu is not scripted yet: a listed gap, STATUS.)"""
+LIBRARIAN_STARTS = (str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state"))
+SHOP_ENTITY = 0x801B15C0  # his shop menu's entity (lib e_shop.c, func_us_801B15C0)
+
+
+def in_shop(g):
+    return any(g.read(0x800733D8 + k * 0xBC + 0x28) == SHOP_ENTITY for k in range(64, 256))
+
+
+def librarian_shop(run, chars):
+    """A walks in to the Librarian and leaves through his menu's Exit; B is never involved, and
+    never held (his scene keeps control for all of A's visit: issue 19's softlock)."""
+    as_at_start(run, *chars)
     a, b = run.s.a, run.s.b
     for g in (a, b):  # B, elsewhere with the same progress, hasn't met him either
         g.write("g_CastleFlags", 0, "<B", 0x72)
+    room = b.snapshot()["room"]
     w = SceneWatch(run)
-    w.until(lambda: w.starts[0], 3000, ("left", ""))
+    w.until(lambda: w.starts[0], 3000, lambda i: ("left+cross" if i % 40 < 10 else "left", ""))
     run.expect(w.starts[0], "A's scene starts", at=a.snapshot())
-    w.until(lambda: w.starts[1], 1200)
-    run.expect(w.starts[1], "B is pulled in and plays it too", starts=w.starts, log=w.log)
-    shop = 0x801B15C0  # his shop menu's entity (lib e_shop.c, func_us_801B15C0)
-    in_shop = lambda g: any(g.read(0x800733D8 + k * 0xBC + 0x28) == shop for k in range(64, 256))
-    met = lambda: [g.read("g_CastleFlags", "<B", 0x72) for g in (a, b)]
-    w.until(lambda: met() == [1, 1] and in_shop(a) and in_shop(b), 6000)
-    met = met()
-    run.expect(met == [1, 1], "both games met the Librarian (MET_LIBRARIAN)", met=met)
-    run.expect(in_shop(a) and in_shop(b), "both end at his shop", starts=w.starts)
+    w.until(lambda: in_shop(a), 6000)
+    run.expect(in_shop(a), "A ends at his shop", log=w.log)
+    run.expect(not w.starts[1] and b.snapshot()["room"] == room, "B isn't pulled in", starts=w.starts, at=b.snapshot())
+    run.expect(not b.mailbox("partner_presence").flags & (CUTSCENE | BUSY), "and doesn't see a scene or a busy partner")
+    x = b.snapshot()["world_x"]
+    w.step(60, ("", "right"))
+    run.expect(b.snapshot()["world_x"] != x, "B keeps playing", at=b.snapshot())
+    w.until(lambda: a.read(DEMO_TIMER, "<i") == 0 and a.snapshot()["x"] < 0x80, 600)  # in the chair
+    w.step(120)
+    w.step(2, ("triangle", ""))  # his menu's Exit; the script walks on, then gives the pad back
+    w.step(120)
+    tries = w.until(lambda: not a.read("g_CutsceneHasControl"), 900, lambda i: ("right+cross" if i % 40 < 10 else "right", ""))
+    run.expect(not a.read("g_CutsceneHasControl"), "A walks out through the menu's Exit", tries=tries, at=a.snapshot())
+    w.step(120)
+    x = a.snapshot()["world_x"]
+    w.step(60, ("right", ""))
+    run.expect(a.snapshot()["world_x"] != x, "A plays on", at=a.snapshot())
+
+
+@session_scenario(starts=LIBRARIAN_STARTS)
+def librarian_shop_alucard(run):
+    """The shop, Alucard in it."""
+    librarian_shop(run, (0, 0))
+
+
+@session_scenario(starts=LIBRARIAN_STARTS, characters=(1, 0))
+def librarian_shop_richter(run):
+    """The shop, Richter in it: the pairing that softlocked (issue 19)."""
+    librarian_shop(run, (1, 0))
+
+
+KEEP_START = str(STARTS / "Scene - The Castle Keep.state")
+
+
+def as_at_start(run, ca, cb):
+    """A debug start holds Alucard: the characters, then back to the start's spot (see
+    _boss_pair_test: a character change is a load, which goes to the save's room)."""
+    from link.mailbox import CHAR_ALUCARD, CMD_ARRIVE
+    from session_m8 import as_characters
+    games = (run.s.a, run.s.b)
+    spots = [g.mailbox("self_presence") for g in games]
+    as_characters(run, ca, cb)
+    for g, p in zip(games, spots):
+        g.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x, p.ground_y)
+    run.step(240)
+    played = [g.mailbox("self_presence").character for g in games]
+    run.expect(played == [ca, cb], "the characters are in play", played=played, alucard=CHAR_ALUCARD)
+
+
+def keep_scene(run, ca, cb):
+    """Issue 20: the scene after Richter's fight (top post_richter_cutscene.c). It steers each
+    player left, holds Cross for a jump only Alucard makes, and only ends at the warp."""
+    as_at_start(run, ca, cb)
+    a, b = run.s.a, run.s.b
+    w = SceneWatch(run)
+    w.until(lambda: w.starts[0] or w.starts[1], 900, ("right", "right"))
+    run.expect(w.starts[0] or w.starts[1], "the scene starts", at=a.snapshot())
+    seen, done, free = [], [False, False], [0, 0]
+    for t in range(9000):
+        w.step(1)
+        if t % 300 == 0:
+            seen.append([(g.snapshot()["world_x"], g.snapshot()["world_y"]) for g in (a, b)])
+        # With the Holy Glasses worn the script lets go at the first landing (step 5): free to walk.
+        free = [0 if t < 2700 or g.read(DEMO_TIMER, "<i") else free[k] + 1 for k, g in enumerate((a, b))]
+        done = [g.read("g_StageId") != 0x0B or g.snapshot()["world_x"] < 0x200 or free[k] > 120 for k, g in enumerate((a, b))]
+        if all(done):
+            break
+    run.expect(all(done), "both players get over the ledge, or are let go", frames=t, seen=seen, a=a.snapshot(), b=b.snapshot())
+    for g, k in zip((a, b), free):
+        if k > 120:
+            x = g.snapshot()["world_x"]
+            w.step(60, ("right", "right"))
+            run.expect(g.snapshot()["world_x"] != x, "a player let go can walk", at=g.snapshot())
+
+
+@session_scenario(starts=(KEEP_START, KEEP_START), characters=(0, 1))
+def keep_scene_alucard_and_richter(run):
+    """The Keep's scene, the pairing that softlocked."""
+    keep_scene(run, 0, 1)
+
+
+@session_scenario(starts=(KEEP_START, KEEP_START), characters=(1, 2))
+def keep_scene_richter_and_maria(run):
+    """The Keep's scene, with no Alucard."""
+    keep_scene(run, 1, 2)
+
+
+@session_scenario()
+def report_state_still_loads(run):
+    """F9 scrubs savestates: one with its folders and a name overwritten still loads (replay.py)."""
+    import sys
+    from pathlib import Path
+    from module import COOP_DISC
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import report
+    a = run.s.a
+    folder = str(Path(COOP_DISC).resolve().parent)
+    state = a.save_state()
+    run.expect(folder.encode() in state, "a savestate holds the disc's folder")
+    clean = report.scrub_bytes(state, [folder, str(Path.home()), "Richter"])
+    run.expect(folder.encode() not in clean and len(clean) == len(state), "the scrub takes it out, at the same size")
+    a.load_state(clean)
+    frame = a.mailbox("self_presence").frame
+    run.step(60)
+    run.expect(a.mailbox("self_presence").frame != frame, "and the game runs on from it")
 
 
 # --- doors in a shared room (D107) ----------------------------------------------------------

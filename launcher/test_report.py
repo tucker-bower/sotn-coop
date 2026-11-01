@@ -8,14 +8,21 @@ import json
 import sys
 import tempfile
 import threading
+import types
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parent / "harness"))
 import report  # noqa: E402
 
 failed = 0
+DISC = "D:/Games/My Tucker Rips/sotn disc.cue"
+NAME = "Zhikajira"
+PAD = "Acme Pro Controller"
+report_name_at = 0x200
 
 
 def check(ok, what):
@@ -28,6 +35,66 @@ home = str(Path.home())
 dirty = f'{home} {json.dumps(home)[1:-1]} from 203.0.113.7:4000, 192.168.1.20'
 clean = report.scrub(dirty)
 check(home not in clean and "203.0.113.7" not in clean and "192.168.1.20" not in clean, "scrub: no home folder or IPs")
+
+
+
+class Game:
+    """Holds a typed name and paths the way a real game's memory does."""
+    def __init__(self, words):
+        self.blob = b"\0".join(f for w in words for f in report.forms(w))
+
+    def save_state(self):
+        return self.blob
+
+    def card(self):
+        save = bytearray(report.SAVE_DATA_SIZE)
+        save[report_name_at:report_name_at + len(NAME)] = NAME.encode()
+        return bytes(report.CARD_BLOCK) + bytes(save) + bytes(0x20000 - report.CARD_BLOCK - len(save))
+
+    def screenshot(self):
+        return None
+
+    def host(self, name):
+        return [[1.0, "out", DISC]]
+
+    def mailbox(self, name):
+        return f"presence {NAME}"
+
+
+class Castle:
+    info = {"name": NAME}
+    joint_save = Path("does-not-exist")
+
+
+with tempfile.TemporaryDirectory() as d:
+    report.reports_dir = lambda: Path(d)
+    report.data_dir = lambda: Path(d)
+    report.load_settings = lambda: {"disc": DISC, "bios": None, "music": "auto", "pads": [PAD, None]}
+    Path(d, "launcher-errors.log").write_text(f"Traceback in {DISC}\n")
+    games = [Game([DISC, home, NAME]), Game([DISC, home, NAME])]
+    journal = report.Journal()
+    path = report.write(games, Castle(), None, [(300, games[0].save_state(), games[1].save_state())], [], [], [PAD],
+                        "my note", {"solo": None}, journal=journal)
+    with zipfile.ZipFile(path) as z:
+        files = {n: z.read(n) for n in z.namelist()}
+    check("launcher-errors.log" in files and "journal.json" in files, "the errors log and the journal are in it")
+    size = len(games[0].save_state())
+    check(len(files["now/A.state"]) == size and len(files[f"before/300_A.state"]) == size, "states keep their size")
+    leaks = [(n, w) for n, data in files.items() for w in (str(Path(DISC).parent), home, NAME, PAD) for f in report.forms(w) if f in data]
+    check(not leaks, f"no planted identifier anywhere in the report, binary files included: {leaks[:4]}")
+    about = json.loads(files["about.json"])
+    check(about["controllers"] == 1 and set(about["settings"]) == {"music"}, "about.json keeps only what's needed")
+    check("time" not in about and "pads" not in about["settings"], "no timestamp or pads in about.json")
+
+journal = report.Journal()
+P = types.SimpleNamespace
+stuck = P(stage=11, room_left=2, room_top=3, flags=64 | 128, x=1, y=2)
+for frame in (1, 2, 3):
+    journal.note(frame, [stuck], "here")
+journal.note(4, [P(stage=11, room_left=2, room_top=4, flags=16, x=1, y=2)], "lost")
+events = list(journal.events)
+check(len(events) == 4 and events[0][-1] == "cutscene follower" and events[-2][-1] == "dead" and events[-1][-1] == "lost",
+      "the journal keeps changes, not frames")
 
 replies = []
 got = []

@@ -133,3 +133,10 @@ Android 13 clamshell. Top: 6.0" AMOLED, 1920×1080, 120 Hz. Bottom: 3.92" AMOLED
 - **Features we lacked:** up to 3 players (6 internally), PvP (the victim's game decides), Saturn Maria and the long-coat Richter (PS1 overlays in C, `decomp-mods/*-forpsx`, AGPL: the base of M16), the PSP recast Alucard voice, fairy and Life Apple revives, per-character respawn effects, Mac support, a relay fallback.
 - **Weaknesses:** players need Docker Desktop, the .NET SDK, about 15 GB and all three discs (US PS1, EU PSP, JP Saturn); setup recompiles the game on the player's machine (30–60 min). No Android. A lobby server at a fixed IP whose source isn't published. No tests or CI in the repository.
 - **Why Docker:** only the extra characters need it (a MIPS compiler, sotn-decomp's Go and Rust asset tools); their overlays have disc art compiled in, so they can't ship prebuilt. Our Maria avoids this with patches of code only (`characters/maria-dx/make_patches.py`).
+
+## Moving the player from the module
+`PLAYER.posX` is relative to the camera, and the engine keeps the world position in `g_PlayerX`/`g_PlayerY`. The module's frame hook runs after the engine compares the two, so a write to `posX` alone is undone the same frame. Write both.
+
+## Scripts that assume Alucard
+- **The walk after Richter's fight** (top `post_richter_cutscene.c`, step 3) holds Left and Cross once. Richter and Maria can't clear the ledge at x=550, and pause is off. With the Holy Glasses worn, the script lets go at the first landing instead.
+- **The shop's Exit** (lib `e_shop.c`, steps 16 and 9) gives the pad back after 32 frames, but scene control stays on until the player walks past x=0xFF. Debug starts hold Alucard: `as_at_start` in `session_m12.py` puts the characters in play, and without it `characters=` has no effect on them.

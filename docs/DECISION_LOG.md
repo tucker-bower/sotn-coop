@@ -732,3 +732,12 @@ Each holds one sentence and a table of the folder's files, with vestigial and ma
 
 **D144: F9 reports are sent by email** (Tucker, 2026-11-01; the provider is an agent-default, pending Tucker)
 A Send step after F9 emails the zip to sotncoop@gmail.com, through Resend with a send-only key put in release builds from `env.toml`. Resend's sandbox sender reaches only the account's own address, so a key lifted from the app can only fill that inbox. Options: a Gmail app password in the app (rejected: it opens the whole account to anyone who unpacks the app), and a Cloudflare Worker holding the key (safer, but its free tier's 10 ms of CPU may not cover encoding a report). Home folders and IP addresses are removed from reports. Replaces the private-repo relay in `design/backlog-report-sending.md`.
+
+**D145: The Librarian's scene isn't shared** (agent-default, 2026-11-01)
+His scene keeps control for a player's whole visit to the shop, so it no longer counts as a cutscene for the partner: no pull, no hold, no busy flag, even at the first meeting. Options: end the follower's copy when the leader leaves (rejected: the follower is still walked into a shop it didn't choose). `MET_LIBRARIAN` is still shared, so the partner just doesn't watch the meeting.
+
+**D146: A blocked scripted walk hops the obstacle** (agent-default, 2026-11-01)
+A walk steered by `padSim` that hasn't moved in 3 seconds hops 64 px up and 16 px on, in any stage. It gets Richter and Maria over the Castle Keep's ledge after Richter's fight, and it's a way out of walks we haven't found yet. Options: give them the jump in that one scene (rejected: it fixes one script), or a rescue menu (still in the backlog).
+
+**D147: What F9 reports keep** (agent-default, 2026-11-01)
+Folders and typed names are overwritten at the same length in every file, savestates included. The disc's file name stays, because a savestate won't load without it. `about.json` keeps versions, the OS family, gameplay settings and the number of controllers. Typed names under 3 letters stay in binary files, since their bytes turn up by chance and identify no one. Screenshots can still show what's on screen, which the Send prompt doesn't promise to remove. `session.log` drops the core's messages: libretro.py can't format them.

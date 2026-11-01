@@ -63,6 +63,11 @@ static bool s_AllowGameOver;
 static bool s_SaveLoaded; // a save was applied: clear the load mode once back in play
 static s32 s_BusyWait;    // dead, waiting for a busy partner to become reachable
 #define PARTNER_BUSY_WAIT 1800 // then the game's own Game Over (the partner seems stuck)
+#define STUCK_WALK_FRAMES 180  // a scripted walk that hasn't moved in this long is blocked...
+#define STUCK_MOVED 8          // (it jitters a pixel or two against the wall)
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+#define STUCK_HOP_X 16         // ...and hops up and on, in the direction it's walking
+#define STUCK_HOP_Y 64
 static bool s_DownForBoss; // dead while the partner fights a boss: respawn once it's over (D24)
 static bool s_Revived;   // the arrival under way is a revive (M13: its teleport-in)
 static void TeleportIn(void);
@@ -423,6 +428,7 @@ static bool DeathUpdate(void) {
         // give up. Holding forever froze the game (playtest 1).
         if (++s_BusyWait > PARTNER_BUSY_WAIT) {
             s_BusyWait = 0;
+            CoopMessageNow("Your partner seems stuck");
             return true;
         }
         return false;
@@ -432,6 +438,35 @@ static bool DeathUpdate(void) {
 }
 
 // --- boss fights and cutscenes: the partner is pulled in (design/M5)
+
+// A scene both players share. The Librarian's isn't: it keeps control for as long as a player is
+// in his shop, so a partner pulled in stayed behind in its own copy once the first player left.
+bool ArriveSharedScene(void) {
+    return g_CutsceneHasControl && g_StageId != STAGE_LIB && g_StageId != STAGE_RLIB;
+}
+
+// Some scripts steer the player with jumps only Alucard can make: the walk to the warp after
+// Richter's fight holds Cross once, and Richter walks into the ledge forever, with pause and map
+// off. A blocked walk is put over the obstacle instead.
+static void StuckWalkRescue(void) {
+    static s32 x; // the world position: on screen, a walk the camera follows stands still
+    static u16 still;
+    Entity* pl = &PLAYER;
+
+    if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || !g_Player.demo_timer ||
+        !(g_Player.padSim & (PAD_LEFT | PAD_RIGHT)) || ABS(g_PlayerX - x) >= STUCK_MOVED) {
+        x = g_PlayerX;
+        still = 0;
+    } else if (++still >= STUCK_WALK_FRAMES) {
+        still = 0;
+        s32 dx = (g_Player.padSim & PAD_LEFT) ? -STUCK_HOP_X : STUCK_HOP_X;
+
+        pl->posX.i.hi += dx; // the world position too, or the camera puts the player back
+        g_PlayerX += dx;
+        pl->posY.i.hi -= STUCK_HOP_Y;
+        g_PlayerY -= STUCK_HOP_Y;
+    }
+}
 
 // sameRoom: a cutscene pulls a partner in the same room too, to the spot that started it
 // (playtest 2026-10-25: two players in one room each started a room's scene on their own).
@@ -480,7 +515,7 @@ static void PullIn(void) {
 // Before PullIn: the edges of this game's own cutscenes.
 static void CutsceneTrack(void) {
     const CoopPresence* p = &g_CoopLink.partner;
-    bool on = g_CutsceneHasControl != 0;
+    bool on = ArriveSharedScene();
 
     if (s_CsCooldown) {
         s_CsCooldown--;
@@ -686,7 +721,7 @@ void ArrivePresence(CoopPresence* p) {
         (g_GameEngineStep == Engine_10 || (g_Player.status & PLAYER_STATUS_DEAD) || s_WaitingForHost)) {
         p->flags |= PRESENCE_DEAD;
     }
-    if (g_GameStep != Play_Default || ArriveBusy() || g_CutsceneHasControl || SceneAftermath() ||
+    if (g_GameStep != Play_Default || ArriveBusy() || ArriveSharedScene() || SceneAftermath() ||
         !(g_GameEngineStep == Engine_Normal || IsPausedEngine(g_GameEngineStep))) {
         p->flags |= PRESENCE_BUSY;
     }
@@ -711,6 +746,7 @@ bool ArriveFrame(void) {
     TeleportInput();
     CutsceneTrack();
     PullIn();
+    StuckWalkRescue();
     ArriveUpdate();
     if (!DeathUpdate()) {
         return false;
