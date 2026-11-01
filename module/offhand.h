@@ -3,6 +3,8 @@
 #define OFFHAND_H
 
 void OffhandUpdate(void); // once per frame, before UpdateGame
+void OffhandRenderStart(void); // around RenderEntities
+void OffhandRenderEnd(void);
 bool OffhandLoading(void); // a weapon is being loaded (the CD is the module's)
 
 void OffhandKeepSheet(s32 hand); // Maria: a hand weapon's sheet just loaded: keep a copy (D106)

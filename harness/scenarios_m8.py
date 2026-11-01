@@ -362,6 +362,55 @@ def pause_menu_portrait(run, ch):
     run.expect(bytes(e.read_bytes(e.read(MENU_STR), 8)) == ALUCARD_NAME, "and so is the game's name")
 
 
+WEAPON_SELF, WEAPON_CLUT_OFS = 0x80710000, 0x7020  # module/link.h: CoopWeapon
+WEAPON_PRG, FRAMES_OFS, PAL_SIZE = 0x8017A000, 0x40, 0x20
+OFFHAND_PALS, BANK_PAL_Y = 0x2D0, 0x1F0  # module/offhand.c
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def offhand_frame_palettes_richter(run):
+    """Issue 65: each frame of an off-hand swing draws with the palette the weapon's frame asks
+    for, as in Alucard's hands, not with Richter's own."""
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    bad, many = [], []
+    for item, what in OFFHAND_ITEMS:
+        e.load_state(start)
+        e.write(EQUIPMENT, item)
+        reload_as(run, mb, CHAR_RICHTER)
+        run.step(90)  # the module loads the weapon
+        seen = set()
+        for i in range(120):
+            run.step(1, "circle" if i % 40 == 0 else "")
+            for slot in range(4, 0x40):
+                ent = e.entity(slot)
+                eid = e.read(ent, "<H", 0x26)
+                if eid < 0xE0:
+                    continue
+                hand = int(eid >= 0xF0)
+                prg, own = WEAPON_PRG + hand * 0x3000, WEAPON_SELF + hand * 0x8000
+                pal, frame = e.read(ent, "<H", 0x16), e.read(ent, "<H", 0x56) & 0x7FFF
+                if not OFFHAND_PALS <= pal < OFFHAND_PALS + 48 or not frame:
+                    continue
+                parts = e.read(prg + FRAMES_OFS + frame * 4)
+                if not prg <= parts < prg + 0x3000:
+                    continue
+                clut = e.read(parts + 2 + 0xA, "<h")
+                seen.add(clut)
+                k = pal - OFFHAND_PALS + clut  # as RenderEntities adds them
+                want = list(struct.unpack("<16H", e.read_bytes(own + WEAPON_CLUT_OFS + (k % 24) * PAL_SIZE, PAL_SIZE)))
+                if list(e.vram_rect(k % 16 * 16, 512 + BANK_PAL_Y + k // 16, 16, 1)[0]) != want:
+                    bad.append((what, i, frame, clut))
+            if what == "sword" and i == 8:
+                e.screenshot(TOOLS["out"] / run.name / "sword.png")
+        many.append((what, sorted(seen)))
+    run.expect(any(s for _, s in many), "swings were seen", many=many)
+    run.expect(not bad, "every frame has its palette", bad=bad[:8], n=len(bad), many=many)
+    run.expect(len(dict(many)["sword"]) > 1, "the sword really uses several", many=many)
+    run.expect(e.read("g_ClutIds", "<H", 2 * OFFHAND_PALS) & 0x8000 == 0, "the table is the game's after drawing")
+
+
 SERVANT_LOADED = 0x80073064  # g_ServantLoaded
 HOLY_SYMBOL, BAT_CARD, GHOST_CARD = 14, 18, 19
 FAERIE_CARD, DEMON_CARD, SWORD_CARD = 0x14, 0x15, 0x16

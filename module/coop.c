@@ -166,7 +166,9 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
+    OffhandRenderStart();
     RenderEntities();
+    OffhandRenderEnd();
     PLAYER.animCurFrame = frame; // (the partner's frame swaps PLAYER out and back)
     PartnerFrame(); // M13: the partner's own update and drawing, after player 1's
     WeaponsDraw();
