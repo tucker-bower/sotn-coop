@@ -78,7 +78,7 @@ static void CapturePresence(CoopPresence* p) {
         p->flags |= PRESENCE_BOSS;
     }
     p->aggroSwitches = BossSwitches();
-    if (g_CutsceneHasControl) {
+    if (ArriveSharedScene()) {
         p->flags |= PRESENCE_CUTSCENE;
     }
     ArrivePresence(p);

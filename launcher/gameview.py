@@ -9,7 +9,9 @@ from array import array
 
 import pygame
 
-from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY,
+import report
+from display import BAR
+from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
@@ -17,6 +19,7 @@ from winmenu import MENU_EVENT
 
 BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (pauses, never quits the app)
 
+STUCK_FRAMES = 3600    # a scene with no one moving this long: the status bar says so
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
 PARTNER_LOST_S = 10
@@ -174,6 +177,11 @@ class Audio:
         with self.lock:
             self.buf.clear()
 
+    def forget_wait(self, stats):
+        """The games stood still in the note box: what the sound did meanwhile isn't an underrun."""
+        self.pulls, self.underruns = stats["pulls"], stats["underruns"]
+        self.short_bytes = round(stats["short_ms"] * 176.4)
+
     def stats(self):
         return {"pushes": self.pushes, "clipped": self.clipped, "pulls": self.pulls, "underruns": self.underruns, "short_ms": round(self.short_bytes / 176.4),
                 "dropped_ms": round(self.dropped_bytes / 176.4)}
@@ -283,6 +291,8 @@ class GameView:
         self.font = pygame.font.SysFont("consolas", 16)
         self.big = pygame.font.SysFont("georgia", 28)
         self.rolling = collections.deque(maxlen=2)
+        self.journal = report.Journal()
+        self.still = {}
         self.inputs = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.frame_times = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.notice, self.notice_until = "", 0
@@ -368,14 +378,17 @@ class GameView:
             pygame.key.stop_text_input()
 
     def report(self, note=None):
-        import report
         shot = self.display.screenshot()  # the window as it was: the games, not the note box
+        shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
+        taken = report.snapshot(self.games, self.audio)
         interactive = note is None
         if interactive:
             note = self.ask_note()
         path = report.write(self.games, self.playthrough, shot, self.rolling, self.inputs,
-                            self.frame_times, self.pads.names(), note,
-                            extra={"audio": self.audio.stats() if self.audio else None, "solo": self.solo})
+                            self.frame_times, self.pads.names(), note, extra={"solo": self.solo},
+                            taken=taken, journal=self.journal)
+        if self.audio:
+            self.audio.forget_wait(taken["audio"])
         if not interactive:
             self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
         elif not report.can_send():
@@ -403,13 +416,13 @@ class GameView:
                 if ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button == pygame.CONTROLLER_BUTTON_B:
                     return False
             self.overlay("Send this report?",
-                         ["It emails your note, the game's state, logs and screenshots to the SOTN Co-op team.",
+                         ["It emails your note, screenshots, inputs, logs, game state and memory cards to the",
+                          "SOTN Co-op team. Your folders, disc path, typed name and IP address are removed.",
                           "Enter / Cross: send.   Esc / Circle: keep it on this device."])
             pygame.time.wait(16)
 
     def send_report(self, path, note):
         """In the background: the games carry on, and online the partner never waits."""
-        import report
         self.say("Sending the bug report...", 3600)
 
         def run():
@@ -587,6 +600,17 @@ class GameView:
         return (f"{'Together' if together else 'Apart'}   ·   music: {'left' if self.music == 0 else 'right'} "
                 f"({self.music_mode}, F1)   ·   F9: report a problem   ·   Esc: pause   ·   {fps}{sim}"), (pa, pb)
 
+    def stuck_note(self, presences):
+        """Says so if a player has stood still in a scene for a long time."""
+        for i, p in enumerate(presences):
+            state = (p.stage, p.room_left, p.room_top, p.x, p.y)
+            if not p.flags & (BUSY | CUTSCENE) or state != self.still.get(i, (None, 0))[0]:
+                self.still[i] = (state, self.frame)
+            elif self.frame - self.still[i][1] > STUCK_FRAMES:
+                who = "Your partner" if self.online and i else f"Player {i + 1}"
+                return f"{who} seems stuck in a scene. Esc: pause, to quit and Continue"
+        return None
+
     started = False  # a picture has come from the game (before that, its boot's black screen)
 
     def run(self):
@@ -674,6 +698,8 @@ class GameView:
                         for i, g in enumerate(self.games):
                             g.mailbox("set_control", (0 if i == self.music else CONTROL_MUTE_MUSIC) | self.aggro)
                 status, pres_list = self.status_line(clock)
+                self.journal.note(self.frame, pres_list, getattr(self, "partner_state", None))
+                status = self.stuck_note(pres_list) or status
                 if self.moments:
                     for event, where in self.moments.check(pres_list):
                         self.moment(event, where)
