@@ -10,20 +10,71 @@ Everything needed to see, and replay, what happened:
                   presences, the player's note
     launcher.log  the launcher's log
     session.log   the game processes' log (connecting, the relay)
-harness/replay.py opens these zips.
+harness/replay.py opens these zips. Home folders and IP addresses are taken out of the text files.
+
+send() emails a report (D144): Resend's API with a send-only key that build_release.sh and
+android/build.sh put in report_key.txt. Its sandbox sender reaches only the key's own account,
+REPORT_EMAIL, so all a key lifted from the app can do is fill that inbox. A build without a key
+tells the player to email the zip themselves.
 """
 
+import base64
 import io
 import json
+import os
 import platform
+import re
+import ssl
 import sys
 import time
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
 from paths import data_dir, load_settings, reports_dir
 
 VERSION = "0.13.0-dev"  # the launcher's
+REPORT_EMAIL = "sotncoop@gmail.com"
+SEND_URL = "https://api.resend.com/emails"
+SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
+KEY_FILE = Path(__file__).resolve().parent / "report_key.txt"
+MAX_SEND = 28 * 2 ** 20  # a bigger zip can be emailed by hand, or asked for
+IP = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+
+
+def scrub(text):
+    """A report's text, without the player's home folder or anyone's IP address."""
+    home = str(Path.home())
+    for form in (home, json.dumps(home)[1:-1]):
+        text = text.replace(form, "~")
+    return IP.sub("x.x.x.x", text)
+
+
+def can_send():
+    return KEY_FILE.is_file()
+
+
+def send(path, note=""):
+    """Emails a report. Returns None, or what went wrong, for the player."""
+    path = Path(path)
+    if path.stat().st_size > MAX_SEND:
+        return "it's too big to send"
+    body = {"from": SEND_FROM, "to": [REPORT_EMAIL], "subject": f"Bug report {path.stem} ({VERSION})",
+            "text": note or "(no note)",
+            "attachments": [{"filename": path.name, "content": base64.b64encode(path.read_bytes()).decode()}]}
+    req = urllib.request.Request(SEND_URL, data=json.dumps(body).encode(), method="POST", headers={
+        "Authorization": f"Bearer {KEY_FILE.read_text().strip()}", "Content-Type": "application/json",
+        "User-Agent": f"sotn-coop/{VERSION}"})
+    tls = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or None)  # as link/connect.py
+    try:
+        with urllib.request.urlopen(req, timeout=120, context=tls if SEND_URL.startswith("https") else None) as r:
+            r.read()
+    except urllib.error.HTTPError as e:
+        return f"the mail service said {e.code}"
+    except OSError:
+        return "no connection"
+    return None
 
 
 def _png(surface_or_image):
@@ -54,7 +105,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             if shot:
                 z.writestr(f"now/{who}.png", _png(shot))
             try:
-                z.writestr(f"link-{who}.json", json.dumps(g.host("log_dump")))
+                z.writestr(f"link-{who}.json", scrub(json.dumps(g.host("log_dump"))))
             except Exception as e:  # noqa: BLE001 - a report should never fail to be written
                 z.writestr(f"link-{who}.json", json.dumps({"error": str(e)}))
         if playthrough and playthrough.joint_save.exists():
@@ -77,9 +128,9 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             "rolling_frames": [entry[0] for entry in rolling], "note": note, "time": time.time(),
         }
         about.update(extra or {})
-        z.writestr("about.json", json.dumps(about, indent=1, default=str))
+        z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str)))
         for name in ("launcher.log", "session.log"):
             log = data_dir() / name
             if log.exists():
-                z.write(log, name)
+                z.writestr(name, scrub(log.read_text(errors="replace")))
     return path

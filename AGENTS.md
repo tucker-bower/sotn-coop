@@ -54,7 +54,7 @@ Git and PRs hold the history, so don't write session logs. Replace what's out of
 - **Minimize upstream diffs.** Mod code lives in this repo. Changes to sotn-decomp and SwanStation go in `patches/`, as small, well-commented hooks, so updating the pinned versions stays cheap.
 - **Tooling in Python** where practical, so Tucker can read and modify it easily.
 - **Evidence over claims.** "Works" means a test passes. Attach the results, plus a short clip or screenshot for anything visual. Prefer reading RAM to reading screenshots: it's cheaper and exact.
-- **Releases:** Tucker publishes them. Upload only to a release that's still a draft, and never replace a published installer: make a new version.
+- **Releases:** Tucker publishes them. Upload only to a release that's still a draft, and never replace a published installer: make a new version. Every release's notes (`docs/releases/`) include a clear, concise changelog written for players, and Tucker approves the text first.
 - Commit messages end with the session attribution lines. PR descriptions end with the Claude Code footer.
 
 ## Testing

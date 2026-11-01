@@ -370,13 +370,53 @@ class GameView:
     def report(self, note=None):
         import report
         shot = self.display.screenshot()  # the window as it was: the games, not the note box
-        if note is None:
+        interactive = note is None
+        if interactive:
             note = self.ask_note()
         path = report.write(self.games, self.playthrough, shot, self.rolling, self.inputs,
                             self.frame_times, self.pads.names(), note,
                             extra={"audio": self.audio.stats() if self.audio else None, "solo": self.solo})
-        self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
+        if not interactive:
+            self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
+        elif not report.can_send():
+            self.say(f"Bug report saved in {path.parent}. Please email it to {report.REPORT_EMAIL}", 600)
+        elif self.ask_send():
+            self.send_report(path, note)
+        else:
+            self.say(f"Bug report kept: {path.name} (in {path.parent})", 480)
         return path
+
+    def ask_send(self):
+        """Send the report, or keep it here? The games wait."""
+        while True:
+            for ev in pygame.event.get():
+                if self.display.handle(ev):
+                    continue
+                if ev.type in (pygame.QUIT, pygame.WINDOWCLOSE):
+                    return False
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_RETURN:
+                    return True
+                if ev.type == pygame.KEYDOWN and ev.key in BACK_KEYS:
+                    return False
+                if ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button == pygame.CONTROLLER_BUTTON_A:
+                    return True
+                if ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button == pygame.CONTROLLER_BUTTON_B:
+                    return False
+            self.overlay("Send this report?",
+                         ["It emails your note, the game's state, logs and screenshots to the SOTN Co-op team.",
+                          "Enter / Cross: send.   Esc / Circle: keep it on this device."])
+            pygame.time.wait(16)
+
+    def send_report(self, path, note):
+        """In the background: the games carry on, and online the partner never waits."""
+        import report
+        self.say("Sending the bug report...", 3600)
+
+        def run():
+            error = report.send(path, note)
+            self.say(f"Couldn't send the bug report: {error}. It's in {path.parent}" if error
+                     else "Bug report sent. Thank you!", 480)
+        threading.Thread(target=run, daemon=True).start()
 
     def write_cards(self):
         if self.save_cards:

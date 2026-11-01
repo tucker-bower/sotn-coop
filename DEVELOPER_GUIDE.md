@@ -25,12 +25,7 @@ How to set up a machine to work on SOTN Co-op. Players don't need any of this: t
 ## Your local environment
 Three git-ignored places hold what's specific to your machine.
 
-**`env.toml`: paths.** `env.example.toml` lists every path and its default, and is committed. To change one, put only that entry in `env.toml`:
-```toml
-[paths]
-win_emulators = "/mnt/c/Users/you/Emulators"   # Windows tools, seen from WSL
-win_masters = "/mnt/c/Users/you/Emulators/SOTN"  # your master copies of the discs
-```
+**`env.toml`: paths.** `env.example.toml` holds every default. To change one, run `cp env.toml.example env.toml` and uncomment only the entries that differ on your machine.
 `scripts/doctor.py` shows the paths it found. You can skip this file if the defaults suit you.
 
 **`LOCAL.md`: notes for agents and yourself.** Agents read it if it exists, so use it for anything about your setup that they should know: your folders, your test devices, how you like builds delivered. Keep personal details here, never in tracked files.

@@ -36,6 +36,7 @@ cp "$ROOT/build/coop/coop.map" "$STAGE/build/coop/"
 cp "$MOD/.env/sys/scph5501.bin" "$STAGE/bios/openbios-fast.bin"   # OpenBIOS with FASTBOOT (scripts/bootstrap.sh)
 cp "$EMU/PCSX-Redux/openbios.bin" "$STAGE/bios/openbios.bin"     # PCSX-Redux's build: savestates from before 0.12
 cp "$MOD/env.example.toml" "$MOD/android/main.py" "$STAGE/"
+"$PY" "$MOD/scripts/report_key.py" "$STAGE/launcher/report_key.txt"   # F9's Send button (D144)
 mkdir -p "$STAGE/LICENSES" && cp "$MOD/NOTICE" "$STAGE/LICENSES/README.txt" && cp "$MOD/LICENSE" "$STAGE/LICENSES/AGPL-3.0.txt" && cp "$MOD"/licenses/* "$STAGE/LICENSES/"
 # libretro.py: pure Python (its sample cores and their GL libraries aren't needed)
 SP="$("$PY" -c "import libretro, os; print(os.path.dirname(os.path.dirname(libretro.__file__)))")"

@@ -7,10 +7,10 @@ _Updated 2026-10-31._
 
 - **Latest release:** v0.12.0, the public beta of 1.0 (D121). Everything since is only on `main` (0.13.0-dev): the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
 - **Tests:** everyday 211 of 212 (the failure is under "Known issues"); last `--full` 283 of 283.
-- **Next:** by the priority order (D109), M16. v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114), so a new beta probably comes first.
+- **Next:** release v0.13.0 (the text is in `docs/releases/`, awaiting Tucker's approval), then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
 
 ## Decisions needed
-- **New beta first, or M16?** M13–M15 haven't reached players. A beta needs `--full`, the boot check and a playtest before release; M16 would otherwise build further on unplaytested work. The agent's recommendation: beta first.
+- **F9's Send button needs a Resend key (D144):** a free Resend account on sotncoop@gmail.com, with a send-only key in `env.toml`. Until then, builds tell players to email the zip.
 
 ## Known issues
 **Bugs**
@@ -64,7 +64,6 @@ The inverted castle's tests are built (D133), but it ships after v1.0 as v1.1 (D
 Tucker moves one of these into a milestone when he wants it worked on.
 
 - **DXC dialogue and voice acting (D84):** an option to use the *Dracula X Chronicles* English script and voices: converting the PSP's ATRAC3 audio and replacing the cutscene scripts in 8 stages. It needs the player's DXC disc.
-- **F9 sends bug reports (D86):** the snapshot plus a short form, sent to a private repo through a small hosted relay. It needs a free Cloudflare account and a GitHub token from Tucker. Design: `design/backlog-report-sending.md`.
 - **A rescue menu for playtesters:** "I'm stuck" in the pause menu, to get past a co-op bug and keep playing. Design: `design/backlog-rescue-menu.md`.
 - **Power tuning and more characters' testing (D111):** waits for community feedback on v1.0.
 - **AYN Thor dual screen (D111):** top screen you, bottom screen your partner, and a metal bat in place of the blood vial's cork (centred, with a pixel test).

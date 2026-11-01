@@ -2,6 +2,7 @@
 .env
 .env/
 env.toml
+launcher/report_key.txt
 patcher/*.bps
 dist/
 disks

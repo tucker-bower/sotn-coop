@@ -16,11 +16,12 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
 | `play.py` | **Vestigial.** Developer presets, started only by `scripts/install_launcher.sh`'s shortcuts. |
-| `report.py` | F9: writes the bug report zip. |
+| `report.py` | F9: writes the bug report zip and emails it. |
 | `smoke.py` | **Vestigial.** Early end-to-end check, not in any runner; the UI flows in `uxdriver.py` replaced it. |
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
 | `test_characters.py` | Checks Maria's build from a DXC disc. |
+| `test_report.py` | Checks what a report sends and removes. |
 | `test_settings.py` | Checks settings defaults, such as PvP being off. |
 | `uxdriver.py` | Plays the real app like a person and photographs every screen. |
 | `winmenu.py` | The native Windows menu bar. |

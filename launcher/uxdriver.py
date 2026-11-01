@@ -543,6 +543,43 @@ def _startup(pg):
     ]
 
 
+def _report_send(pg):
+    """F9, a note, Send: the report reaches the mail service (a fake one here), with the note."""
+    import http.server
+    import threading
+    import report
+    got = []
+
+    class Mail(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            got.append((self.headers["Authorization"], json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    def start(d):
+        mail = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Mail)
+        threading.Thread(target=mail.serve_forever, daemon=True).start()
+        report.SEND_URL = f"http://127.0.0.1:{mail.server_port}/emails"
+        report.KEY_FILE = Path(os.environ["COOP_DATA"]) / "report_key.txt"
+        report.KEY_FILE.write_text("test-key\n")
+    steps = _solo(pg)
+    i = next(k for k, s in enumerate(steps) if s[0] == "game_frames")
+    return steps[:i] + [
+        ("call", start), ("game_frames", 300), ("key", pg.K_F9), ("wait", 30), ("type", "stuck in a wall"),
+        ("wait", 10), ("key", pg.K_RETURN), ("wait", 30), ("shot", "send-report"), ("key", pg.K_RETURN),
+        ("until", lambda d: got), ("wait", 30), ("shot", "report-sent"),
+        ("expect", lambda d: got[0][0] == "Bearer test-key", "the key goes with it"),
+        ("expect", lambda d: got[0][1]["to"] == [report.REPORT_EMAIL], "it goes to the reports address"),
+        ("expect", lambda d: got[0][1]["text"] == "stuck in a wall", "the note goes with it"),
+        ("expect", lambda d: len(got[0][1]["attachments"][0]["content"]) > 1000, "the zip goes with it"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+    ]
+
+
 def _window(pg):
     steps = _couch(pg, quit_at_end=False)[:-2]
     i = next(k for k, s in enumerate(steps) if s[0] == "unplug")
@@ -849,7 +886,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"report_send": _report_send, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
