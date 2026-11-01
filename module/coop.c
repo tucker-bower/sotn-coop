@@ -88,18 +88,24 @@ static void CapturePresence(CoopPresence* p) {
 void SetCdVolume(s8 s_num, s16 arg1, s16 arg2); // DRA
 extern s16 g_CdVolume;
 void SsSetSerialVol(s16 s_num, s16 voll, s16 volr);
+void SsSetMVol(s16 voll, s16 volr);
+extern s16 g_SeqPlayingId, g_volumeL, g_volumeR;
 
 // CONTROL_MUTE_MUSIC: silence the CD (XA) music, and keep it silent through the game's own
 // volume changes (fades, stage changes) by setting it every frame. Unmuted, the game's own
-// volume comes back.
+// volume comes back. The Librarian's music isn't on the CD: it's a sequence, with its own volume.
 static void MusicUpdate(void) {
     static bool muted;
 
     if (g_CoopLink.control & CONTROL_MUTE_MUSIC) {
         SsSetSerialVol(0, 0, 0);
+        if (g_SeqPlayingId) { // SsSeqSetVol left a third of it audible: the voices' master volume
+            SsSetMVol(0, 0);
+        }
         muted = true;
     } else if (muted) {
         SetCdVolume(0, g_CdVolume, g_CdVolume);
+        SsSetMVol(g_volumeL, g_volumeR);
         muted = false;
     }
 }

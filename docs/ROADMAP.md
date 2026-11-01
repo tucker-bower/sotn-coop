@@ -7,7 +7,7 @@ _Updated 2026-11-01._
 
 - **Latest release:** v0.13.0, with v0.12.0 as the fallback if it feels worse (D121). It has the partner as a real second player (M13), Slippi-style connecting (M14), PvP (M15), inverted castle coverage and boss rush.
 - **Tests:** last `--full` 300 of 301 (2026-11-01); `ui_online` failed under full load, then passed 3 of 3 alone.
-- **Next:** a release with F9's Send button (the Resend key is in `env.toml`, and test reports were accepted) and the fixes for issues 19–22, then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
+- **Next:** a release with F9's Send button (the Resend key is in `env.toml`, and test reports were accepted) and the fixes for issues 19–26 and 29, then M16 by the priority order (D109). v1.0 follows playtesters' feedback (D121) and the first-castle playthrough in segments (D114).
 
 ## Decisions needed
 None.

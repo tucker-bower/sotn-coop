@@ -741,3 +741,9 @@ A walk steered by `padSim` that hasn't moved in 3 seconds hops 64 px up and 16 p
 
 **D147: What F9 reports keep** (agent-default, 2026-11-01)
 Folders and typed names are overwritten at the same length in every file, savestates included. The disc's file name stays, because a savestate won't load without it. `about.json` keeps versions, the OS family, gameplay settings and the number of controllers. Typed names under 3 letters stay in binary files, since their bytes turn up by chance and identify no one. Screenshots can still show what's on screen, which the Send prompt doesn't promise to remove. `session.log` drops the core's messages: libretro.py can't format them.
+
+**D148: One attack at a time for Richter** (Tucker, 2026-11-01)
+○ waits for his own attack to end, and Square is ignored until an off-hand swing ends (issue 29). Maria's guardians aren't changed: her attacks run on another system, and no one has reported this for her.
+
+**D149: A muted game with a sequence playing is silent** (agent-default, 2026-11-01)
+The Librarian's music is a sequence, not CD audio, and `SsSeqSetVol` left a third of it audible, so the music-muted game sets the voices' master volume to 0 while a sequence plays. Its sound effects go quiet too, for that game, in his shop only.

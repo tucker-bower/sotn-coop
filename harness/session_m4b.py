@@ -70,6 +70,51 @@ def sound_level(g, frames):
 
 
 @session_scenario(starts=(None, None))
+def music_mute_in_shop(run):
+    """Issue 26: the Librarian's music is a sequence, not the CD's: the mute silences it too."""
+    from session_m12 import LIBRARIAN_STARTS, in_shop
+    with Session(COOP_DISC, starts=(LIBRARIAN_STARTS[0], LIBRARIAN_STARTS[0]), audio=True) as s:
+        a = s.a
+        a.write("g_CastleFlags", 0, "<B", 0x72)  # he hasn't been met
+        for i in range(6000):
+            a.frame("left+cross" if i % 40 < 10 else "left")
+            if in_shop(a):
+                break
+        run.expect(in_shop(a), "A reaches the shop", at=a.snapshot())
+        sound_level(a, 240)
+        loud = sound_level(a, 180)
+        a.mailbox("set_control", CONTROL_MUTE_MUSIC)
+        sound_level(a, 240)  # the notes already sounding ring out: the mute applies to new ones
+        quiet = sound_level(a, 180)
+        a.mailbox("set_control", 0)
+        sound_level(a, 240)
+        back = sound_level(a, 180)
+        run.expect(loud > 100, "his music plays", level=round(loud))
+        run.expect(quiet < loud / 10, "muted: (almost) silent", level=round(quiet), music=round(loud))
+        run.expect(back > loud / 2, "unmuted: his music is back", level=round(back), music=round(loud))
+
+
+@session_scenario()
+def rolling_states_stay_cheap(run):
+    """Issue 23: F9's rolling state costs no visible hitch, even for two games, and loads."""
+    import time
+    a, b = run.s.a, run.s.b
+    worst = 0
+    for frame in range(1, 7):
+        t = time.perf_counter()
+        a.keep_state(frame)
+        b.keep_state(frame)
+        worst = max(worst, (time.perf_counter() - t) if frame > 2 else 0)  # after the buffers' first use
+        run.step(5)
+    run.expect(worst < 0.008, "both games' states take under 8 ms", worst_ms=round(worst * 1000, 1))
+    kept = a.kept_states()
+    run.expect([tag for tag, _ in kept] == [5, 6], "the last two are kept", tags=[tag for tag, _ in kept])
+    a.load_state(kept[-1][1])
+    run.step(10)
+    run.expect(a.mailbox("self_presence").flags != 0, "and one loads")
+
+
+@session_scenario(starts=(None, None))
 def music_mute(run):
     """Couch play: only one game plays music. With CONTROL_MUTE_MUSIC the Alchemy Lab's music goes
     silent, and comes back when it's cleared. (Not the entrance: its thunder is a sound effect.)"""

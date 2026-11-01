@@ -277,6 +277,7 @@ static void AluSwing(s32 hand) {
     EntityFactory(f);
     f->pfnUpdate = EntityFactory;
     g_CurrentEntity = cur;
+    g_pads[0].tapped &= ~PAD_SQUARE;
     ReduceWeapon(hand);
 }
 
@@ -291,6 +292,7 @@ static void AluAnimate(void) {
         g_pads[0].pressed &= ~(PAD_LEFT | PAD_RIGHT);
         g_pads[0].tapped &= ~(PAD_LEFT | PAD_RIGHT);
     }
+    g_pads[0].tapped &= ~PAD_SQUARE; // one attack at a time: no whip until the swing ends
     g_CurrentEntity = &s_Alu;
     PlayAnimation(D_800B0130, D_800B01B8);
     g_CurrentEntity = cur;
@@ -481,7 +483,8 @@ void OffhandUpdate(void) {
     if (s_PlaceIn && !--s_PlaceIn) {
         PlaceSheet();
     }
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging) {
+    // g_Player.unk46: an attack of their own is under way, and ○ waits for it as a whip does
+    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging || g_Player.unk46) {
         return;
     }
     for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○

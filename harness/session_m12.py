@@ -776,6 +776,33 @@ def report_state_still_loads(run):
     run.expect(a.mailbox("self_presence").frame != frame, "and the game runs on from it")
 
 
+@session_scenario(starts=(None, None))
+def solo_continue_picture_width(run):
+    """Issue 24: Continue from the title, one game: the picture is the game's 256 wide, not the
+    title's 512 with the game in its left half."""
+    from link.mailbox import CMD_LOAD_SAVE, IN_PLAY
+    from session import Session
+    from module import COOP_DISC
+    save = (STARTS / "Scene - The Librarian.save").read_bytes()
+    with Session(COOP_DISC, starts=(None, None)) as s:
+        a = s.a
+        for _ in range(9000):
+            s.step(1)
+            if a.read("g_GameState") == 1 and a.raw_frame()[0] == 512:
+                break
+        run.expect(a.raw_frame()[0] == 512, "the title is 512 wide", width=a.raw_frame()[0])
+        a.mailbox("put_save", save)
+        a.mailbox("command", CMD_LOAD_SAVE)
+        for i in range(3000):
+            s.step(1)
+            p = a.mailbox("self_presence")
+            if p.flags & IN_PLAY and not p.flags & BUSY:
+                break
+        run.expect(p.flags & IN_PLAY, "in play", frames=i)
+        s.step(120)
+        run.expect(a.raw_frame()[0] == 256, "the picture is the game's width", width=a.raw_frame()[0])
+
+
 # --- doors in a shared room (D107) ----------------------------------------------------------
 @session_scenario(starts=("no1", "no1"))
 def guest_opens_red_door(run):

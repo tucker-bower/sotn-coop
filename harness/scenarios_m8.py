@@ -221,6 +221,7 @@ NO3, HALL_ROOM = 0x41, 72  # the castle entrance's zombie hall (room 14,40)
 OFFHAND_ITEMS = ((19, "short sword"), (86, "sword"), (27, "two-handed sword"), (128, "club"),
                  (85, "fist"), (133, "throwing weapon"))
 LEATHER_SHIELD, POTION, APPLE = 5, 159, 30
+ATTACK_NOW = 0x80072F66  # g_Player.unk46: an attack of the player's own is under way
 
 
 def offhand_entity(e):
@@ -295,6 +296,39 @@ def offhand_weapons(run, ch):
         run.step(1, "circle")
         run.step(120)
         run.expect(e.read(HP_NOW, "<i") > 10, f"{what} heals", hp=e.read(HP_NOW, "<i"))
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def offhand_one_attack_at_a_time_richter(run):
+    """Issue 29: ○ waits for the whip to end, and the whip waits for ○'s swing: never both."""
+    e, mb, ch = run.emu, mailbox(run), CHAR_RICHTER
+    e.write(EQUIPMENT, OFFHAND_ITEMS[0][0])
+    reload_as(run, mb, ch)
+    run.step(90)  # the module loads the weapon
+    run.step(2, "square")
+    run.step(3)
+    whipping = e.read(ATTACK_NOW, "<H")
+    run.expect(whipping, "the whip is out", unk46=whipping)
+    run.step(2, "circle")
+    swung = False
+    for _ in range(40):
+        run.step(1)
+        swung |= offhand_entity(e) is not None and e.read(ATTACK_NOW, "<H") != 0
+    run.expect(not swung, "○ does nothing during the whip")
+    for _ in range(120):
+        if not e.read(ATTACK_NOW, "<H"):
+            break
+        run.step(1)
+    run.step(30)
+    run.step(1, "circle")
+    run.step(3)
+    run.expect(offhand_entity(e) is not None, "○ works once the whip is over")
+    run.step(2, "square")
+    both = False
+    for _ in range(12):
+        run.step(1)
+        both |= bool(e.read(ATTACK_NOW, "<H")) and offhand_entity(e) is not None
+    run.expect(not both, "the whip does nothing during the swing")
 
 
 SERVANT_LOADED = 0x80073064  # g_ServantLoaded

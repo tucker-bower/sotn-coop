@@ -54,6 +54,7 @@ from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
 WINDOW_TITLE = "SOTN Co-op"
 SIZE = CANVAS
+PAGE_TOP, PAGE_LINE = 140, 24  # a help page's first line, and its line height
 INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (150, 20, 30), (12, 8, 14)
 OK_GREEN = (140, 200, 120)
 # OpenBIOS built with FASTBOOT (scripts/bootstrap.sh): the game starts 5 s sooner than on
@@ -136,6 +137,7 @@ class UI:
     def __init__(self, display, on_action):
         self.display = display
         self.screen = display.canvas
+        self.page_top = 0  # the line a help page starts at
         self.on_action = on_action  # menu-bar items that don't go anywhere (View, Help...)
         self.title = pygame.font.SysFont("georgia", 34, bold=True)
         self.big = pygame.font.SysFont("georgia", 26)
@@ -327,18 +329,29 @@ class UI:
         self.menu(heading, [(button, "")], text)
 
     def page(self, heading, text):
-        """A page of text (help), then OK."""
+        """A page of text (help), then OK. A long one scrolls: up and down, or the mouse wheel."""
         lines = text.split("\n")
+        rows = (SIZE[1] - 80 - PAGE_TOP) // PAGE_LINE
+        last = max(len(lines) - rows, 0)
+        self.page_top = 0
         while True:
-            for a in self.events():
+            for a in self.events(raw=True):
                 if a == "quit":
                     raise SystemExit
                 if a in ("ok", "back") or (isinstance(a, tuple) and a[0] == "click"):
                     return
+                if a in ("up", "down"):
+                    self.page_top += 1 if a == "down" else -1
+                elif isinstance(a, tuple) and a[0] == "event" and a[1].type == pygame.MOUSEWHEEL:
+                    self.page_top -= a[1].y
+                self.page_top = min(max(self.page_top, 0), last)
             self.frame(heading)
-            for k, line in enumerate(lines):
+            for k, line in enumerate(lines[self.page_top:self.page_top + rows]):
                 t = self.small.render(line, True, INK)
-                self.screen.blit(t, (90, 140 + k * 24))
+                self.screen.blit(t, (90, PAGE_TOP + k * PAGE_LINE))
+            if last:
+                t = self.small.render(f"Up / down to scroll ({self.page_top + 1}-{self.page_top + rows} of {len(lines)})", True, INK)
+                self.screen.blit(t, (SIZE[0] - t.get_width() - 90, PAGE_TOP - PAGE_LINE))
             self.items([("OK", "")], 0, top=SIZE[1] - 80)
             self.flip()
             pygame.time.wait(16)
