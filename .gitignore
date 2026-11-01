@@ -16,3 +16,7 @@ __pycache__/
 *.state
 *.mcd
 .env/android/
+
+# Tucker's machine and devices: setup notes and playtest sheets
+LOCAL.md
+local/

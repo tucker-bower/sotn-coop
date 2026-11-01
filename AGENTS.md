@@ -4,7 +4,7 @@ This file is how we work together. Before doing anything, read:
 1. `docs/TECHNICAL_SUMMARY.md`: what we've built and how it works.
 2. `docs/ROADMAP.md`, the "Now" section: where we are, what's next, and any open decisions.
 
-Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `SETUP.md`.
+Then run `scripts/doctor.py`, which checks the toolchain, discs and build. Setup and paths are in `SETUP.md`. If `LOCAL.md` exists, read it too: it's git-ignored and covers this machine and its devices.
 
 ## Where things live
 Each fact has one home. Read these only when the task needs them, and search the long ones instead of reading them through.
@@ -18,6 +18,7 @@ Each fact has one home. Read these only when the task needs them, and search the
 | `docs/design/` | One design per milestone, with its acceptance criteria | Before and while building it |
 | `docs/link-protocol.md` | The wire protocol | The protocol changes |
 | `harness/README.md` | How to write tests | The test API changes |
+| `LOCAL.md` (git-ignored) | This machine, its devices, playtest workflow | The setup changes |
 
 Git and PRs hold the history, so don't write session logs. Replace what's out of date rather than adding to it: less is more.
 
@@ -29,7 +30,7 @@ Git and PRs hold the history, so don't write session logs. Replace what's out of
 1. **Design first.** Before each milestone, write a one-page proposal in `docs/design/Mx-<name>.md`, with 2–3 options, a recommendation, risks and **testable acceptance criteria**. Don't write milestone code until Tucker approves it. Small spikes to de-risk the proposal are fine.
 2. **Build autonomously** on a branch named `coop-mx-<short-name>`.
 3. **Open a PR** using the template below. If PRs are stacked, confirm the work actually reached `main` after merging.
-4. **Playtest** at milestones: deliver an installer and APK, with a short sheet of what to try in `docs/playtest/`.
+4. **Playtest** at milestones: deliver an installer and APK, with a short sheet of what to try.
 
 ## Decisions
 - **Reversible:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.
@@ -43,6 +44,7 @@ Git and PRs hold the history, so don't write session logs. Replace what's out of
 
 ## Engineering rules
 - **Never end a session with unsaved work.** At every natural checkpoint, and before you could run out of usage, update the docs, then commit and push, even if the work is unfinished. Mark unfinished work as such.
+- **Keep the repo clean of personal setup.** Local paths, device workflow and playtest sheets go in `LOCAL.md` and `local/`, which are git-ignored.
 - **Never commit game data:** disc images, extracted files, ROM-derived assets, or savestates containing game RAM. Check `git status` before every commit.
 - **Keep each game deterministic.** Timing-dependent behavior belongs in the host, never in the game.
 - **Emulator calls go through the one thin adapter.**
@@ -51,7 +53,6 @@ Git and PRs hold the history, so don't write session logs. Replace what's out of
 - **Tooling in Python** where practical, so Tucker can read and modify it easily.
 - **Evidence over claims.** "Works" means a test passes. Attach the results, plus a short clip or screenshot for anything visual. Prefer reading RAM to reading screenshots: it's cheaper and exact.
 - **Releases:** Tucker publishes them. Upload only to a release that's still a draft, and never replace a published installer: make a new version.
-- **Tucker's PC is in use.** Never capture the full desktop or steal focus. Capture only our own window.
 - Commit messages end with the session attribution lines. PR descriptions end with the Claude Code footer.
 
 ## Testing
@@ -79,12 +80,8 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 
 **New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True`). Keep everyday at 10 minutes or less by moving repetition to `--full`.
 
-**On Tucker's PC:** emulators are in `C:\Users\tucke\OneDrive\Desktop\Emulators`. Install what you need for cross-emulator checks there, and ask before installing anything outside that folder.
-
 ## PR template
 ```
-## What
-<one paragraph, outcome-focused>
 ## Acceptance criteria
 - [x] <criterion>: <evidence: test name / clip / numbers>
 ## Defaults I chose (reversible)

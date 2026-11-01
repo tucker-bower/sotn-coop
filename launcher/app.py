@@ -1264,7 +1264,7 @@ class Launcher:
         if c.get("state") == "failed":
             raise ConnectFailed(c.get("reason") or "")
         if c.get("left_s") is not None:
-            # which step it's on: says at once which side is stuck (Tucker's Thor test, 2026-10-23)
+            # which step it's on: says at once which side is stuck (a real device test, 2026-10-23)
             step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
                     "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
             if c.get("relay_error") and c.get("state") == "waiting":  # say so now, not in five minutes

@@ -74,7 +74,7 @@ for key in ("win_emulators", "win_masters"):
 
 print("== Android release key (D112)")
 ks = Path(os.path.expanduser(ENV.get("android", {}).get("keystore", "-")))
-check(ks.exists(), f"keystore: {ks}", "restore it and password_file from Tucker's password manager (env.example.toml [android])",
+check(ks.exists(), f"keystore: {ks}", "restore it and password_file from your password manager (env.example.toml [android])",
       required=False)
 
 print("== hygiene")

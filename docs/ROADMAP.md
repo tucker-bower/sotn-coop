@@ -20,7 +20,7 @@ _Updated 2026-10-31._
 - **Richter's HUD name box** is blank after a save load (retail Richter too).
 - **Partner's body:** Alucard afterimages use some of DRA's 16 DR_ENV entries; the VRAM-to-CPU copy doesn't read bank 2, so a partner's death dissolve starts from player 1's frame.
 - **Off-hand weapons:** some frames' palette is wrong (a raised blade blue instead of white).
-- **Android:** sound underruns on the emulators (7–38%, CPU-bound); not yet checked on the Thor.
+- **Android:** sound underruns on the emulators (7–38%, CPU-bound); not yet checked on a real device.
 
 **Not covered by a test**
 - Shaft, and the inverted castle's scenes.
@@ -28,7 +28,7 @@ _Updated 2026-10-31._
 - Hit tests check the reaction, not its sound.
 - Power of Wolf and Skill of Wolf; the blue door live (world relics are checked in code only).
 - Leaving the Librarian's shop through his menu; the Succubus pairings (no saving in the Nightmare).
-- `android_pair` and `android_pc_join`: they fail from the emulators' test setup; the real Thor hosting the PC works.
+- `android_pair` and `android_pc_join`: they fail from the emulators' test setup; a real Android device hosting a PC works.
 - A real two-home online test.
 
 ## Milestones

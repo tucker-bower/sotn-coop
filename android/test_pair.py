@@ -7,7 +7,7 @@ the lobby, and play with the partner connected.
     python android/test_pair.py --pc [apk]   criterion 3: the PC launcher hosts, an emulator joins
     python android/test_pair.py --pc-join [apk]   criterion 3: an emulator hosts, the PC launcher joins
     python android/test_pair.py --room [apk]      as --pc-join, but the PC types the room code: they
-                                                  meet on the real ntfy.sh (Tucker's Thor playtest)
+                                                  meet on the real ntfy.sh (as a real device does)
 
 The emulators can't reach each other directly (each is behind its own NAT on this PC), so the
 joiner types the host's address as 10.0.2.2:PORT (this PC, from inside an emulator), which the
@@ -116,7 +116,7 @@ def pc_launcher(script, out, port, code_file, **env):
     shutil.rmtree(out.parent / "pc-data", ignore_errors=True)  # a fresh install, as the device's
     env = dict(os.environ, COOP_PORT=str(port), COOP_UX_CODE=str(code_file), SDL_VIDEODRIVER="dummy",
                SDL_AUDIODRIVER="dummy", COOP_UX_NO_AUDIO="1", COOP_DATA=str(out.parent / "pc-data"), **env)
-    pc_python = Path(os.environ.get("COOP_PYTHON", ROOT.parent / "sotn-decomp-coop" / ".venv" / "bin" / "python"))
+    pc_python = Path(os.environ.get("COOP_PYTHON", ROOT / ".env" / "src" / "sotn-decomp" / ".venv" / "bin" / "python"))
     return subprocess.Popen([str(pc_python), str(ROOT / "launcher" / "uxdriver.py"), script, "--out", str(out)],
                             env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 

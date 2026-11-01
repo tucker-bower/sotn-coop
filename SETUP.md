@@ -16,7 +16,7 @@ Everything is listed in `env.example.toml`. Override per machine in `env.toml` (
 | What | Where |
 |---|---|
 | Discs (working copies) | `disks/` |
-| Master copies of discs and BIOS | `win_masters` (on Tucker's PC: `OneDrive\Desktop\Emulators\SOTN`) |
+| Master copies of discs and BIOS | `win_masters` in `env.toml` |
 | SwanStation core, OpenBIOS, savestates, harness output | `.env/` (git-ignored) |
 | Python venv (decomp tools and harness) | `.env/src/sotn-decomp/.venv/` |
 | Matching build output | `.env/src/sotn-decomp/build/us/` |
@@ -25,4 +25,3 @@ Everything is listed in `env.example.toml`. Override per machine in `env.toml` (
 - Ubuntu 26.04 has no `gcc-mipsel-linux-gnu`, so the bootstrap installs it from 24.04 via a low-priority apt pin (D12).
 - If a first build fails partway through, run `rm -rf build/us` before rebuilding. Ninja keeps the broken objects.
 - Upstream `make disk` rewrites the tracked file `include/lba_us.h`. Restore it with `git checkout include/lba_us.h` before committing.
-- **Tucker's machine:** `.env` is a link into the old fork (`/home/tucker/sotn-decomp-coop/mods/co-op/.env`), and the decomp's `mods/co-op/module` is a link to this repo's `module/`. The decomp includes `mods/co-op/module/coop_api.h` through that link, so the path is real even though the repo no longer lives there.

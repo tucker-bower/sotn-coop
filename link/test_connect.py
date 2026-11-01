@@ -167,7 +167,7 @@ def main():
     check(a.host.connector.state == b.host.connector.state == "connected" and lan,
           f"same house: connected over the LAN (joiner's peer {b.t.peer})")
 
-    # Same house, and the relay can't be reached (Tucker's Thor, 2026-10-23: no CA certificates):
+    # Same house, and the relay can't be reached (a real device, 2026-10-23: no CA certificates):
     # the LAN broadcast to the usual port finds the partner anyway
     a, b = session(PORT_RESTRICTED, PORT_RESTRICTED, same_house=True, relay=DeadRelay(), port=GAME_PORT, seconds=5)
     check(a.host.connector.state == b.host.connector.state == "connected" and b.t.peer and b.t.peer[0].startswith("192.168."),
@@ -207,7 +207,7 @@ def main():
         check(bool(p.host.partner_hello) == want,
               f"a roomless HELO: the {role} {'takes it (ip:port)' if want else 'ignores it'}")
 
-    # Different versions (Tucker's Thor on 0.9.0-dev, his PC still on 0.7.1): told at once, by name.
+    # Different versions (one side on 0.9.0-dev, the other still on 0.7.1): told at once, by name.
     for what, ver in (("a newer joiner", {"link": 99, "app": "1.0.0"}), ("a joiner from before 0.9.0", {"link": 8, "app": None})):
         a, b = session(CONE, CONE, b_version=ver, seconds=10)
         sa, sb = a.host.connector.status(), b.host.connector.status()
@@ -215,7 +215,7 @@ def main():
         check(sa["state"] == "failed" and (old or sb["state"] == "failed") and "same version" in sa["reason"] and (ver["app"] or "older") in sa["reason"],
               f"{what}: {'the host is' if old else 'both are'} told within 10 s ({sa['reason']!r:.70})")
 
-    # Leaving (playtest 2026-10-25: closing the PC app left the Thor saying nothing): the partner
+    # Leaving (playtest 2026-10-25: closing the PC app left the partner saying nothing): the partner
     # is told at once, and it's forgotten when the partner comes back (a new host, a new sid).
     a, b = session(CONE, CONE, seconds=10)
     b.host.goodbye()

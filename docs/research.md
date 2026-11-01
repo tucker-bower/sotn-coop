@@ -9,11 +9,11 @@ What we've learned that the code and `TECHNICAL_SUMMARY.md` don't say: game inte
 - **A scripted boss kill can skip the death sequence** that writes the time-attack record.
 - **UI flows test the last release patch**, which `rebuild_fixtures.sh` now remakes. Before that, they tested a three-day-old build.
 - **Frame-drop baselines vary between soak runs:** sessions link over real loopback UDP with wall-clock hosts. Each game stays deterministic; the soak's 0.5% tolerance covers it.
-- **Android emulator hosts can't be reached in tests:** two emulators sit behind this PC's NAT, and they lost outside access after a WSL restart. The real Thor isn't affected.
+- **Android emulator hosts can't be reached in tests:** two emulators sit behind the PC's NAT, and they can lose outside access after a WSL restart. Real devices aren't affected.
 - **Writes through NULL land in BIOS RAM.** Player 1's controller dying for good has been this, three different ways (M13).
 
 **Debugging with real devices**
-- **Check installed versions first.** Four rounds of a Thor connection failure came from old builds: the PC still on 0.7.1, then an APK from before the fix. Different versions now say so by name.
+- **Check installed versions first.** Four rounds of a device connection failure came from old builds on one side. Different versions now say so by name.
 - `android/device.py` runs Windows adb on port 5038: the default port reaches WSL's adb server, which can't see USB.
 - Logs: `session.log` in the data folder on PC, logcat through `device.py log` on Android. F9 reports include them.
 - Windows RedirectionGuard crashed the launcher when the installer started it (fixed in M7b). A saved window position can land on no monitor (fixed in 0.11).
@@ -86,7 +86,7 @@ Enabled by writing the RAM_SIZE register at `0x1F801060`. Most modern emulators 
 Work in progress on PsyZ, with no release date. It can jump into a stage (`--stage`), run boss demos (`--demo N`), and `src/pc/replay.c` records inputs with a periodic state check. Our code is shared C, so it can move over when a true port exists (D8).
 
 ## Dracula X Chronicles
-- Tucker's copy is the USA release, **ULUS-10277**; the decomp extracts from the EU release, ULES-00841. See D15.
+- We use the USA release, **ULUS-10277**; the decomp extracts from the EU release, ULES-00841. See D15.
 - USA `maria.bin` is `0x33F80` bytes against EU's `0x3F700`: it omits 5 European HUD textures (`font_eu`, `hud_sp`, `hud_it`, `hud_ge`, `hud_fr`). Every Maria asset from `subweapons` to `crash_cardinal_pal` sits at a constant `-0xB780` offset from EU's.
 - **Maria's sound:** `PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk` (English), `sound/SE/sd_mar2.spk` (Japanese), built with `tools/maria-sfx`.
 - **DXC dialogue:** cutscene scripts in `PSPBIN/{st0,cen,dai,dre,lib,no3,no4,sel}.bin`; voices in `snd_e/XA/*.at3` (English) and `sound/XA/*.at3` (Japanese).

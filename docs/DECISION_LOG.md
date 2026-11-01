@@ -28,10 +28,10 @@ Follow the Maria mod precedent: a Docker image or script that takes the user's o
 The spec-driven loop is in `AGENTS.md`.
 
 **D10: Install DuckStation + PCSX-Redux for cross-checks, using OpenBIOS** (owner, 2026-10-18)
-Install both into `C:\Users\tucke\OneDrive\Desktop\Emulators`, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
+Install both in one emulators folder, pointed at OpenBIOS so the checks are fully automated. Tucker runs a real-BIOS smoke test at milestones.
 
-**D11: Environment layout: one manifest plus a doctor; masters live in the OneDrive Emulators folder** (owner, 2026-10-18)
-`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in `OneDrive\Desktop\Emulators\SOTN\` (Tucker accepted the ~1.5GB of OneDrive sync). Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
+**D11: Environment layout: one manifest plus a doctor; masters live outside the repo** (owner, 2026-10-18)
+`env.example.toml` (committed) and `env.toml` (local) list every path. `scripts/doctor.py` checks them, and `scripts/bootstrap.sh` creates them. Masters go in the `win_masters` folder (Tucker accepted the ~1.5GB of OneDrive sync). Working copies stay in WSL `disks/`, and churny data (savestates, builds) stays in `mods/co-op/.env/`.
 
 **D12: MIPS cross toolchain from Ubuntu 24.04 via an apt pin** (agent-default, 2026-10-18)
 Ubuntu 26.04 dropped `gcc-mipsel-linux-gnu`. Options considered: pinned noble packages; building gcc from source; clang as the preprocessor. Chose noble because it's the exact compiler upstream's Docker image uses, so matching-build risk is lowest. Pin priority is 50, so nothing else is pulled from noble.
@@ -723,3 +723,6 @@ The co-op mod moves out of the sotn-decomp fork into its own repository, to make
 
 **D141: No usage budget in the docs** (agent-default, 2026-10-31)
 The month target and Claude Pro budget came out of `AGENTS.md`, the roadmap and the PR template, after Tucker removed them from the roadmap and this log. Options: keep them, or keep only the "50% over budget" stop. Reporting problems early covers what mattered.
+
+**D142: Personal setup stays out of the repo** (Tucker, 2026-10-31)
+Local paths, the device workflow and playtest sheets moved to the git-ignored `LOCAL.md` and `local/`. Machine paths go in `env.toml`, so `env.example.toml` holds neutral defaults. Older decisions and designs still name the Thor where it shaped a product choice.

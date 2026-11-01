@@ -1,4 +1,4 @@
-# M4b: playtest 1 fixes (notes in `docs/playtest_notes/playtest_1.md`)
+# M4b: playtest 1 fixes
 
 **Status:** built, approved by Tucker 2026-10-19 ("address my feedback as m4b"). Each fix has a harness test in `harness/session_m4b.py`.
 
