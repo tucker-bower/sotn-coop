@@ -34,7 +34,7 @@ from pathlib import Path
 
 from paths import data_dir, load_settings, reports_dir
 
-VERSION = "0.13.0-dev"  # the launcher's
+VERSION = "0.13.0"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
 SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
