@@ -130,6 +130,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     SharedUpdate();
     BossUpdate();
     PvpUpdate();
+    ProgressDamageTaken();
     DebugUpdate();
     return ArriveFrame();
 }

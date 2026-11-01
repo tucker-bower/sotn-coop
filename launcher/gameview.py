@@ -13,6 +13,7 @@ from link.mailbox import (CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AG
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
+import rules as castle_rules
 from winmenu import MENU_EVENT
 
 BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (pauses, never quits the app)
@@ -261,8 +262,8 @@ class Pads:
 class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
-    def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None):
+    def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", rules=None,
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, rush=None, joiner=False):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
@@ -271,12 +272,9 @@ class GameView:
         self.rush = rush  # bossrush.BossRush: ticked every frame, its line on the status bar
         self.music_mode, self.music = music, None
         self.solo = 0  # couch: play one game's sound while both make the same (see same_sound)
-        chance = max(0, min(255, round(aggro * 256 / 100)))
-        self.aggro = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
-        # the partner's sounds, % of their volume (M13: module/partner.c; 0 would mean the default)
-        self.aggro |= max(1, min(100, int(partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
-        if pvp:  # M15: the partner's attacks hurt (the host's setting online)
-            self.aggro |= CONTROL_PVP
+        self.partner_vol = partner_vol
+        self.joiner = joiner  # online, in the host's castle: its rules are the host's
+        self.set_rules(rules)
         self.save_cards = save_cards  # (path A, path B) or (path local,)
         self.frames, self.profile = frames, profile
         self.canvas = display.canvas
@@ -295,8 +293,38 @@ class GameView:
         if not self.online and launcher and launcher.settings.get("netsim"):
             self.set_netsim(launcher.settings["netsim"])
 
+    frame = 0
+
     def say(self, text, frames=300):
         self.notice, self.notice_until = text, self.frame + frames
+
+    def set_rules(self, rules):
+        """The castle's rules (launcher/rules.py), at the start and whenever they change: in the
+        games, and, from the host, on to the partner."""
+        self.rules = castle_rules.clean(rules)
+        chance = max(0, min(255, round(self.rules["aggro"] * 256 / 100)))
+        control = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
+        # the partner's sounds, % of their volume (M13: module/partner.c; 0 would mean the default)
+        control |= max(1, min(100, int(self.partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
+        if self.rules["pvp"]:  # M15: the partner's attacks hurt
+            control |= CONTROL_PVP
+        self.aggro = control
+        self.music = None  # couch: the control word is written again, with the music's bit
+        words = castle_rules.encode(self.rules)
+        for g in self.games:
+            g.host("set_rules", words, None if self.joiner else self.rules)
+        if self.s.joint:
+            self.s.joint.shared_level = self.rules["shared_level"]
+
+    def follow_host(self):
+        """A joiner: the host changed the castle's rules. They go on the joiner's copy too."""
+        theirs = (self.games[0].host("status").get("partner_hello") or {}).get("rules")
+        if theirs is None or castle_rules.clean(theirs) == self.rules:
+            return
+        self.set_rules(theirs)
+        if self.playthrough:
+            self.playthrough.set_rules(self.rules)
+        self.say("Your partner changed the castle's rules", 300)
 
     def moment(self, event, where=""):
         if self.playthrough:
@@ -375,7 +403,8 @@ class GameView:
             note = self.ask_note()
         path = report.write(self.games, self.playthrough, shot, self.rolling, self.inputs,
                             self.frame_times, self.pads.names(), note,
-                            extra={"audio": self.audio.stats() if self.audio else None, "solo": self.solo})
+                            extra={"audio": self.audio.stats() if self.audio else None, "solo": self.solo,
+                                   "rules": self.rules})
         if not interactive:
             self.say(f"Bug report saved: {path.name} (in {path.parent})", 480)
         elif not report.can_send():
@@ -455,7 +484,7 @@ class GameView:
         while True:
             items = ["Resume",
                      f"Layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
-                     "How to play", "Report a problem (F9)", "Save and go back to the menu"]
+                     "How to play", "Castle rules", "Report a problem (F9)", "Save and go back to the menu"]
             for ev in pygame.event.get():
                 if self.display.handle(ev):
                     continue
@@ -503,6 +532,10 @@ class GameView:
                             self.launcher.action("help_play")
                         continue
                     if sel == 3:
+                        if self.launcher:
+                            self.launcher.action("rules")
+                        continue
+                    if sel == 4:
                         self.report()
                         return "resume"
                     return "menu"
@@ -636,7 +669,7 @@ class GameView:
                 break
             keys = pygame.key.get_pressed()
             t0 = time.perf_counter()
-            pads = [self.pads.mask(i, keys) for i in range(len(self.games))]
+            pads = [castle_rules.remapped(self.pads.mask(i, keys), self.rules) for i in range(len(self.games))]
             self.inputs.append((self.frame, *pads))
             if self.frame % ROLLING_EVERY == 0:
                 self.rolling.append((self.frame, *(g.save_state() for g in self.games)))
@@ -662,6 +695,8 @@ class GameView:
                 s.joint.tick()
             if self.rush:
                 self.rush.tick()
+            if self.joiner and self.frame % 60 == 0:
+                self.follow_host()
             if self.frame % 15 == 0:
                 if self.online:
                     self.games[0].mailbox("set_control", self.aggro)  # online: never mute local music (D55)

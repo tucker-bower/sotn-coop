@@ -409,7 +409,12 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("wait", 3),  # Layout: Automatic -> Side by side
         ("expect", lambda d: d.launcher.settings.get("layout") == "side", "the pause menu changes the layout (View, from a controller)"),
         ("call", lambda d: d.launcher.action("layout:auto")),
-        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back to the menu
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Castle rules
+        ("screen", "Castle rules"), ("shot", "castle-rules"), ("key", pg.K_RIGHT), ("wait", 3),
+        ("expect", lambda d: d.view.rules["exp_pct"] == 125 and d.view.playthrough.info["rules"]["exp_pct"] == 125,
+         "a slider moved in a game goes to the game and into the castle"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"),
+        *[("key", pg.K_UP)] * 4, ("key", pg.K_RETURN),  # Save and go back to the menu
         ("screen", "Home"), ("shot", "home-again"),
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
 
@@ -616,6 +621,20 @@ def _menus(pg):
                   ("menu", action), ("until", lambda d: d.heading in ("Debug starts", "Making the debug starts")),
                   ("until", lambda d: d.heading == "Debug starts"), ("shot", action), ("key", pg.K_ESCAPE),
                   ("screen", "Home")]
+    def a_castle(d):
+        from archive import Castle
+        d.castle = Castle.new(name="Rules")
+
+    def saved_rules(d):
+        from archive import Castle
+        return Castle(d.castle.dir).info.get("rules") or {}
+    steps += [("menu", "rules"), ("screen", "Castle rules"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
+              ("call", a_castle), ("menu", "rules"), ("screen", "which castle"), ("key", pg.K_RETURN),
+              ("screen", "Castle rules"), ("shot", "rules"), ("key", pg.K_RIGHT), ("wait", 3),
+              ("expect", lambda d: saved_rules(d).get("exp_pct") == 125, "Options > Open settings: a slider saves to the castle"),
+              *[("key", pg.K_DOWN)] * 6, ("key", pg.K_RETURN), ("wait", 3),
+              ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
+              ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
     steps += [("menu", "quit")]
     return steps
 
@@ -782,7 +801,7 @@ def _characters(pg):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
              ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
     for path, words, name in wrong:

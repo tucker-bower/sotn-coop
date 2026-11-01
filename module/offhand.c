@@ -481,7 +481,7 @@ void OffhandUpdate(void) {
     if (s_PlaceIn && !--s_PlaceIn) {
         PlaceSheet();
     }
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging) {
+    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging || RULE_OFF(RULE_NO_OFFHAND)) {
         return;
     }
     for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○

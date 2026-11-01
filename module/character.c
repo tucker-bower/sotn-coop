@@ -194,7 +194,7 @@ static void Growth(void) {
     u32 r;
 
     if (g_GameState != Game_Play || g_StageId == STAGE_ST0 || CharacterLoaded() == CHAR_ALUCARD ||
-        g_GameEngineStep != Engine_Normal) {
+        g_GameEngineStep != Engine_Normal || RULE_OFF(OPT_NO_GROWTH)) {
         return;
     }
     r = CheckAndDoLevelUp();
@@ -215,7 +215,7 @@ static void Familiar(void) {
     s32 want;
 
     if (CharacterLoaded() == CHAR_ALUCARD || g_StageId == STAGE_ST0 || g_GameState != Game_Play ||
-        g_GameEngineStep != Engine_Normal) {
+        g_GameEngineStep != Engine_Normal || RULE_OFF(RULE_NO_FAMILIARS)) {
         return;
     }
     if (s_FamLoading) {
@@ -253,7 +253,8 @@ static void PoisonWater(void) {
 void CharacterFrame(void) {
     const CharBlob* b;
 
-    g_CoopOptions = g_CoopLink.options; // for the player overlays
+    // for the player overlays, with the castle's rules for them
+    g_CoopOptions = g_CoopLink.options | (g_CoopLink.rulesOff & RULE_OVERLAY_MASK);
 
     if (g_GameState == Game_NowLoading && g_GameStep <= Play_PrepareDemo) {
         CharacterApply();

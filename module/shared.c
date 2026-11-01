@@ -957,7 +957,7 @@ static void NearestPlayer(s16* x, s16* y) {
 
     *x = PLAYER.posX.i.hi;
     *y = PLAYER.posY.i.hi;
-    if (s_Role != ROLE_AUTHORITY) {
+    if (s_Role != ROLE_AUTHORITY || RULE_OFF(RULE_NO_NEAR_TARGET)) {
         return;
     }
     px = p->x - g_Tilemap.scrollX.i.hi; // partner, in this game's screen space

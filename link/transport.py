@@ -21,7 +21,7 @@ from collections import OrderedDict
 
 from . import relay  # M14: packets through a relay are sealed (link/relay.py)
 
-WIRE_VERSION = 10
+WIRE_VERSION = 11
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
 TAG_PRESENCE = b"PRES"  # payload: presence (0x2C), then _PRES_TAIL
 TAG_EVENTS = b"EVTS"    # payload: first seq (u32), then events

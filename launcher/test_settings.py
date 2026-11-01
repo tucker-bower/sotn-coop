@@ -1,5 +1,6 @@
-"""Settings defaults (no games run): PvP is optional and off on a fresh install (M15, Tucker
-2026-10-31), and the game gets the PvP bit only when it's on.
+"""Settings defaults (no games run): the app's settings stay the app's, and the rules that used to
+be here (PvP, boss aggro) are each castle's now (launcher/test_rules.py, D145). The game gets the
+PvP bit only when the castle's rules say so.
 
     python launcher/test_settings.py
 """
@@ -25,19 +26,14 @@ def main():
         os.environ["COOP_DATA"] = d
         import paths
         s = paths.load_settings()
-        check(s["pvp"] is False, "a fresh install: PvP off")
-        s["pvp"] = True
+        check("pvp" not in s and "aggro" not in s, "a fresh install has no global PvP or aggro setting")
+        s["music"] = "left"
         paths.save_settings(s)
-        check(paths.load_settings()["pvp"] is True, "turned on, it stays on")
-        s["pvp"] = False
-        paths.save_settings(s)
-        check(paths.load_settings()["pvp"] is False, "and off again")
-    # the control word the game gets (gameview.GameView: CONTROL_PVP only with pvp=True)
+        check(paths.load_settings()["music"] == "left", "a setting stays as it's set")
     import inspect
     import gameview
-    src = inspect.getsource(gameview.GameView.__init__)
-    check("pvp=False" in inspect.signature(gameview.GameView.__init__).__str__() and
-          "if pvp:" in src and "CONTROL_PVP" in src, "the game view sets CONTROL_PVP only when asked (default off)")
+    src = inspect.getsource(gameview.GameView.set_rules)
+    check('if self.rules["pvp"]:' in src and "CONTROL_PVP" in src, "the game view sets CONTROL_PVP only when the rules do")
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 

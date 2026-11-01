@@ -61,7 +61,8 @@ static const u16 s_Bosses[] = {
 // 280 HP, item drops), not bosses: they were listed, and meeting one pulled the partner in.
 
 static s16 s_BaseHp[LEN(s_Bosses)]; // the table's own values, read once
-static bool s_HpRead, s_HpDoubled;
+static bool s_HpRead;
+static s32 s_HpPct = 100; // the boss HP set in the table (the castle's rules: D145)
 static bool s_HpInverted; // the castle the HP were last set for (OrdinaryHere)
 static bool s_BossHere; // a living boss is in this room
 
@@ -133,11 +134,12 @@ static bool PartnerFighting(void) {
            p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// --- 2x HP (D25)
+// --- boss HP: 2x with a partner (D25), unless the castle's rules say otherwise (D145)
 
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
-    bool want = g_CoopLink.partnerAge < 600; // a partner's game has been heard from (10 s)
+    // a partner's game has been heard from (10 s)
+    s32 want = g_CoopLink.partnerAge < 600 ? RULE_PCT(bossHpPct, 200) : RULE_PCT(bossHpSoloPct, 100);
     bool inverted;
     s32 i, hp;
 
@@ -151,14 +153,14 @@ static void UpdateHp(void) {
         s_HpRead = true;
     }
     inverted = (g_StageId & STAGE_INVERTEDCASTLE_FLAG) != 0;
-    if ((want == s_HpDoubled && inverted == s_HpInverted) || s_BossHere) { // never mid-fight
+    if ((want == s_HpPct && inverted == s_HpInverted) || s_BossHere) { // never mid-fight
         return;
     }
     for (i = 0; i < LEN(s_Bosses); i++) {
-        hp = s_BaseHp[i] * (want && IsBossEnemy(s_Bosses[i]) ? 2 : 1);
-        defs[s_Bosses[i]].hitPoints = hp > HP_MAX ? HP_MAX : hp;
+        hp = IsBossEnemy(s_Bosses[i]) ? s_BaseHp[i] * want / 100 : s_BaseHp[i];
+        defs[s_Bosses[i]].hitPoints = hp > HP_MAX ? HP_MAX : hp < 1 ? 1 : hp;
     }
-    s_HpDoubled = want;
+    s_HpPct = want;
     s_HpInverted = inverted;
 }
 

@@ -1,6 +1,6 @@
 """A native Windows menu bar on the launcher's window (design/M7b-polish.md part 3, option A).
 
-File / Game / View / Controllers / Help, as in any Windows program. A click posts a pygame
+File / Game / Options / View / Controllers / Help, as in any Windows program. A click posts a pygame
 event (MENU_EVENT, with .action) that the launcher handles like any other input, so every item
 is also reachable without the mouse from the controller's pause menu.
 
@@ -22,6 +22,7 @@ MENUS = [
                ("Open the &data folder", "data_folder"), None, ("E&xit", "quit")]),
     ("&Game", [("&Pause\tEsc", "pause"), ("&Report a problem\tF9", "report"), None,
                ("Leave to the &menu", "leave")]),
+    ("&Options", [("&Open settings…", "rules"), ("App &settings…", "settings")]),
     ("&View", [("Automatic", "layout:auto"), ("Side by side", "layout:side"), ("Stacked (vertical monitor)", "layout:stacked"),
                ("Player 1 only", "layout:p1"), ("Player 2 only", "layout:p2"),
                ("Player 2 in its own window", "layout:windows"), None,
