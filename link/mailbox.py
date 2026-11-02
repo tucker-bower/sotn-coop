@@ -53,6 +53,7 @@ OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, OPT_NO_AIR_JUMPS = 0x01000000, 0x02000000, 0x
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
+OPT_ALUCARD_HUD = 4  # options: Richter and Maria use Alucard's health bar (module/character.c)
 OPT_NO_TINT = 0x20000000  # options: two of a kind aren't told apart by a tint (module/partner.c)
 OPT_SPELL_TRIGGERS = 0x40000000  # options: spells on R2 or L2 and a face button (module/spells.c)
 OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)

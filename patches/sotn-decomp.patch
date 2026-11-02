@@ -160,7 +160,7 @@ index 9500e4fdb..9aa681cc0 100644
      g_PlayerHud.g_HealingMailTimer = 0;
  
 -    if ((g_StageId == STAGE_ST0) || (g_PlayableCharacter != PLAYER_ALUCARD)) {
-+    if ((g_StageId == STAGE_ST0) || (PL_CHARACTER != PLAYER_ALUCARD)) {
++    if ((g_StageId == STAGE_ST0) || (PL_HUD != PLAYER_ALUCARD)) {
          DrawRichterHud();
          return;
      }
@@ -169,7 +169,7 @@ index 9500e4fdb..9aa681cc0 100644
      u32 leading_zeros;
  
 -    if (g_StageId == STAGE_ST0 || g_PlayableCharacter != PLAYER_ALUCARD) {
-+    if (g_StageId == STAGE_ST0 || PL_CHARACTER != PLAYER_ALUCARD) {
++    if (g_StageId == STAGE_ST0 || PL_HUD != PLAYER_ALUCARD) {
          DrawRichterHudSubweapon();
          return;
      }
@@ -260,7 +260,7 @@ diff --git a/src/dra/dra.h b/src/dra/dra.h
 index 3799f72af..b70052ae5 100644
 --- a/src/dra/dra.h
 +++ b/src/dra/dra.h
-@@ -898,4 +898,12 @@ s16 func_80110394(void);
+@@ -898,4 +898,13 @@ s16 func_80110394(void);
  int MemcardDetectSave(s32 nPort, u8* expectedSaveName, s32 block);
  #endif
  
@@ -270,6 +270,7 @@ index 3799f72af..b70052ae5 100644
 +#include "../../mods/co-op/module/coop_api.h"
 +#else
 +#define PL_CHARACTER g_PlayableCharacter
++#define PL_HUD g_PlayableCharacter
 +#endif
 +
  #endif

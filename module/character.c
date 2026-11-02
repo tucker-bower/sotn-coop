@@ -298,6 +298,36 @@ static void Poison(void) {
     }
 }
 
+// Alucard's health bar for Richter and Maria (issue 34). DRA draws it for g_CoopHudCharacter, from
+// tiles and palettes only Alucard's F_GAME.BIN has: they're put back from CoopBoot's copy, often
+// enough to outlast a load. Richter's and Maria's own bars use none of that area.
+#define HUD_STRIP 28              // of F_GAME.BIN's 32x128 strips: VRAM (0x3C0, 0x100)
+#define HUD_STRIP_BYTES 0x2000
+#define HUD_RELOAD_EVERY 32
+static void AlucardHud(void) {
+    static const u8 rows[] = {0xF7, 0xF9}; // palettes 0x170-0x17F, 0x190-0x19F
+    bool want = s_Loaded != CHAR_ALUCARD && g_CoopLink.options & OPT_ALUCARD_HUD;
+    RECT r;
+    s32 i;
+
+    g_CoopHudCharacter = want ? PLAYER_ALUCARD : g_CoopCharacter;
+    if (!want || g_GameState != Game_Play || g_Timer % HUD_RELOAD_EVERY) {
+        return;
+    }
+    r.x = 0x3C0;
+    r.y = 0x100;
+    r.w = 0x20;
+    r.h = 0x38;
+    LoadImage(&r, (u_long*)(FGAME_GFX_ADDR + HUD_STRIP * HUD_STRIP_BYTES));
+    r.x = 0;
+    r.w = 0x100;
+    r.h = 1;
+    for (i = 0; i < 2; i++) {
+        r.y = rows[i];
+        LoadImage(&r, (u_long*)(FGAME_PAL_ADDR + (rows[i] - 0xF0) * 0x200));
+    }
+}
+
 // Some doorways have a gap in the floor, one tile wide, that the door's walk carries Alucard
 // across. Richter's and Maria's walks check for a fall: they dropped in, the wall pushed them into
 // the next room and back, forever (playtest 0.14). During a door's walk at a room's edge, there's
@@ -372,4 +402,5 @@ void CharacterFrame(void) {
     PoisonWater();
     Poison();
     Growth();
+    AlucardHud();
 }

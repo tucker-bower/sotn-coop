@@ -511,6 +511,23 @@ def poison_hits(run, ch):
     run.expect(not e.read(POISON_MARK, "<I") & 1, "it wears off")
 
 
+@per_character
+def alucard_health_bar(run, ch):
+    """Issue 34: with the option on, Richter and Maria draw Alucard's bar, with his tiles."""
+    from link.mailbox import OPT_ALUCARD_HUD
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    mb.set_options(OPT_ALUCARD_HUD)
+    reload_as(run, mb, ch)
+    run.step(120)
+    out = TOOLS["out"] / run.name
+    out.mkdir(parents=True, exist_ok=True)
+    e.screenshot(out / "hud.png")
+    bar = e.read(PRIM_BUF + e.read(PLAYER_HUD_PRIM, "<i") * PRIM_SIZE + PRIM_TPAGE, "<H")
+    run.expect(bar == ALUCARD_HUD_TPAGE, "its first sprite is on Alucard's page", tpage=bar)
+
+
+PLAYER_HUD_PRIM, PRIM_BUF, PRIM_SIZE, PRIM_TPAGE, ALUCARD_HUD_TPAGE = 0x80137970, 0x80086FEC, 0x34, 0x1A, 0x1F
 SHORT_SWORD = 19
 ALUCARD_RATE = 30  # damage_rate_alucard, measured
 

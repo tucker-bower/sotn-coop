@@ -587,10 +587,11 @@ class Launcher:
 
     def options(self, seat):
         """The OPT_* bits for that seat's game (link/mailbox.py)."""
-        from link.mailbox import OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
+        from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
         return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat)) |
                 (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
                 (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
+                (OPT_ALUCARD_HUD if self.settings.get("alucard_hud") else 0) |
                 (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
 
     def controls_menu(self):
@@ -1609,6 +1610,7 @@ class Launcher:
                      (f"Partner's health bar: {'on' if st.get('partner_hp', True) else 'off'}", "Under your own health, while you play together"),
                      (f"Tint the partner: {'on' if st.get('partner_tint', True) else 'off'}", "Tell two players of the same character apart"),
                      (f"Spells on triggers: {'on' if st.get('spell_triggers') else 'off'}", "Alucard: hold R2 with Square, Circle, Cross or Triangle: Dark Metamorphosis, Summon Spirit, Hellfire, Tetra Spirit. L2 with Square or Circle: Soul Steal, Sword Brothers"),
+                     (f"Alucard's health bar: {'on' if st.get('alucard_hud') else 'off'}", "Richter and Maria: his health and hearts display"),
                      ("Castle rules", "XP, damage, enemy HP, PvP and everything co-op changes: each castle has its own"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
@@ -1631,12 +1633,14 @@ class Launcher:
             elif k == 5:
                 st["spell_triggers"] = not st.get("spell_triggers")
             elif k == 6:
-                self.open_rules()
+                st["alucard_hud"] = not st.get("alucard_hud")
             elif k == 7:
-                self.game_files()
+                self.open_rules()
             elif k == 8:
-                self.controls_menu()
+                self.game_files()
             elif k == 9:
+                self.controls_menu()
+            elif k == 10:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)
