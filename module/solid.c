@@ -6,12 +6,20 @@
 // it); on a room's authority the calls are recorded and sent with the snapshot, and the guest
 // makes the same calls against its copies, for its own player. Standing on one that moved
 // sideways carries the guest along, as the platforms do for their own player.
+//
+// Buttons and lifts ask the same call whether the player's on top, then move the player with
+// them. A guest standing on one says which in its presence, and the authority's call answers
+// "on top" for it, with the guest's buttons in place of the authority's (the Alchemy Lab's
+// elevator reads Up and Down there). What the entity then does to the authority's own player and
+// buttons is undone at the next call, or at the end of the update (issue 98).
 #define COOP_MODULE
 #include <game.h>
+#include "link.h"
 #include "solid.h"
 
 #define STAGE_SLOTS (TOTAL_ENTITY_COUNT - STAGE_ENTITY_START)
 #define ON_TOP 4
+#define PARTNER_STAND_FRESH 30 // frames: a guest who's gone quiet isn't weighing anything down
 
 static SolidCall s_Calls[SOLID_CALLS_MAX];
 static s32 s_NCalls;
@@ -19,6 +27,13 @@ static bool s_Record;
 static s16 s_LastX[STAGE_SLOTS];  // guest: where each solid copy was (world x)...
 static u16 s_LastAt[STAGE_SLOTS]; // ...and when
 static u16 s_Frame;
+static u8 s_StandSlot;        // guest: 1 + the slot it stood on this frame
+static bool s_PartnerStood;   // authority: an entity was told the partner's weight is the player's
+static f32 s_PosX, s_PosY, s_VelX, s_VelY, s_ShoveX, s_ShoveY; // PLAYER then
+static s32 s_DemoTimer;
+static u32 s_PadSim;
+static u16 s_Pressed, s_Tapped;   // this player's buttons then: the entity reads the partner's
+static u16 s_PartnerPadWas;       // the partner's last frame, for what they've just pressed
 
 // The stage's own, for the US build outside the prologue (src/st/st_common.h)
 static u8 Collide(Entity* self, u16 w, u16 h, u16 flags) {
@@ -99,9 +114,41 @@ static u8 Collide(Entity* self, u16 w, u16 h, u16 flags) {
     return 0;
 }
 
+void SolidPartnerDone(void) {
+    if (!s_PartnerStood) {
+        return;
+    }
+    s_PartnerStood = false;
+    PLAYER.posX = s_PosX;
+    PLAYER.posY = s_PosY;
+    PLAYER.velocityX = s_VelX.val;
+    PLAYER.velocityY = s_VelY.val;
+    g_unkGraphicsStruct.shoveX = s_ShoveX;
+    g_unkGraphicsStruct.shoveY = s_ShoveY;
+    g_Player.demo_timer = s_DemoTimer;
+    g_Player.padSim = s_PadSim;
+    g_pads[0].pressed = s_Pressed;
+    g_pads[0].tapped = s_Tapped;
+}
+
+void SolidUpdateDone(void) {
+    SolidPartnerDone();
+    s_PartnerPadWas = g_CoopLink.partnerPad;
+}
+
+static bool PartnerStandsOn(s32 slot, u16 flags) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    return s_Record && flags & ON_TOP && g_CoopLink.partnerAge <= PARTNER_STAND_FRESH &&
+           p->role == ROLE_GUEST && p->standSlot == slot + 1;
+}
+
 // Every overlay's GetPlayerCollisionWith jumps here.
 u8 CoopPlayerCollision(Entity* self, u16 w, u16 h, u16 flags) {
     s32 slot = self - &g_Entities[STAGE_ENTITY_START];
+    u8 hit;
+
+    SolidPartnerDone();
 
     if (s_Record && slot >= 0 && slot < STAGE_SLOTS && s_NCalls < SOLID_CALLS_MAX) {
         s_Calls[s_NCalls].slot = slot;
@@ -110,7 +157,31 @@ u8 CoopPlayerCollision(Entity* self, u16 w, u16 h, u16 flags) {
         s_Calls[s_NCalls].h = h;
         s_NCalls++;
     }
-    return Collide(self, w, h, flags);
+    hit = Collide(self, w, h, flags);
+    if (hit || !PartnerStandsOn(slot, flags)) {
+        return hit;
+    }
+    s_PartnerStood = true;
+    s_PosX = PLAYER.posX;
+    s_PosY = PLAYER.posY;
+    s_VelX.val = PLAYER.velocityX;
+    s_VelY.val = PLAYER.velocityY;
+    s_ShoveX = g_unkGraphicsStruct.shoveX;
+    s_ShoveY = g_unkGraphicsStruct.shoveY;
+    s_DemoTimer = g_Player.demo_timer;
+    s_PadSim = g_Player.padSim;
+    s_Pressed = g_pads[0].pressed;
+    s_Tapped = g_pads[0].tapped;
+    g_pads[0].pressed = g_CoopLink.partnerPad;
+    g_pads[0].tapped = g_CoopLink.partnerPad & ~s_PartnerPadWas;
+    return ON_TOP;
+}
+
+s32 SolidStandSlot(void) {
+    s32 slot = s_StandSlot;
+
+    s_StandSlot = 0;
+    return slot;
 }
 
 void SolidRecord(bool on) {
@@ -136,6 +207,7 @@ void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored) {
     Entity* e;
 
     s_Frame++;
+    s_StandSlot = 0;
     for (i = 0; i < n; i++) {
         slot = calls[i].slot;
         e = &g_Entities[STAGE_ENTITY_START + slot];
@@ -143,10 +215,10 @@ void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored) {
             continue;
         }
         wx = e->posX.i.hi + g_Tilemap.scrollX.i.hi;
-        if (Collide(e, calls[i].w, calls[i].h, calls[i].flags) == ON_TOP &&
-            s_LastAt[slot] == (u16)(s_Frame - 1)) {
+        if (Collide(e, calls[i].w, calls[i].h, calls[i].flags) == ON_TOP) {
+            s_StandSlot = slot + 1;
             dx = wx - s_LastX[slot]; // ride along, as the platforms move their own player
-            if (dx > -16 && dx < 16) {
+            if (s_LastAt[slot] == (u16)(s_Frame - 1) && dx > -16 && dx < 16) {
                 PLAYER.posX.i.hi += dx;
                 g_unkGraphicsStruct.shoveX.i.hi += dx;
             }

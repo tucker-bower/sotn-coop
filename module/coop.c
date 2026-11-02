@@ -10,6 +10,7 @@
 #include "boss.h"
 #include "character.h"
 #include "mist.h"
+#include "solid.h"
 #include "progress.h"
 #include "shared.h"
 #include "spells.h"
@@ -186,6 +187,7 @@ static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s
 static void __attribute__((used)) RenderEntitiesHook(void) {
     u16 frame;
 
+    SolidUpdateDone();
     frame = PLAYER.animCurFrame;
 
     MistStepAfter();

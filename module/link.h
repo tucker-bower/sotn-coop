@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 14
+#define COOP_LINK_VERSION 15
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -147,7 +147,8 @@ typedef struct {
     /* 0x22 */ u16 roomFrames; // frames since entering this room (the earlier one is authority)
     /* 0x24 */ s16 scrollX;    // camera position in the room (shared rooms need cameras close)
     /* 0x26 */ s16 scrollY;
-    /* 0x28 */ u16 role;       // ROLE_* (design/M4)
+    /* 0x28 */ u8 role;        // ROLE_* (design/M4)
+    /* 0x29 */ u8 standSlot;   // a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
     /* 0x2A */ u16 aggroSwitches; // bosses switching to/from the partner so far (tests)
 } CoopPresence; // size = 0x2C
 

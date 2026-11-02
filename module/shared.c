@@ -1242,4 +1242,5 @@ void SharedPresence(CoopPresence* p) {
     p->scrollX = g_Tilemap.scrollX.i.hi;
     p->scrollY = g_Tilemap.scrollY.i.hi;
     p->role = s_Role;
+    p->standSlot = SolidStandSlot();
 }

@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 14
+LINK_VERSION = 15
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -17,7 +17,7 @@ STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
-_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhHH")  # CoopPresence, 0x2C bytes
+_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhBBH")  # CoopPresence, 0x2C bytes
 ROLE_NONE, ROLE_AUTHORITY, ROLE_GUEST = 0, 1, 2
 _HEADER = struct.Struct("<III")                # magic, version, heartbeat
 SELF, PARTNER = 0x0C, 0x38                     # offsets in CoopLink
@@ -107,6 +107,7 @@ class Presence:
     scroll_x: int = 0
     scroll_y: int = 0
     role: int = 0
+    stand_slot: int = 0  # a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
     aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
     pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 

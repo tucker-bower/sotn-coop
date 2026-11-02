@@ -1,4 +1,4 @@
-# The co-op link protocol (wire version 11, mailbox version 13)
+# The co-op link protocol (wire version 13, mailbox version 15)
 
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
@@ -17,7 +17,7 @@ This is everything a **host** needs, so another one can be written without readi
 ## The host's job, once per frame
 0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
 1. **Hello:** every 60 frames, send `HELO`.
-2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 14, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 15, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
 4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below), whose `pad` is `CoopLink.selfPad`.
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
@@ -93,7 +93,8 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | 0x1E | s16 ×2 | last x, y on the ground |
 | 0x22 | u16 | frames in this room |
 | 0x24 | s16 ×2 | camera x, y |
-| 0x28 | u16 | shared-room role: 0 none, 1 authority, 2 guest |
+| 0x28 | u8 | shared-room role: 0 none, 1 authority, 2 guest |
+| 0x29 | u8 | a guest: 1 + the stage slot of the solid it stands on, or 0 (the authority's buttons and lifts feel it) |
 | 0x2A | u16 | the boss target-switch count (tests) |
 
 ## Events (8 bytes: u8 type, u8 pad, u16 a, u32 b)
@@ -114,7 +115,7 @@ Hosts don't interpret events: they move them between rings.
 ## The mailbox (`g_CoopLink`, 0x225C8 bytes)
 | offset | field | written by |
 |---|---|---|
-| 0x0000 | magic `'COOP'`, version (12), heartbeat | game |
+| 0x0000 | magic `'COOP'`, version (15), heartbeat | game |
 | 0x000C | `self`: presence | game |
 | 0x0038 | `partner`: presence | host |
 | 0x0064 | `partnerAge` (u32, frames since `partner` was written) | game counts, host zeroes |
