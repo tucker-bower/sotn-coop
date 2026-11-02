@@ -122,6 +122,7 @@ def pin_target(e):
 
 # --- M12 part 3: every hand weapon in every character's hands --------------------------------
 EQUIP_DEFS, EQUIP_SIZE, CATEGORY_OFS, N_HAND_ITEMS = 0x800A4B04, 0x34, 0x0E, 0xA9
+IVE_BEEN_ROBBED = 53
 WEAPON_CATEGORIES = (0, 1, 2, 3, 4, 5)  # short sword, sword, thrown, fist, club, two-handed
 
 
@@ -134,6 +135,7 @@ def try_weapon(run, mb, ch, item, button, frames=400):
     """Equip, go to the hall, swing at an enemy kept on the live hitbox: (spawned, hit, ended)."""
     e = run.emu
     e.write(EQUIPMENT, item)
+    e.write("g_CastleFlags", 0, "<B", IVE_BEEN_ROBBED)  # the Alucard Sword: else a load takes it, as Death did
     reload_as(run, mb, ch)
     mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
     wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(

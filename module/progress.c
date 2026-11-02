@@ -408,13 +408,13 @@ static void Resync(void) {
 }
 
 // Death's scene takes Alucard's gear from the players who see it, but the flag it sets also comes
-// with a save or a partner's castle: a player joining later kept the set (playtest 0.14). Only
-// in the first castle: the inverted castle has the pieces to find again.
+// with a save or a partner's castle: a player joining later kept the set (playtest 0.14). Looked at
+// when a game comes into play, and before the inverted castle: it has the pieces to find again.
 static void RobbedUpdate(void) {
     const u32* eq = g_Status.equipment;
 
-    if (g_CastleFlags[IVE_BEEN_ROBBED] && g_GameState == Game_Play && g_GameStep == Play_Default &&
-        !g_CutsceneHasControl && g_StageId != STAGE_ST0 && !(g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
+    if (g_CastleFlags[IVE_BEEN_ROBBED] && !g_CastleFlags[INVERTED_CASTLE_UNLOCKED] && !g_CutsceneHasControl &&
+        g_StageId != STAGE_ST0 && !(g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
         (eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SWORD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SHIELD ||
          eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SHIELD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SWORD ||
          eq[HEAD_SLOT] == ITEM_DRAGON_HELM || eq[ARMOR_SLOT] == ITEM_ALUCARD_MAIL ||
@@ -425,7 +425,6 @@ static void RobbedUpdate(void) {
 }
 
 void ProgressUpdate(void) {
-    RobbedUpdate();
     bool inPlay = g_GameState == Game_Play && g_GameStep == Play_Default;
 
     WrapApi();
@@ -436,6 +435,7 @@ void ProgressUpdate(void) {
     if (!s_InPlay) {
         s_InPlay = true;
         Resync();
+        RobbedUpdate();
     }
     DetectFlags();
     DetectMap();
