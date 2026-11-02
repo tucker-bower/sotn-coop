@@ -145,7 +145,7 @@ def main():
     got = read_session(path)
     check(got[0][-1] == 3 and got[1] == low, "a solo save writes slot 1 and keeps slot 2")
 
-    # A joiner still booting has no mailbox: its boot would wipe a load written now (issue 61).
+    # A joiner still booting isn't running yet: its boot would wipe a load written now (issue 61).
     from unittest import mock
     m = mock.MagicMock()
     m.ready.return_value = False
@@ -161,7 +161,10 @@ def main():
     check(not m.command.called, "a joiner holds the host's load while its game boots")
     m.ready.return_value = True
     j.tick()
-    check(m.command.called and m.put_save.called, "and applies it once the game has a mailbox")
+    check(not m.command.called, "not at the mailbox's first sign: the game must be running")
+    m.self_presence.return_value.flags = 8
+    j.tick()
+    check(m.command.called and m.put_save.called, "and applies it once the game is running")
 
     # The test castles the app ships (D136): installed once, again only when the bundle changes,
     # each a template listed with the test castles, none with the castles; no game graphics.

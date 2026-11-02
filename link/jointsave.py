@@ -102,7 +102,7 @@ class JointSave:
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
-        self._load_msg = None  # the host's load, until this game has a mailbox: its boot wipes one written sooner (issue 61)
+        self._load_msg = None  # the host's load, until this game is running: its boot wipes one written sooner (issue 61)
 
     def _write(self, blobs):
         """blobs: [slot 1 (this machine's player), slot 2 or None (keep the file's)]."""
@@ -219,7 +219,7 @@ class JointSave:
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)
-        if self._load_msg and m.ready():
+        if self._load_msg and m.ready() and m.self_presence().flags:  # its code is running: boot's over
             self._load(m, self._load_msg)
             self._load_msg = None
         if self.pending and self.pending[0] == "local":  # the partner never answered: alone
