@@ -114,6 +114,7 @@ OPTIONS = {
     "swanstation_BIOS_PathNTSCU": "scph5501.bin",
     "swanstation_GPU_Renderer": "Software",
     "swanstation_CPU_ExecutionMode": "Recompiler",
+    "swanstation_CPU_Overclock": "200",
 }
 
 

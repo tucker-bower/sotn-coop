@@ -111,6 +111,28 @@ static void MusicUpdate(void) {
     }
 }
 
+// The castle's front door shuts for good behind the first player in, and with it the flag that
+// keeps it shut, for both (src/st/e_castle_door.h). Whoever is still outside can't get in, however
+// the door's tiles reached them, so for them it stays passable (playtest 2026-11-01).
+#define DOOR_ROOM_LEFT 2
+#define DOOR_ROOM_TOP 38
+#define DOOR_X 105 // world x: past the door's far edge
+#define DOOR_TILE_START 0x445
+#define DOOR_TILE_STEP 0x20
+static void CastleDoorUpdate(void) {
+    static const u16 open[] = {0x6D1, 0x6D2, 0x6D3, 0x6D4, 0x6D5, 0x6D6, 0x6D3, 0x6D4};
+    s32 i;
+
+    if (g_GameState != Game_Play || g_StageId != STAGE_NO3 || g_Tilemap.left != DOOR_ROOM_LEFT ||
+        g_Tilemap.top != DOOR_ROOM_TOP || !g_Tilemap.fg ||
+        PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi >= DOOR_X) {
+        return;
+    }
+    for (i = 0; i < LEN(open); i++) {
+        g_Tilemap.fg[DOOR_TILE_START + i * DOOR_TILE_STEP] = open[i];
+    }
+}
+
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
 //
 // The main loop runs UpdateGame only if DebugUpdate() returns nonzero, but in the US build
@@ -136,6 +158,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     ProgressUpdate();
     MistStepUpdate();
     SharedUpdate();
+    CastleDoorUpdate();
     BossUpdate();
     PvpUpdate();
     DebugUpdate();

@@ -468,7 +468,7 @@ static void ApplySnapshot(void) {
             continue;
         }
         if (IsScenery(ovl, (u32)se_e->pfnUpdate)) {
-            r += sizeof(Entity) + se->nPrims * sizeof(Primitive);
+            r += sizeof(Entity) + se->nPrims * sizeof(Primitive) + se->nEnvs * sizeof(DR_ENV);
             if (!s_Mirrored[i] && e->entityId == se_e->entityId && e->pfnUpdate == se_e->pfnUpdate) {
                 s_Local[i] = true; // already running here (this game spawned it too): keep it
                 continue;

@@ -80,7 +80,7 @@ QCF = ["down"] * 3 + ["down+right"] * 3 + ["right"] * 2 + ["right+square"] * 2 +
 # (what, relics without, relics with, measure(run), at least this much more with the relic)
 ALUCARD_ROWS = [
     ("Soul of Bat: R1 turns into a bat", [], [SOUL_OF_BAT], lambda r: frames_in(r, BAT, {MORPH_BAT}), 20),
-    ("Form of Mist: L1 turns into mist", [], [FORM_OF_MIST], lambda r: frames_in(r, MIST, {MORPH_MIST}), 15),
+    ("Form of Mist: L1 turns into mist", [], [FORM_OF_MIST], lambda r: frames_in(r, MIST, {MORPH_MIST}), 10),
     ("Soul of Wolf: R2 turns into a wolf", [], [SOUL_OF_WOLF], lambda r: frames_in(r, WOLF, {MORPH_WOLF}), 20),
     ("Leap Stone: the double jump", [], [LEAP_STONE],
      lambda r: rise(r, ["cross"] * 16 + [""] * 2 + ["cross"] * 12 + [""] * 60), 12),
