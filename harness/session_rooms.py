@@ -129,6 +129,36 @@ def same_character_body_moves_as_the_partner(run):
     run.expect(len(frames_body) > 3, "A's copy of B runs", frames=sorted(frames_body))
 
 
+SPELL_DARK_METAMORPHOSIS_STEP = 32  # Player_SpellDarkMetamorphosis (include/player_steps.h)
+
+
+@session_scenario(starts=(MARBLE, MARBLE), characters=(0, 0))
+def partner_casts_a_spell_this_game_never_learnt(run):
+    """Issue 122: A knows Dark Metamorphosis and B doesn't. A casts it, and B's copy of A casts it
+    too: the body checks the partner's spells, not this game's."""
+    from link.mailbox import OPT_PARTNER_SIM, OPT_SHORTCUTS, SPELLS, spell_options
+    from scenarios_m8 import MP, MP_MAX, SPELLS_LEARNT
+    a, b = run.s.a, run.s.b
+    body = symbols()["g_CoopSpikeBody"]
+    choice = spell_options([None, None, None, SPELLS.index("Dark Metamorphosis")])
+    a.host("set_player", options=OPT_PARTNER_SIM | OPT_SHORTCUTS | choice)
+    b.host("set_player", options=OPT_PARTNER_SIM)
+    a.write(SPELLS_LEARNT, 0xFF)
+    b.write(SPELLS_LEARNT, 0)
+    for g in (a, b):
+        g.write(MP, 99, "<i")
+        g.write(MP_MAX, 99, "<i")
+    run.step(120)
+    run.expect(not b.read(SPELLS_LEARNT) & 0xFF, "B hasn't learnt it")
+    cast_a, cast_body = False, False
+    for t in range(240):
+        run.step(1, ("rs_left" if t % 120 < 2 else "", ""))
+        cast_a |= a.read(a.entity(0) + PLAYER_STEP, "<H") == SPELL_DARK_METAMORPHOSIS_STEP
+        cast_body |= b.read(body + PLAYER_STEP, "<H") == SPELL_DARK_METAMORPHOSIS_STEP
+    run.expect(cast_a, "A casts it")
+    run.expect(cast_body, "B's copy of A casts it")
+
+
 SCENE = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Scene - Maria in the Alchemy Lab.state")
 
 
