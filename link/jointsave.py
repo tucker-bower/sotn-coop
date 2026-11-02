@@ -102,6 +102,7 @@ class JointSave:
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
+        self._load_msg = None  # the host's load, until this game has a mailbox: its boot wipes one written sooner (issue 61)
 
     def _write(self, blobs):
         """blobs: [slot 1 (this machine's player), slot 2 or None (keep the file's)]."""
@@ -213,26 +214,33 @@ class JointSave:
                 local_blob = self.pending[1] if (self.pending and self.pending[0] == "local") else m.save_out()
                 self._write([local_blob, remote_blob])
                 self.pending = None
-            elif op == "load_save":  # the host's castle: "yours" is this player's slot
-                yours, theirs = base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])
-                if self.path is not None:
-                    write_session(self.path, [yours, theirs])
-                self.resumed = True
-                self.dead_frames = 0
-                m.put_save(yours)
-                m.command(CMD_LOAD_SAVE)
-                # the host's test castle: arrive where it starts. A new load replaces any arrival
-                # still waiting: the last one's sent a boss rush's joiner back to the boss before.
-                self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
+            elif op == "load_save":
+                self._load_msg = msg
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)
+        if self._load_msg and m.ready():
+            self._load(m, self._load_msg)
+            self._load_msg = None
         if self.pending and self.pending[0] == "local":  # the partner never answered: alone
             self._pending_frames += 1
             if self._pending_frames > PARTNER_SAVE_FRAMES:
                 self._write([self.pending[1], None])
                 self.pending = None
         self._both_dead_online()
+
+    def _load(self, m, msg):
+        """The host's castle: "yours" is this player's slot."""
+        yours, theirs = base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])
+        if self.path is not None:
+            write_session(self.path, [yours, theirs])
+        self.resumed = True
+        self.dead_frames = 0
+        m.put_save(yours)
+        m.command(CMD_LOAD_SAVE)
+        # the host's test castle: arrive where it starts. A new load replaces any arrival
+        # still waiting: the last one's sent a boss rush's joiner back to the boss before.
+        self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
 
     def _both_dead_online(self):
         m = self.mb[0]

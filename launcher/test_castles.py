@@ -4,6 +4,7 @@ each "PC" is its own COOP_DATA folder.
     python launcher/test_castles.py
 """
 
+import base64
 import os
 import struct
 import sys
@@ -143,6 +144,24 @@ def main():
     j.tick()
     got = read_session(path)
     check(got[0][-1] == 3 and got[1] == low, "a solo save writes slot 1 and keeps slot 2")
+
+    # A joiner still booting has no mailbox: its boot would wipe a load written now (issue 61).
+    from unittest import mock
+    m = mock.MagicMock()
+    m.ready.return_value = False
+    m.save_seq.return_value = 0
+    m.partner_age.return_value = 0
+    m.self_presence.return_value.flags = m.partner_presence.return_value.flags = 0
+    net = mock.MagicMock()
+    saved = base64.b64encode(bytes(SAVE_DATA_SIZE)).decode()
+    net.take_control.return_value = [{"op": "load_save", "yours": saved, "mine": saved, "start": None}]
+    j = JointSave([m], root / "late.coop", host=net, rank=1)
+    j.tick()
+    net.take_control.return_value = []
+    check(not m.command.called, "a joiner holds the host's load while its game boots")
+    m.ready.return_value = True
+    j.tick()
+    check(m.command.called and m.put_save.called, "and applies it once the game has a mailbox")
 
     # The test castles the app ships (D136): installed once, again only when the bundle changes,
     # each a template listed with the test castles, none with the castles; no game graphics.
