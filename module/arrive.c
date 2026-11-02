@@ -773,13 +773,5 @@ bool ArriveFrame(void) {
     if (CutsceneHold()) {
         return false;
     }
-    // The partner is in their menu in my room: a boss fight waits for them. Otherwise this game
-    // plays on: their game is frozen, so nothing there hits them, and the room is this game's
-    // until they're back (shared.c, issue 108).
-    if (InNormalPlay() && g_GameEngineStep == Engine_Normal && !ArriveBusy() && PartnerFresh() &&
-        (g_CoopLink.partner.flags & PRESENCE_PAUSED) && SameRoomAsPartner() &&
-        (BossHere() || (g_CoopLink.partner.flags & PRESENCE_BOSS))) {
-        return false;
-    }
     return true;
 }

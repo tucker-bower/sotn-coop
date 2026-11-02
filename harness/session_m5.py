@@ -12,6 +12,7 @@ from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 from session_progress import arrive, status
 from session_scenarios import heal
 
+ENGINE_NORMAL, ENGINE_MENU = 1, 2
 NO1 = 0x01
 NEXT_TO_BOSS = (96, 40, 135)  # NO1 room 96 (59,23), near its left edge
 DOPPLEGANGER10, DOPPLEGANGER10_HP = 253, 120  # enemy definition (assets/dra/us/enemydefs.yaml)
@@ -136,6 +137,54 @@ def boss_both_hit_one_death(run):
     ra, rb = rec(a), rec(b)
     run.expect(any(ra) and ra == rb, "the kill is recorded in both worlds",
                a=[i for i, v in enumerate(ra) if v], b=[i for i, v in enumerate(rb) if v])
+
+
+def close_menu(run, g):
+    pad = (lambda p: (p, "")) if g is run.s.a else (lambda p: ("", p))
+    for p in ("triangle", "start", "triangle"):
+        if g.read("g_GameEngineStep") == ENGINE_NORMAL:
+            break
+        run.step(2, **{"p1": pad(p)})
+        run.step(60)
+    run.expect(g.read("g_GameEngineStep") == ENGINE_NORMAL, "the menu closed", engine=g.read("g_GameEngineStep"))
+
+
+@session_scenario(starts=("no1", "entrance"))
+def boss_pause_keeps_the_partner_fighting(run):
+    """Issue 108, D158: a pause works the same in a boss fight. Either player can open their menu;
+    their game is frozen, so nothing hurts them, the other fights on, and the paused player comes
+    back to the fight as it now is, whichever game was running it."""
+    a, b = run.s.a, run.s.b
+    run.expect(into_boss_room(run, a) is not None, "A is in a boss fight")
+    run.expect(wait_pulled(run, b, a, 300) is not None, "B was pulled in")
+    run.step(30)
+    for paused, plays, who in ((b, a, "guest"), (a, b, "authority")):
+        run.step(1, **{"p1": ("", "start") if paused is b else ("start", "")})
+        run.step(60)
+        run.expect(paused.read("g_GameEngineStep") == ENGINE_MENU, f"the {who} is in its menu")
+        hp = status(paused)["hp"]
+        heal(plays)
+        x0, boss0 = plays.snapshot()["world_x"], bosses(plays)
+        run.expect(len(boss0) == 1, "the other game has the boss", boss=boss0)
+        slot = next(iter(boss0))
+        plays.write(plays.entity(slot), boss0[slot][1] - 7, "<h", 0x3E)  # the fight goes on without them
+        for i in range(240):
+            run.step(1, p1=("right", "") if plays is a else ("", "right"))
+            if i % 30 == 0:
+                heal(plays)
+        run.expect(plays.snapshot()["world_x"] != x0, f"the partner plays on while the {who} is paused")
+        run.expect(bosses(plays), "the boss is still there", boss=bosses(plays))
+        run.expect(status(paused)["hp"] == hp, "the paused player can't be hurt", hp=hp, now=status(paused)["hp"])
+        close_menu(run, paused)
+        run.step(90)
+        run.expect(not (paused.mailbox("self_presence").flags & BUSY), "the paused player is back in play")
+        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+        run.expect({pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}, "the room is shared again", a=pa.role, b=pb.role)
+        run.expect(paused.mailbox("self_presence").role == ROLE_GUEST, "the one who paused is the guest")
+        run.expect(sorted(e[1] for e in bosses(a).values()) == sorted(e[1] for e in bosses(b).values()),
+                   "both see the boss as it now is", a=bosses(a), b=bosses(b))
+        run.expect(len(bosses(paused)) == 1, "one boss", boss=bosses(paused))
+        heal(a), heal(b)
 
 
 @session_scenario(starts=("no1", "entrance"))

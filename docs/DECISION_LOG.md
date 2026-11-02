@@ -772,8 +772,8 @@ Snapshots from before the authority heard of a hit bring the copy back to hittab
 **D157: A boss room is never reloaded for a player already in it** (agent-default, 2026-11-02)
 Pulling a far-away player in the same room reloaded that game's fight, and the two games could pull each other for ever (#111). A boss makes the room shared at any camera distance instead.
 
-**D158: Outside boss fights, a pause doesn't stop the partner** (Tucker, #108; how: agent-default)
-The paused game stops sharing the room, and the partner's game runs it. Back from the menu, that game counts as just arrived, so it's the guest and takes the room as it now is. In a boss fight a pause still holds both, and the second player can't open their own menu during it: that part of #108 is open.
+**D158: A pause doesn't stop the partner** (Tucker, #108, boss fights included; how: agent-default)
+The paused game stops sharing the room, and the partner's game runs it. Back from the menu, that game counts as just arrived, so it's the guest and takes the room as it now is.
 
 **D159: Skipping a scene runs it fast** (Tucker, #107; how: agent-default)
 The game only allows a skip after it's been seen in a finished game, and only in some stages. With both players asking, each launcher runs the scene at 8x with no picture or sound, which works for every scene and stays in step.
