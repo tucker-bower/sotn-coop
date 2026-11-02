@@ -30,7 +30,9 @@ HELPERS = ("GetSideToPlayer", "GetDistanceToPlayerX", "GetDistanceToPlayerY")
 # their tiles after the authority's are copied in, so a guest opens its own (M12: a guest
 # Alucard was walled in at Olrox's door until the authority walked through). What locks one
 # (NZ1's g_bossDoorsLocked) is in the BSS, which the guest gets from the authority.
-DECOR = re.compile(r"Entity(RedDoor|SealedDoor|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
+# Camera limits too: they're the limits of one game's own camera, set as its own player walks
+# past (playtest 0.14: a guest kept the old limit, and stood on it as if on a floor).
+DECOR = re.compile(r"Entity(RedDoor|SealedDoor|LockCamera|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
                    r"Vortex|Bookcase|Furniture|Gears|DoorRubble|Shadow)|Clouds|LightningCloud|"
                    r"DistantBackgroundTrees|ForegroundTree|3DBackgroundHouse|HouseShader|ClockTower3D|"
                    r"StainedGlass|StainedGlassBackground|CavernBackground\w*|NightSky|BgColumnsParallax\w*|"

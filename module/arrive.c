@@ -139,13 +139,6 @@ static bool SameRoomAsPartner(void) {
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// In this room but half a screen or more away (cameras apart: no shared room).
-static bool FarInRoom(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    s32 dx = p->scrollX - g_Tilemap.scrollX.i.hi, dy = p->scrollY - g_Tilemap.scrollY.i.hi;
-    return SameRoomAsPartner() && (dx >= 128 || dx <= -128 || dy >= 112 || dy <= -112);
-}
-
 static bool PartnerInBossFight(void) {
     return PartnerFresh() && (g_CoopLink.partner.flags & PRESENCE_BOSS) &&
            !(g_CoopLink.partner.flags & PRESENCE_DEAD);
@@ -490,10 +483,7 @@ static void PullIn(void) {
     if (!PartnerInBossFight() || (s_BossPulled && !s_BossPullCooldown && !ArriveBusy() && !SameRoomAsPartner())) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
-               (CanBePulled(false) ||
-                // the same room but too far apart to share it (a wide arena: the Succubus's, when
-                // one player walked on through her intro): each game would fight its own boss
-                (CanBePulled(true) && SharedRole() == ROLE_NONE && p->role == ROLE_NONE && FarInRoom()))) {
+               CanBePulled(false)) { // the same room is never reloaded: the fight is shared (shared.c)
         s_BossPulled = true;
         s_BossPullCooldown = BOSS_PULL_COOLDOWN;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
@@ -707,7 +697,8 @@ void ArrivePresence(CoopPresence* p) {
     // During a scene it stays where the scene started, which is where a pulled-in partner must
     // arrive for its own copy to play the same (the scene walks the player on; arriving there,
     // Death's scene walked the partner out of the room, over and over).
-    if (((g_Player.vram_flag & 1) && !g_CutsceneHasControl) || p->roomLeft != s_GroundLeft ||
+    // Not while a door or a scene walks the player: that can cross ground nobody can stand on.
+    if (((g_Player.vram_flag & 1) && !g_CutsceneHasControl && !g_Player.demo_timer) || p->roomLeft != s_GroundLeft ||
         p->roomTop != s_GroundTop || p->stage != s_GroundStage) {
         p->groundX = p->x;
         p->groundY = p->y;

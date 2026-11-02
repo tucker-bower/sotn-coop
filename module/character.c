@@ -250,10 +250,28 @@ static void PoisonWater(void) {
     }
 }
 
+// Some doorways have a gap in the floor, one tile wide, that the door's walk carries Alucard
+// across. Richter's and Maria's walks check for a fall: they dropped in, the wall pushed them into
+// the next room and back, forever (playtest 0.14). During a door's walk at a room's edge, there's
+// ground under them. A scene's walk isn't a door's.
+#define DOOR_EDGE 24
+
+static void DoorWalkGround(void) {
+    s32 x = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi;
+
+    if (s_Loaded != CHAR_ALUCARD && g_GameState == Game_Play && g_GameStep == Play_Default &&
+        g_GameEngineStep == Engine_Normal && g_Player.demo_timer && !g_CutsceneHasControl &&
+        (g_Player.padSim & (PAD_LEFT | PAD_RIGHT)) &&
+        (x < DOOR_EDGE || x >= (s32)(g_Tilemap.hSize << 8) - DOOR_EDGE)) {
+        g_Player.vram_flag |= TOUCHING_GROUND;
+    }
+}
+
 void CharacterFrame(void) {
     const CharBlob* b;
 
     g_CoopOptions = g_CoopLink.options; // for the player overlays
+    DoorWalkGround();
 
     if (g_GameState == Game_NowLoading && g_GameStep <= Play_PrepareDemo) {
         CharacterApply();

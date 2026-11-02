@@ -9,6 +9,7 @@ Deterministic by construction: fixed core options, empty memory cards in a fresh
 no wall-clock input. Two Emu instances fed the same inputs produce identical RAM (lockstep.py).
 """
 
+import logging
 import os
 import re
 import struct
@@ -121,6 +122,9 @@ OPTIONS = {
 
 if BIOS:
     OPTIONS["swanstation_BIOS_PathNTSCU"] = BIOS.name
+
+
+logging.getLogger("libretro").setLevel(logging.ERROR)  # format strings without their values: reports filled with them
 
 
 class Emu:

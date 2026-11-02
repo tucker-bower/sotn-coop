@@ -27,6 +27,7 @@ _LEVEL, _EXP = 0x238 + 0x284, 0x238 + 0x288  # SaveData.status (PlayerStatus) .l
 BOTH_DEAD_FRAMES = 4               # ticks both must be waiting before the launcher acts
 LINKED_FRAMES = 600                # a partner heard from within 10 s (module: PartnerLinked)
 PARTNER_SAVE_FRAMES = 300          # waiting this long for the partner's save: save alone
+RESEND_LOAD_FRAMES = 300           # a linked partner out of play this long gets the load again
 ARRIVE_AFTER_FRAMES = 60           # in play this long after a load before a test castle's arrive
 
 
@@ -91,6 +92,8 @@ class JointSave:
         self.dead_frames = 0
         self.saves = 0        # joint saves written
         self.resumed = False  # the session file was loaded in this run
+        self.sent_load = False  # this game (the host) told the partner to load it
+        self.partner_out = 0    # frames the linked partner has been out of play since
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
@@ -148,8 +151,23 @@ class JointSave:
                 self.pending = (i, blob)
         self._both_dead()
 
+    def _bring_partner(self, m):
+        """A partner who joined a castle already under way sits at their title screen, and only a
+        load brings them in (playtest 0.14). The host sends it again until they're in play."""
+        p = m.partner_presence()
+        if self.path is None or not self.path.exists() or not self.sent_load or m.partner_age() > 30 or p.flags & 1:
+            self.partner_out = 0
+            return
+        self.partner_out += 1
+        if self.partner_out >= RESEND_LOAD_FRAMES:
+            self.partner_out = 0
+            blobs = both_slots(read_session(self.path))
+            b64 = lambda b: base64.b64encode(b).decode("ascii")
+            self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]), "start": None})
+
     def _tick_online(self):
         m = self.mb[0]
+        self._bring_partner(m)
         seq = m.save_seq()
         if seq < self.seen[0]:
             self.seen[0] = seq
@@ -240,6 +258,7 @@ class JointSave:
     def resume(self):
         """Loads the session file into both games (from the title screen, or in play)."""
         self.resumed = True
+        self.sent_load = True
         blobs = both_slots(read_session(self.path))
         self._arrive = [[m, None, tuple(self.start)] for m in self.mb] if self.start else []
         if self.host is not None:

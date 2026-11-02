@@ -11,6 +11,7 @@
 #include "flag_gated.h"
 #include "link.h"
 #include "progress.h"
+#include "message.h"
 #include "boss.h"
 #include "shared.h"
 
@@ -277,6 +278,9 @@ static void Apply(const CoopEvent* ev) {
         break;
     case EV_ITEM:
         AddToInventory(ev->a, ev->b);
+        // The game whose copy took it showed its name; here it arrives unannounced (playtest 0.14).
+        CoopMessageName(ev->b == EQUIP_HAND ? (const u8*)g_api.equipDefs[ev->a].name
+                                            : (const u8*)g_api.accessoryDefs[ev->a].name);
         break;
     case EV_USED: // the partner used it up (M13's fairy revive): one fewer in the shared bag
         if (ev->a < LEN(g_Status.equipHandCount) && g_Status.equipHandCount[ev->a]) {
@@ -403,7 +407,25 @@ static void Resync(void) {
     s_Visited = 0;
 }
 
+// Death's scene takes Alucard's gear from the players who see it, but the flag it sets also comes
+// with a save or a partner's castle: a player joining later kept the set (playtest 0.14). Only
+// in the first castle: the inverted castle has the pieces to find again.
+static void RobbedUpdate(void) {
+    const u32* eq = g_Status.equipment;
+
+    if (g_CastleFlags[IVE_BEEN_ROBBED] && g_GameState == Game_Play && g_GameStep == Play_Default &&
+        !g_CutsceneHasControl && g_StageId != STAGE_ST0 && !(g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
+        (eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SWORD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SHIELD ||
+         eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SHIELD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SWORD ||
+         eq[HEAD_SLOT] == ITEM_DRAGON_HELM || eq[ARMOR_SLOT] == ITEM_ALUCARD_MAIL ||
+         eq[CAPE_SLOT] == ITEM_TWILIGHT_CLOAK || eq[ACCESSORY_1_SLOT] == ITEM_NECKLACE_OF_J ||
+         eq[ACCESSORY_2_SLOT] == ITEM_NECKLACE_OF_J)) {
+        g_api.InitStatsAndGear(1);
+    }
+}
+
 void ProgressUpdate(void) {
+    RobbedUpdate();
     bool inPlay = g_GameState == Game_Play && g_GameStep == Play_Default;
 
     WrapApi();

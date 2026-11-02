@@ -95,6 +95,7 @@ static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while t
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
+static u8 s_HitHold[STAGE_SLOTS];      // frames a copy this game hit stays invincible, whatever arrives
 #define TAKEN_FRAMES 120 // online: longer than a slow round trip plus the playout delay (M7b)
 #define E_PRIZE_DROP 3 // hearts, gold, subweapons: the same entity id in every stage
 static u32 s_AppliedSeq;
@@ -230,10 +231,9 @@ static bool PartnerShareable(void) {
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
-    // A shared boss fight stays shared, cameras near or not: arenas are up to two screens wide,
-    // and a split would leave each game its own boss (the pull that fixes that reloads the room,
-    // and the fight is gone).
-    if (s_Role != ROLE_NONE && (BossHere() || (p->flags & PRESENCE_BOSS))) {
+    // A boss fight is shared, cameras near or not: arenas are up to two screens wide, and apart
+    // each game would fight its own boss (a pull to fix that reloads the room, and the fight is gone).
+    if (BossHere() || (p->flags & PRESENCE_BOSS)) {
         return true;
     }
     dx = p->scrollX - g_Tilemap.scrollX.i.hi;
@@ -352,6 +352,7 @@ static void BecomeGuest(void) {
         s_Mirrored[i] = false;
         s_Local[i] = false;
         s_TakenHere[i] = 0;
+        s_HitHold[i] = 0;
     }
     s_OrigUpdate = g_api.o.Update;
     s_OrigSpawner = g_api.o.UpdateRoomPosition;
@@ -536,6 +537,12 @@ static void ApplySnapshot(void) {
         }
         s_Local[i] = false;
         CopyWords(e, r, sizeof(Entity));
+        // Snapshots from before the authority heard of a hit bring the copy back to hittable, and a
+        // whip hit it every frame of a round trip: online, it did many times its damage (playtest
+        // 0.14). This game's own hit counts here until the authority's catches up.
+        if (s_HitHold[i] > e->nFramesInvincibility) {
+            e->nFramesInvincibility = s_HitHold[i];
+        }
         r += sizeof(Entity);
         s_Mirrored[i] = true;
         src = (const Primitive*)r;
@@ -814,6 +821,9 @@ static void ReportHits(void) {
         }
         ProgressEmit(EV_HIT, i | (e->entityId << 8),
                      (u16)damage | (e->hitFlags << 16) | (((e->flags & FLAG_DEAD) != 0) << 24));
+        if (damage) {
+            s_HitHold[i] = e->nFramesInvincibility;
+        }
         ProgressEmit(EV_HIT2, i | (e->hitParams ? (e->hitParams & 0xFF ? e->hitParams & 0xFF : 0xFF) : 0) << 8,
                      e->nFramesInvincibility | (e->stunFrames & 0xFF) << 8 | (u32)e->hitEffect << 16);
     }
@@ -976,7 +986,14 @@ static void ApplyHits(void) {
 }
 
 static void HitDetectionWrap(void) {
+    s32 i;
+
     if (s_Role == ROLE_GUEST) {
+        for (i = 0; i < STAGE_SLOTS; i++) {
+            if (s_HitHold[i]) {
+                s_HitHold[i]--;
+            }
+        }
         SaveHitFields();
         s_HitDetection();
         CollectTouchedDrops();
@@ -1004,7 +1021,9 @@ static void NearestPlayer(s16* x, s16* y) {
 
     *x = PLAYER.posX.i.hi;
     *y = PLAYER.posY.i.hi;
-    if (s_Role != ROLE_AUTHORITY) {
+    // Scenery acts for this game's own player: a door or a camera limit that asked about the
+    // nearer one opened for the wrong side, or never (playtest 0.14).
+    if (s_Role != ROLE_AUTHORITY || IsScenery(FindOverlay(g_StageId), (u32)g_CurrentEntity->pfnUpdate)) {
         return;
     }
     px = p->x - g_Tilemap.scrollX.i.hi; // partner, in this game's screen space

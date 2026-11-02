@@ -461,7 +461,9 @@ static void AluPalettes(void) {
 // The partner starts as a copy of player 1, a little to the right.
 #define DRAW_OFS (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)) // g_PlayerDraw in the copy
 
+#define PLAYER_HIT_MARGIN 1000
 static bool s_TeleportSeen; // the partner's FLIP_TELEPORT_IN, last frame
+static bool s_BodyDied;     // dead here while the partner isn't: made again
 static s32 s_PartnerHp = -1; // its HP, as its status last said (a drop: it was hit in its game)
 u32 g_CoopBodyHits; // hits given to the body (tests read it: coop.map)
 u32 g_CoopBodyOff; // tests: no partner body (it's drawn by nothing then)
@@ -653,7 +655,10 @@ static void SwapOut(void) {
     Swap();
 }
 
-static bool PartnerLive(void) { return g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES; }
+// Its body outlasts a stall of the link (it blinked in and out with each one: playtest 0.14), standing
+// still once its buttons stop coming.
+#define BODY_STALE_FRAMES 300
+static bool PartnerLive(void) { return g_CoopLink.partnerAge <= BODY_STALE_FRAMES; }
 
 // The partner is in this room, in play, as a character we can run: Alucard (DRA's code), Richter or
 // Maria (their partner builds), in any game.
@@ -835,9 +840,10 @@ void PartnerFrame(void) {
         return;
     }
     if (s_Made && !Spike() &&
-        (!PartnerLive() || !PartnerHere() || g_CoopLink.partner.character != s_Char ||
+        (!PartnerLive() || !PartnerHere() || g_CoopLink.partner.character != s_Char || s_BodyDied ||
          ((g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) && !s_TeleportSeen))) {
         Drop(); // gone (from this room, or for good), or just revived: made again where they are
+        s_BodyDied = false;
     }
     s_TeleportSeen = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN);
     if (!Spike() && !(PartnerLive() && PartnerHere())) {
@@ -859,7 +865,7 @@ void PartnerFrame(void) {
         return;
     }
     s_JustMade = false;
-    pad = PartnerLive() ? g_CoopLink.partnerPad : g_CoopSpikePad;
+    pad = !PartnerLive() ? g_CoopSpikePad : g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES ? g_CoopLink.partnerPad : 0;
     t0 = VSync(1);
     if (PartnerLive()) {
         PutStatus();
@@ -871,7 +877,9 @@ void PartnerFrame(void) {
     if (PartnerLive() && ((const CoopStatus*)STATUS_PARTNER_ADDR)->magic == STATUS_MAGIC) {
         s32 hp = *(const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a; // g_Status.hp
         if (s_PartnerHp > hp && hp > 0) {
-            g_Status.hp = s_PartnerHp;
+            // Its own code's sums can differ from its game's, and a body that died here stayed dead
+            // and unseen while the partner played on (playtest 0.14): it can't die of this.
+            g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + (s_PartnerHp - hp);
             PLAYER.hitParams = DAMAGEKIND_1;
             PLAYER.hitPoints = s_PartnerHp - hp + g_Status.defenseEquip;
             g_CoopBodyHits++;
@@ -911,6 +919,7 @@ void PartnerFrame(void) {
     g_CurrentEntity = cur;
     g_pads[0] = pad0;
     g_CoopOptions = options;
+    s_BodyDied = (g_Player.status & PLAYER_STATUS_DEAD) && !(p->flags & PRESENCE_DEAD);
     Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
     SwapOut();
     g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter: its update and drawing

@@ -2,7 +2,7 @@
 #ifndef PARTNER_H
 #define PARTNER_H
 
-#define PARTNER_STALE_FRAMES 30 // no host update for this long: the partner's gone (no body)
+#define PARTNER_STALE_FRAMES 30 // no host update for this long: the partner's gone
 
 void PartnerBoot(void);  // once, at boot: finds the BIOS's rand() seed (the partner's is its own)
 void PartnerFrame(void); // its update and drawing: after player 1's RenderEntities (coop.c)

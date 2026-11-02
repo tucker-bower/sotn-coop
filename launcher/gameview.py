@@ -345,8 +345,20 @@ class GameView:
         self.display.present(over_games=True)
         return rects
 
+    def keep_playing(self):
+        """While a box is up: online, this game runs on with no buttons held, or the partner's game
+        would lose it (playtest 0.14: reporting a problem froze the partner). On the couch both wait."""
+        if self.online:
+            for g in self.games:
+                g.frame_start(0)
+            for g in self.games:
+                g.frame_end()
+            self.frame += 1
+            if self.audio:
+                self.audio.clear()
+
     def ask_note(self):
-        """"What happened?" Typed text, or "" (Enter on nothing, or Esc). The games wait."""
+        """"What happened?" Typed text, or "" (Enter on nothing, or Esc)."""
         text = ""
         pygame.key.start_text_input()
         try:
@@ -372,6 +384,7 @@ class GameView:
                 self.overlay("Report a problem: what happened? (optional)",
                              ["Type, then Enter to save the report (or press Cross / A: no note). Esc: no note."],
                              box_text=shown)
+                self.keep_playing()
                 pygame.time.wait(16)
         finally:
             pygame.key.stop_text_input()
@@ -401,7 +414,7 @@ class GameView:
         return path
 
     def ask_send(self):
-        """Send the report, or keep it here? The games wait."""
+        """Send the report, or keep it here?"""
         while True:
             for ev in pygame.event.get():
                 if self.display.handle(ev):
@@ -420,6 +433,7 @@ class GameView:
                          ["It emails your note, screenshots, inputs, logs, game state and memory cards to the",
                           "SOTN Co-op team. Your folders, disc path, typed name and IP address are removed.",
                           "Enter / Cross: send.   Esc / Circle: keep it on this device."])
+            self.keep_playing()
             pygame.time.wait(16)
 
     def send_report(self, path, note):
