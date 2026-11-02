@@ -37,3 +37,4 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M8-maria-and-richter.md` | Playable Maria and Richter. Done. |
 | `M8b-character-balance.md` | Their balance and ability mapping. Done. |
 | `M9-android.md` | Android. Done. |
+| `bat-carry.md` | Hanging onto Bat Alucard (#43). Proposed. |
