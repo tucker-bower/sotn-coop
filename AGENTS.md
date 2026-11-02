@@ -80,7 +80,7 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 |---|---|---|
 | A handful, by name or `-k` | seconds to minutes | A small change |
 | Everyday (273 tests) | 10 minutes | Before committing a major change, and before opening or updating a PR with code changes |
-| `--full` (299 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
+| `--full` (364 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
 
 **After a module change, rebuild first:** `scripts/rebuild_fixtures.sh` (about 15 minutes) rebuilds the disc, Maria's patches and every savestate, because savestates hold the module's code. Don't rebuild while tests are running.
 
