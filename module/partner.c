@@ -289,10 +289,11 @@ static void Swap(void) {
     // wrapped to 0 in the body's frame, player 1's slot stayed in the copy).
     for (i = 0; i < 64; i++, body += 0xBC / 4) {
         u32* ram = (u32*)&g_Entities[i];
-        if (i && i <= E_AFTERIMAGE_3 && !s_OtherChar) {
-            continue;
-        }
-        if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
+        if (i && i <= E_AFTERIMAGE_3) {
+            if (!s_OtherChar) { // slot 1's id is a counter: 0 is no sign of an empty slot
+                continue;
+            }
+        } else if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
             continue;
         }
         for (k = 0; k < 0xBC / 4; k++) {
@@ -767,6 +768,35 @@ bool PartnerSimulated(void) {
 
 static void Draw(void);
 
+// Alucard's afterimages, with their primitives gone, write through whatever replaced them: every
+// frame func_801093C4 takes a DR_ENV pointer from another entity's primitive. That walked up low
+// memory into the exception vector and hung the game for good (playtest 2026-11-01). Set up again
+// as AluInit does. Tests read the count: coop.map.
+#define AFTERIMAGE_PRIMS 8
+u32 g_CoopAfterimagesRepaired;
+
+static void KeepAfterimages(void) {
+    Entity* e = &g_Entities[E_AFTERIMAGE_1];
+    Primitive* prim;
+    s32 i, index;
+
+    if (CharacterLoaded() != CHAR_ALUCARD || (e->flags & FLAG_HAS_PRIMS)) {
+        return;
+    }
+    index = g_api.AllocPrimitives(PRIM_TILE, AFTERIMAGE_PRIMS);
+    if (index < 0) {
+        g_Player.unk6A = 0xFFFF; // no pool either: func_801093C4 does nothing in this state
+        return;
+    }
+    e->primIndex = index;
+    e->flags |= FLAG_HAS_PRIMS;
+    for (prim = &g_PrimBuf[index], i = 0; i < 6; i++, prim = prim->next) {
+        prim->drawMode = DRAW_UNK_100 | DRAW_HIDE | DRAW_UNK02;
+    }
+    g_Player.unk6A = 0;
+    g_CoopAfterimagesRepaired++;
+}
+
 // The partner's frame: its update and its drawing, in one swap. After player 1's RenderEntities.
 void PartnerFrame(void) {
     const CoopPresence* p = &g_CoopLink.partner;
@@ -797,6 +827,7 @@ void PartnerFrame(void) {
         s_FlashCount = 0;
         return;
     }
+    KeepAfterimages();
     if (g_CoopBodyOff) { // tests: no body (what a game does without one)
         if (s_Made) {
             Drop();
@@ -1001,7 +1032,9 @@ static void Draw(void) {
     for (i = 1; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
-    Tint(gt4);
+    if (!s_OtherChar) { // only two of a kind need telling apart
+        Tint(gt4);
+    }
     if (s_Banked) {
         BankPolys(gt4, gt3);
     }

@@ -9,6 +9,7 @@ Deterministic by construction: fixed core options, empty memory cards in a fresh
 no wall-clock input. Two Emu instances fed the same inputs produce identical RAM (lockstep.py).
 """
 
+import os
 import re
 import struct
 import tempfile
@@ -114,6 +115,7 @@ OPTIONS = {
     "swanstation_BIOS_PathNTSCU": "scph5501.bin",
     "swanstation_GPU_Renderer": "Software",
     "swanstation_CPU_ExecutionMode": "Recompiler",
+    "swanstation_CPU_Overclock": os.environ.get("COOP_OVERCLOCK", "200"),
 }
 
 

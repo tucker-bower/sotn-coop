@@ -24,7 +24,7 @@ def screen_diff(x, y, mask=None):
         sum(1 for v in d.getdata() if v)
 
 
-def jump_frames(linked, frames=(10, 20, 30, 40)):
+def jump_frames(linked, frames=(10, 20, 30)):  # by 40, one run can have the sky's random lightning
     """B jumps at the castle entrance while A stands still. Returns B's screenshots at those
     frames, and where A's sprite is on B's screen."""
     with Session(COOP_DISC) as s:

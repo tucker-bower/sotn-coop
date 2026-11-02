@@ -27,6 +27,7 @@ PROFILES = {
     "transatlantic": dict(delay=55, jitter=10,  loss=0.01, burst=1.5),
     "wifi":          dict(delay=15, jitter=20,  loss=0.03, burst=4, spike=0.004, spike_ms=150),
     "cellular":      dict(delay=45, jitter=25,  loss=0.02, burst=2, spike=0.002, spike_ms=250, kbps=1500),
+    "playtest":      dict(delay=30, jitter=15,  loss=0.005, burst=2, spike=0.002, spike_ms=137),
 }
 PROFILE_WORDS = {  # what each profile stands for, round trip
     "lan": "same house (2 ms)",
@@ -35,6 +36,7 @@ PROFILE_WORDS = {  # what each profile stands for, round trip
     "transatlantic": "across an ocean (110 ms, 1% loss)",
     "wifi": "bad Wi-Fi (30–300 ms, 3% loss in bursts)",
     "cellular": "phone hotspot (90–500 ms, 2% loss, 1.5 Mbit/s)",
+    "playtest": "the 0.13 online playtest (60–120 ms, with hitches)",
 }
 
 

@@ -34,6 +34,8 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_m11.py` | Castles, solo and the shared level. |
 | `session_m12.py` | Cutscenes, bosses and story scenes together. |
 | `session_m15.py` | PvP. |
+| `realtime.py` | **Manual.** Two games at full speed on their own clocks, over a simulated connection: routes, screenshots, hangs. |
+| `session_netplay.py` | Online play on the game's own route, with a playtest-like connection. |
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |

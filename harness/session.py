@@ -52,7 +52,7 @@ class _Worker:
         # with the second game half a frame behind (the driver steps them alternately).
         # Real-time play (audio) keeps the wall clock.
         self.clock = {"t": rank / 120, "dt": 1 / 60}
-        if not audio:
+        if not audio and not os.environ.get("COOP_REALTIME"):
             self.transport.clock = lambda: self.clock["t"]
         self.host = Host(self.mailbox, self.transport, rank, patch_crc=patch_crc, playout=learn_peer)
         self.host.set_portraits(portraits.read(disc))
@@ -237,6 +237,26 @@ class MailboxProxy:
         return lambda *a: self.game.mailbox(name, *a)
 
 
+class CrashGuard:
+    """Fails a test the moment a game's exception vector changes: a write through a bad pointer
+    (the 0.13 playtest's freeze) leaves the CPU looping there while the emulator runs on, and the
+    test only sees a game that stopped moving, if it looks at all. Read every second of play."""
+
+    VECTOR, SIZE, EVERY = 0x80000080, 16, 60
+
+    def __init__(self):
+        self.good, self.frames = {}, 0
+
+    def check(self, games):
+        self.frames += 1
+        if self.frames % self.EVERY == 1:
+            for g in games:
+                now = g.read_bytes(self.VECTOR, self.SIZE)
+                if self.good.setdefault(g.name, now) != now:
+                    raise RuntimeError(f"game {g.name} crashed: its exception vector was overwritten "
+                                       f"by frame {self.frames} ({now.hex()})")
+
+
 class HostProxy:
     """A worker game's Host, for online JointSave control messages."""
 
@@ -257,6 +277,7 @@ class Session:
         self.disc, self.starts, self.session_file, self.audio = disc, starts, session_file, audio
         self.characters, self.blob = characters, blob
         self.joint = None
+        self.guard = CrashGuard()
 
     def __enter__(self):
         ctx = mp.get_context("spawn")
@@ -314,6 +335,7 @@ class Session:
             sb = self.b.step(1, pb)
             if self.joint:
                 self.joint.tick()
+            self.guard.check(self.games)
             if each:
                 each(i, sa, sb)
         return sa, sb
@@ -352,6 +374,7 @@ class OnlineSession:
         self.joint = None
         self.want_joint = joint
         self.port = None
+        self.guard = CrashGuard()
 
     def __enter__(self):
         self._shms = []
@@ -405,6 +428,7 @@ class OnlineSession:
             s = self.local.step(1, p)
             if self.joint:
                 self.joint.tick()
+            self.guard.check([self.local])
             if each:
                 each(i, s)
         return s

@@ -7,6 +7,7 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `backlog-report-sending.md` | **Superseded** by D144: a hosted relay for F9 reports. |
 | `backlog-rescue-menu.md` | Backlog: an "I'm stuck" menu for playtesters. |
 | `boss-rush.md` | Boss rush mode. Done. |
+| `netplay-suite.md` | The 0.13 playtest's bugs, and the tests that reproduce them. In progress. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |
 | `M1-ghost-p2.md` | **Withdrawn.** A ghost second player in one game, dropped for one game per player. |
 | `M1-link-presence.md` | The link between two games, and seeing each other. Done. |

@@ -150,3 +150,6 @@ Serializing takes under 2 ms and a copy about 5 ms; the hitch was the 12.5 MB go
 
 ## Boot time is part of the tests
 An extra CD read at boot shifts every savestate made afterwards, and `no_effect_on_play` and `pvp_familiar` fail on the shifted starts. Don't add boot reads: have the host write data to expansion RAM, as `link/portraits.py` does.
+
+## Reading a crash from an F9 report
+A report's `.state` file holds the game. After the header, the `CPU` marker is followed by 8 bytes, then 36 registers (pc is the 35th), and RAM starts 6702 bytes after the marker. A game stuck at pc 0x80000080 with a changed exception vector has been written over. Compare low memory with the partner's report: `g_Timer` stopped while emulator frames went on means the game itself stopped. Reports' `presences` are the player's own, not the partner's.

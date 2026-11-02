@@ -41,7 +41,7 @@ def online_in_process(run):
         b.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
         for _ in range(400):
             step_pair(s0, s1, 1)
-            if b.mailbox("self_presence").role == ROLE_GUEST:
+            if a.mailbox("self_presence").role == ROLE_AUTHORITY and b.mailbox("self_presence").role == ROLE_GUEST:
                 break
         roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
         run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "they share the room: in-process A runs it",

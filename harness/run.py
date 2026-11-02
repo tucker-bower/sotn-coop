@@ -46,6 +46,7 @@ import scenarios_m13  # noqa: F401
 import session_m15  # noqa: F401
 import session_inverted  # noqa: F401
 import session_bossrush  # noqa: F401
+import session_netplay  # noqa: F401
 import spec_test  # noqa: F401
 from commands import COMMANDS, run_command
 from scenario import FULL_ONLY, SCENARIOS, run_scenario
