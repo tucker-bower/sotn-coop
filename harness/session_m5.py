@@ -14,6 +14,7 @@ from session_scenarios import heal
 
 ENGINE_NORMAL, ENGINE_MENU = 1, 2
 NO1 = 0x01
+DEMO_TIMER = 0x32C  # g_Player.demo_timer
 NEXT_TO_BOSS = (96, 40, 135)  # NO1 room 96 (59,23), near its left edge
 DOPPLEGANGER10, DOPPLEGANGER10_HP = 253, 120  # enemy definition (assets/dra/us/enemydefs.yaml)
 BOSS_STAGES = set(range(0x16, 0x1F)) | set(range(0x36, 0x3F))
@@ -83,6 +84,8 @@ def boss_pulls_partner_in(run):
     run.step(30)
     roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
     run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A runs the fight, B is its guest", roles=roles)
+    run.expect(b.read("g_Player", "<i", DEMO_TIMER) == 0, "the boss's door doesn't hold the guest (#129)",
+               hold=b.read("g_Player", "<i", DEMO_TIMER))
     run.expect([e[1] for e in bosses(b).values()] == [e[1] for e in bosses(a).values()],
                "B sees the same boss, with the same HP", a=bosses(a), b=bosses(b))
 

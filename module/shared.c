@@ -299,6 +299,17 @@ static void TrackMenu(void) {
     paused = now;
 }
 
+// A long hold with nothing simulated is a scene's: the Doppleganger's door holds the player 576
+// frames, and the boss's own code lets go. A guest doesn't run the boss, so it stood frozen in the
+// fight (playtest 0.14). Shorter holds are a door's or a hit's, and end on their own.
+#define GUEST_HOLD_MAX 32
+
+static void ReleaseGuestHold(void) {
+    if (s_Role == ROLE_GUEST && g_Player.demo_timer > GUEST_HOLD_MAX && !g_Player.padSim && !g_CutsceneHasControl) {
+        g_Player.demo_timer = 0;
+    }
+}
+
 static void TrackRoom(void) {
     if (g_StageId != s_RoomStage || g_Tilemap.left != s_RoomLeft || g_Tilemap.top != s_RoomTop) {
         s_RoomStage = g_StageId;
@@ -1155,6 +1166,7 @@ const OverlayInfo* FindOverlay(s32 stage) {
 void SharedUpdate(void) {
     TrackRoom();
     TrackMenu();
+    ReleaseGuestHold();
     if (g_GameState != Game_Play) {
         return;
     }
