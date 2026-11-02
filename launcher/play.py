@@ -97,7 +97,7 @@ def main():
                 g.load_card(card.read_bytes())
         if setup_name:
             setup(setup_name, s)
-        view = GameView(s, display, Pads(), audio, goal=goal, aggro=args.aggro,
+        view = GameView(s, display, Pads(), audio, goal=goal, rules={"aggro": args.aggro},
                         save_cards=(CARDS / "A.mcd", CARDS / "B.mcd"), frames=args.frames, profile=args.profile)
         view.run()
         if args.shot:

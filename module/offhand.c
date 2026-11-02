@@ -461,7 +461,7 @@ void OffhandUpdate(void) {
         PlaceSheet();
     }
     // g_Player.unk46: an attack of their own is under way, and ○ waits for it as a whip does
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging || g_Player.unk46) {
+    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging || g_Player.unk46 || RULE_OFF(RULE_NO_OFFHAND)) {
         return;
     }
     for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○

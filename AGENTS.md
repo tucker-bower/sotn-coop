@@ -87,6 +87,8 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 **New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True`). Keep everyday at 10 minutes or less by moving repetition to `--full`.
 
 ## PR template
+Before Issuing a PR, run the everyday test suite. The full test suite should only be run before creating a new release. Additonally, check that all documentation is up-to-date before issuing the PR, including the md roadmap, repo root readme, and status.
+
 ```
 Fixes #<issue>
 Fixes #<issue>

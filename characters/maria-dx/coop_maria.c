@@ -39,6 +39,9 @@ void CoopMarPartnerInit(u16 initParam) {
 #endif
 
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
+    if (g_CoopOptions & OPT_NO_GROWTH) {
+        return attack; // the castle's rules: her attacks as in her own game
+    }
     if (subweapon == COOP_MAR_BASIC) {
         attack += g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;
         if (COOP_CAN(RELIC_FIRE_OF_BAT)) {

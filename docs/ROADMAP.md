@@ -26,6 +26,7 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | M14 | Connect the way Slippi does (cut down, D123) | Done | `M14-relay` |
 | M15 | PvP, the host's option | Done | `M15-pvp` |
 | — | Boss rush | Done | `boss-rush` |
+| — | Castle rules | Done | `M-castle-rules` |
 | M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice | #48 | `M16-saturn-characters` |
 | M17 | 3+ players, online then couch | #49 | `M17-more-players` |
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |

@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 13
+#define COOP_LINK_VERSION 14
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -249,7 +249,14 @@ typedef struct {
     /* 0x22434 */ CoopHit selfHits[COOP_HITS];
     /* 0x224F4 */ u32 partnerHitCount; // host writes
     /* 0x224F8 */ CoopHit partnerHits[COOP_HITS];
-} CoopLink; // size = 0x225B8
+    /* 0x225B8 */ u32 rulesOff;     // host writes every frame: RULE_* bits, the castle's rules (D162)
+    /* 0x225BC */ u16 expPct;       // XP from a kill, % (0: 100)
+    /* 0x225BE */ u16 dealtPct;     // damage the player deals, % (0: 100)
+    /* 0x225C0 */ u16 takenPct;     // damage the player takes, after defense, % (0: 100)
+    /* 0x225C2 */ u16 enemyHpPct;   // enemies' HP with a partner, % (0: 200)
+    /* 0x225C4 */ u16 enemyHpSoloPct; // enemies' HP alone, % (0: 100)
+    /* 0x225C6 */ u16 rulesPad;
+} CoopLink; // size = 0x225C8
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define OPT_NO_TINT 0x20000000 // options: two of a kind aren't told apart by a tint (partner.c)
@@ -260,7 +267,26 @@ typedef struct {
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 #define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 #define CONTROL_PVP 0x1000000 // the host's PvP setting: the partner's attacks hurt (M15, pvp.c)
-#define CONTROL_ENEMY_HP_SHIFT 25 // bits 25-31: enemies' health with a partner, in tens of %, 0 = 200%
+
+// The castle's rules (D162, design/M-castle-rules.md): each bit turns a co-op change to the game
+// off, so all zero is the game as we built it. Bits 24 and up also go to the player overlays
+// through g_CoopOptions (OPT_NO_*, characters/richter-ps1/coop_ric.h).
+#define RULE_NO_SHARED_LEVEL 0x001  // no XP split, no XP sent to the partner
+#define RULE_NO_SHARED_GOLD 0x002   // each player keeps their own gold
+#define RULE_NO_REVIVE 0x004        // a fallen player stays down until both are
+#define RULE_NO_FAERIE_REVIVE 0x008 // a partner's faerie doesn't revive
+#define RULE_NO_BOSS_PULL 0x010     // a boss fight doesn't bring the partner
+#define RULE_NO_SCENE_PULL 0x020    // a cutscene doesn't bring the partner
+#define RULE_NO_NEAR_TARGET 0x040   // enemies aim at this game's player, not the nearer one
+#define RULE_NO_MAP_TELEPORT 0x080  // Cross on the map doesn't go to the partner
+#define RULE_NO_OFFHAND 0x100       // Richter and Maria: Circle doesn't use the off-hand item
+#define RULE_NO_FAMILIARS 0x200     // Richter and Maria: no familiars
+#define RULE_OVERLAY_MASK 0xFF000000
+#define OPT_NO_GROWTH 0x01000000      // Richter and Maria: no levels, no STR/INT in their attacks
+#define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: relics teach them nothing
+#define OPT_NO_AIR_JUMPS 0x04000000   // Richter and Maria: their own jumps only (D122 off)
+#define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
+#define RULE_PCT(field, otherwise) (g_CoopLink.field ? (s32)g_CoopLink.field : (otherwise))
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0

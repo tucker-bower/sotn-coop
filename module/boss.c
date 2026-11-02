@@ -131,17 +131,17 @@ static bool PartnerFighting(void) {
            p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// --- enemies' health with a partner (D25, playtest 0.13: every enemy, 200% unless the host says)
+// --- enemies' health: 2x with a partner (D25, D160), unless the castle's rules say otherwise (D162)
 
 #define ENEMY_DEFS 400 // g_EnemyDefs (assets/dra/us/enemydefs.yaml)
-#define ENEMY_HP_DEFAULT 20 // tens of %
 
 static s16 s_BaseHp[ENEMY_DEFS]; // the table's own values, read once
-static u32 s_HpSet = 10;         // what the table holds, in tens of %
+static s32 s_HpPct = 100;        // what the table holds, in %
 
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
-    u32 want = (g_CoopLink.control >> CONTROL_ENEMY_HP_SHIFT) & 0x7F;
+    // a partner's game has been heard from (10 s)
+    s32 want = g_CoopLink.partnerAge < 600 ? RULE_PCT(enemyHpPct, 200) : RULE_PCT(enemyHpSoloPct, 100);
     s32 i, hp;
 
     if (!defs) {
@@ -153,22 +153,17 @@ static void UpdateHp(void) {
         }
         s_HpRead = true;
     }
-    if (g_CoopLink.partnerAge >= 600) { // no partner's game heard from for 10 s: as the game has it
-        want = 10;
-    } else if (!want) {
-        want = ENEMY_HP_DEFAULT;
-    }
-    if (want == s_HpSet || s_BossHere) { // never mid-fight
+    if (want == s_HpPct || s_BossHere) { // never mid-fight
         return;
     }
     for (i = 0; i < ENEMY_DEFS; i++) {
-        hp = s_BaseHp[i] * (s32)want / 10;
+        hp = s_BaseHp[i] * want / 100;
         // Parts with no health, or that can't die, stay so.
         if (s_BaseHp[i] > 0 && s_BaseHp[i] < HP_MAX) {
-            defs[i].hitPoints = hp > HP_MAX ? HP_MAX : hp;
+            defs[i].hitPoints = hp > HP_MAX ? HP_MAX : hp < 1 ? 1 : hp;
         }
     }
-    s_HpSet = want;
+    s_HpPct = want;
 }
 
 // --- aggro (D47)

@@ -17,7 +17,7 @@ This is everything a **host** needs, so another one can be written without readi
 ## The host's job, once per frame
 0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
 1. **Hello:** every 60 frames, send `HELO`.
-2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 12, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 14, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
 4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below), whose `pad` is `CoopLink.selfPad`.
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
@@ -45,7 +45,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `SPRT` | the sender's own attack sprites: N × 20-byte `CoopSprite` (below), N ≤ 24 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerSprites` (M12). |
 | `PRIM` | `zlib` of N × 0x30-byte primitives (the sender's attack primitives, below), N ≤ 32 | As `SPRT`. The receiver writes them, decompressed, to `partnerPrims` (M12). |
 | `HITS` | the sender's player's attack hitboxes: N × 12-byte `CoopHit` (below), N ≤ 16 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerHits` (M15). |
-| `HELO` | UTF-8 JSON: `{"link": 10, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "pvp": <the host's PvP setting, online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
+| `HELO` | UTF-8 JSON: `{"link": 12, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "rules": <the castle's rules as a JSON object (launcher/rules.py), online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …
@@ -111,7 +111,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 
 Hosts don't interpret events: they move them between rings.
 
-## The mailbox (`g_CoopLink`, 0x225B8 bytes)
+## The mailbox (`g_CoopLink`, 0x225C8 bytes)
 | offset | field | written by |
 |---|---|---|
 | 0x0000 | magic `'COOP'`, version (12), heartbeat | game |
@@ -130,6 +130,7 @@ Hosts don't interpret events: they move them between rings.
 | 0x3438 | `snapOutSeq`, `snapOutSize`, `snapOut` (0xF000) | game |
 | 0x12440 | `snapInSeq`, `snapInSize`, `snapIn` (0xF000) | host |
 | 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP | launcher |
+| 0x225B8 | `rulesOff` (`RULE_*`, `OPT_NO_*` bits), then u16 `expPct`, `dealtPct`, `takenPct`, `enemyHpPct`, `enemyHpSoloPct`, pad: the castle's rules, all zero by default | host, every frame |
 | 0x2144C | `character`: the CHAR_* this game's player plays, from its next load (M8) | launcher |
 | 0x21450 | `options`: OPT_* bits, the player's own settings (1 one-button moves, 2 the partner's body; bits 8–23 the spell on each right-stick direction) | launcher |
 | 0x21454 | `padExtra`: buttons a PlayStation pad lacks (right stick: 1 up, 2 right, 4 down, 8 left), every frame | launcher |

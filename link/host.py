@@ -64,6 +64,7 @@ class Host:
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
         self.portraits = None
+        self.rule_words = None  # the castle's rules, for the mailbox: None until a launcher sets them
 
     def set_player(self, character=None, options=None, blob=None):
         """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
@@ -115,13 +116,13 @@ class Host:
         """A new castle: the joiner starts its game too, past the title screen."""
         self.hello["fresh"] = bool(fresh)
 
-    def set_enemy_hp(self, percent):
-        """The host's setting covers the session, like PvP's."""
-        self.hello["enemy_hp"] = int(percent)
-
-    def set_pvp(self, on):
-        """The host's PvP setting (M15), told to the partner in every HELO: it covers the session."""
-        self.hello["pvp"] = bool(on)
+    def set_rules(self, words, rules=None):
+        """The castle's rules (D162). words: launcher/rules.py's encode(), written into the game
+        every frame, so loading a savestate can't undo them. rules: the host's, told to the
+        partner in every HELO, so a change reaches the joiner within a second."""
+        self.rule_words = tuple(words)
+        if rules is not None:
+            self.hello["rules"] = rules
         return True
 
     def start_connect(self, room, role, relay=None, **kw):
@@ -329,6 +330,8 @@ class Host:
         self.mailbox.set_rank(self.rank)
         self.mailbox.set_character(self.character)
         self.mailbox.set_options(self.options)
+        if self.rule_words is not None:
+            self.mailbox.set_rules(*self.rule_words)
         me = self.mailbox.self_presence()
         self.transport.send(TAG_PRESENCE, me.pack() + struct.pack("<H", me.pad & 0xFFFF))
         sprites = self.mailbox.self_sprites()

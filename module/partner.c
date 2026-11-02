@@ -575,11 +575,17 @@ static void Make(void) {
 
 // Entity positions are on screen (relative to the camera), and the camera moved while the copy
 // was out of RAM: its slots move with it, as the game moves its own entities.
+// The body's Alucard code checks for a level up, on this player's XP and the partner's stats: that
+// level's gains were swapped out with the stats, and Richter leveled with his growth rule off.
+static s32 s_KeptExp;
+
 static void SwapIn(void) {
     s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
     s32 i;
 
     Swap();
+    s_KeptExp = g_Status.exp;
+    g_Status.exp = 0;
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
     s_SfxPos = g_sfxRingBufferWritePos;
@@ -636,6 +642,7 @@ void PartnerBodyOffset(s16* dx, s16* dy) {
 }
 
 static void SwapOut(void) {
+    g_Status.exp += s_KeptExp;
     s_ScrollX = g_Tilemap.scrollX.i.hi;
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Code) {

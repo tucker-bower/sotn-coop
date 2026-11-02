@@ -61,6 +61,9 @@ def load_characters(run):
         if c != CHAR_ALUCARD:
             run.expect(reload_game(run, g), f"{'AB'[g is run.s.b]} loads as {names[c]}")
             arrive(run, g, p.stage, p.room_id, p.ground_x, p.ground_y)
+            run.step(10)  # arrive() can return before the command starts: the room's load
+            while g.mailbox("self_presence").flags & BUSY:
+                run.step(1)
     for g, c in zip((run.s.a, run.s.b), run.s.characters):
         run.expect(g.mailbox("self_presence").character == c, f"{'AB'[g is run.s.b]} plays {names[c]}",
                    playing=g.mailbox("self_presence").character)
@@ -382,10 +385,11 @@ def online_pvp_setting(run):
     launcher reads it (launcher/app.py's join_online) to set the joiner's game the same."""
     a, b = run.s.a, run.s.b
     run.step(90)
-    run.expect(not (b.host("status").get("partner_hello") or {}).get("pvp"), "off by default")
-    a.host("set_pvp", True)
+    run.expect(not (b.host("status").get("partner_hello") or {}).get("rules"), "nothing set, nothing told")
+    a.host("set_rules", (0, 0, 0, 0, 0, 0), {"pvp": True})
     run.step(90)
-    run.expect((b.host("status").get("partner_hello") or {}).get("pvp") is True, "the joiner hears PvP is on",
+    run.expect(((b.host("status").get("partner_hello") or {}).get("rules") or {}).get("pvp") is True,
+               "the joiner hears PvP is on",
                hello=b.host("status").get("partner_hello"))
 
 

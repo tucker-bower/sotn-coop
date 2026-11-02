@@ -57,12 +57,14 @@ def with_exp(blob, exp):
     return bytes(out)
 
 
-def both_slots(blobs):
+def both_slots(blobs, shared_level=True):
     """[slot 1, slot 2] to load: slot 2 a copy of slot 1 if it has none yet, both at the
-    higher XP."""
+    higher XP (unless the castle's rules give each player a level of their own: D162)."""
     blobs = [b for b in blobs if b is not None]
     if len(blobs) == 1:
         blobs = [blobs[0], blobs[0]]
+    if not shared_level:
+        return blobs
     exp = max(save_fields(b)[3] for b in blobs)
     return [with_exp(b, exp) for b in blobs]
 
@@ -88,6 +90,7 @@ class JointSave:
         self.mb, self.path = mailboxes, (Path(path) if path else None)
         self.host, self.rank = host, rank
         self.on_write = None  # (blobs) -> None: the launcher updates the castle's info
+        self.shared_level = True  # the castle's rules (D162)
         self.seen = [m.save_seq() for m in mailboxes]
         self.pending = None   # (saver index / "local" / "remote", blob) while the partner saves
         self.dead_frames = 0
@@ -171,7 +174,7 @@ class JointSave:
         self.partner_out += 1
         if self.partner_out >= RESEND_LOAD_FRAMES:
             self.partner_gone = False
-            blobs = both_slots(read_session(self.path))
+            blobs = both_slots(read_session(self.path), self.shared_level)
             b64 = lambda b: base64.b64encode(b).decode("ascii")
             self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]), "start": None})
 
@@ -269,7 +272,7 @@ class JointSave:
         """Loads the session file into both games (from the title screen, or in play)."""
         self.resumed = True
         self.sent_load = True
-        blobs = both_slots(read_session(self.path))
+        blobs = both_slots(read_session(self.path), self.shared_level)
         self._arrive = [[m, None, tuple(self.start)] for m in self.mb] if self.start else []
         if self.host is not None:
             self.mb[0].put_save(blobs[0])

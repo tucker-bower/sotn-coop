@@ -37,6 +37,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `realtime.py` | **Manual.** Two games at full speed on their own clocks, over a simulated connection: routes, screenshots, hangs. |
 | `session_netplay.py` | Online play on the game's own route, with a playtest-like connection. |
 | `session_rooms.py` | What the 0.14 playtest's reports found: doors, camera limits, the partner's body, scene votes. |
+| `session_rules.py` | Each castle rule, turned off or moved, in two games. |
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |

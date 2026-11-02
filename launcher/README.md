@@ -22,6 +22,8 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
 | `test_characters.py` | Checks Maria's build from a DXC disc. |
 | `test_report.py` | Checks what a report sends and removes. |
-| `test_settings.py` | Checks settings defaults, such as PvP being off. |
+| `rules.py` | A castle's rules: every rule, its default, and what the game gets. |
+| `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |
+| `test_settings.py` | Checks the app's settings, and that PvP and aggro are no longer among them. |
 | `uxdriver.py` | Plays the real app like a person and photographs every screen. |
 | `winmenu.py` | The native Windows menu bar. |

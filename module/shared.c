@@ -1035,7 +1035,7 @@ static void NearestPlayer(s16* x, s16* y) {
     *y = PLAYER.posY.i.hi;
     // Scenery acts for this game's own player: a door or a camera limit that asked about the
     // nearer one opened for the wrong side, or never (playtest 0.14).
-    if (s_Role != ROLE_AUTHORITY || IsScenery(FindOverlay(g_StageId), (u32)g_CurrentEntity->pfnUpdate)) {
+    if (s_Role != ROLE_AUTHORITY || RULE_OFF(RULE_NO_NEAR_TARGET) || IsScenery(FindOverlay(g_StageId), (u32)g_CurrentEntity->pfnUpdate)) {
         return;
     }
     px = p->x - g_Tilemap.scrollX.i.hi; // partner, in this game's screen space

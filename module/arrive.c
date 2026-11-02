@@ -278,7 +278,7 @@ static void TeleportInput(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
     if (!InNormalPlay() || g_GameEngineStep != Engine_Map || !(g_pads[0].tapped & PAD_CROSS) ||
-        ArriveBusy()) {
+        ArriveBusy() || RULE_OFF(RULE_NO_MAP_TELEPORT)) {
         return;
     }
     if (BossHere()) { // no running from a boss fight (design/M5)
@@ -379,7 +379,7 @@ static bool DeathUpdate(void) {
     if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
         return true; // playing alone, the prologue, or the host said so: the game's own Game Over
     }
-    if (!s_DeathFade && FairyRevive()) {
+    if (!s_DeathFade && !RULE_OFF(RULE_NO_FAERIE_REVIVE) && FairyRevive()) {
         return true;
     }
     if (!(p->flags & PRESENCE_DEAD)) {
@@ -403,6 +403,14 @@ static bool DeathUpdate(void) {
             }
             return false;
         }
+    }
+    // The castle's rules: no revive. Stay down; when the partner falls too, the host decides.
+    if (RULE_OFF(RULE_NO_REVIVE) && !(p->flags & PRESENCE_DEAD)) {
+        if (!s_DownForBoss) {
+            s_DownForBoss = true;
+            CoopMessageNow("Down until your partner falls");
+        }
+        return false;
     }
     if (!(p->flags & PRESENCE_DEAD) && PartnerReachable()) {
         s_DeathFade = 0;
@@ -483,6 +491,7 @@ static void PullIn(void) {
     if (!PartnerInBossFight() || (s_BossPulled && !s_BossPullCooldown && !ArriveBusy() && !SameRoomAsPartner())) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
+               !RULE_OFF(RULE_NO_BOSS_PULL) &&
                CanBePulled(false)) { // the same room is never reloaded: the fight is shared (shared.c)
         s_BossPulled = true;
         s_BossPullCooldown = BOSS_PULL_COOLDOWN;
@@ -494,7 +503,8 @@ static void PullIn(void) {
     if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || (p->flags & PRESENCE_DEAD) ||
         (p->stage == STAGE_ST0 && g_StageId != STAGE_ST0) || !SAME_WORLD(p)) {
         s_CutscenePulled = false;
-    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled(true)) {
+    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled(true) &&
+               !RULE_OFF(RULE_NO_SCENE_PULL)) {
         // The partner is busy (the cutscene has control): arrive anyway. This game runs its
         // own copy of the scene; the flags it sets are shared, so it plays out the same.
         s_CutscenePulled = true;
@@ -513,6 +523,7 @@ static void CutsceneTrack(void) {
         s_CsCooldown--;
     }
     if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) && !BossFinalGone() &&
+        !RULE_OFF(RULE_NO_SCENE_PULL) &&
         ((PartnerFresh() && !(p->flags & PRESENCE_CUTSCENE) && SAME_WORLD(p) &&
           (p->stage != STAGE_ST0 || g_StageId == STAGE_ST0)) ||
          PartnerOnItsWay())) {

@@ -782,5 +782,12 @@ The game only allows a skip after it's been seen in a finished game, and only in
 A setting, in tens of %, that the host's value decides online. It replaces 2x for bosses only.
 
 **D161: A new castle skips the title** (Tucker, #109; how: agent-default)
-The launcher plays the title's menus through as a player would, on screen. A rules screen comes up as a castle starts (the castle rules branch will replace it, D145).
+The launcher plays the title's menus through as a player would, on screen. A new castle starts on its rules screen (D162).
 
+**D162: Everything that changes the game is a castle's rule** (Tucker, 2026-11-01: "Each feature that in some way deviates from vanilla game logic needs to be a toggleable option... scoped to the castles"; the list and the details agent-default, `docs/design/M-castle-rules.md`)
+- **The rule:** every feature that deviates from vanilla game logic has a setting in the launcher, stored per castle, shared with the partner, and defaulting to how the game plays now. A new feature adds its rule.
+- Rules live in `castle.json`, go to the joiner in HELO, and reach the game through mailbox words the host writes every frame. PvP, boss aggro and enemy health (D160) moved here from the app's settings; castles from before keep those values. Options › Open settings, the pause menu and Settings › Castle rules edit them, and online only the host can during a session.
+- **Not toggles (agent-default):** castle flags, the map, items and relics, shared rooms, the partner's body, joint saves, and Richter's and Dracula's shared death. Turning one off leaves two games that disagree about the castle.
+- **Controls stay per player (agent-default):** shortcuts and spells are about a player's hands. The button remap is a castle rule, as Tucker asked, and applies to both players.
+- **Revive off (agent-default):** a fallen player stays down until the partner falls too; then the host reloads as for any double death. A Game Over would have dropped them to the title alone.
+- **Merged with 0.15 (agent-default, 2026-11-02):** one rule for all enemies' HP, with a partner and alone: D160's setting and the branch's boss HP sliders are the same thing. Everything from 0.15 that changes the game is either a rule or argued onto the design's list: pausing, scene votes and the fixes are how co-op works; the partner's health bar, tint and spells on triggers are per player. A new castle starts on its rules screen, with no "don't ask again" (test castles and resumed castles skip it).
