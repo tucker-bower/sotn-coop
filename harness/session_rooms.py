@@ -185,6 +185,36 @@ def scene_skips_once_both_players_ask(run):
     run.step(2)
 
 
+ICON_AREA = (0x280, 0x180, 32, 32), (0, 0xFD, 256, 2)  # VRAM: the pickup icons' tiles, their palettes
+
+
+def icons(g):
+    return [g.vram_rect(*area) for area in ICON_AREA]
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def pickup_icon_matches_for_both_players(run):
+    """Issue 100: a pickup's icon loads when it starts, in the room's authority only. B arrives
+    after it has, and still draws the same icon (not whatever was in that slot)."""
+    from session_progress import HOLY_MAIL, NO3
+    a, b = run.s.a, run.s.b
+    room, x, y = HOLY_MAIL
+    before = icons(b)
+    arrive(run, a, NO3, room, x - 48, y - 40)
+    run.step(60)
+    run.expect(icons(a) != before, "A loaded the icon")
+    run.expect(icons(b) != icons(a), "B hasn't got it yet")
+    arrive(run, b, NO3, room, x - 48, y - 40)
+    for t in range(600):
+        run.step(1)
+        roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
+        if roles == (1, 2):
+            break
+    run.expect(roles == (1, 2), "A runs the room, B is the guest", roles=roles, a=a.snapshot(), b=b.snapshot())
+    run.step(90)  # an icon a frame
+    run.expect(icons(a) == icons(b), "both have the same icon, tiles and palette")
+
+
 @session_scenario(starts=("entrance", "entrance"))
 def pickup_name_shows_for_both_players(run):
     """Report 222025: B gets what A picked up, and now sees its name too."""

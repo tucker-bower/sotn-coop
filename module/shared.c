@@ -285,6 +285,8 @@ static void DecideRole(void) {
     s_Role = want;
     if (s_Role == ROLE_GUEST) {
         BecomeGuest();
+    } else if (s_Role == ROLE_AUTHORITY) {
+        VramResendIcons();
     }
     s_Settle = 0;
 }
