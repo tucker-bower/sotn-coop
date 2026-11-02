@@ -21,6 +21,7 @@ BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (paus
 
 STUCK_FRAMES = 3600    # a scene with no one moving this long: the status bar says so
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
+GAME_TITLE = 1
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
 PARTNER_LOST_S = 10
 
@@ -270,12 +271,14 @@ class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
     def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None, enemy_hp=200):
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None, enemy_hp=200, script=()):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
         self.online = len(self.games) == 1
+        self.script = [pad for frames, pad in script for _ in range(frames)]  # played from the title on
         self.scene_speed = 1
+        self.script_on = False
         self.playthrough, self.goal = playthrough, goal
         self.rush = rush  # bossrush.BossRush: ticked every frame, its line on the status bar
         self.music_mode, self.music = music, None
@@ -346,6 +349,14 @@ class GameView:
             c.blit(self.font.render(box_text, True, (240, 240, 240)), (box.x + 8, box.y + 11))
         self.display.present(over_games=True)
         return rects
+
+    def scripted(self, pads):
+        """The game's title menus, played through; nobody's buttons count until they're done."""
+        if any(g.read("g_GameState") != GAME_TITLE for g in self.games) and not self.script_on:
+            return [""] * len(pads)
+        self.script_on = True
+        pad = self.script.pop(0)
+        return [pad] * len(pads)
 
     def scene_speed_now(self):
         if not self.online:
@@ -689,6 +700,8 @@ class GameView:
             keys = pygame.key.get_pressed()
             t0 = time.perf_counter()
             pads = [self.pads.mask(i, keys) for i in range(len(self.games))]
+            if self.script:
+                pads = self.scripted(pads)
             self.inputs.append((self.frame, *pads))
             if self.frame % ROLLING_EVERY == 0:
                 for g in self.games:

@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 12
+LINK_VERSION = 13
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -13,7 +13,7 @@ FAMILIAR_SELF, FAMILIAR_PARTNER = 0x807C0000, 0x807E0000
 FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
-STATUS_RANGES = ((0x80097BA0, 0x48), (0x80097BFC, 0x34))
+STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -47,6 +47,8 @@ HIT_SIZE, N_HITS = 0xC, 16
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
+OPT_NO_TINT = 0x20000000  # options: two of a kind aren't told apart by a tint (module/partner.c)
+OPT_SPELL_TRIGGERS = 0x40000000  # options: spells on R2 or L2 and a face button (module/spells.c)
 OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")

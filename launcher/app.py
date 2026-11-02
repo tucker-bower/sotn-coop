@@ -52,6 +52,7 @@ from report import VERSION  # noqa: E402
 from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
+# A new castle goes straight into the game: the castle menu has replaced the game's own (issue 109).
 # Title -> main menu -> file select -> New game -> name "A" (harness/savestates.py's new_game)
 NEW_GAME_INPUTS = ((600, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross"), (120, ""),
                    (2, "cross"), (20, ""), (2, "start"))
@@ -478,6 +479,7 @@ class Launcher:
         self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
+        self.new_castle_start = False  # the next game view starts a new game (issue 109)
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
             from archive import Castle
             Castle.install_bundled()
@@ -579,9 +581,11 @@ class Launcher:
 
     def options(self, seat):
         """The OPT_* bits for that seat's game (link/mailbox.py)."""
-        from link.mailbox import OPT_PARTNER_HP, OPT_SHORTCUTS, spell_options
+        from link.mailbox import OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
         return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat)) |
-                (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0))
+                (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
+                (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
+                (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
 
     def controls_menu(self):
         """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
@@ -931,7 +935,7 @@ class Launcher:
 
     def storage_line(self):
         from archive import total_savestates_size
-        return f"Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
+        return f"Version {VERSION}   ·   Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
 
     def home(self):
         pending = None
@@ -1077,18 +1081,6 @@ class Launcher:
         finally:
             castle.tidy()
 
-    def new_game(self, s):
-        """A new castle goes straight into the game: the castle menu has replaced the game's own
-        (issue 109). The title's menus and a name, as a player would go through them."""
-        if not self.boot_to_title(s, "Starting a new game"):
-            return
-        self.apply_players(s)
-        for k, (frames, pad) in enumerate(NEW_GAME_INPUTS):
-            s.step(frames, pad if len(s.games) == 1 else (pad, pad))
-            self.ui.frame("Starting a new game")
-            self.ui.bar(k, len(NEW_GAME_INPUTS))
-            self.ui.flip()
-
     def castle_rules(self):
         """The game's settings, each time a castle starts (issue 109). Comes up unless the player
         turned it off."""
@@ -1115,7 +1107,7 @@ class Launcher:
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
         if fresh:
-            self.new_game(s)
+            self.new_castle_start = True
             return
         self.load_cards(s, castle)
         if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
@@ -1163,7 +1155,9 @@ class Launcher:
                         profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
                         partner_vol=self.settings.get("partner_vol", 60),
                         pvp=bool(self.settings.get("pvp")) if pvp is None else pvp, rush=rush,
-                        enemy_hp=self.settings.get("enemy_hp", 200) if enemy_hp is None else enemy_hp)
+                        enemy_hp=self.settings.get("enemy_hp", 200) if enemy_hp is None else enemy_hp,
+                        script=NEW_GAME_INPUTS if self.new_castle_start else ())
+        self.new_castle_start = False
         result = view.run()
         if result == "quit":
             raise SystemExit
@@ -1397,8 +1391,7 @@ class Launcher:
                 s.joint.path = castle.joint_save
                 s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
                 self.load_cards(s, castle)
-                if theirs.get("fresh"):
-                    self.new_game(s)
+                self.new_castle_start = bool(theirs.get("fresh"))
                 try:
                     self.run_view(s, castle, goal="PvP is on (your partner's setting): your attacks hurt each other." if pvp else "",
                                   pvp=pvp, enemy_hp=theirs.get("enemy_hp"))
@@ -1498,6 +1491,8 @@ class Launcher:
                      (f"Enemy health: {st.get('enemy_hp', 200)}%", "All enemies' and bosses' health with a partner (online, the host's setting counts)"),
                      (f"Partner's sounds: {st.get('partner_vol', 60)}%", "How loud your partner's attacks and steps are, in your game"),
                      (f"Partner's health bar: {'on' if st.get('partner_hp', True) else 'off'}", "Under your own health, while you play together"),
+                     (f"Tint the partner: {'on' if st.get('partner_tint', True) else 'off'}", "Tell two players of the same character apart"),
+                     (f"Spells on triggers: {'on' if st.get('spell_triggers') else 'off'}", "Alucard: hold R2 with Square, Circle, Cross or Triangle: Dark Metamorphosis, Summon Spirit, Hellfire, Tetra Spirit. L2 with Square or Circle: Soul Steal, Sword Brothers"),
                      (f"PvP: {'on' if st.get('pvp') else 'off'}", "Players' attacks hurt each other (online, the host's setting counts)"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
@@ -1520,12 +1515,16 @@ class Launcher:
             elif k == 5:
                 st["partner_hp"] = not st.get("partner_hp", True)
             elif k == 6:
-                st["pvp"] = not st.get("pvp")
+                st["partner_tint"] = not st.get("partner_tint", True)
             elif k == 7:
-                self.game_files()
+                st["spell_triggers"] = not st.get("spell_triggers")
             elif k == 8:
-                self.controls_menu()
+                st["pvp"] = not st.get("pvp")
             elif k == 9:
+                self.game_files()
+            elif k == 10:
+                self.controls_menu()
+            elif k == 11:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

@@ -23,6 +23,7 @@ LOCK_X = 336
 PLAYER_STEP = 0x2C
 RICHTER_DEAD = 16
 ANIM_FRAME = 0x56
+BOTTOM_TEXT_TIMER = 0x80097410  # g_unkGraphicsStruct.BottomCornerTextTimer
 
 
 def room_id(g, left, top):
@@ -152,6 +153,20 @@ def scene_skips_once_both_players_ask(run):
     votes = [g.mailbox("self_presence") for g in (a, b)]
     run.expect(scene_speed(votes, False) > 1, "two votes do", votes=[v.flip_x for v in votes])
     run.step(2)
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def pickup_name_shows_for_both_players(run):
+    """Report 222025: B gets what A picked up, and now sees its name too."""
+    from session_progress import HOLY_MAIL, counts, take
+    a, b = run.s.a, run.s.b
+    run.expect(not b.read(BOTTOM_TEXT_TIMER, "<i"), "B has no text up")
+    take(run, a, HOLY_MAIL, frames=20)
+    shown = 0
+    for t in range(300):
+        run.step(1)
+        shown = shown or b.read(BOTTOM_TEXT_TIMER, "<i")
+    run.expect(shown, "the name came up in B's game too")
 
 
 def symbols_status(g):

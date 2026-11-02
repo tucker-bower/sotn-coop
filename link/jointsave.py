@@ -17,7 +17,7 @@ import base64
 import struct
 from pathlib import Path
 
-from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, DEAD, IN_PLAY, SAVE_DATA_SIZE
+from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, DEAD, IN_PLAY, SAVE_DATA_SIZE
 
 MAGIC, VERSION = b"COOPSAVE", 1
 _INFO = 0x200                      # SaveData.info (include/game.h)
@@ -27,7 +27,8 @@ _LEVEL, _EXP = 0x238 + 0x284, 0x238 + 0x288  # SaveData.status (PlayerStatus) .l
 BOTH_DEAD_FRAMES = 4               # ticks both must be waiting before the launcher acts
 LINKED_FRAMES = 600                # a partner heard from within 10 s (module: PartnerLinked)
 PARTNER_SAVE_FRAMES = 300          # waiting this long for the partner's save: save alone
-RESEND_LOAD_FRAMES = 300           # a linked partner out of play this long gets the load again
+PARTNER_GONE_FRAMES = 300          # not heard from for this long: they've left
+RESEND_LOAD_FRAMES = 300           # back, and out of play this long: they get the load again
 ARRIVE_AFTER_FRAMES = 60           # in play this long after a load before a test castle's arrive
 
 
@@ -93,7 +94,8 @@ class JointSave:
         self.saves = 0        # joint saves written
         self.resumed = False  # the session file was loaded in this run
         self.sent_load = False  # this game (the host) told the partner to load it
-        self.partner_out = 0    # frames the linked partner has been out of play since
+        self.partner_gone = False  # the link was lost since the partner was last in play
+        self.partner_out = 0    # frames the partner has been out of play since coming back
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
@@ -116,7 +118,9 @@ class JointSave:
         been in play for a moment (an arrive during the load is lost)."""
         for a in list(self._arrive):
             q = a[0].self_presence()
-            if not (q.flags & IN_PLAY) or q.flags & BUSY:
+            if q.flags & CUTSCENE:  # the start's scene: it's there. Sent after it, the fight was reloaded
+                self._arrive.remove(a)  # and the scene played again (the Succubus's, playtest 0.14)
+            elif not (q.flags & IN_PLAY) or q.flags & BUSY:
                 a[1] = 0 if a[1] is None else a[1]  # loading: from here on, count
             elif a[1] is not None:
                 a[1] += 1
@@ -152,15 +156,21 @@ class JointSave:
         self._both_dead()
 
     def _bring_partner(self, m):
-        """A partner who joined a castle already under way sits at their title screen, and only a
-        load brings them in (playtest 0.14). The host sends it again until they're in play."""
-        p = m.partner_presence()
-        if self.path is None or not self.path.exists() or not self.sent_load or m.partner_age() > 30 or p.flags & 1:
+        """A partner who came back to a castle already under way sits at their title screen, and
+        only a load brings them in (playtest 0.14). The host sends it again, once per return."""
+        age = m.partner_age()
+        if age > PARTNER_GONE_FRAMES:
+            self.partner_gone = True
             self.partner_out = 0
+            return
+        if not self.partner_gone or not self.sent_load or age > 30 or self.path is None or not self.path.exists():
+            return
+        if m.partner_presence().flags & 1:
+            self.partner_gone = False
             return
         self.partner_out += 1
         if self.partner_out >= RESEND_LOAD_FRAMES:
-            self.partner_out = 0
+            self.partner_gone = False
             blobs = both_slots(read_session(self.path))
             b64 = lambda b: base64.b64encode(b).decode("ascii")
             self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]), "start": None})

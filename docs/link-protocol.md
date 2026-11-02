@@ -1,4 +1,4 @@
-# The co-op link protocol (wire version 10, mailbox version 12)
+# The co-op link protocol (wire version 11, mailbox version 13)
 
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
@@ -145,7 +145,7 @@ Hosts don't interpret events: they move them between rings.
 **The partner's copies (CTRL, M12–M13):** each is JSON `{"op": …, "data": base64(zlib(blob))}`, sent when the sender's copy changes. The receiver writes the blob, magic last, to the partner's address in expansion RAM.
 - `weapon` (plus `"hand"`: 0 or 1): the `CoopWeapon` (0x7320 bytes: magic `'WPNS'`, seq, item, then the hand's overlay, 256×128 tile sheet and 24 palettes) from `0x80710000 + hand × 0x8000`, to `0x80720000 + hand × 0x8000`. Sent when its seq changes (the game copies a weapon when it loads). The partner draws the swing from it (`weapons.c`).
 - `familiar`: the `CoopFamiliar` (0x10420 bytes: magic `'FAML'`, seq, servant, sprite bank, then its overlay, tile sheet and palettes 0x140–0x15F) from `0x807C0000`, to `0x807E0000` (`familiar.c`).
-- `status`: the sender's `g_Status` from `hp` (0x48 bytes) and from `subWeapon` (0x34 bytes), at most every 10 frames and only when changed, to a `CoopStatus` (magic `'STAT'`) at `0x80730000`. The partner's body runs with these stats, level and equipment (`partner.c`).
+- `status`: the sender's `g_Status` from `spellsLearnt` (0x4C bytes) and from `subWeapon` (0x34 bytes), at most every 10 frames and only when changed, to a `CoopStatus` (magic `'STAT'`) at `0x80730000`. The partner's body runs with these stats, level and equipment (`partner.c`).
 
 **`CoopSprite` (20 bytes, M12):** `animSet` (s16), `animCurFrame` (u16), `x`, `y` (s16, in the room), `palette` (u16), `facingLeft`, `blendMode` (u8), `zPriority`, `drawFlags`, `unk5A` (u16), `weapon` (u16: `0x100 | hand` for a hand weapon's sprite, whose `animSet` is then its bank, 0x10–0x13; else 0).
 

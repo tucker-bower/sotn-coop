@@ -20,4 +20,5 @@ Setup, build, generator and release tools.
 | `rebuild_fixtures.sh` | Rebuilds the disc, Maria and every savestate after a module change. |
 | `report_key.py` | Puts the key for F9's Send button in a build. |
 | `redux_check.sh` | Runs the module check in PCSX-Redux. |
+| `read_report.py` | **Manual.** Prints who was where in an unpacked F9 report, from its saved memory. |
 | `release.py` | Builds both apps and a draft GitHub release. |

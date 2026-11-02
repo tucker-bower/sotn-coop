@@ -153,3 +153,16 @@ An extra CD read at boot shifts every savestate made afterwards, and `no_effect_
 
 ## Reading a crash from an F9 report
 A report's `.state` file holds the game. After the header, the `CPU` marker is followed by 8 bytes, then 36 registers (pc is the 35th), and RAM starts 6702 bytes after the marker. A game stuck at pc 0x80000080 with a changed exception vector has been written over. Compare low memory with the partner's report: `g_Timer` stopped while emulator frames went on means the game itself stopped. Reports' `presences` are the player's own, not the partner's.
+
+## Loading an F9 report's state
+A report's state won't load as it is: the disc's path is blanked, in the header and in a trailer after the data. `harness/replay.py` points both at this machine's disc. `scripts/read_report.py` prints who was where from a report's memory, without an emulator.
+
+## Doorways have gaps
+The east door of the Marble Gallery's corridor (room (45,25) to (60,25)) has a one-tile gap in its floor under the door. Alucard's door walk crosses it. Richter's and Maria's walks check for a fall, and they drop in. In there, the wall pushes the player 13 px, which is through the door: the room changes, and the same happens on the other side, forever.
+
+## Camera limits are a floor
+`g_Tilemap.height` isn't only the camera: with no room below, a player is held there. A player past an `EntityLockCamera` it never ran for stands at y 251 on nothing, off the screen. If a report shows that y, look at the limits.
+
+## ANIM_FRAME_LOAD
+Bit 15 of `animCurFrame` means "the sprite is already in VRAM, don't upload it". A dead player's last frame has it: a body stuck at a frame like 0x8022 is a dead body.
+

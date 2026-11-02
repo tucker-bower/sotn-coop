@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 12
+#define COOP_LINK_VERSION 13
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -80,19 +80,19 @@ typedef struct {
 #define TPAGE_BANK 0x4000
 #define CLUT_BANK 0x8000
 
-// M13: the partner's status (g_Status from hp to statsTotal, and from subWeapon to the elements:
+// M13: the partner's status (g_Status from spellsLearnt to statsTotal, and from subWeapon to the elements:
 // stats, level, equipment), for the partner's body (partner.c). The host reads it from the
 // partner's game and writes it here, magic last, when it changes.
 #define STATUS_PARTNER_ADDR 0x80730000
 #define STATUS_MAGIC 0x53544154 // 'STAT'
-#define STATUS_A 0x80097BA0     // g_Status.hp
-#define STATUS_A_SIZE 0x48
+#define STATUS_A 0x80097B9C     // g_Status.spellsLearnt (a spell only casts if it's learnt), then hp
+#define STATUS_A_SIZE 0x4C
 #define STATUS_B 0x80097BFC     // g_Status.subWeapon
 #define STATUS_B_SIZE 0x34
 typedef struct {
     /* 0x00 */ u32 magic; // STATUS_MAGIC once written
     /* 0x04 */ u8 a[STATUS_A_SIZE];
-    /* 0x4C */ u8 b[STATUS_B_SIZE];
+    /* 0x50 */ u8 b[STATUS_B_SIZE];
 } CoopStatus; // size = 0x80
 
 // M13 step 4: a player's familiar, for the partner to draw it (familiar.c): each game copies its
@@ -252,6 +252,8 @@ typedef struct {
 } CoopLink; // size = 0x225B8
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
+#define OPT_NO_TINT 0x20000000 // options: two of a kind aren't told apart by a tint (partner.c)
+#define OPT_SPELL_TRIGGERS 0x40000000 // options: spells on R2 or L2 and a face button (spells.c)
 #define OPT_PARTNER_HP 0x80000000 // options: the partner's health under this player's (issue 106)
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)

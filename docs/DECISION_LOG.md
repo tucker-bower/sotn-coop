@@ -762,3 +762,25 @@ The door shuts for good behind the first player in, and its castle flag and tile
 
 **D154: The emulated CPU runs at 200%** (agent-default, 2026-11-01; game feel, so Tucker can overrule it)
 The partner's body costs 45–85 of a frame's 263 scanlines. On the playtest's route, the gate room lost up to 11% of its game frames with the body, and 2% without. Doubling the CPU brings the worst room to 1.7%, better than no body at all, and it needs no change to the body or the disc. Compared at 130%, 150% and 200% (`netplay_gate_*`, `realtime.py`): frames kept 99.2%, 99.4%, 99.5%. At 200% the worst half-second on the lab route was 83–90% against 73% at 150%, and the rooms on the gate route became shared sooner (10 s unshared against 33 s). Set in `harness/emu.py`, which the launcher uses too. The cost: rooms where retail slowed down no longer do, and the Android emulator works harder (not yet measured on a device). Options considered: making the body cheaper again (D129 already took the easy savings); drawing it every other frame (visible).
+
+**D155: What acts for one game's player runs in that game** (agent-default, 2026-11-02)
+The 0.14 playtest's stuck players came from the same mistake. Camera limits (`EntityLockCamera`) belong to one game's camera, but a guest only had a copy that never ran, and our targeting patch sent `GetSideToPlayer` to the nearer player, on the authority too. They now run in each game, as doors do, and scenery's `GetSideToPlayer` answers for that game's player. A new entity that reacts to "the player" for that player's own sake belongs on the list in `scripts/gen_overlay_table.py`. Buttons and lifts that a guest must drive for both are still open: #98.
+
+**D156: A guest's hit holds its copy of the enemy until the authority's catches up** (agent-default, 2026-11-02)
+Snapshots from before the authority heard of a hit bring the copy back to hittable, so a whip hit it every frame of the round trip: online, Richter did many times his damage ("so OP"). The guest keeps its own invincibility on that slot.
+
+**D157: A boss room is never reloaded for a player already in it** (agent-default, 2026-11-02)
+Pulling a far-away player in the same room reloaded that game's fight, and the two games could pull each other for ever (#111). A boss makes the room shared at any camera distance instead.
+
+**D158: Outside boss fights, a pause doesn't stop the partner** (Tucker, #108; how: agent-default)
+The paused game stops sharing the room, and the partner's game runs it. Back from the menu, that game counts as just arrived, so it's the guest and takes the room as it now is. In a boss fight a pause still holds both, and the second player can't open their own menu during it: that part of #108 is open.
+
+**D159: Skipping a scene runs it fast** (Tucker, #107; how: agent-default)
+The game only allows a skip after it's been seen in a finished game, and only in some stages. With both players asking, each launcher runs the scene at 8x with no picture or sound, which works for every scene and stays in step.
+
+**D160: Every enemy has more health with a partner, 200% by default** (Tucker, #104)
+A setting, in tens of %, that the host's value decides online. It replaces 2x for bosses only.
+
+**D161: A new castle skips the title** (Tucker, #109; how: agent-default)
+The launcher plays the title's menus through as a player would, on screen. A rules screen comes up as a castle starts (the castle rules branch will replace it, D145).
+

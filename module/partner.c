@@ -42,7 +42,7 @@ static const Region s_Regions[] = {
     {0x80097D1C, 0x280},                // g_PlayerDraw[16]
     {0x800ACF74, 8},                    // D_800ACF74, g_AlucardChairSleepTimer
     {0x8013B5E8, 4},                    // knockback invincibility, HUD HP delay
-    {STATUS_A, STATUS_A_SIZE},          // g_Status: hp .. statsTotal (the partner's: PutStatus)
+    {STATUS_A, STATUS_A_SIZE},          // g_Status: spellsLearnt .. statsTotal (the partner's: PutStatus)
     {STATUS_B, STATUS_B_SIZE},          // g_Status: subWeapon .. elements
     {0x8013796C, 0x30},                 // g_PlayerHud
     {0x80139828, 0x40},                 // g_StatBuffTimers
@@ -58,7 +58,7 @@ static const Region s_Regions[] = {
     {0x8013AEE4, 0x4},                  // D_8013AEE4
     {0x80097BF8, 0x4},                  // g_Status.D_80097BF8 (bit 0: no MP back), between the two ranges
 };
-#define BODY_SIZE (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + 0x48 + 0x34 + 0x30 + 0x40 + 0x40 + \
+#define BODY_SIZE (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + STATUS_A_SIZE + 0x34 + 0x30 + 0x40 + 0x40 + \
                    0xC + 0x8 + 0x100 + 0x4 + 0x4 + 0x4 + 0x4)
 
 // A partner who runs its own player code (Richter, Maria), or an Alucard partner in their game:
@@ -875,7 +875,7 @@ void PartnerFrame(void) {
     // Hit in its own game (its HP dropped): its own hit reaction here, its own code's knockback
     // and voice, from the same HP to the same HP (cosmetic: the body's status is the partner's).
     if (PartnerLive() && ((const CoopStatus*)STATUS_PARTNER_ADDR)->magic == STATUS_MAGIC) {
-        s32 hp = *(const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a; // g_Status.hp
+        s32 hp = ((const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a)[1]; // g_Status.hp
         if (s_PartnerHp > hp && hp > 0) {
             // Its own code's sums can differ from its game's, and a body that died here stayed dead
             // and unseen while the partner played on (playtest 0.14): it can't die of this.
@@ -1041,7 +1041,7 @@ static void Draw(void) {
     for (i = 1; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
-    if (!s_OtherChar) { // only two of a kind need telling apart
+    if (!s_OtherChar && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
         Tint(gt4);
     }
     if (s_Banked) {

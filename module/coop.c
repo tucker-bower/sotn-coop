@@ -232,8 +232,8 @@ static void PartnerHealth(void) {
         g_CoopLink.partnerAge > PARTNER_STALE_FRAMES || g_GpuUsage.tile + 2 >= MAX_TILE_COUNT) {
         return;
     }
-    hp = ((const s32*)st->a)[0]; // g_Status.hp, hpMax
-    max = ((const s32*)st->a)[1];
+    hp = ((const s32*)st->a)[1]; // g_Status.hp, hpMax
+    max = ((const s32*)st->a)[2];
     if (max <= 0) {
         return;
     }
