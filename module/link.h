@@ -48,6 +48,7 @@ typedef struct {
     /* 0x12 */ u16 weapon; // a hand weapon's sprite: WEAPON_SPRITE | hand (weapons.c), else 0
 } CoopSprite; // size = 0x14
 #define WEAPON_SPRITE 0x100 // CoopSprite.weapon: animSet is its bank (0x10-0x13), palette its own
+#define WEAPON_ARM 0x200    // CoopSprite.weapon: Alucard's punching arm, animCurFrame his frame (issue 123)
 
 // A player's attack that can hurt (M15, pvp.c): its hitbox in the room, as hit detection reads it.
 #define COOP_HITS 16

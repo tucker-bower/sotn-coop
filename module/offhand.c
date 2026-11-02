@@ -235,8 +235,11 @@ static void Use(s32 hand) {
 #define E_FACTORY 1     // the factory's entity id in every player entity loop (src/dra/7879C.c)
 static Entity s_Alu;
 static bool s_Swinging;
+static bool s_Fist; // that swing is a fist weapon's: Alucard's own arm is the punch (issue 123)
 static u16 s_Unk46;
 static bool s_Grounded; // the swing started on the ground
+
+u16 OffhandArmFrame(void) { return s_Swinging && s_Fist ? s_Alu.animCurFrame & 0x7FFF : 0; }
 
 static void AluSwing(s32 hand) {
     u32 item = g_Status.equipment[hand];
@@ -254,6 +257,7 @@ static void AluSwing(s32 hand) {
     s_Alu.ext.player.anim = eq->playerAnim + (s_Grounded ? 0 : 4); // in the air: his jump swing
     s_Unk46 = eq->unk11 + 0x7FFF + 2;
     s_Swinging = true;
+    s_Fist = eq->itemCategory == ITEM_FIST;
     g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
     PlayAnimation(D_800B0130, D_800B01B8);
     // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's

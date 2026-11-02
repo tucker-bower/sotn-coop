@@ -176,4 +176,4 @@ Bit 15 of `animCurFrame` means "the sprite is already in VRAM, don't upload it".
 An entity's primitives are a linked chain, and its code walks them all. A chain cut short when a guest takes an entity over runs that code off the end (a Beelzebub part has 256 and froze the game). `CompleteChains` rebuilds them on hand-over.
 
 ## Fist weapons are primitives
-A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_001.c`) draws four primitives on tpage 0x1A, and Alucard's own body plays the punch. So the partner's weapon sprites carry nothing for Richter's fist (#123).
+A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_001.c`) draws four primitives on tpage 0x1A, and Alucard's own body plays the punch. So the link's weapon sprites carry nothing for a fist. Richter and Maria draw a crop of Alucard's own body frames instead (`DrawArm`, D164): frames 125-127 hold the reach, in front of x +12 and above his cape.

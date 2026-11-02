@@ -3,6 +3,7 @@
 #define OFFHAND_H
 
 void OffhandUpdate(void); // once per frame, before UpdateGame
+u16 OffhandArmFrame(void); // a fist weapon's swing: Alucard's body frame now, else 0
 void OffhandRenderStart(void); // around RenderEntities
 void OffhandRenderEnd(void);
 bool OffhandLoading(void); // a weapon is being loaded (the CD is the module's)

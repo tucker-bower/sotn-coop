@@ -13,6 +13,7 @@ bool PartnerSimulated(void); // the partner's body is the simulated one this fra
 // drawn from the partner's real sprites (weapons.c), moved to where the body is.
 bool PartnerWeaponDiffers(s32 hand);
 void PartnerBodyOffset(s16* dx, s16* dy); // the body's spot minus the partner's real one
+u16 PartnerClut(u16 clut); // a CLUT as the partner's body reads it (second bank, if it's there)
 void PartnerBankPolys(u32 gt4, u32 gt3); // what was drawn since: from the second bank (familiar.c)
 
 #endif

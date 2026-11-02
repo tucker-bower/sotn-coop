@@ -794,3 +794,9 @@ The launcher plays the title's menus through as a player would, on screen. A new
 
 **D163: A guest's weight and buttons work the authority's solids** (Tucker, #98; how: agent-default)
 Buttons and lifts run only in the authority's game and ask about that game's player. The guest's presence names the solid it stands on (`standSlot`). The authority's collision answers "on top", with the guest's buttons in `g_pads[0]`, and puts its own player and buttons back at the next call or the end of the update. Rejected: running these entities in both games, which breaks one authority per room. It reaches only entities that use the collision call.
+
+**D164: Richter's and Maria's fists are Alucard's arm** (Tucker, #123: "NO NEW ART, just re-use alucards arm, potentially with a recolor"; how: agent-default)
+A crop of his punch frames from `ARC_F.BIN`, in the puncher's own palette, drawn in both games. No new art, in this or anything else.
+
+**D165: Richter's and Maria's status effects, poison first** (Tucker, #102: all of them, stone and curse can wait; how: agent-default)
+Module state, not their player code: timer 0, which Alucard's poison uses, is Richter's flame whip. The rules are Alucard's. The growth rule (`OPT_NO_GROWTH`) turns it off, since it's part of what isn't in their own games.

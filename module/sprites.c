@@ -36,6 +36,9 @@ void SpritesCapture(void) {
         s->weapon = 0;
         WeaponSprite(e, s); // a hand weapon's: as the partner draws it
     }
+    if (n < COOP_SPRITES && WeaponArm(&g_CoopLink.selfSprites[n])) {
+        n++;
+    }
     g_CoopLink.selfSpriteCount = n;
 }
 

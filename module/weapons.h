@@ -6,5 +6,6 @@ void WeaponKeepClut(s32 hand, const u16* clut);  // Richter, Maria: its palettes
 void WeaponsUpdate(void);                        // once per frame
 void WeaponsDraw(void);                          // after RenderEntities: the partner's swings
 bool WeaponSprite(Entity* e, CoopSprite* s);     // e is a hand weapon's sprite: s as sent
+bool WeaponArm(CoopSprite* s);                   // a fist weapon's swing: Alucard's arm, as sent
 
 #endif

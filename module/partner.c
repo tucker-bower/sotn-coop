@@ -949,6 +949,8 @@ static u16 BankClut(u16 c) {
     return y >= 0xF0 && y < 0x100 && (c & 0x3F) < 0x10 ? c | CLUT_BANK : c;
 }
 
+u16 PartnerClut(u16 clut) { return s_Banked ? BankClut(clut) : clut; }
+
 static void BankPolys(u32 gt4, u32 gt3) {
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
         g_CurrentBuffer->polyGT4[gt4].tpage = BankTpage(g_CurrentBuffer->polyGT4[gt4].tpage);
