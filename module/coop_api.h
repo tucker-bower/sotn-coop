@@ -32,6 +32,13 @@
 // and its palettes apart (no room for the two together).
 #define FGAME_GFX_ADDR 0x80580000
 #define FGAME_PAL_ADDR 0x806C2000
+// Richter's and Maria's cutscene portraits for the pause menu (link/portraits.py writes them,
+// portrait.c shows them), then the picture scaled for the menu, then what that overwrites.
+#define PORTRAIT_ADDR 0x806C4000
+#define PORTRAIT_MAGIC 0x54524F50 // 'PORT'
+#define PORTRAIT_MENU_ADDR 0x806C8000
+#define PORTRAIT_SAVED_ADDR 0x806C9800
+#define PORTRAIT_SAVED_CLUT_ADDR 0x806CB000
 #define PARTNER_RIC_ADDR 0x80740000
 #define PARTNER_MAR_ADDR 0x80780000
 #define PARTNER_PLAYER_SIZE 0x40000

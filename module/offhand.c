@@ -12,9 +12,10 @@
 // after a load (where the game skips them for Richter's player code) the module loads them.
 //
 // Palettes: a weapon's 24 palettes load over 0x110-0x13F, where Richter's and Maria's own are
-// (Alucard has his elsewhere). In their games, the module keeps their palettes there: each time
-// weapon palettes load (the menu closing, or the module's own load), the one the weapon is drawn
-// with moves to a palette they don't use, and theirs are put back.
+// (Alucard has his elsewhere), and those two leave none of theirs empty. So the module puts theirs
+// back each time weapon palettes load, and keeps the weapons' in VRAM's second bank. A weapon's
+// entities use palette numbers of their own (OFFHAND_PALS), which only while RenderEntities runs
+// lead there. The game still adds each frame's palette to the entity's, as in Alucard's hands.
 #define COOP_MODULE
 #include <game.h>
 #include <disk.h>
@@ -51,17 +52,16 @@ extern s32 g_EquippedWeaponIds[2];
 #define WBANK 0x17 // the weapon's sprites (stage sprite bank 0x17 is free; Richter uses 0x10-0x13, familiars 0x14, Maria 0x10-0x16)
 
 static s8 s_Loading = -1; // the hand whose weapon is being loaded
-static u8 s_Hand;         // the hand of the swing now
 
 #define PAL_WEAPONS 0x110 // a hand's 24 palettes from here (src/weapon/shared.h)
 #define N_WEAPON_PAL 24  // include/weapon.h
 #define N_PAL 48
+#define OFFHAND_PALS 0x2D0 // the weapons' palette numbers, in the table's last 48
+#define BANK_PAL_Y 0x1F0  // their rows in the second bank
 static u16 s_Own[N_PAL * COLORS_PER_PAL]; // the player's palettes 0x110-0x13F, as loaded
 static bool s_HaveOwn;
-static s16 s_Slot[2];   // where each hand's weapon palette goes (one the player doesn't use)
-static u32 s_SlotsFor = 0xFF; // the character they were picked for
-static u16 s_WeaponPal[2][COLORS_PER_PAL];
-static u8 s_Clut[2]; // which of the hand's 24 palettes that is
+static u16 s_Bank[N_PAL * COLORS_PER_PAL]; // both hands' weapon palettes, as sent to the second bank
+static u16 s_Ids[N_PAL];                    // g_ClutIds, while RenderEntities borrows them
 static u8 s_PrevEngine; // g_GameEngineStep last frame
 
 static bool InPlay(void) {
@@ -94,51 +94,58 @@ static void Upload(void) {
     LoadImage(&rect, (u_long*)Pal(PAL_WEAPONS));
 }
 
-// The weapons' palettes, in their slots.
-static void PutWeaponPals(void) {
-    s32 h, k;
+static void UploadBank(void) {
+    RECT rect;
 
-    for (h = 0; h < 2; h++) {
-        if (s_Slot[h] >= 0) {
-            for (k = 0; k < COLORS_PER_PAL; k++) {
-                Pal(s_Slot[h])[k] = s_WeaponPal[h][k];
-            }
-        }
-    }
-    Upload();
+    rect.x = 0;
+    rect.y = BANK_PAL_Y | VRAM_BANK;
+    rect.w = 0x100;
+    rect.h = 3;
+    LoadImage(&rect, (u_long*)s_Bank);
 }
 
-// The player's own palettes, once in play after a load, and two they leave empty (picked once
-// per character: a load keeps the weapons' palettes where they were).
+// The player's own palettes, once in play after a load.
 static void KeepOwn(void) {
-    s32 p, k, n = 0;
+    s32 k;
 
     s_HaveOwn = true;
-    if (s_SlotsFor != CharacterLoaded()) {
-        s_SlotsFor = CharacterLoaded();
-        s_Slot[0] = s_Slot[1] = -1;
-        for (p = N_PAL - 1; p >= 0 && n < 2; p--) {
-            for (k = 0; k < COLORS_PER_PAL && !Pal(PAL_WEAPONS + p)[k]; k++) {
-            }
-            if (k == COLORS_PER_PAL) {
-                s_Slot[n++] = PAL_WEAPONS + p;
-            }
-        }
-    }
-    PutWeaponPals();
+    Upload();
+    UploadBank();
     for (k = 0; k < N_PAL * COLORS_PER_PAL; k++) {
         s_Own[k] = Pal(PAL_WEAPONS)[k];
     }
 }
 
-static s32 Extended(SpriteParts** animset);
+// While RenderEntities runs, a weapon's palette numbers lead to the second bank.
+void OffhandRenderStart(void) {
+    s32 k;
 
-// Weapon palettes for that hand just loaded over the player's: its own goes to its slot, and
+    if (CharacterLoaded() == CHAR_ALUCARD) {
+        return;
+    }
+    for (k = 0; k < N_PAL; k++) {
+        s_Ids[k] = g_ClutIds[OFFHAND_PALS + k];
+        g_ClutIds[OFFHAND_PALS + k] = CLUT_BANK | ((BANK_PAL_Y + k / 16) << 6) | (k % 16);
+    }
+}
+
+void OffhandRenderEnd(void) {
+    s32 k;
+
+    if (CharacterLoaded() == CHAR_ALUCARD) {
+        return;
+    }
+    for (k = 0; k < N_PAL; k++) {
+        g_ClutIds[OFFHAND_PALS + k] = s_Ids[k];
+    }
+}
+
+// Weapon palettes for that hand just loaded over the player's: they go to the second bank, and
 // the player's come back. Then the three palette rows are sent to VRAM, as the weapon does.
 static void FixPalettes(s32 hand) {
     u16* block = Pal(PAL_WEAPONS + hand * N_WEAPON_PAL);
     u16* own = s_Own + hand * N_WEAPON_PAL * COLORS_PER_PAL;
-    s32 k, frame, clut = 0;
+    s32 k;
 
     for (k = 0; k < N_WEAPON_PAL * COLORS_PER_PAL && block[k] == own[k]; k++) {
     }
@@ -146,18 +153,14 @@ static void FixPalettes(s32 hand) {
         return; // nothing loaded over them
     }
     WeaponKeepClut(hand, block); // all 24, for the partner to draw this weapon (weapons.c)
-    s_Hand = hand;
-    if (IsWeapon(Category(hand)) && Loaded(hand) && (frame = Extended(WEAPON_ANIMSET(hand))) != 0) {
-        clut = WEAPON_ANIMSET(hand)[frame]->parts[0].clut;
-    }
-    s_Clut[hand] = clut;
-    for (k = 0; k < COLORS_PER_PAL; k++) {
-        s_WeaponPal[hand][k] = block[clut * COLORS_PER_PAL + k];
+    for (k = 0; k < N_WEAPON_PAL * COLORS_PER_PAL; k++) {
+        s_Bank[hand * N_WEAPON_PAL * COLORS_PER_PAL + k] = block[k];
     }
     for (k = 0; k < N_WEAPON_PAL * COLORS_PER_PAL; k++) {
         block[k] = own[k];
     }
-    PutWeaponPals();
+    Upload();
+    UploadBank();
 }
 
 bool OffhandLoading(void) { return s_Loading >= 0; }
@@ -182,28 +185,6 @@ static void LoadWeapons(void) {
             return;
         }
     }
-}
-
-// The frame of the weapon's sprites that reaches furthest forward: the blade held out.
-static s32 Extended(SpriteParts** animset) {
-    s32 best = 0, reach = -999, i, k, r;
-    SpriteParts* parts;
-
-    for (i = 1; i < 64; i++) {
-        parts = animset[i];
-        if ((u32)parts < WEAPON_PRG(s_Hand) || (u32)parts >= WEAPON_PRG(s_Hand) + WEAPON_SIZE ||
-            parts->count == 0 || parts->count > 16) {
-            break;
-        }
-        for (k = 0; k < parts->count; k++) {
-            r = parts->parts[k].offsetx + parts->parts[k].width;
-            if (r > reach) {
-                reach = r;
-                best = i;
-            }
-        }
-    }
-    return best;
 }
 
 // Potions, with DRA's amounts (src/dra/7E4BC.c: GetStatusAilmentTimer adds the Bwaka knife's
@@ -268,7 +249,6 @@ static void AluSwing(s32 hand) {
     s_Alu.ext.player.anim = eq->playerAnim + (s_Grounded ? 0 : 4); // in the air: his jump swing
     s_Unk46 = eq->unk11 + 0x7FFF + 2;
     s_Swinging = true;
-    s_Hand = hand;
     g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
     PlayAnimation(D_800B0130, D_800B01B8);
     // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's
@@ -368,12 +348,9 @@ bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand) {
     }
     *hand = e->entityId >= 0xF0;
     *set = o->set && o->hand == *hand ? o->set : 0x10 + *hand * 2;
-    if (o->set && o->hand == *hand) {
-        *palette = o->palette;
-    } else if (e->palette & PAL_UNK_FLAG) {
-        *palette = PAL_WEAPONS + *hand * N_WEAPON_PAL + s_Clut[*hand];
-    } else {
-        *palette = e->palette;
+    *palette = o->set && o->hand == *hand ? o->palette : e->palette;
+    if (*palette >= OFFHAND_PALS && *palette < OFFHAND_PALS + N_PAL) {
+        *palette += PAL_WEAPONS - OFFHAND_PALS; // the partner's game has them where they loaded
     }
     return true;
 }
@@ -443,9 +420,9 @@ void CoopWeaponEntity(Entity* self) {
         self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
     }
     if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
-        self->palette < PAL_WEAPONS + N_PAL && s_Slot[hand] >= 0) {
+        self->palette < PAL_WEAPONS + N_PAL) {
         s_Original[self - g_Entities].palette = self->palette;
-        self->palette = PAL_UNK_FLAG | s_Slot[hand]; // the player's own palettes are there
+        self->palette += OFFHAND_PALS - PAL_WEAPONS; // the player's own palettes are at the old number
     }
     for (i = 0; i < 4; i++) {
         banks[0x10 + i] = own[i];

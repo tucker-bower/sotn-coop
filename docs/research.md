@@ -147,3 +147,6 @@ Serializing takes under 2 ms and a copy about 5 ms; the hitch was the 12.5 MB go
 ## Test starts and fights
 - **A debug start can sit over a drop.** Maria in the Center's did: the player fell to a floor where her scene can't go on. Her scene needs the lift at x 384 on the floor at y 455.
 - **A scripted boss kill hides what a long fight does.** Karasuman's chain fight ended in about 40 frames. Left alone, he can knock a player out of the door they arrived by: `boss_karasuman_stays_shared` keeps him alive for 30 s.
+
+## Boot time is part of the tests
+An extra CD read at boot shifts every savestate made afterwards, and `no_effect_on_play` and `pvp_familiar` fail on the shifted starts. Don't add boot reads: have the host write data to expansion RAM, as `link/portraits.py` does.

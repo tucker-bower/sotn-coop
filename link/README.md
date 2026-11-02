@@ -14,6 +14,7 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `netsim.py` | A simulated bad connection, for tests and for trying one at home. |
 | `playout.py` | A jitter buffer that plays the partner's state back evenly. |
 | `portmap.py` | Asks the home router to open the game's port. |
+| `portraits.py` | Reads Richter's and Maria's cutscene portraits from the player's disc for their pause menu. |
 | `relay.py` | **Vestigial.** A working relay no release uses or starts (D123); kept for anyone who wants to run one. |
 | `rendezvous.py` | Connect codes, STUN and direct-IP parsing. |
 | `test_connect.py` | Connects every pair of router types on the virtual internet. |

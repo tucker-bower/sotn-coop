@@ -9,6 +9,7 @@ import struct
 import time
 
 from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
+from .portraits import PORTRAIT_ADDR
 from .playout import Playout
 from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages)
@@ -62,6 +63,7 @@ class Host:
         self._frames = 0
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
+        self.portraits = None
 
     def set_player(self, character=None, options=None, blob=None):
         """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
@@ -76,10 +78,17 @@ class Host:
             self.blob = blob
             self._put_blob()
 
+    def set_portraits(self, data):
+        """Richter's and Maria's pause menu pictures (link/portraits.py)."""
+        self.portraits = data
+        self._put_blob()
+
     def _put_blob(self):
         adapter = self.mailbox.adapter
         if self.blob and adapter.read_bytes(CHAR_BLOB_ADDR, 32) != self.blob[:32]:
             adapter.write_bytes(CHAR_BLOB_ADDR, self.blob)
+        if self.portraits and adapter.read_bytes(PORTRAIT_ADDR, 4) != self.portraits[:4]:
+            adapter.write_bytes(PORTRAIT_ADDR, self.portraits)
 
     def _note(self, way, what):
         self.log.append((time.monotonic(), way, what))

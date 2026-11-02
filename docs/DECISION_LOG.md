@@ -750,3 +750,9 @@ The Librarian's music is a sequence, not CD audio, and `SsSeqSetVol` left a thir
 
 **D150: GitHub issues track the project** (Tucker, 2026-11-01)
 The game is mostly built, and what's left is feature requests and bug fixes, so tracking moves from `ROADMAP.md` to GitHub issues and the tracker board. Agents still write design docs for bigger work, because they're useful to future agents. `ROADMAP.md` keeps the goal and the milestones built so far.
+
+**D151: Richter's and Maria's pause menu shows their own name and portrait** (Tucker, 2026-11-01; how: agent-default)
+Their 48×72 cutscene portraits, scaled to the menu's 64×96, are put over Alucard's picture and palette in VRAM while the menu is open, and restored after. The host reads them from the player's disc (`link/portraits.py`), since reading them at boot added 1.2 s and shifted every test start. Without them the menu keeps Alucard's picture.
+
+**D152: Off-hand weapons' palettes live in VRAM's second bank** (agent-default, 2026-11-01)
+Richter and Maria use every palette in 0x110-0x13F, so the empty slots the old code looked for never existed, and weapons drew in the character's colours. All 48 weapon palettes now sit in the second bank, reached by palette numbers 0x2D0-0x2FF, which point there only while RenderEntities runs. A stage entity using those numbers would be off-colour for that moment. Options: follow each frame's palette in one borrowed slot (rejected: nothing is free to borrow).

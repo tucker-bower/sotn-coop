@@ -14,6 +14,7 @@
 #include "shared.h"
 #include "spells.h"
 #include "offhand.h"
+#include "portrait.h"
 #include "sprites.h"
 #include "weapons.h"
 #include "pvp.h"
@@ -126,6 +127,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     OffhandUpdate();
     WeaponsUpdate();
     FamiliarUpdate();
+    PortraitUpdate();
     MusicUpdate();
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
@@ -164,7 +166,9 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
+    OffhandRenderStart();
     RenderEntities();
+    OffhandRenderEnd();
     PLAYER.animCurFrame = frame; // (the partner's frame swaps PLAYER out and back)
     PartnerFrame(); // M13: the partner's own update and drawing, after player 1's
     WeaponsDraw();
