@@ -166,6 +166,12 @@ def main():
     j.tick()
     check(m.command.called and m.put_save.called, "and applies it once the game is running")
 
+    # A partner whose game stopped says so (issue 113).
+    net.take_control.return_value = [{"op": "crashed"}]
+    j.tick()
+    net.take_control.return_value = []
+    check(j.partner_crashed, "the partner's game stopped: this game hears it")
+
     # The test castles the app ships (D136): installed once, again only when the bundle changes,
     # each a template listed with the test castles, none with the castles; no game graphics.
     import json

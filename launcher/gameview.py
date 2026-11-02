@@ -3,14 +3,20 @@ share. Two games, two pads, one window (or two: launcher/display.py), both games
 game's music, joint saves, savestates at moments worth going back to, and F9 bug reports."""
 
 import collections
+import logging
+import subprocess
+import sys
 import threading
 import time
 from array import array
+from pathlib import Path
 
 import pygame
 
+import crashwatch
 import report
 from display import BAR
+from platform_android import ANDROID
 from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
@@ -268,6 +274,10 @@ class Pads:
         return "+".join(sorted(pressed))
 
 
+def partner_crashed(session):
+    return bool(session.joint and session.joint.partner_crashed)
+
+
 class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
@@ -296,6 +306,7 @@ class GameView:
         self.journal = report.Journal()
         self.still = {}
         self.inputs = collections.deque(maxlen=60 * REPORT_SECONDS)
+        self.watch = crashwatch.CrashWatch()
         self.frame_times = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.notice, self.notice_until = "", 0
         self.mismatch = None
@@ -437,16 +448,48 @@ class GameView:
         finally:
             pygame.key.stop_text_input()
 
-    def report(self, note=None):
+    def open_crash_window(self, path):
+        """Android has one window: the same questions, on its screen. Elsewhere, a process of its
+        own (crash_window.py), asking the player before anything is sent."""
+        if ANDROID:
+            note = self.ask_note()
+            if report.can_send() and self.ask_send():
+                self.send_report(path, note)
+            return
+        app = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, str(Path(__file__).with_name("app.py"))]
+        subprocess.Popen(app + ["--crash-window", str(path)])
+
+    def crashed(self, why):
+        """A game crashed or hung: its report first, while the rolling states still show it
+        happening, then the partner, then the window. Back to the menu: this game is lost."""
+        logging.getLogger("launcher").error("%s", why)
+        live = [g for g in self.games if getattr(g, "proc", None) is None or g.proc.is_alive()]
+        path = None
+        try:
+            path = self.report(note=f"Automatic report: {why}.", games=live)
+        except Exception:  # noqa: BLE001 - the player still has to be told
+            logging.getLogger("launcher").exception("crash report")
+        if self.online and self.s.joint and live:
+            try:
+                self.s.joint.host.send_control({"op": "crashed"})
+            except Exception:  # noqa: BLE001 - nothing more to tell it with
+                logging.getLogger("launcher").exception("telling the partner")
+        if path:
+            self.open_crash_window(path)
+        self.say("The game stopped, so it's going back to the menu.", 180)
+        return "menu"
+
+    def report(self, note=None, games=None):
+        games = self.games if games is None else games
         shot = self.display.screenshot()  # the window as it was: the games, not the note box
         shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
-        taken = report.snapshot(self.games, self.audio)
+        taken = report.snapshot(games, self.audio)
         interactive = note is None
         if interactive:
             note = self.ask_note()
-        kept = zip(*(g.kept_states() for g in self.games))  # the same frames in each game
+        kept = zip(*(g.kept_states() for g in games))  # the same frames in each game
         rolling = [(states[0][0], *(st for _, st in states)) for states in kept]
-        path = report.write(self.games, self.playthrough, shot, rolling, self.inputs,
+        path = report.write(games, self.playthrough, shot, rolling, self.inputs,
                             self.frame_times, self.pads.names(), note, extra={"solo": self.solo, "rules": self.rules},
                             taken=taken, journal=self.journal)
         if self.audio:
@@ -602,7 +645,9 @@ class GameView:
         state = getattr(self, "partner_state", None)
         if state == getattr(self, "_told", None):
             return None
-        self._told = state if state in ("left", "lost") else None
+        self._told = state if state in ("left", "lost", "crashed") else None
+        if state == "crashed":
+            return "Your partner's game stopped. You can keep playing alone."
         if state == "left":
             return "Your partner left the game. You can keep playing alone."
         if state == "lost":
@@ -648,7 +693,8 @@ class GameView:
             age = g.mailbox("partner_age")
             pa, pb = g.mailbox("self_presence"), g.mailbox("partner_presence")
             together = age <= 30 and {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
-            self.partner_state = ("left" if hst.get("partner_left") else
+            self.partner_state = ("crashed" if partner_crashed(self.s) else
+                                  "left" if hst.get("partner_left") else
                                   "lost" if hst.get("partner_hello") and (hst.get("rx_age") or 0) > PARTNER_LOST_S
                                   else "here" if age <= 30 else getattr(self, "partner_state", None))
             if self.mismatch:
@@ -744,9 +790,13 @@ class GameView:
                 for g in self.games:
                     g.frame_end()
                 self.frame += 1
-            for g, pad in zip(self.games, pads):  # both games run their frame at the same time
-                g.frame_start(pad)
-            replies = [g.frame_end() for g in self.games]
+            try:
+                for g, pad in zip(self.games, pads):  # both games run their frame at the same time
+                    g.frame_start(pad)
+                replies = [g.frame_end() for g in self.games]
+            except (EOFError, OSError):  # a worker process died
+                result = self.crashed("a game's process ended")
+                break
             t1 = time.perf_counter()
             frames = []
             for i, (g, (picture, sound)) in enumerate(zip(self.games, replies)):
@@ -762,6 +812,11 @@ class GameView:
             if self.audio:
                 self.audio.push(mix([sound for _, sound in replies], self.solo))
             self.frame += 1
+            if self.frame % crashwatch.EVERY == 0:
+                why = self.watch.check(self.games)
+                if why:
+                    result = self.crashed(why)
+                    break
             if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
             if self.rush:

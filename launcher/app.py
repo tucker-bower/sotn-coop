@@ -1660,6 +1660,10 @@ class Launcher:
 
 
 def main():
+    if "--crash-window" in sys.argv:  # crash_window.py: the game's stopped, in another process
+        import crash_window
+        crash_window.run(sys.argv[sys.argv.index("--crash-window") + 1])
+        return
     logging.basicConfig(filename=paths.data_dir() / "launcher.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     if ANDROID:  # and to logcat too, where android/device.py log reads it

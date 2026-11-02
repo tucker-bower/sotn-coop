@@ -102,6 +102,7 @@ class JointSave:
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
+        self.partner_crashed = False  # the partner's app said its game stopped (issue 113)
         self._load_msg = None  # the host's load, until this game is running: its boot wipes one written sooner (issue 61)
 
     def _write(self, blobs):
@@ -219,6 +220,8 @@ class JointSave:
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)
+            elif op == "crashed":
+                self.partner_crashed = True
         if self._load_msg and m.ready() and m.self_presence().flags:  # its code is running: boot's over
             self._load(m, self._load_msg)
             self._load_msg = None

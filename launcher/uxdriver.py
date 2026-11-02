@@ -586,6 +586,27 @@ def _report_send(pg):
     ]
 
 
+def _crash(pg):
+    """Issue 113: a game crashes in play (its vector overwritten). The report is saved with the
+    states from before, the crash window is asked for, and the app goes back to its menu."""
+    import zipfile
+    import report
+    opened = []
+
+    def crash(d):
+        d.view.open_crash_window = opened.append
+        d.view.games[0].write(0x80000080, 0x12345678)
+    steps = _solo(pg)
+    i = next(k for k, s in enumerate(steps) if s[0] == "game_frames")
+    return steps[:i] + [
+        ("game_frames", 300), ("call", crash), ("until", lambda d: opened), ("wait", 30), ("shot", "crashed"),
+        ("expect", lambda d: opened[0].parent == report.reports_dir(), "the report is saved before anything is asked"),
+        ("expect", lambda d: any(n.startswith("before") for n in zipfile.ZipFile(opened[0]).namelist()),
+         "it holds states from before the crash"),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+    ]
+
+
 def _window(pg):
     steps = _couch(pg, quit_at_end=False)[:-2]
     i = next(k for k, s in enumerate(steps) if s[0] == "unplug")
@@ -918,7 +939,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"report_send": _report_send, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 
