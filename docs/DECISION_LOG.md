@@ -800,3 +800,6 @@ A crop of his punch frames from `ARC_F.BIN`, in the puncher's own palette, drawn
 
 **D165: Richter's and Maria's status effects, poison first** (Tucker, #102: all of them, stone and curse can wait; how: agent-default)
 Module state, not their player code: timer 0, which Alucard's poison uses, is Richter's flame whip. The rules are Alucard's. The growth rule (`OPT_NO_GROWTH`) turns it off, since it's part of what isn't in their own games.
+
+**D166: Richter's and Maria's damage a second is Alucard's** (Tucker, #114; how: agent-default)
+Measured with the same stats on a held target (`damage_rate_*`): Alucard's Short Sword 30 a second, Maria 39, Richter 87. Their attacks' own values go to 20% (the whip, 32 to 6) and 50% (hers, 12 to 6). STR and the +25% relics stay, so by the design's own numbers (`M8b`) they follow Alucard: about 20 a hit at Slogra and 56 at Succubus. Only the plain attack is tuned and tested: subweapons, crashes and off-hand weapons aren't, and only the early game is measured. The growth rule turns this off with the rest.

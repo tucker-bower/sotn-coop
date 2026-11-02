@@ -11,6 +11,7 @@ extern s16* spritebank3[];
 s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 
 // Tuning knobs (M8b §5: the balance runs set them).
+#define WHIP_BASE_PCT 20   // issue 114: his whip's own attack, so his damage a second is Alucard's
 #define WHIP_STR_PCT 100   // the whip gains this % of STR (Alucard's weapons gain all of it)
 #define SUBWPN_INT_DIV 50  // subweapons and crashes: × (1 + INT / this)
 #define FIRE_WHIP_PCT 125  // Fire of Bat: the whip burns, for this % of its damage
@@ -33,7 +34,7 @@ s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
         attack /= 2; // poisoned (module/character.c)
     }
     if (id == SUBWPN_WHIP || id == SUBWPN_FLAME_WHIP) {
-        attack += g_Status.statsTotal[STAT_STR] * WHIP_STR_PCT / 100;
+        attack = attack * WHIP_BASE_PCT / 100 + g_Status.statsTotal[STAT_STR] * WHIP_STR_PCT / 100;
         if (id == SUBWPN_WHIP && COOP_CAN(RELIC_FIRE_OF_BAT)) {
             attack = attack * FIRE_WHIP_PCT / 100;
             entity->attackElement |= ELEMENT_FIRE;
