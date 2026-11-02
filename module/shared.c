@@ -72,7 +72,8 @@ static u32 FgSum(s32 n) {
 typedef struct {
     u8 slot;   // 0..191 (+ STAGE_ENTITY_START)
     u8 nPrims; // primitives that follow the entity
-    u16 nEnvs; // then the DR_ENV of each PRIM_ENV among them, in order
+    u8 nEnvs;  // then the DR_ENV of each PRIM_ENV among them, in order
+    u8 nMore;  // how many longer its chain is than the primitives sent (MAX_PRIMS_PER_ENTITY)
 } SnapEntity;
 
 // A PRIM_ENV primitive (a render-to-texture pass: the Warg burning away) points at a DR_ENV from
@@ -92,6 +93,7 @@ static void (*s_OrigUpdate)(void);
 static void (*s_OrigSpawner)(void);
 static s16 s_MirrorPrims[STAGE_SLOTS]; // head index per slot, -1 if none
 static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while the count holds)
+static u8 s_MirrorMore[STAGE_SLOTS];   // what the chain lacks of the authority's (SnapEntity.nMore)
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
@@ -372,6 +374,7 @@ static void BecomeGuest(void) {
     for (i = 0; i < STAGE_SLOTS; i++) {
         s_MirrorPrims[i] = -1;
         s_MirrorCount[i] = 0;
+        s_MirrorMore[i] = 0;
         s_Mirrored[i] = false;
         s_Local[i] = false;
         s_TakenHere[i] = 0;
@@ -425,7 +428,40 @@ static void ResyncSpawner(void) {
 
 // The copies become this game's own world: their primitives are theirs now, and the stage
 // logic runs them from here (that's the hand-over: design/M4, part 1).
+// Taking over: an entity's code walks its chain by its own count. A Beelzebub part's 256, copied as
+// 64, ran off the end into low memory and spun there, and the game froze. Its chain gets its length
+// back, or the entity goes.
+static void CompleteChains(void) {
+    Primitive* p;
+    Entity* e;
+    s32 i, k, idx;
+
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        if (!s_Mirrored[i] || !s_MirrorMore[i] || s_MirrorPrims[i] < 0) {
+            continue;
+        }
+        e = &g_Entities[STAGE_ENTITY_START + i];
+        if (!e->entityId || !(e->flags & FLAG_HAS_PRIMS) || e->primIndex != s_MirrorPrims[i]) {
+            continue; // gone with the room, and the chain with it
+        }
+        idx = AllocPrimitives(PRIM_GT4, s_MirrorMore[i]);
+        if (idx < 0) {
+            DestroyEntity(e);
+            continue;
+        }
+        p = &g_PrimBuf[s_MirrorPrims[i]];
+        for (k = 1; k < s_MirrorCount[i] && p->next; k++) {
+            p = p->next;
+        }
+        p->next = &g_PrimBuf[idx];
+        for (p = p->next; p; p = p->next) {
+            p->drawMode = DRAW_HIDE;
+        }
+    }
+}
+
 static void StopBeingGuest(void) {
+    CompleteChains();
     ResyncSpawner();
     if (g_api.o.Update == GuestUpdate) {
         g_api.o.Update = s_OrigUpdate;
@@ -570,6 +606,7 @@ static void ApplySnapshot(void) {
         s_Mirrored[i] = true;
         src = (const Primitive*)r;
         n = se->nPrims;
+        s_MirrorMore[i] = se->nMore;
         r += n * sizeof(Primitive);
         env = (const DR_ENV*)r;
         r += se->nEnvs * sizeof(DR_ENV);
@@ -662,7 +699,7 @@ static void CaptureSnapshot(void) {
     u8* end = g_CoopLink.snapOut + SNAP_MAX;
     SnapHeader* h = (SnapHeader*)w;
     const OverlayInfo* ovl = FindOverlay(g_StageId);
-    s32 i, n, k, envs;
+    s32 i, n, k, envs, more;
     Entity* e;
     Primitive* p;
 
@@ -682,10 +719,14 @@ static void CaptureSnapshot(void) {
         if (!e->entityId) {
             continue;
         }
-        n = 0;
+        n = more = 0;
         if (e->flags & FLAG_HAS_PRIMS) {
-            for (p = &g_PrimBuf[e->primIndex]; p && n < MAX_PRIMS_PER_ENTITY; p = p->next) {
-                n++;
+            for (p = &g_PrimBuf[e->primIndex]; p && more < 0xFF; p = p->next) {
+                if (n < MAX_PRIMS_PER_ENTITY) {
+                    n++;
+                } else {
+                    more++;
+                }
             }
         }
         if (w + sizeof(SnapEntity) + sizeof(Entity) + n * sizeof(Primitive) > end) {
@@ -702,6 +743,7 @@ static void CaptureSnapshot(void) {
         ((SnapEntity*)w)->slot = i;
         ((SnapEntity*)w)->nPrims = n;
         ((SnapEntity*)w)->nEnvs = envs;
+        ((SnapEntity*)w)->nMore = more;
         w += sizeof(SnapEntity);
         CopyWords(w, e, sizeof(Entity));
         ((Entity*)w)->pfnUpdate = BossRealUpdate(e); // not the aggro wrapper (module state)
