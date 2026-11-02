@@ -4,6 +4,9 @@
 
 Project tracking is in [GitHub issues](https://github.com/tucker-bower/sotn-coop/issues), on the [tracker](https://github.com/users/tucker-bower/projects/1) (D150).
 
+## Decisions needed
+- **Richter's fist weapons (#123):** a punch draws no sprite, because Alucard's own arm is the punch and Richter doesn't have it. Options: (A) send the punch's streak to the partner, which is faint; (B) give Richter a visible fist sprite in both games, which looks better but is new art work; (C) leave it. Recommendation: B, after the release.
+
 ## Milestones
 What's been built so far. Each milestone's acceptance criteria are in its design doc, in `design/`.
 

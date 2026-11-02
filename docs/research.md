@@ -166,3 +166,14 @@ The east door of the Marble Gallery's corridor (room (45,25) to (60,25)) has a o
 ## ANIM_FRAME_LOAD
 Bit 15 of `animCurFrame` means "the sprite is already in VRAM, don't upload it". A dead player's last frame has it: a body stuck at a frame like 0x8022 is a dead body.
 
+## A mailbox can exist before its module runs
+`magic` and `version` are set before the module's code runs, and a command written in that gap is lost. Anything sent to a booting game waits for nonzero presence flags: a running module always sets `IN_PLAY` or `BUSY`.
+
+## The ending's movie stops g_Timer
+`g_Timer` ticks in `MainGame`'s loop, and the ending's movie plays in its own (`VSync`, `StGetNext`). So in `Game_Ending` a stopped timer isn't a hang.
+
+## Primitive chains need their full length
+An entity's primitives are a linked chain, and its code walks them all. A chain cut short when a guest takes an entity over runs that code off the end (a Beelzebub part has 256 and froze the game). `CompleteChains` rebuilds them on hand-over.
+
+## Fist weapons are primitives
+A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_001.c`) draws four primitives on tpage 0x1A, and Alucard's own body plays the punch. So the partner's weapon sprites carry nothing for Richter's fist (#123).
