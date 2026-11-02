@@ -250,6 +250,54 @@ static void PoisonWater(void) {
     }
 }
 
+// Poison (issue 102): Alucard's rules (src/dra/71830.c, 5D5BC.c), for players whose own code has
+// no such thing. A poison hit lasts his time; while it does, hits do double, attacks half (the
+// mark in g_Status is his too, and coop_ric.c and coop_maria.c read it), and the player pulses
+// the game's poison palette, through the hit palette's own timer. Stone and curse: not yet.
+#define T_HIT_PALETTE 2 // PL_T_2, Richter's and Maria's
+#define POISON_PULSE 64
+#define POISON_MARK 1   // g_Status.D_80097BF8
+#define POISON_LASTS 0xFFF
+#define STATUS_AILMENT_POISON 0 // src/dra/dra.h
+s32 GetStatusAilmentTimer(s32 statusAilment, s32 timer); // DRA (src/dra/5D5BC.c)
+static s16 s_Poison;
+
+void CharacterCurePoison(void) {
+    s_Poison = 0;
+    g_Status.D_80097BF8 &= ~POISON_MARK;
+}
+
+static void Poison(void) {
+    if (CharacterLoaded() == CHAR_ALUCARD || g_GameState != Game_Play || RULE_OFF(OPT_NO_GROWTH) ||
+        !g_Status.hp) {
+        if (s_Poison) {
+            CharacterCurePoison();
+        }
+        return;
+    }
+    if (g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    if (s_Poison && PLAYER.hitParams) {
+        PLAYER.hitPoints *= 2;
+    }
+    if (PLAYER.hitParams & ELEMENT_POISON && !(g_Status.elementsImmune & ELEMENT_POISON)) {
+        s_Poison = GetStatusAilmentTimer(STATUS_AILMENT_POISON, POISON_LASTS);
+    }
+    if (!s_Poison) {
+        return;
+    }
+    if (!--s_Poison) {
+        CharacterCurePoison();
+        return;
+    }
+    g_Status.D_80097BF8 |= POISON_MARK;
+    if (s_Poison % POISON_PULSE == 0 && !g_Player.timers[T_HIT_PALETTE]) {
+        PLAYER.palette = PAL_FLAG(PAL_CC_DARK_EFFECT);
+        g_Player.timers[T_HIT_PALETTE] = POISON_PULSE / 5;
+    }
+}
+
 // Some doorways have a gap in the floor, one tile wide, that the door's walk carries Alucard
 // across. Richter's and Maria's walks check for a fall: they dropped in, the wall pushed them into
 // the next room and back, forever (playtest 0.14). During a door's walk at a room's edge, there's
@@ -322,5 +370,6 @@ void CharacterFrame(void) {
     }
     Familiar();
     PoisonWater();
+    Poison();
     Growth();
 }

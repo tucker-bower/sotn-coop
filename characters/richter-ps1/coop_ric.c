@@ -29,6 +29,9 @@ s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
     if (g_CoopOptions & OPT_NO_GROWTH) {
         return attack; // the castle's rules: his attacks as in his own game
     }
+    if (g_Status.D_80097BF8 & 1) {
+        attack /= 2; // poisoned (module/character.c)
+    }
     if (id == SUBWPN_WHIP || id == SUBWPN_FLAME_WHIP) {
         attack += g_Status.statsTotal[STAT_STR] * WHIP_STR_PCT / 100;
         if (id == SUBWPN_WHIP && COOP_CAN(RELIC_FIRE_OF_BAT)) {

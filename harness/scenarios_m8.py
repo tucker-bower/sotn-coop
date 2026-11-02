@@ -466,6 +466,51 @@ def poison_water(run, ch):
             run.expect(lost > 0, "without it, poison water hurts", lost=lost)
 
 
+POISON_MARK = 0x80097BF8  # g_Status.D_80097BF8: bit 0, the game's own "poisoned"
+ELEMENT_POISON, ELEMENTS_IMMUNE = 0x80, 0x80097C2C
+HIT_POINTS, HIT_PARAMS, ENTITY_PALETTE = 0x3E, 0x44, 0x16
+PAL_POISON = 0x8166  # PAL_FLAG(PAL_CC_DARK_EFFECT), as built
+
+
+def _hit(run, e, damage, element=0):
+    """The player takes a hit as the game's hit detection leaves it; returns the HP lost."""
+    hp = e.read(HP_NOW, "<i")
+    e.write(e.entity(0) + HIT_POINTS, damage, "<h")
+    e.write(e.entity(0) + HIT_PARAMS, 2 | element, "<H")
+    run.step(2)
+    lost = hp - e.read(HP_NOW, "<i")
+    run.step(150)  # his hit reaction and invincibility
+    return lost
+
+
+@per_character
+def poison_hits(run, ch):
+    """Issue 102: poison as Alucard has it. Immunity keeps it off; once poisoned, hits do double;
+    the player pulses; it wears off."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, 200, "<i")
+    start = e.save_state()
+    e.write(ELEMENTS_IMMUNE, ELEMENT_POISON, "<H")
+    _hit(run, e, 5, ELEMENT_POISON)
+    run.expect(not e.read(POISON_MARK, "<I") & 1, "immune: not poisoned")
+    e.load_state(start)
+    first = _hit(run, e, 5, ELEMENT_POISON)
+    run.expect(e.read(POISON_MARK, "<I") & 1, "a poison hit poisons")
+    second = _hit(run, e, 5)
+    run.expect((first, second) == (5, 10), "hits do double while poisoned", first=first, second=second)
+    seen = False
+    for _ in range(90):
+        run.step(1)
+        seen |= e.read(e.entity(0) + ENTITY_PALETTE, "<H") == PAL_POISON
+    run.expect(seen, "the player pulses the poison palette")
+    for _ in range(0x1000):
+        run.step(1)
+        if not e.read(POISON_MARK, "<I") & 1:
+            break
+    run.expect(not e.read(POISON_MARK, "<I") & 1, "it wears off")
+
+
 SKILL_OF_WOLF = 6
 HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC  # g_Status (include/game.h)
 

@@ -203,6 +203,11 @@ static void Use(s32 hand) {
     case ITEM_ELIXIR:
         heal = g_Status.hpMax;
         break;
+    case ITEM_ANTIVENOM:
+        CharacterCurePoison();
+        PlaySfx(SFX_HEALTH_PICKUP);
+        ReduceWeapon(hand);
+        return;
     case ITEM_MANNA_PRISM:
         g_Status.mp = g_Status.mpMax;
         PlaySfx(SFX_MAGIC_WEAPON_APPEAR_A);
@@ -379,6 +384,9 @@ void CoopWeaponEntity(Entity* self) {
     s16 scaleY = PLAYER.scaleY;
     s32 i, set;
 
+    if (g_Status.D_80097BF8 & 1) {
+        g_Player.status |= PLAYER_STATUS_POISON; // for the weapon's attack (GetEquipProperties)
+    }
     for (i = 0; i < 4; i++) {
         own[i] = banks[0x10 + i];
     }
