@@ -298,6 +298,49 @@ static void TrackRoom(void) {
     }
 }
 
+// An entity's own data can hold pointers into its primitive chain, by the authority's numbering:
+// a guest's copy that later runs here (the hand-over) walked another entity's chain, and an Axe
+// Knight's walk never ended. On the way out each becomes its place in the chain; on the way in, the
+// mirror's primitive at that place.
+#define EXT_START (0x7C / 4)
+#define EXT_END (sizeof(Entity) / 4)
+#define PRIM_PLACE 0xC0DE0000
+#define PRIM_PLACE_MASK 0xFFFF0000
+
+static void PrimPointersOut(u32* copy, const Entity* e) {
+    const Primitive* p;
+    u32 i, place;
+
+    for (i = EXT_START; i < EXT_END; i++) {
+        u32 at = copy[i] - (u32)g_PrimBuf;
+        if (at >= sizeof(g_PrimBuf) || at % sizeof(Primitive)) {
+            continue;
+        }
+        place = 0;
+        for (p = &g_PrimBuf[e->primIndex]; p && (u32)p != copy[i]; p = p->next) {
+            place++;
+        }
+        copy[i] = PRIM_PLACE | (p ? place : 0);
+    }
+}
+
+static void PrimPointersIn(Entity* e, s32 head) {
+    u32* word = (u32*)e;
+    Primitive* p;
+    u32 i, place;
+
+    for (i = EXT_START; i < EXT_END; i++) {
+        if ((word[i] & PRIM_PLACE_MASK) != PRIM_PLACE) {
+            continue;
+        }
+        p = head >= 0 ? &g_PrimBuf[head] : NULL;
+        for (place = word[i] & ~PRIM_PLACE_MASK; p && place; place--) {
+            p = p->next;
+        }
+        word[i] = (u32)p;
+    }
+}
+
 // --- guest
 
 static void BecomeGuest(void) {
@@ -556,6 +599,7 @@ static void ApplySnapshot(void) {
             e->primIndex = s_MirrorPrims[i];
             e->flags |= FLAG_HAS_PRIMS;
         }
+        PrimPointersIn(e, se->nPrims ? s_MirrorPrims[i] : -1);
     }
     for (i = 0; i < STAGE_SLOTS; i++) {
         if (!present[i]) {
@@ -631,6 +675,9 @@ static void CaptureSnapshot(void) {
         w += sizeof(SnapEntity);
         CopyWords(w, e, sizeof(Entity));
         ((Entity*)w)->pfnUpdate = BossRealUpdate(e); // not the aggro wrapper (module state)
+        if (n) {
+            PrimPointersOut((u32*)w, e);
+        }
         w += sizeof(Entity);
         for (p = n ? &g_PrimBuf[e->primIndex] : NULL; p && n--; p = p->next) {
             CopyWords(w, p, sizeof(Primitive));

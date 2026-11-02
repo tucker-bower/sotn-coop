@@ -11,6 +11,9 @@ The 2026-11-01 online session on 0.13 froze, got stuck and slowed down, while th
 - **Stuck at the gate:** D153.
 - **The slowdown:** the body's CPU cost, not the network: D154. No room on the route needs over 420 kbit/s.
 
+- **A second hang, found by `harness/realtime.py`:** entities keep pointers into their primitive chain, in the authority's numbering. A guest's copy that ran after a hand-over walked another entity's chain, and an Axe Knight's walk never ended. They now travel as places in the chain (`PrimPointersOut`/`In`, `module/shared.c`). The Marble Gallery route stopped at the same moment every run, and no longer does. This may also be what took Alucard's afterimages, and the corrupted graphics: not shown yet. The lockstep runner never reproduced it, so `harness/realtime.py` is the check for it.
+- **Not bugs:** the Outer Wall route's room loop is the bot riding the lift (solo too). Both players down at a black screen is a test without a joint save. Richter's dark HUD on routes that switch character in play is known (only tests do that).
+
 ## Tests
 - `CrashGuard` (`harness/session.py`): every two-game test fails if a game's exception vector changes.
 - `netplay_gate_*`: both players run the forest and pass the castle door, keeping 95% of their game frames in every room, under 1.5 Mbit/s.
@@ -19,6 +22,7 @@ The 2026-11-01 online session on 0.13 froze, got stuck and slowed down, while th
 
 ## Left
 - The real cause of the lost primitives, if `g_CoopAfterimagesRepaired` ever rises.
-- `netplay_first_rooms` (enemies, pickups, buttons, elevators, red doors), the pause-one-side test, and the real-time mode.
+- Tests for pickups' graphics, buttons, and elevators as the guest, and pausing one side.
+- A dead player's black screen shows an empty message box while the partner fights a boss.
 - The app's own crash detection, and the reports' additions (plan step 7).
 - The quick fixes from the playtest notes, each a GitHub issue.

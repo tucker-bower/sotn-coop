@@ -1032,7 +1032,9 @@ static void Draw(void) {
     for (i = 1; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
-    Tint(gt4);
+    if (!s_OtherChar) { // only two of a kind need telling apart
+        Tint(gt4);
+    }
     if (s_Banked) {
         BankPolys(gt4, gt3);
     }

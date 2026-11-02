@@ -52,7 +52,7 @@ class _Worker:
         # with the second game half a frame behind (the driver steps them alternately).
         # Real-time play (audio) keeps the wall clock.
         self.clock = {"t": rank / 120, "dt": 1 / 60}
-        if not audio:
+        if not audio and not os.environ.get("COOP_REALTIME"):
             self.transport.clock = lambda: self.clock["t"]
         self.host = Host(self.mailbox, self.transport, rank, patch_crc=patch_crc, playout=learn_peer)
         self.host.set_portraits(portraits.read(disc))
