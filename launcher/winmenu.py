@@ -20,7 +20,7 @@ MENU_EVENT = pygame.event.custom_type()
 MENUS = [
     ("&File", [("&New game", "new"), ("&Continue", "continue"), ("&Savestates…", "savestates"), None,
                ("Open the &data folder", "data_folder"), None, ("E&xit", "quit")]),
-    ("&Game", [("&Pause\tEsc", "pause"), ("&Report a problem\tF9", "report"), None,
+    ("&Game", [("&Pause\tEsc", "pause"), ("&Report a problem\tF9", "report"), ("&Save a savestate", "moment"), None,
                ("Leave to the &menu", "leave")]),
     ("&View", [("Automatic", "layout:auto"), ("Side by side", "layout:side"), ("Stacked (vertical monitor)", "layout:stacked"),
                ("Player 1 only", "layout:p1"), ("Player 2 only", "layout:p2"),

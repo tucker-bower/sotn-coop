@@ -111,6 +111,14 @@ class Host:
         self.hello["castle"] = meta
         return True
 
+    def set_fresh(self, fresh):
+        """A new castle: the joiner starts its game too, past the title screen."""
+        self.hello["fresh"] = bool(fresh)
+
+    def set_enemy_hp(self, percent):
+        """The host's setting covers the session, like PvP's."""
+        self.hello["enemy_hp"] = int(percent)
+
     def set_pvp(self, on):
         """The host's PvP setting (M15), told to the partner in every HELO: it covers the session."""
         self.hello["pvp"] = bool(on)

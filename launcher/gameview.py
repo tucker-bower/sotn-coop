@@ -11,7 +11,7 @@ import pygame
 
 import report
 from display import BAR
-from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY,
+from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_ENEMY_HP_SHIFT, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
@@ -270,11 +270,12 @@ class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
     def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None):
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None, enemy_hp=200):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
         self.online = len(self.games) == 1
+        self.scene_speed = 1
         self.playthrough, self.goal = playthrough, goal
         self.rush = rush  # bossrush.BossRush: ticked every frame, its line on the status bar
         self.music_mode, self.music = music, None
@@ -285,6 +286,7 @@ class GameView:
         self.aggro |= max(1, min(100, int(partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
         if pvp:  # M15: the partner's attacks hurt (the host's setting online)
             self.aggro |= CONTROL_PVP
+        self.aggro |= max(1, min(127, int(enemy_hp) // 10)) << CONTROL_ENEMY_HP_SHIFT
         self.save_cards = save_cards  # (path A, path B) or (path local,)
         self.frames, self.profile = frames, profile
         self.canvas = display.canvas
@@ -344,6 +346,13 @@ class GameView:
             c.blit(self.font.render(box_text, True, (240, 240, 240)), (box.x + 8, box.y + 11))
         self.display.present(over_games=True)
         return rects
+
+    def scene_speed_now(self):
+        if not self.online:
+            return scene_speed([g.mailbox("self_presence") for g in self.games], False)
+        g = self.games[0]
+        linked = g.mailbox("partner_age") <= 30
+        return scene_speed([g.mailbox("self_presence")] + ([g.mailbox("partner_presence")] if linked else []), not linked)
 
     def keep_playing(self):
         """While a box is up: online, this game runs on with no buttons held, or the partner's game
@@ -458,6 +467,10 @@ class GameView:
             return "pause"
         if action == "report":
             return "report"
+        if action == "moment":  # a savestate of the castle, any time, for the Savestates menu
+            self.moment("Saved", "")
+            self.say("Savestate saved", 180)
+            return None
         if action == "leave":
             return "menu"
         if action == "quit":
@@ -680,6 +693,12 @@ class GameView:
             if self.frame % ROLLING_EVERY == 0:
                 for g in self.games:
                     g.keep_state(self.frame)
+            for k in range(self.scene_speed - 1):  # a scene both players asked to skip: no sound or picture
+                for g in self.games:
+                    g.frame_start(0)
+                for g in self.games:
+                    g.frame_end()
+                self.frame += 1
             for g, pad in zip(self.games, pads):  # both games run their frame at the same time
                 g.frame_start(pad)
             replies = [g.frame_end() for g in self.games]
@@ -714,6 +733,7 @@ class GameView:
                         for i, g in enumerate(self.games):
                             g.mailbox("set_control", (0 if i == self.music else CONTROL_MUTE_MUSIC) | self.aggro)
                 status, pres_list = self.status_line(clock)
+                self.scene_speed = self.scene_speed_now()
                 self.journal.note(self.frame, pres_list, getattr(self, "partner_state", None))
                 status = self.stuck_note(pres_list) or status
                 if self.moments:

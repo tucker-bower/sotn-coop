@@ -104,6 +104,7 @@ class Driver:
             drv._hook_display(this.display)
             drv._hook_ui(this.ui)
         launcher_cls.__init__ = init
+        launcher_cls.castle_rules = lambda _self: None  # flows go straight to the game
         import gameview
         orig_overlay = gameview.GameView.overlay
 

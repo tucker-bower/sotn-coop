@@ -22,6 +22,8 @@
 // Bit 6: this player's one-button moves are on (OPT_SHORTCUTS): the partner's copy of it reads its
 // buttons the same way (Richter's and Maria's moves check the option in their own code).
 #define FLIP_SHORTCUTS 0x40
+// Bit 5: this player voted to skip the cutscene (arrive.c).
+#define FLIP_SKIP_VOTE 0x20
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24
@@ -250,11 +252,13 @@ typedef struct {
 } CoopLink; // size = 0x225B8
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
+#define OPT_PARTNER_HP 0x80000000 // options: the partner's health under this player's (issue 106)
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 #define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 #define CONTROL_PVP 0x1000000 // the host's PvP setting: the partner's attacks hurt (M15, pvp.c)
+#define CONTROL_ENEMY_HP_SHIFT 25 // bits 25-31: enemies' health with a partner, in tens of %, 0 = 200%
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0

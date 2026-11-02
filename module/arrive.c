@@ -534,6 +534,31 @@ static void CutsceneTrack(void) {
     s_CsOn = on;
 }
 
+// Start asks to skip a scene (issue 107): this game's Start does nothing else during one, the
+// partner sees a note, and the presence says so. The game itself only lets a scene be skipped after
+// it's been seen in a finished game, and only in some stages, so nothing here ends it: with both
+// asking, the launchers run the scene at high speed (gameview.py).
+static bool s_SkipVote, s_SkipNoted;
+
+bool ArriveSkipVote(void) { return s_SkipVote; }
+
+static void SkipVote(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    if (!ArriveSharedScene()) {
+        s_SkipVote = s_SkipNoted = false;
+        return;
+    }
+    if (g_pads[0].tapped & PAD_START) {
+        g_pads[0].tapped &= ~PAD_START;
+        s_SkipVote = true;
+    }
+    if (PartnerFresh() && (p->flipX & FLIP_SKIP_VOTE) && !s_SkipVote && !s_SkipNoted) {
+        s_SkipNoted = true;
+        CoopMessage("Skip cutscene: START");
+    }
+}
+
 // True while the leader holds its scene for the partner, or a game whose scene ended waits for
 // the partner's to end (this frame's game update is skipped).
 static bool CutsceneHold(void) {
@@ -738,6 +763,7 @@ bool ArriveFrame(void) {
     CommandUpdate();
     TeleportInput();
     CutsceneTrack();
+    SkipVote();
     PullIn();
     StuckWalkRescue();
     ArriveUpdate();
@@ -747,9 +773,12 @@ bool ArriveFrame(void) {
     if (CutsceneHold()) {
         return false;
     }
-    // Shared-room pause: the partner is in their menu in my room, so my world waits too.
+    // The partner is in their menu in my room: a boss fight waits for them. Otherwise this game
+    // plays on: their game is frozen, so nothing there hits them, and the room is this game's
+    // until they're back (shared.c, issue 108).
     if (InNormalPlay() && g_GameEngineStep == Engine_Normal && !ArriveBusy() && PartnerFresh() &&
-        (g_CoopLink.partner.flags & PRESENCE_PAUSED) && SameRoomAsPartner()) {
+        (g_CoopLink.partner.flags & PRESENCE_PAUSED) && SameRoomAsPartner() &&
+        (BossHere() || (g_CoopLink.partner.flags & PRESENCE_BOSS))) {
         return false;
     }
     return true;

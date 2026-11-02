@@ -70,7 +70,7 @@ def human(n):
 
 
 DEFAULTS = {"disc": None, "bios": None, "music": "auto", "aggro": 50, "pads": [None, None],
-            "pvp": False}  # M15: PvP is optional, off unless the player turns it on (Settings > PvP)
+            "pvp": False, "enemy_hp": 200, "rules_prompt": True, "partner_hp": True}  # M15: PvP is optional, off unless the player turns it on (Settings > PvP)
 
 
 def load_settings():

@@ -47,8 +47,19 @@ HIT_SIZE, N_HITS = 0xC, 16
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
+OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
+
+
+FLIP_SKIP_VOTE = 0x20  # CoopPresence.flip_x: this player asked to skip the cutscene (module/arrive.c)
+SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players asking
+
+
+def scene_speed(presences, solo):
+    """How fast a game's scene runs: fast when every player in it asked to skip (issue 107)."""
+    scene = [p for p in presences if p.flags & CUTSCENE]
+    return SCENE_SPEED if scene and (solo or len(scene) == 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
 
 
 def spell_options(spells):
@@ -60,6 +71,7 @@ CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 CONTROL_PARTNER_VOL_SHIFT = 16  # bits 16-23: the partner's sounds, % of their volume (0 = 60; M13)
 CONTROL_PVP = 0x1000000  # the host's PvP setting: the partner's attacks hurt (M15)
+CONTROL_ENEMY_HP_SHIFT = 25  # bits 25-31: enemies' health with a partner, in tens of %, 0 = 200%
 SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 

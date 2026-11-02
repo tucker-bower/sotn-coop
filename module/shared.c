@@ -212,7 +212,7 @@ static bool PartnerShareable(void) {
     s32 dx, dy;
 
     if (g_CoopLink.partnerAge > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
-        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) || !SAME_WORLD(p)) {
+        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD | PRESENCE_PAUSED)) || !SAME_WORLD(p)) {
         return false;
     }
     if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep != Engine_Normal) {
@@ -285,6 +285,18 @@ static void DecideRole(void) {
         BecomeGuest();
     }
     s_Settle = 0;
+}
+
+// Back from a menu, the room has gone on in the partner's game: that's the room, and this game's
+// copy of it from before is out of date. Counted as just arrived, this game is its guest.
+static void TrackMenu(void) {
+    static bool paused;
+    bool now = g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70;
+
+    if (paused && !now) {
+        s_RoomFrames = 0;
+    }
+    paused = now;
 }
 
 static void TrackRoom(void) {
@@ -1142,6 +1154,7 @@ const OverlayInfo* FindOverlay(s32 stage) {
 
 void SharedUpdate(void) {
     TrackRoom();
+    TrackMenu();
     if (g_GameState != Game_Play) {
         return;
     }

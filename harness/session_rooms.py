@@ -5,7 +5,10 @@ import struct
 
 from session import session_scenario
 
+from link.mailbox import CUTSCENE, FLIP_SKIP_VOTE
+
 from coop_env import TOOLS
+from link.mailbox import scene_speed
 from module import symbols
 from session_progress import arrive
 
@@ -123,6 +126,32 @@ def same_character_body_moves_as_the_partner(run):
         frames_a.add(a.read(a.entity(0) + ANIM_FRAME, "<H") & 0x7FFF)
     run.expect(len(frames_a) == 1, "A stands", frames=sorted(frames_a))
     run.expect(len(frames_body) > 3, "A's copy of B runs", frames=sorted(frames_body))
+
+
+SCENE = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Scene - Maria in the Alchemy Lab.state")
+
+
+@session_scenario(starts=(SCENE, SCENE))
+def scene_skips_once_both_players_ask(run):
+    """Issue 107: Start skips a scene, but only when both players have pressed it."""
+    a, b = run.s.a, run.s.b
+    for t in range(1200):
+        run.step(1, ("left", "left"))
+        if a.mailbox("self_presence").flags & CUTSCENE and b.mailbox("self_presence").flags & CUTSCENE:
+            break
+    run.expect(a.mailbox("self_presence").flags & CUTSCENE, "the scene is on", t=t)
+    run.step(120)
+    run.step(2, ("start", ""))
+    run.step(120)
+    run.expect(a.mailbox("self_presence").flip_x & FLIP_SKIP_VOTE, "A asked to skip")
+    run.expect(not b.mailbox("self_presence").flip_x & FLIP_SKIP_VOTE, "B hasn't")
+    run.expect(scene_speed([a.mailbox("self_presence"), b.mailbox("self_presence")], False) == 1,
+               "one vote doesn't speed it up")
+    run.step(2, ("", "start"))
+    run.step(30)
+    votes = [g.mailbox("self_presence") for g in (a, b)]
+    run.expect(scene_speed(votes, False) > 1, "two votes do", votes=[v.flip_x for v in votes])
+    run.step(2)
 
 
 def symbols_status(g):
