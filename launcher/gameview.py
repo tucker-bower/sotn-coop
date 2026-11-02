@@ -99,6 +99,9 @@ def same_sound(pa, pb):
     return bool(pa.flags & pb.flags & CUTSCENE) and pa.stage == pb.stage and pa.room == pb.room
 
 
+PRIMED_BYTES = 44100 * 4 // 20  # 50 ms: what the device waits for, after running dry
+
+
 class Audio:
     """The games' sound, through an SDL audio device fed from a small buffer."""
 
@@ -108,6 +111,7 @@ class Audio:
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
         self.dev = self.chan = None
+        self.primed = False
         if not getattr(pygame, "IS_CE", False):
             # pygame (not -ce: Android, design/M9): its AudioDevice's Python callback deadlocks on
             # the GIL there, so the sound goes through SDL_mixer, queued from the main thread.
@@ -157,14 +161,18 @@ class Audio:
             self.chan.stop()
 
     def _pull(self, dev, mem):
+        """After running dry it waits for 50 ms of sound first, as _feed does: otherwise each pull
+        comes up a little short, and a slow frame becomes a crackle (issue 134)."""
         with self.lock:
-            n = min(len(mem), len(self.buf))
+            self.pulls += 1
+            self.primed = self.primed or len(self.buf) >= PRIMED_BYTES
+            n = min(len(mem), len(self.buf)) if self.primed else 0
             mem[:n] = self.buf[:n]
             del self.buf[:n]
-            self.pulls += 1
             if n < len(mem):
-                self.underruns += 1
+                self.underruns += self.primed
                 self.short_bytes += len(mem) - n
+                self.primed = False
         for i in range(n, len(mem)):
             mem[i] = 0
 
