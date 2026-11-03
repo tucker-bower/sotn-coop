@@ -395,32 +395,39 @@ static void BecomeGuest(void) {
 // authority's camera was. Left there, the spawner would sweep everything between that and this
 // game's camera on its next scroll, and bring back enemies already killed. Re-seat them for this
 // camera, as InitRoomEntities leaves them, without spawning anything.
+// Only in play: mid stage load, g_StageId is already the next stage but its overlay isn't in yet,
+// so the cursors' addresses held the old stage's data. The walk back never met a list head and ran
+// down through memory until the emulator crashed (#142: a hand-over ending at a boss's door). A
+// load re-seats the cursors itself. The walks also stay inside the overlay, whatever they find.
+#define STAGE_CODE 0x80180000 // stage overlays load here
+#define IN_LAYOUT(ovl, p) ((u32)(p) >= STAGE_CODE && (u32)(p) < (ovl)->bssStart)
 static void ResyncSpawner(void) {
     const OverlayInfo* ovl = FindOverlay(g_StageId);
     u16** h;
     u16** v;
+    u16* hHead;
+    u16* vHead;
     s32 right, below;
 
-    if (!ovl || !ovl->layout[LAYOUT_H] || !ovl->layout[LAYOUT_V]) {
+    if (g_GameStep != Play_Default || !ovl || !ovl->layout[LAYOUT_H] || !ovl->layout[LAYOUT_V]) {
         return;
     }
     h = (u16**)ovl->layout[LAYOUT_H];
     v = (u16**)ovl->layout[LAYOUT_V];
-    if (!*h || !*v) {
+    for (hHead = *h; IN_LAYOUT(ovl, hHead) && hHead[0] != LAYOUT_START; hHead -= LAYOUT_ENTRY) {
+    }
+    for (vHead = *v; IN_LAYOUT(ovl, vHead) && vHead[1] != LAYOUT_START; vHead -= LAYOUT_ENTRY) {
+    }
+    if (!IN_LAYOUT(ovl, hHead) || !IN_LAYOUT(ovl, vHead)) {
         return;
     }
     right = g_Tilemap.scrollX.i.hi + 320;
     below = g_Tilemap.scrollY.i.hi + 288;
-    while ((*h)[0] != LAYOUT_START) { // back to the head of the x-sorted list...
-        *h -= LAYOUT_ENTRY;
-    }
-    *h += LAYOUT_ENTRY; // ...then past everything already in range
+    *h = hHead + LAYOUT_ENTRY; // the head of the x-sorted list, then past everything already in range
     while ((*h)[0] != LAYOUT_END && (*h)[0] <= right) {
         *h += LAYOUT_ENTRY;
     }
-    while ((*v)[1] != LAYOUT_START) { // the y-sorted list, the same way
-        *v -= LAYOUT_ENTRY;
-    }
+    *v = vHead; // the y-sorted list, the same way
     while ((*v)[1] == LAYOUT_START || (*v)[1] < below) {
         *v += LAYOUT_ENTRY;
     }
