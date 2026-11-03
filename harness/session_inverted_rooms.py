@@ -7,14 +7,19 @@ rooms, opening doors, entering bossfights"). Starts are bossstarts.INVERTED's, o
 - inverted_boss_walk_in_<boss>: both walk through the boss's door at once (the pull-in tests have
   B pulled; this is the race of both arriving), and both end up in one fight that stays shared
   and doesn't restart.
+- boss_door_hand_over_mid_load: the same walk into Doppleganger40, where a guest's hand-over ends
+  during the boss stage's load; the layout spawner's cursors are left alone until the stage is in.
 
 Health is topped up every frame: the walk is the test, not the enemies on the way."""
 
 from session import session_scenario  # first: puts `link` on the path
 
+import re
+
 from bots import walker
 from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 from session_m12 import STARTS
+from coop_env import COOP
 
 HP, HP_MAX = 0x23C, 0x240  # g_Status
 BOUNCE_FRAMES = 120   # back into the room just left this soon: bounced off the door
@@ -76,13 +81,14 @@ def travel(run, way, rooms_needed=1, limit=3600):
                    roles=(pa.role, pb.role))
 
 
-def walk_in(run, way, limit=4000, hold=600):
+def walk_in(run, way, limit=4000, hold=600, each=lambda t: None):
     """Both walk through the boss's door at once: both in one fight that stays one."""
     a, b = run.s.a, run.s.b
     bots = (walker(way), walker(way))
     boss = lambda g: g.mailbox("self_presence").flags & BOSS
     for t in range(limit):
         run.step(1, p1=tuple(bots[k](g.snapshot(), t) for k, g in enumerate((a, b))))
+        each(t)
         for g in (a, b):
             _alive(g)
         if boss(a) and boss(b):
@@ -110,6 +116,46 @@ def walk_in(run, way, limit=4000, hold=600):
     run.expect(all({x, y} == {ROLE_AUTHORITY, ROLE_GUEST} for x, y in roles),
                f"one fight: one authority, one guest (after {settling} frames of the two hearing each other)",
                roles=sorted(roles))
+
+
+# Play_PrepareNextStage..Play_WaitStageSfx: g_StageId is the next stage, its overlay isn't in yet
+LOADING = range(4, 9)
+RBO5 = 0x39  # STAGE_BO5 | STAGE_INVERTEDCASTLE_FLAG: Doppleganger40's stage
+POISON = 0x80180010  # in the old stage's memory: no list head below it, so a walk back would run away
+
+
+def _layout_slots(stage):
+    """A stage's layout spawner cursors (horizontal, vertical), from the module's overlay table."""
+    line = next(l for l in (COOP / "module/overlay_table.c").read_text().splitlines() if f"{{STAGE_{stage}," in l)
+    h, v = re.search(r"\{(0x\w+), (0x\w+), 0x\w+, 0x\w+\}, 0x\w+, \{0x", line).groups()
+    return int(h, 16), int(v, 16)
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Doppleganger40.state"),) * 2)
+def boss_door_hand_over_mid_load(run):
+    """Both walk into Doppleganger40; while each game loads the boss's stage, its spawner cursors stay put.
+    #142: a hand-over that ended mid-load re-seated them from the old stage's memory, walked down
+    through RAM and crashed the emulator, about 1 run in 9. The cursors are poisoned here so that
+    any touch shows, every run."""
+    slots = _layout_slots("RBO5")
+    games = (run.s.a, run.s.b)
+    poisoned, touched = [False, False], []
+
+    def each(t):
+        for k, g in enumerate(games):
+            if g.read("g_StageId") != RBO5 or g.read("g_GameStep") not in LOADING:
+                continue
+            if not poisoned[k]:
+                for slot in slots:
+                    g.write(slot, POISON)
+                poisoned[k] = True
+            elif any(g.read(slot) != POISON for slot in slots):
+                touched.append(("AB"[k], t, [hex(g.read(slot)) for slot in slots]))
+                for slot in slots:
+                    g.write(slot, POISON)
+    walk_in(run, "right", each=each)
+    run.expect(all(poisoned), "both games loaded the boss's stage (and had their cursors poisoned)", poisoned=poisoned)
+    run.expect(not touched, "nothing re-seats the spawner's cursors mid-load", touched=touched[:4])
 
 
 def _register(row, everyday):
