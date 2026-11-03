@@ -27,6 +27,9 @@
 // Bits 4, 3: this player is a bat in flight that can be held, and is being carried (carry.c).
 #define FLIP_BAT 0x10
 #define FLIP_CARRIED 0x08
+// Bit 2: this game is between stages or mid-teleport. Its presence is half old, half new then
+// (the new stage, the old room and scene flags, a mid-load position): never a place to be pulled to.
+#define FLIP_LOADING 0x04
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24

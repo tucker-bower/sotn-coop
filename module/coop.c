@@ -76,7 +76,8 @@ static void CapturePresence(CoopPresence* p) {
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
     p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
                ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0) |
-               (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0) | CarryPresence();
+               (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0) | CarryPresence() |
+               (g_GameStep != Play_Default || ArriveBusy() ? FLIP_LOADING : 0);
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }

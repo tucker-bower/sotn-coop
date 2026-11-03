@@ -38,6 +38,8 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_netplay.py` | Online play on the game's own route, with a playtest-like connection. |
 | `session_rooms.py` | What the 0.14 playtest's reports found: doors, camera limits, the partner's body, scene votes. |
 | `session_carry.py` | Hanging onto Bat Alucard, a castle rule. |
+| `session_crawl.py` | Every room of both castles with both players walking through it, one test per area. |
+| `roommap.py` | Rooms' collision from the extracted stage files: where a player can stand. |
 | `session_inverted_rooms.py` | The inverted castle with both players: through doors together, and into each boss at once. |
 | `session_rules.py` | Each castle rule, turned off or moved, in two games. |
 | `session_m4b.py` | Fixes from the first playtest. |
