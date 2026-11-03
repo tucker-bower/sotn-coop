@@ -30,11 +30,11 @@ def run_command(name):
     argv, extra = COMMANDS[name]
     out = TOOLS["out"] / name
     out.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy",
-               COOP_DATA=tempfile.mkdtemp(prefix="coop-test-"), **extra)
     started = time.time()
-    p = subprocess.run([sys.executable] + [a.replace("{out}", str(out / "flow")) for a in argv], env=env,
-                       cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    with tempfile.TemporaryDirectory(prefix="coop-test-", ignore_cleanup_errors=True) as data:
+        env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy", COOP_DATA=data, **extra)
+        p = subprocess.run([sys.executable] + [a.replace("{out}", str(out / "flow")) for a in argv], env=env,
+                           cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     sys.stdout.write(p.stdout)
     tail = "\n".join([line for line in p.stdout.splitlines() if not line.startswith("[")][-12:])
     r = {"passed": p.returncode == 0, "seconds": round(time.time() - started, 1), "checks": [],

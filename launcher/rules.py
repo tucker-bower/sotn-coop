@@ -8,7 +8,7 @@ the game gets (the mailbox's rule words, link/mailbox.py); with every rule at it
 them are zero, so a game with no rules set plays the same.
 """
 
-from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, RULE_NO_BOSS_PULL,
+from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, RULE_BAT_CARRY, RULE_NO_BOSS_PULL,
                           RULE_NO_FAERIE_REVIVE, RULE_NO_FAMILIARS, RULE_NO_MAP_TELEPORT, RULE_NO_NEAR_TARGET,
                           RULE_NO_OFFHAND, RULE_NO_REVIVE, RULE_NO_SCENE_PULL, RULE_NO_SHARED_GOLD,
                           RULE_NO_SHARED_LEVEL)
@@ -43,6 +43,7 @@ TOGGLES = (
      "Off: parts of the castle may be out of reach", True, OPT_NO_AIR_JUMPS),
     ("offhand", "Off-hand weapons", "Richter and Maria: Circle uses the item in the other hand", True, RULE_NO_OFFHAND),
     ("familiars", "Richter's and Maria's familiars", "Their familiar cards work, as Alucard's do", True, RULE_NO_FAMILIARS),
+    ("bat_carry", "Hang onto the bat", "Up beside Alucard's bat hangs on, and it flies slower. Cross drops off", False, 0),
     ("pvp", "PvP", "Your attacks hurt each other", False, 0),
     ("remap", "Button remap", "Both players' buttons follow the map below", False, 0),
 )
@@ -95,6 +96,8 @@ def encode(rules):
     for key, _, _, _, bit in TOGGLES:
         if bit and not rules[key]:
             off |= bit
+    if rules["bat_carry"]:
+        off |= RULE_BAT_CARRY
 
     def pct(key):
         return 0 if rules[key] == DEFAULTS[key] else rules[key]

@@ -24,6 +24,9 @@
 #define FLIP_SHORTCUTS 0x40
 // Bit 5: this player voted to skip the cutscene (arrive.c).
 #define FLIP_SKIP_VOTE 0x20
+// Bits 4, 3: this player is a bat in flight that can be held, and is being carried (carry.c).
+#define FLIP_BAT 0x10
+#define FLIP_CARRIED 0x08
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24
@@ -283,6 +286,7 @@ typedef struct {
 #define RULE_NO_MAP_TELEPORT 0x080  // Cross on the map doesn't go to the partner
 #define RULE_NO_OFFHAND 0x100       // Richter and Maria: Circle doesn't use the off-hand item
 #define RULE_NO_FAMILIARS 0x200     // Richter and Maria: no familiars
+#define RULE_BAT_CARRY 0x400        // on, unlike the others: a partner can hang onto the bat (carry.c)
 #define RULE_OVERLAY_MASK 0xFF000000
 #define OPT_NO_GROWTH 0x01000000      // Richter and Maria: no levels, no STR/INT in their attacks
 #define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: relics teach them nothing

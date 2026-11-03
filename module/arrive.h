@@ -5,6 +5,7 @@
 
 void Arrive(u16 stage, u16 roomId, s16 x, s16 y);
 bool ArriveBusy(void);
+void ArriveFollow(void);               // to the partner, if they can be reached (carry.c)
 bool ArriveSkipVote(void);
 bool SceneAftermath(void);              // a scene just ended and the game still steers the player
 bool ArriveFrame(void);                 // once per frame before UpdateGame; false: skip it

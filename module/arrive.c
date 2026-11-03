@@ -296,6 +296,14 @@ static void TeleportInput(void) {
     s_ArriveText = "Joined partner";
 }
 
+void ArriveFollow(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    if (!ArriveBusy() && !BossHere() && PartnerReachable()) {
+        Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+    }
+}
+
 // --- death: respawn at the partner instead of Game Over (D24)
 
 // M13 step 4: a revived player comes in with its own character's teleport-in (Alucard's light,

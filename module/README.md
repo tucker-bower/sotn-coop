@@ -23,6 +23,8 @@ The co-op code that runs inside the game on the PS1.
 | `Makefile` | Builds `boot.bin` and `COOP.BIN`. |
 | `message.c` | On-screen co-op messages. |
 | `message.h` | Header for `message.c`. |
+| `carry.c` | Hanging onto Bat Alucard, a castle rule. |
+| `carry.h` | Header for `carry.c`. |
 | `mist.c` | Mist Step: Richter and Maria through mist grates. |
 | `mist.h` | Header for `mist.c`. |
 | `offhand.c` | Off-hand weapons for Richter and Maria. |

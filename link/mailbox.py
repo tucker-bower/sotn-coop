@@ -48,7 +48,7 @@ RULES = 0x225B8  # the castle's rules (D162): u32 RULE_* bits, then u16 exp, dea
 _RULES = struct.Struct("<IHHHHHH")
 RULE_NO_SHARED_LEVEL, RULE_NO_SHARED_GOLD, RULE_NO_REVIVE, RULE_NO_FAERIE_REVIVE = 0x001, 0x002, 0x004, 0x008
 RULE_NO_BOSS_PULL, RULE_NO_SCENE_PULL, RULE_NO_NEAR_TARGET, RULE_NO_MAP_TELEPORT = 0x010, 0x020, 0x040, 0x080
-RULE_NO_OFFHAND, RULE_NO_FAMILIARS = 0x100, 0x200
+RULE_NO_OFFHAND, RULE_NO_FAMILIARS, RULE_BAT_CARRY = 0x100, 0x200, 0x400  # RULE_BAT_CARRY: on when set
 OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, OPT_NO_AIR_JUMPS = 0x01000000, 0x02000000, 0x04000000  # to the player overlays too
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
@@ -62,6 +62,7 @@ SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", Non
 
 
 FLIP_SKIP_VOTE = 0x20  # CoopPresence.flip_x: this player asked to skip the cutscene (module/arrive.c)
+FLIP_BAT, FLIP_CARRIED = 0x10, 0x08  # CoopPresence.flip_x: a bat that can be held, and being carried (module/carry.c)
 SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players asking
 
 

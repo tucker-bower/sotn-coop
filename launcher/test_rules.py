@@ -26,8 +26,9 @@ def main():
     check(rules.DEFAULTS["enemy_hp_pct"] == 200 and rules.DEFAULTS["enemy_hp_solo_pct"] == 100 and rules.DEFAULTS["aggro"] == 50,
           "boss HP 2x with a partner, 1x alone, 50% aggro")
     check(rules.DEFAULTS["pvp"] is False and rules.DEFAULTS["remap"] is False, "PvP and the button remap start off")
-    check(all(t[3] for t in rules.TOGGLES if t[0] not in ("pvp", "remap")), "every other toggle starts on, as the game plays now")
+    check(all(t[3] for t in rules.TOGGLES if t[0] not in ("pvp", "remap", "bat_carry")), "every other toggle starts on, as the game plays now")
     check(rules.changed({}) == [], "nothing differs from the defaults")
+    check(rules.encode({"bat_carry": True})[0] == rules.RULE_BAT_CARRY, "bat carry on sets its bit")
     bits = [t[4] for t in rules.TOGGLES if t[4]]
     check(len(bits) == len(set(bits)) and all(b and not b & (b - 1) for b in bits), "each rule has a bit of its own")
     for t in rules.TOGGLES:

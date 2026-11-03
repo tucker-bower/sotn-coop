@@ -10,6 +10,7 @@
 #include "boss.h"
 #include "character.h"
 #include "mist.h"
+#include "carry.h"
 #include "solid.h"
 #include "progress.h"
 #include "shared.h"
@@ -75,7 +76,7 @@ static void CapturePresence(CoopPresence* p) {
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
     p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
                ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0) |
-               (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0);
+               (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0) | CarryPresence();
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }
@@ -167,6 +168,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     PvpUpdate();
     ProgressDamageTaken();
     DebugUpdate();
+    CarryBefore();
     return ArriveFrame();
 }
 
@@ -189,6 +191,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     u16 frame;
 
     SolidUpdateDone();
+    CarryAfter();
     frame = PLAYER.animCurFrame;
 
     MistStepAfter();
