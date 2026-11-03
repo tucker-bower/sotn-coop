@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -211,11 +212,18 @@ if __name__ == "__main__":
         sys.exit(0)
     if not names:
         sys.exit("no test matches")
-    if jobs > 1 and len(names) > 1:
-        sys.exit(1 if run_parallel(names, jobs) else 0)
-    failed = 0
-    for name in names:
-        r = run_one(name)
-        failed += not r["passed"]
-        print(show(r, name))
-    sys.exit(1 if failed else 0)
+    # One folder for all the tests' temporary files, on the disk and gone after: many leave theirs
+    # (up to 445 MB each), and they filled a RAM-backed /tmp.
+    from coop_env import TOOLS
+    TOOLS["out"].mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="tmp-run-", dir=TOOLS["out"], ignore_cleanup_errors=True) as tmp:
+        os.environ["TMPDIR"] = tmp
+        tempfile.tempdir = None
+        if jobs > 1 and len(names) > 1:
+            sys.exit(1 if run_parallel(names, jobs) else 0)
+        failed = 0
+        for name in names:
+            r = run_one(name)
+            failed += not r["passed"]
+            print(show(r, name))
+        sys.exit(1 if failed else 0)
