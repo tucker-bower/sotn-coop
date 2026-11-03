@@ -1611,6 +1611,7 @@ class Launcher:
                      (f"Tint the partner: {'on' if st.get('partner_tint', True) else 'off'}", "Tell two players of the same character apart"),
                      (f"Spells on triggers: {'on' if st.get('spell_triggers') else 'off'}", "Alucard: hold R2 with Square, Circle, Cross or Triangle: Dark Metamorphosis, Summon Spirit, Hellfire, Tetra Spirit. L2 with Square or Circle: Soul Steal, Sword Brothers"),
                      (f"Alucard's health bar: {'on' if st.get('alucard_hud') else 'off'}", "Richter and Maria: his health and hearts display"),
+                     (f"Show ping: {'on' if st.get('show_ping') else 'off'}", "Online: the round trip to your partner, top right while you play"),
                      ("Castle rules", "XP, damage, enemy HP, PvP and everything co-op changes: each castle has its own"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
@@ -1635,12 +1636,14 @@ class Launcher:
             elif k == 6:
                 st["alucard_hud"] = not st.get("alucard_hud")
             elif k == 7:
-                self.open_rules()
+                st["show_ping"] = not st.get("show_ping")
             elif k == 8:
-                self.game_files()
+                self.open_rules()
             elif k == 9:
-                self.controls_menu()
+                self.game_files()
             elif k == 10:
+                self.controls_menu()
+            elif k == 11:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)

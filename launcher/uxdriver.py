@@ -712,10 +712,15 @@ def _online_host(pg, code_file):
               [("screen", "Host: which castle?"), ("key", pg.K_RETURN),       # New castle (D136)
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
+            ("call", lambda d: d.launcher.settings.__setitem__("show_ping", True)),  # Settings > Show ping
             ("pad", 100, A), ("pad", 100, A),
             # Not after a set number of frames: a slower partner is still starting, and leaves later.
             ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            ("until", lambda d: re.fullmatch(r"\d+ ms", d.launcher.display.corner or "") or d.waited > 600),
+            ("shot", "host-ping"),
+            ("expect", lambda d: re.fullmatch(r"\d+ ms", d.launcher.display.corner or ""),
+             "Show ping: the round trip in the top right"),
             *(_rush_online_host() if RUSH else []),
             *_android_picture("host-playing"),
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
@@ -835,7 +840,7 @@ def _characters(pg):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
              ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 8, ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 9, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
     for path, words, name in wrong:

@@ -12,7 +12,11 @@ Times are the receiver's clock (s); frames are the sender's host frames (link/tr
   offsets all sit well above that minimum, the path itself changed (a slower route, or the
   partner's PC hitched and its frames now run later): the minimum starts over.
 - delay: how far behind that fastest path we play. It rises at once to cover the jitter seen
-  (95th percentile) and falls back slowly, so it doesn't pump. While presences go missing it's
+  (80th percentile, at most 0.1 s) and falls back over about a second. The partner's body runs
+  its own inputs with rollback (M13), so a presence that's late costs a small correction, not a
+  hitch: holding the partner back costs more (playtest 0.14: about half a second behind;
+  netplay_partner_lag measured 133 ms on the playtest connection with the old 95th percentile,
+  0.25 s cap and slow decay, 67 ms with these). While presences go missing it's
   at least a frame, so a lost one is interpolated across instead of showing as a hitch.
 Everything here is host-side and timing-dependent by nature (AGENTS.md): the game only ever
 sees ordinary presence and snapshot writes."""
@@ -24,8 +28,9 @@ from dataclasses import replace
 FPS = 60
 WINDOW_S = 3.0       # the jitter is measured over this long
 REBASE_S = 0.3       # if every offset this recent is well above the fastest path, it moved
-MAX_DELAY_S = 0.25   # never hold the partner back more than this
-DECAY_S = 0.02       # the delay falls back by at most this much per second
+MAX_DELAY_S = 0.1    # never hold the partner back more than this
+DECAY_S = 0.1        # the delay falls back by at most this much per second
+JITTER_PCT = 0.8     # the share of recent arrivals the delay waits for
 MAX_LERP = 6         # interpolate across at most this many missing frames
 MAX_STEP = 48        # ...and only if the partner moved less than this (px) between samples
 
@@ -85,8 +90,8 @@ class Playout:
                 q.popleft()
             base = min(recent)
         offs = sorted(o for _, o in q)
-        p95 = offs[min(len(offs) - 1, int(len(offs) * 0.95))] - base
-        want = min(MAX_DELAY_S, max(self.min_delay, p95))
+        jitter = offs[min(len(offs) - 1, int(len(offs) * JITTER_PCT))] - base
+        want = min(MAX_DELAY_S, max(self.min_delay, jitter))
         if want >= self.delay:
             self.delay = want
         elif self._last_t is not None:

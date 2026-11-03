@@ -312,6 +312,14 @@ class Host:
             self.connector.tick()
         if self._frames % HELLO_EVERY == 0:
             self.transport.send(TAG_HELLO, self._hello_bytes())
+        if self._frames % 60 == 0 and self.transport.peer is not None:  # F9 reports: where the lag comes from
+            q = self.transport.quality()
+            sent = self.transport.bytes_sent
+            self._note("net", f"rtt {q['rtt_ms']} ms (var {q['rtt_var_ms']}), loss {q['loss_pct']}%, "
+                              f"held back {self.playout.stats()['delay_ms'] if self.playout else 0} ms, "
+                              f"late {self.playout.late if self.playout else 0}, "
+                              f"sent {(sent - getattr(self, '_sent_was', sent)) // 1024} KB/s")
+            self._sent_was = sent
         self._frames += 1
         if not self.mailbox.ready():  # the game is booting: only the handshake (and the ping)
             for tag, _, _, payload, addr in self.transport.receive():

@@ -190,3 +190,40 @@ def netplay_marble_gallery_axe_knight(run):
     from bots import walker
     as_characters(run, 0, 1)
     _keeps_running(run, 1500, [walker("right", 24), walker("left", 24)])
+
+
+def partner_lag(run, frames=1200, profile=PROFILE):
+    """How far behind each game shows the other player, in frames, sampled every frame while both
+    walk the hall: the partner's own frame counter now, minus the one stamped on the presence this
+    game is showing (CoopPresence.frame: the sender's g_Timer when it was captured). That's the
+    whole way: the network, the jitter buffer (link/playout.py), and the frames in between."""
+    from bots import walker
+    a, b = run.s.a, run.s.b
+    into_hall(run)
+    run.s.set_net(profile, SEED)
+    run.step(300)  # the jitter buffer settles
+    lags = ([], [])
+    bots = (walker("right", attack_every=30), walker("left", attack_every=30))
+    for t in range(frames):
+        run.step(1, p1=tuple(bots[k](g.snapshot(), t) for k, g in enumerate((a, b))))
+        for k, (me, them) in enumerate(((a, b), (b, a))):
+            p = me.mailbox("partner_presence")
+            if p.frame:
+                lags[k].append(them.read(GAME_FRAMES) - p.frame)
+    out = []
+    for k, lag in enumerate(lags):
+        lag.sort()
+        out.append({"median_ms": round(lag[len(lag) // 2] * 1000 / 60), "p95_ms": round(lag[int(len(lag) * 0.95)] * 1000 / 60),
+                    "max_ms": round(lag[-1] * 1000 / 60)})
+    return out
+
+
+@session_scenario(characters=(0, 1))
+def netplay_partner_lag(run):
+    """Issue: about half a second between a player's move and the partner seeing it (playtest
+    0.14). On the playtest's connection (30 ms each way, jitter, hitches), each game shows the
+    other at most one way's delay plus a few frames behind, most of the time."""
+    lag = partner_lag(run)
+    one_way = 30  # with the old jitter buffer: 133 ms (median); the network and a frame or two: 50 to 67
+    for k, m in enumerate(lag):
+        run.expect(m["median_ms"] <= one_way + 50, f"{'AB'[k]} sees {'BA'[k]} {m['median_ms']} ms behind (median)", **m)
