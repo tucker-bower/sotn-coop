@@ -21,6 +21,7 @@ from .rendezvous import MAGIC_COOKIE
 
 CONE, RESTRICTED, PORT_RESTRICTED, SYMMETRIC = "full cone", "restricted", "port restricted", "symmetric"
 KINDS = (CONE, RESTRICTED, PORT_RESTRICTED, SYMMETRIC)
+SYMMETRIC_RANDOM = "symmetric, random ports"  # a new port per destination, picked at random (many phone networks)
 
 
 class Internet:
@@ -75,12 +76,15 @@ class Router:
             if dst in self.net.sockets:
                 self.net.sockets[dst].queue.append((data, src))
             return
-        key = (src, dst) if self.kind == SYMMETRIC else src
+        sym = self.kind in (SYMMETRIC, SYMMETRIC_RANDOM)
+        key = (src, dst) if sym else src
         port = self.out.get(key)
         if port is None:
             port = next(self._ports)
+            if self.kind == SYMMETRIC_RANDOM:
+                port = 1024 + (port * 7919 + 13) % 60000
             self.out[key] = port
-            self.back[port] = (src, dst if self.kind == SYMMETRIC else None)
+            self.back[port] = (src, dst if sym else None)
         for p, private in self.forwards.items():
             if private == src:
                 port = p  # a forwarded port keeps its number on the way out (UPnP)
@@ -97,7 +101,7 @@ class Router:
             ok = {CONE: True,
                   RESTRICTED: any(ip == src[0] for ip, _ in seen),
                   PORT_RESTRICTED: src in seen,
-                  SYMMETRIC: src == only}[self.kind]
+                  SYMMETRIC: src == only, SYMMETRIC_RANDOM: src == only}[self.kind]
             if not ok:
                 self.dropped += 1
                 return

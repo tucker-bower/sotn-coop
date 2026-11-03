@@ -4,9 +4,10 @@ transport, on the virtual internet of link/natsim.py.
     python link/test_connect.py
 
 For every pair of router kinds, two players with a room code must connect (and only then
-exchange presences), except where hole punching can't work: a router that gives a new port per
-destination ("symmetric") against one that filters by port, or two symmetric ones. Those must
-fail within the timeout with a reason that names the problem. Also:
+exchange presences), except where hole punching can't work: two routers that each give a new
+port per destination ("symmetric"). A symmetric router against one that filters by port connects
+by port prediction (issue 58), unless it picks its ports at random. Those that can't must fail
+within the timeout with a reason that names the problem. Also:
 - two players in the same house connect across their LAN;
 - a stranger with another room code is never accepted, even when it knows our address;
 - a forwarded port (UPnP or by hand) makes even a symmetric router reachable."""
@@ -20,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from link.connect import GAME_PORT, TIMEOUT_S, Connector  # noqa: E402
 from link.host import Host  # noqa: E402
-from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, DeadRelay, Internet, MemoryRelay, StunServer  # noqa: E402
+from link.natsim import CONE, KINDS, PORT_RESTRICTED, RESTRICTED, SYMMETRIC, SYMMETRIC_RANDOM, DeadRelay, Internet, MemoryRelay, StunServer  # noqa: E402
 from link.relay import Relay  # noqa: E402
 from link.transport import TAG_PRESENCE, UdpTransport  # noqa: E402
 
@@ -117,7 +118,7 @@ def exchanged(a, b):
 
 
 def expect_connects(a_kind, b_kind):
-    return not ({a_kind, b_kind} in ({SYMMETRIC, PORT_RESTRICTED}, {SYMMETRIC}))
+    return {a_kind, b_kind} != {SYMMETRIC}
 
 
 def main():
@@ -138,6 +139,16 @@ def main():
         else:
             ok = "failed" in (sa["state"], sb["state"]) and "port" in (sa["reason"] or sb["reason"] or "")
             check(ok, f"{ka} host + {kb} joiner: fails with a reason ({sa['reason'] or sb['reason']!r:.60})")
+
+    # Port prediction (issue 58) needs ports given out in steps: random ones still fail, with the reason
+    for ka, kb in ((SYMMETRIC_RANDOM, PORT_RESTRICTED), (PORT_RESTRICTED, SYMMETRIC_RANDOM)):
+        a, b = session(ka, kb, seconds=TIMEOUT_S + 5)
+        sa, sb = a.host.connector.status(), b.host.connector.status()
+        check("failed" in (sa["state"], sb["state"]) and "port" in (sa["reason"] or sb["reason"] or ""),
+              f"{ka} host + {kb} joiner: fails with a reason ({sa['reason'] or sb['reason']!r:.60})")
+    a, b = session(SYMMETRIC, PORT_RESTRICTED, seconds=35)
+    check(a.host.connector.predict is not None and b.host.connector.their_predict == a.host.connector.predict,
+          f"a symmetric router's step is posted and read ({a.host.connector.predict})")
 
     # M14: with an open relay, the pairings hole punching can't do connect too, through it; the relay
     # carries only sealed packets (it can't read a presence or a HELO)
@@ -229,6 +240,27 @@ def main():
     check(not a.host.status()["partner_left"], "the partner comes back: no longer 'left'")
     a.host._check_bye(b'{"sid": "someone"}')
     check(not a.host.partner_left, "a BYE from anyone else is ignored")
+
+    # IPv6 (issue 58): a game listening everywhere also listens on IPv6, on the same port, and a
+    # partner's IPv6 candidate is reached through it (here over ::1, on real sockets)
+    import socket
+    p1, p2 = UdpTransport(bind_host="0.0.0.0"), UdpTransport(bind_host="0.0.0.0")
+    if p1.sock6 is None:
+        print("skip IPv6: this machine has none")
+    else:
+        p1.probe(("::1", p2.port), TAG_PRESENCE, bytes(0x2C))
+        import time
+        for _ in range(50):
+            got = p2._datagrams()
+            if got:
+                break
+            time.sleep(0.01)
+        check(bool(got) and got[0][1][0] == "::1" and len(got[0][1]) == 2,
+              f"IPv6: a packet to the partner's IPv6 address arrives, from a plain (ip, port) ({got[:1] and got[0][1]})")
+    p1.close(); p2.close()
+    from link.rendezvous import global_ip6
+    ip6 = global_ip6()
+    check(ip6 is None or (":" in ip6 and not ip6.startswith("fe80")), f"this machine's global IPv6 address, if any: {ip6}")
 
     sym = Connector.__init__  # noqa: F841 - (the connector module imports cleanly)
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")

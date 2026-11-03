@@ -107,6 +107,16 @@ class UdpTransport:
                     raise
         self.sock.setblocking(False)
         self.port = self.sock.getsockname()[1]
+        self.sock6 = None  # IPv6, beside it on the same port (issue 58): a real socket listening everywhere
+        if sock is None and (bind_host or host) in ("0.0.0.0", ""):
+            try:
+                s6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                s6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                s6.bind(("::", self.port))
+                s6.setblocking(False)
+                self.sock6 = s6
+            except (OSError, AttributeError):  # no IPv6 here: IPv4 only, as before
+                pass
         self.seq = 0
         self.frame = 0            # the host's frame, stamped on everything sent
         self.partitioned = False  # tests: drop everything both ways, like a dead network
@@ -265,8 +275,11 @@ class UdpTransport:
             pkt = self.sim.stamp(pkt)
         if self.relay is not None and self.peer == self.relay:  # through the relay: sealed (link/relay.py)
             pkt = relay.MAGIC + self.relay_room + relay.seal(self.relay_token, pkt)
+        sock = self.sock6 if ":" in str(self.peer[0]) else self.sock
+        if sock is None:  # an IPv6 address, and no IPv6 here
+            return
         try:
-            self.sock.sendto(pkt, self.peer)
+            sock.sendto(pkt, self.peer)
         except OSError:  # partner not listening (yet, or any more): presence is best-effort
             pass
 
@@ -394,11 +407,13 @@ class UdpTransport:
     def _datagrams(self):
         """What came in from the socket, through the simulated internet if there is one."""
         raw = []
-        while True:
-            try:
-                raw.append(self.sock.recvfrom(65536))
-            except (BlockingIOError, ConnectionRefusedError, OSError):
-                break
+        for sock in (self.sock, self.sock6):
+            while sock is not None:
+                try:
+                    data, addr = sock.recvfrom(65536)
+                except (BlockingIOError, ConnectionRefusedError, OSError):
+                    break
+                raw.append((data, (addr[0], addr[1])))  # IPv6's has flow info and scope too
         if not self.sim:
             return raw
         for data, addr in raw:
@@ -407,6 +422,8 @@ class UdpTransport:
 
     def close(self):
         self.sock.close()
+        if self.sock6 is not None:
+            self.sock6.close()
 
 
 class ReliableChannel:

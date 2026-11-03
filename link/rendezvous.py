@@ -144,6 +144,19 @@ def local_ip():
         return "127.0.0.1"
 
 
+def global_ip6():
+    """This machine's global IPv6 address, or None (no IPv6, or only link-local and private ones).
+    Nothing is sent: connecting a UDP socket only picks the route (issue 58)."""
+    import ipaddress
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as s:
+            s.connect(("2001:4860:4860::8888", 80))
+            ip = s.getsockname()[0].split("%")[0]
+    except (OSError, AttributeError):
+        return None
+    return ip if ipaddress.ip_address(ip).is_global else None
+
+
 def _parse_stun_response(data, tx_id):
     if len(data) < 20:
         return None
