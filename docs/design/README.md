@@ -24,6 +24,7 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M17-more-players.md` | Three or more players. Planned. |
 | `M18-mac-linux.md` | Mac and Linux builds. Planned. |
 | `M19-widescreen.md` | Widescreen. Planned. |
+| `M20-mod-compat.md` | Co-op on top of other mods: the randomizer, editor patches, SOTN Ultimate (#144). Proposed. |
 | `M2-shared-progression.md` | Shared progression, live. Done. |
 | `M3-teleport-respawn-save.md` | Teleport, respawn, pause rules and joint saves. Done. |
 | `M3b-save-rooms.md` | Joint saves in the game's own save rooms. Done. |
