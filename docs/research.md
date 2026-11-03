@@ -177,3 +177,9 @@ An entity's primitives are a linked chain, and its code walks them all. A chain 
 
 ## Fist weapons are primitives
 A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_001.c`) draws four primitives on tpage 0x1A, and Alucard's own body plays the punch. So the link's weapon sprites carry nothing for a fist. Richter and Maria draw a crop of Alucard's own body frames instead (`DrawArm`, D164): frames 125-127 hold the reach, in front of x +12 and above his cape.
+
+## The Android app has its own file list
+`android/build.sh` stages the app separately from `scripts/build_release.sh`. A file added to one isn't in the other: 0.13 to 0.16.0 shipped an APK without `maria-partner.bps`, and every game start on Android with Maria's disc chosen crashed. `launcher_ship_lists` checks Maria's files are in both. On the Thor, 0.16.1 solo play holds 61 to 62 fps with the CPU at 200% (D154); a two-player session on it isn't measured.
+
+## Sound on Android
+pygame on Android isn't pygame-ce. Its AudioDevice callback deadlocks, and SDL_mixer's `Channel.queue` starts the queued sound from a callback that needs Python's lock, so it starts late and the sound gaps. SDL_QueueAudio through ctypes works: `libSDL2.so` is already loaded, and `pygame.mixer` must be shut first because Android opens one device. Also, `Clock.tick(60)` there rounds to 16 ms, 62.5 fps. F9 reports' `audio` has the numbers: `path`, `underruns`, `gaps` (when, the frame gap, what was buffered), `fed_ms` against `seconds`.

@@ -102,6 +102,23 @@ def same_sound(pa, pb):
 PRIMED_BYTES = 44100 * 4 // 20  # 50 ms: what the device waits for, after running dry
 
 
+class Pacer:
+    """60 frames a second, to the deadline: pygame's Clock.tick(60) waits whole milliseconds, so
+    Android's pygame ran 16 ms frames, 62.5 a second, and the games 4% fast (issue 66). Behind by
+    more than 0.1 s (a load, a box), it starts again from now rather than racing to catch up."""
+
+    def __init__(self, fps=60):
+        self.period, self.next = 1 / fps, None
+
+    def wait(self):
+        now = time.perf_counter()
+        if self.next is None or now - self.next > 0.1:
+            self.next = now
+        self.next += self.period
+        if self.next > now:
+            time.sleep(self.next - now)
+
+
 class Audio:
     """The games' sound, through an SDL audio device fed from a small buffer."""
 
@@ -110,9 +127,17 @@ class Audio:
         self.buf, self.lock = bytearray(), threading.Lock()
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
-        self.dev = self.chan = None
+        self.fed_bytes, self.started = 0, time.monotonic()  # sound handed to the device, since when (issue 66)
+        self.pushed_at, self.push_gap, self.gaps = 0.0, 0.0, collections.deque(maxlen=30)  # each underrun: when, since the last push, buffered
+        self.dev = self.chan = self.queue = None
         self.primed = False
         if not getattr(pygame, "IS_CE", False):
+            try:  # pygame (not -ce): Android, design/M9. Straight to SDL (issue 66)
+                from sdlqueue import SdlQueue
+                self.queue = SdlQueue()
+                return
+            except Exception:  # noqa: BLE001  (then SDL_mixer, as before)
+                logging.getLogger(__name__).exception("SDL audio queue")
             # pygame (not -ce: Android, design/M9): its AudioDevice's Python callback deadlocks on
             # the GIL there, so the sound goes through SDL_mixer, queued from the main thread.
             if pygame.mixer.get_init() != (44100, -16, 2):
@@ -146,15 +171,40 @@ class Audio:
             n = len(self.buf) // 4 * 4  # whole stereo samples
             sound = pygame.mixer.Sound(buffer=bytes(self.buf[:n]))
             del self.buf[:n]
+            self.fed_bytes += n
             self.pulls += 1
             self.fed_at = now
             if busy:
                 self.chan.queue(sound)
             else:
-                self.underruns += self.pulls > 1  # it ran dry (the first start isn't)
+                if self.pulls > 1:  # it ran dry (the first start isn't)
+                    self.underruns += 1
+                    self.gaps.append((round(now - self.started, 2), round(self.push_gap, 3), n // 4))
                 self.chan.play(sound)
 
+    def _queue(self):
+        """SDL_QueueAudio (issue 66): everything buffered goes to SDL. After running dry it waits
+        for 50 ms of sound first, as _pull does; over 0.2 s waiting in SDL, the newest is dropped."""
+        waiting = self.queue.queued()
+        if self.primed and waiting == 0:
+            self.underruns += 1
+            self.gaps.append((round(time.monotonic() - self.started, 2), round(self.push_gap, 3), len(self.buf) // 4))
+            self.primed = False
+        if not self.primed and len(self.buf) < PRIMED_BYTES:
+            return
+        self.primed = True
+        n = len(self.buf) // 4 * 4
+        if waiting + n > 44100 * 4 // 5:
+            self.dropped_bytes += n
+        else:
+            self.queue.push(self.buf[:n])
+            self.fed_bytes += n
+            self.pulls += 1
+        del self.buf[:n]
+
     def close(self):
+        if self.queue is not None:
+            self.queue.close()
         if self.dev is not None:
             self.dev.close()
         elif self.chan is not None:
@@ -169,6 +219,7 @@ class Audio:
             n = min(len(mem), len(self.buf)) if self.primed else 0
             mem[:n] = self.buf[:n]
             del self.buf[:n]
+            self.fed_bytes += n
             if n < len(mem):
                 self.underruns += self.primed
                 self.short_bytes += len(mem) - n
@@ -180,18 +231,26 @@ class Audio:
         if data:
             x = array("h", data[:len(data) // 2 * 2])
             self.pushes += 1
+            now = time.monotonic()
+            self.push_gap, self.pushed_at = now - self.pushed_at, now
             self.clipped += max(x) >= 32767 or min(x) <= -32768
         with self.lock:
             self.buf += data
             if len(self.buf) > 44100 * 4 // 5:  # over 0.2 s behind: drop the oldest
                 self.dropped_bytes += len(self.buf) - 44100 * 4 // 10
                 del self.buf[:len(self.buf) - 44100 * 4 // 10]
-        if self.chan is not None:
+        if self.queue is not None:
+            with self.lock:
+                self._queue()
+        elif self.chan is not None:
             self._feed()
 
     def clear(self):
         with self.lock:
             self.buf.clear()
+            if self.queue is not None:
+                self.queue.clear()
+                self.primed = False
 
     def forget_wait(self, stats):
         """The games stood still in the note box: what the sound did meanwhile isn't an underrun."""
@@ -200,7 +259,10 @@ class Audio:
 
     def stats(self):
         return {"pushes": self.pushes, "clipped": self.clipped, "pulls": self.pulls, "underruns": self.underruns, "short_ms": round(self.short_bytes / 176.4),
-                "dropped_ms": round(self.dropped_bytes / 176.4)}
+                "dropped_ms": round(self.dropped_bytes / 176.4), "fed_ms": round(self.fed_bytes / 176.4),
+                "seconds": round(time.monotonic() - self.started, 1),
+                "path": "sdl queue" if self.queue is not None else "mixer" if self.chan is not None else "callback",
+                "mixer": pygame.mixer.get_init() if self.chan is not None else None, "gaps": list(self.gaps)}
 
 
 def frame_surface(surf, fmt, pitch, height):
@@ -742,7 +804,7 @@ class GameView:
         """Returns when the player goes back to the menu (or closes the window): "menu", "quit"
         or ("navigate", action)."""
         s = self.s
-        clock, self.frame, last_cards = pygame.time.Clock(), 0, time.time()
+        clock, pacer, self.frame, last_cards = pygame.time.Clock(), Pacer(), 0, time.time()
         status, raw, prof = "", [None, None], []
         result = "menu"
         while True:
@@ -873,7 +935,8 @@ class GameView:
                 last_cards = time.time()
             if self.frames and self.frame >= self.frames:
                 break
-            clock.tick(60)
+            pacer.wait()
+            clock.tick()  # for the status bar's fps
         self.write_cards()
         self.moment("Quit")
         if self.audio:
