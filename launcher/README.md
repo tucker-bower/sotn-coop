@@ -19,6 +19,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `report.py` | F9: writes the bug report zip and emails it. |
 | `crashwatch.py` | Notices a game that has crashed or hung. |
 | `crash_window.py` | The bug report window after a crash: its own process, and nothing is sent unless the player says so. |
+| `sdlqueue.py` | Android's sound, pushed straight to SDL (SDL_QueueAudio). |
 | `smoke.py` | **Vestigial.** Early end-to-end check, not in any runner; the UI flows in `uxdriver.py` replaced it. |
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
@@ -29,5 +30,6 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `rules.py` | A castle's rules: every rule, its default, and what the game gets. |
 | `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |
 | `test_settings.py` | Checks the app's settings, and that PvP and aggro are no longer among them. |
+| `test_ship_lists.py` | The files the app reads are in both the installer's and the APK's lists. |
 | `uxdriver.py` | Plays the real app like a person and photographs every screen. |
 | `winmenu.py` | The native Windows menu bar. |
