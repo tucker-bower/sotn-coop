@@ -183,3 +183,9 @@ A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_0
 
 ## Sound on Android
 pygame on Android isn't pygame-ce. Its AudioDevice callback deadlocks, and SDL_mixer's `Channel.queue` starts the queued sound from a callback that needs Python's lock, so it starts late and the sound gaps. SDL_QueueAudio through ctypes works: `libSDL2.so` is already loaded, and `pygame.mixer` must be shut first because Android opens one device. Also, `Clock.tick(60)` there rounds to 16 ms, 62.5 fps. F9 reports' `audio` has the numbers: `path`, `underruns`, `gaps` (when, the frame gap, what was buffered), `fed_ms` against `seconds`.
+
+## A presence mid-load is half old, half new
+While a game loads another stage (a teleport, a door to another area), its presence already has the new stage, but still the old room, the old scene's flag and a mid-load position such as (0, 4). Nothing may act on it then: a scene pull sent the partner there, and its own room change then waited for good on a graphics load of kind 0xFFFE that `LoadPendingGfx` never clears. Presences now say so (`FLIP_LOADING`), and pulls ignore them. Found by `crawl_dai`.
+
+## Finding a place to stand in a room
+`harness/roommap.py` reads a room's collision from sotn-decomp's extracted stage files (`assets/st/<stage>/layers.json`, the fg tilemap, the tile definition's `_cols.bin`): nonzero is solid. An arrival inside a wall or ceiling goes wrong in ways no player would see (it can land in another room, or in a scene), so tests arrive on a floor. NO1, RLIB, RNO3 and RARE have no extracted room table.

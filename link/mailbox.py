@@ -62,6 +62,7 @@ SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", Non
 
 
 FLIP_SKIP_VOTE = 0x20  # CoopPresence.flip_x: this player asked to skip the cutscene (module/arrive.c)
+FLIP_LOADING = 0x04  # CoopPresence.flip_x: between stages or mid-teleport (module/arrive.c)
 FLIP_BAT, FLIP_CARRIED = 0x10, 0x08  # CoopPresence.flip_x: a bat that can be held, and being carried (module/carry.c)
 SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players asking
 

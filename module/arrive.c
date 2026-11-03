@@ -494,6 +494,12 @@ static void PullIn(void) {
     if (BossFinalGone()) { // the game is ending: never pulled (boss.c)
         return;
     }
+    // A partner leaving a scene by teleport still had the scene's flag, with the new stage and a
+    // mid-load position: this player was pulled there, and its own room change then hung on a
+    // graphics load that never ended (session_crawl, the Royal Chapel).
+    if (p->flipX & FLIP_LOADING) {
+        return;
+    }
     // Once per fight, unless this player left the room mid-fight: knocked back through the door
     // from the arrival spot at its edge (Karasuman's), they'd never see the boss again.
     if (!PartnerInBossFight() || (s_BossPulled && !s_BossPullCooldown && !ArriveBusy() && !SameRoomAsPartner())) {
