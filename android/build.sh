@@ -30,7 +30,8 @@ cp "$MOD"/launcher/*.py "$STAGE/launcher/"
 cp -r "$MOD/launcher/assets" "$STAGE/launcher/"
 cp "$MOD"/link/*.py "$STAGE/link/"
 cp "$MOD"/patcher/{bps,patcher,sectors}.py "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$STAGE/patcher/"
-cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-vh.bps,maria-vb.bps} "$STAGE/patcher/maria/"
+# the same as the installer's (scripts/build_release.sh): 0.13 to 0.16.0 left out maria-partner.bps
+cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps} "$STAGE/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$STAGE/config/"
 cp "$ROOT/build/coop/coop.map" "$STAGE/build/coop/"
 cp "$MOD/.env/sys/scph5501.bin" "$STAGE/bios/openbios-fast.bin"   # OpenBIOS with FASTBOOT (scripts/bootstrap.sh)
