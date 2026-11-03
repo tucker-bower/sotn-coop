@@ -49,6 +49,7 @@ import session_m15  # noqa: F401
 import session_rules  # noqa: F401
 import session_carry  # noqa: F401
 import session_inverted  # noqa: F401
+import session_inverted_rooms  # noqa: F401
 import session_bossrush  # noqa: F401
 import session_netplay  # noqa: F401
 import spec_test  # noqa: F401

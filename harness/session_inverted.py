@@ -123,3 +123,19 @@ def online_inverted_boss(run):
     from session_m12 import boss_flow
     run.s.set_net("country", 7, delay=60, jitter=4, loss=0.02)
     boss_flow(run, next(r for r in bossstarts.B if r["name"] == "Medusa"))
+
+
+RCEN, SHAFT_ROOM, LIFT_ROOM = 0x28, 8, 0  # Reverse Center: Shaft's room (3 by 3 screens), and the lift's below
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Galamoth.state"),) * 2)
+def boss_shaft(run):
+    """Issue 68: Shaft, together. The Galamoth start has all five Vlad relics; A goes into Shaft's
+    room, on the platform under his orb, and walks to it; B, in the room below (the lift's), is pulled in. Then
+    as every boss: twice the HP, it falls once, both fine after, the same castle flags. (No time
+    attack record: the game keeps none for Shaft.)"""
+    from session_m12 import boss_flow
+    a, b = run.s.a, run.s.b
+    arrive(run, b, RCEN, LIFT_ROOM, 128, 279)
+    arrive(run, a, RCEN, SHAFT_ROOM, 440, 400)  # the platform under the orb (y 455), right of it
+    boss_flow(run, dict(name="Shaft", area="Reverse Center", walk="left", inverted=True, event=None))
