@@ -189,3 +189,12 @@ While a game loads another stage (a teleport, a door to another area), its prese
 
 ## Finding a place to stand in a room
 `harness/roommap.py` reads a room's collision from sotn-decomp's extracted stage files (`assets/st/<stage>/layers.json`, the fg tilemap, the tile definition's `_cols.bin`): nonzero is solid. An arrival inside a wall or ceiling goes wrong in ways no player would see (it can land in another room, or in a scene), so tests arrive on a floor. NO1, RLIB, RNO3 and RARE have no extracted room table.
+
+## An arrival keeps the speed it had
+A teleport (a pull, a map teleport, a revive) puts the player at the partner's ground spot, but the player kept its velocity from before, and the ground spot is the doorway the partner came in by until the partner lands. Pulled into a boss's room right after the partner, a walking player slid straight back out through the door. `ArriveFinish` now zeroes the speed and keeps the spot 40 px from a room's left and right edges. Adding the move to `g_PlayerX` as well counted it twice: the frame's own update derives it from the entity's move (boss rush's joiner landed elsewhere).
+
+## A save room is never left for a pull
+`D_80137598` is DRA's "in a save room". `CanBePulled` refuses then, so a partner standing in a save room is pulled into a boss fight only once it walks out (`edges_boss_pull_waits_for_the_save_room`).
+
+## When a test's game process dies
+Each game process writes a native stack trace (faulthandler) to `coop-worker-<pid>.txt` in the temp folder, and the harness reports the exit code (a negative one is the signal) and that trace. Issue 142 was found this way: a SwanStation segfault in `UncheckedReadMemoryHalfWord`.
