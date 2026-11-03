@@ -14,6 +14,8 @@ import multiprocessing as mp
 import os
 import sys
 import traceback
+import tempfile
+from pathlib import Path
 
 from coop_env import COOP, TOOLS, savestate
 
@@ -120,6 +122,8 @@ class _Worker:
 
 def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
             port=0, patch_crc=None, learn_peer=False):
+    import faulthandler  # a native crash (the emulator's) writes its stack where the proxy finds it
+    faulthandler.enable(open(Path(tempfile.gettempdir()) / f"coop-worker-{os.getpid()}.txt", "w"))
     if os.environ.get("COOP_WORKER_LOG"):  # the launcher's: a worker's warnings (connect, relay) kept
         import logging
         logging.basicConfig(filename=os.environ["COOP_WORKER_LOG"], level=logging.INFO,
@@ -149,7 +153,13 @@ class Game:
 
     def _ask(self, cmd, args=None):
         self.conn.send((cmd, args))
-        status, value = self.conn.recv()
+        try:
+            status, value = self.conn.recv()
+        except EOFError:  # its process died: say how (a negative code is the signal), and where
+            self.proc.join(2)
+            trace = Path(tempfile.gettempdir()) / f"coop-worker-{self.proc.pid}.txt"
+            where = trace.read_text()[-1500:] if trace.exists() else ""
+            raise RuntimeError(f"game {self.name}'s process died (exit code {self.proc.exitcode}) during {cmd}\n{where}")
         if status != "ok":
             raise RuntimeError(f"game {self.name}: {value}")
         return value
