@@ -50,7 +50,7 @@ Every player's game runs in **SwanStation**, the libretro core forked from DuckS
 - **Characters.** Richter and Maria are playable (M8). Our Richter is Alucard's engine plus Richter's code, run from the expansion RAM (D89). Maria's code is compiled from the PSP *Dracula X Chronicles* overlay via the decomp's Maria port and applied as **patches of code only**, so no game art ships (`characters/maria-dx/make_patches.py`).
 - **PvP** (off by default) uses the attacker's real hitboxes, sent over the link, and the victim's own game decides each hit (D132).
 
-- **Castle rules (D162).** Every co-op change to the game is a setting of the castle, defaulting to how it plays now: `launcher/rules.py` lists them, `castle.json` keeps them, HELO gives the joiner the host's, and the host writes them into the mailbox every frame. Each rule is a bit or a percentage the module checks where the change happens; all zero is the default.
+- **Castle rules (D162).** Every co-op change to the game is a setting of the castle, defaulting to how it plays now: `launcher/rules.py` lists them, `castle.json` keeps them, HELO gives the joiner the host's, and the host writes them into the mailbox every frame. Each rule is a bit or a percentage the module checks where the change happens; all zero is the default. Hanging onto the bat (`module/carry.c`, D167) is the one rule that's off by default.
 
 ### Saves
 A **joint save** (`link/jointsave.py`) holds both games' memory cards in one file, so either partner can continue any castle (D31, D97). Saving uses the game's own save rooms, and resuming uses the game's own Load menu (D46). The launcher keeps savestates at big moments and never deletes or overwrites one (D69).

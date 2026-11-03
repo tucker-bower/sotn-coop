@@ -153,7 +153,7 @@ Hosts don't interpret events: they move them between rings.
 
 **Primitives (0x30 bytes each, M12):** a `Primitive` as the game keeps it, with its `next` pointer left out and positions in the room. Byte 0x27 (a pad byte) is `0xFA` for a familiar's primitive (M13).
 
-**Presence `flipX`, high bits (M13):** bit 7, this player just came in by teleport (a revive): the partner's copy plays its character's teleport-in; bit 6, this player's one-button moves are on.
+**Presence `flipX`, high bits (M13):** bit 7, this player just came in by teleport (a revive): the partner's copy plays its character's teleport-in; bit 6, this player's one-button moves are on; bit 4, a bat in flight that can be held; bit 3, being carried by the partner's bat (D167).
 
 **`CoopHit` (12 bytes, M15):** `x`, `y` (s16: the hitbox's centre in the room, in pixels), `w`, `h` (u8: half its width and height), `hitboxState` (u8), `facingLeft` (u8), `attack` (s16), `element` (u16).
 
