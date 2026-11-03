@@ -199,7 +199,10 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
         for who, g, link in zip("AB", games, taken["links"]):
             z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
             z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
-            shot = g.screenshot()
+            try:
+                shot = g.screenshot()
+            except ImportError:  # the Android app has no PIL: window.png still has the picture
+                shot = None
             if shot:
                 z.writestr(f"now/{who}.png", _png(shot))
             z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))

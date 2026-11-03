@@ -86,6 +86,21 @@ with tempfile.TemporaryDirectory() as d:
     check(about["controllers"] == 1 and set(about["settings"]) == {"music"}, "about.json keeps only what's needed")
     check("time" not in about and "pads" not in about["settings"], "no timestamp or pads in about.json")
 
+
+
+class NoPilGame(Game):
+    def screenshot(self):  # as on Android (0.16.0: F9 there closed the app)
+        raise ModuleNotFoundError("No module named 'PIL'")
+
+
+with tempfile.TemporaryDirectory() as d:
+    report.reports_dir = lambda: Path(d)
+    games = [NoPilGame([DISC]), NoPilGame([DISC])]
+    path = report.write(games, Castle(), None, [], [], [], [PAD], "", {"solo": None})
+    with zipfile.ZipFile(path) as z:
+        check("now/A.state" in z.namelist() and "now/A.png" not in z.namelist(),
+              "without PIL (Android), the report is written, without the games' own pictures")
+
 journal = report.Journal()
 P = types.SimpleNamespace
 stuck = P(stage=11, room_left=2, room_top=3, flags=64 | 128, x=1, y=2)
