@@ -5,8 +5,7 @@
 Project tracking is in [GitHub issues](https://github.com/tucker-bower/sotn-coop/issues), on the [tracker](https://github.com/users/tucker-bower/projects/1) (D150).
 
 ## Decisions needed
-- **Bat carry (#43):** `design/bat-carry.md`, needs approval before building.
-- **0.16 notes:** `releases/v0.16.0.md`, need approval before the release.
+None right now.
 
 ## Milestones
 What's been built so far. Each milestone's acceptance criteria are in its design doc, in `design/`.

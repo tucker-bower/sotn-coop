@@ -1,6 +1,6 @@
 # Hanging onto Bat Alucard (#43)
 
-**Status:** proposed, needs Tucker's approval. It changes the game, so it's a castle rule, off by default (D162).
+**Status:** option 1 approved by Tucker, being built. It changes the game, so it's a castle rule, off by default (D162).
 
 **Goal:** a partner hangs onto Alucard's bat, at the cost of his speed, to reach what the bat reaches. They can still double-jump, so they can drop off and carry on.
 
