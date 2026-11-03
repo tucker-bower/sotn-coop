@@ -6,7 +6,11 @@
 // snapshot) but not the picture they show. The module patches libgpu's LoadImage (main.exe,
 // always resident) to come here; uploads made by the stage overlay's code while this game is a
 // room's authority are recorded and sent with the snapshot, and the guest makes them too.
-// Uploads from DRA (the player's sprite frames, every frame) are each game's own and never sent.
+// Uploads from DRA (the player's sprite frames, every frame) are each game's own and never sent,
+// except a pickup's icon (issue 100): stages load it through DRA's LoadEquipIcon, into a slot the
+// guest's copy of the pickup draws from. LoadEquipIcon skips what its slot already holds, so in
+// play the authority clears that record each frame, and a guest who's just arrived is sent every
+// icon again.
 #define COOP_MODULE
 #include <game.h>
 #include "overlay_table.h"
@@ -25,6 +29,11 @@ void FlushCache(void); // main.exe
 u16 GetTPage(s32 tp, s32 abr, s32 x, s32 y); // main.exe
 u16 GetClut(s32 x, s32 y);                    // main.exe
 #define STAGE_CODE 0x80180000         // stage overlays load here
+#define LOAD_EQUIP_ICON 0x800EB534     // DRA (src/dra/4AEA4.c), up to the next function
+#define LOAD_EQUIP_ICON_END 0x800EB6B4
+#define ICON_SLOTS 32
+#define NO_ICON 0xFFFF
+extern u16 D_801374F8[], D_80137538[]; // DRA: the icon and palette each slot holds
 #define J(target) (0x08000000 | (((u32)(target) & 0x0FFFFFFF) >> 2))
 
 // libgpu's queue (src/main/psxsdk/libgpu/sys.c): LoadImage is addque2(dws, rect, 8, p)
@@ -42,9 +51,15 @@ static bool s_Record;
 static bool s_Patched;
 static bool s_FromStage; // inside LoadTPage / LoadClut called by the stage
 
+static u16 s_Icons[ICON_SLOTS], s_IconPals[ICON_SLOTS]; // what each slot held
+static s32 s_Resend;
+
 static bool StageCaller(u32 caller) {
     const OverlayInfo* ovl;
 
+    if (caller >= LOAD_EQUIP_ICON && caller < LOAD_EQUIP_ICON_END && g_GameEngineStep == Engine_Normal) {
+        return true;
+    }
     return caller >= STAGE_CODE && (ovl = FindOverlay(g_StageId)) && caller < ovl->bssStart;
 }
 
@@ -113,11 +128,34 @@ void VramPatch(void) {
 }
 
 void VramRecord(bool on) {
+    s32 i;
+
     s_Record = on;
     if (!on) {
         s_Size = 0;
+        s_Resend = 0;
+        return;
+    }
+    if (g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    for (i = 0; i < ICON_SLOTS; i++) {
+        if (D_801374F8[i] != NO_ICON) {
+            s_Icons[i] = D_801374F8[i] + 1; // 0: nothing yet
+            s_IconPals[i] = D_80137538[i];
+            D_801374F8[i] = D_80137538[i] = NO_ICON;
+        }
+    }
+    while (s_Resend > 0) {
+        i = --s_Resend;
+        if (s_Icons[i]) { // one a frame: each brings its palette rows
+            g_api.LoadEquipIcon(s_Icons[i] - 1, s_IconPals[i], i);
+            break;
+        }
     }
 }
+
+void VramResendIcons(void) { s_Resend = ICON_SLOTS; }
 
 s32 VramTake(u8* out, s32 room) {
     s32 n = s_Size <= room ? s_Size : 0;

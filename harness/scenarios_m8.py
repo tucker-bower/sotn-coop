@@ -466,6 +466,123 @@ def poison_water(run, ch):
             run.expect(lost > 0, "without it, poison water hurts", lost=lost)
 
 
+POISON_MARK = 0x80097BF8  # g_Status.D_80097BF8: bit 0, the game's own "poisoned"
+ELEMENT_POISON, ELEMENTS_IMMUNE = 0x80, 0x80097C2C
+HIT_POINTS, HIT_PARAMS, ENTITY_PALETTE = 0x3E, 0x44, 0x16
+PAL_POISON = 0x8166  # PAL_FLAG(PAL_CC_DARK_EFFECT), as built
+
+
+def _hit(run, e, damage, element=0):
+    """The player takes a hit as the game's hit detection leaves it; returns the HP lost."""
+    hp = e.read(HP_NOW, "<i")
+    e.write(e.entity(0) + HIT_POINTS, damage, "<h")
+    e.write(e.entity(0) + HIT_PARAMS, 2 | element, "<H")
+    run.step(2)
+    lost = hp - e.read(HP_NOW, "<i")
+    run.step(150)  # his hit reaction and invincibility
+    return lost
+
+
+@per_character
+def poison_hits(run, ch):
+    """Issue 102: poison as Alucard has it. Immunity keeps it off; once poisoned, hits do double;
+    the player pulses; it wears off."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, 200, "<i")
+    start = e.save_state()
+    e.write(ELEMENTS_IMMUNE, ELEMENT_POISON, "<H")
+    _hit(run, e, 5, ELEMENT_POISON)
+    run.expect(not e.read(POISON_MARK, "<I") & 1, "immune: not poisoned")
+    e.load_state(start)
+    first = _hit(run, e, 5, ELEMENT_POISON)
+    run.expect(e.read(POISON_MARK, "<I") & 1, "a poison hit poisons")
+    second = _hit(run, e, 5)
+    run.expect((first, second) == (5, 10), "hits do double while poisoned", first=first, second=second)
+    seen = False
+    for _ in range(90):
+        run.step(1)
+        seen |= e.read(e.entity(0) + ENTITY_PALETTE, "<H") == PAL_POISON
+    run.expect(seen, "the player pulses the poison palette")
+    for _ in range(0x1000):
+        run.step(1)
+        if not e.read(POISON_MARK, "<I") & 1:
+            break
+    run.expect(not e.read(POISON_MARK, "<I") & 1, "it wears off")
+
+
+@per_character
+def alucard_health_bar(run, ch):
+    """Issue 34: with the option on, Richter and Maria draw Alucard's bar, with his tiles."""
+    from link.mailbox import OPT_ALUCARD_HUD
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    mb.set_options(OPT_ALUCARD_HUD)
+    reload_as(run, mb, ch)
+    run.step(120)
+    out = TOOLS["out"] / run.name
+    out.mkdir(parents=True, exist_ok=True)
+    e.screenshot(out / "hud.png")
+    bar = e.read(PRIM_BUF + e.read(PLAYER_HUD_PRIM, "<i") * PRIM_SIZE + PRIM_TPAGE, "<H")
+    run.expect(bar == ALUCARD_HUD_TPAGE, "its first sprite is on Alucard's page", tpage=bar)
+
+
+PLAYER_HUD_PRIM, PRIM_BUF, PRIM_SIZE, PRIM_TPAGE, ALUCARD_HUD_TPAGE = 0x80137970, 0x80086FEC, 0x34, 0x1A, 0x1F
+SHORT_SWORD = 19
+ALUCARD_RATE = 30  # damage_rate_alucard, measured
+
+
+def damage_a_second(run, e, mb, ch, seconds=10):
+    """Issue 114: mashing the plain attack at an enemy held on it, in the hall: swing rate,
+    hitboxes and the target's invincibility, all counted the same way. Returns (damage a second,
+    the most in one hit)."""
+    from scenarios_m12 import pin_target
+    e.write(EQUIPMENT, SHORT_SWORD)
+    reload_as(run, mb, ch)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    target = min(s for s, hp in enemies_hp(e).items() if 0 < hp < 32767)
+    enemy, full = e.entity(target), 20000
+    start = e.save_state()
+    best, top = 0, 0
+    for every in (8, 12, 16, 20, 24, 32):  # however fast this character can usefully press
+        e.load_state(start)
+        total = 0
+        for i in range(seconds * 60):
+            route.heal(e)
+            x = e.read(e.entity(0), "<i") + (-1 if e.read(e.entity(0) + 0x14, "<H") else 1) * (14 << 16)
+            e.write(enemy, x, "<i")
+            e.write(enemy + 4, e.read(e.entity(0) + 4, "<i"), "<i")
+            e.write(enemy + 0x3E, full, "<h")
+            e.write(enemy + 0x40, 0, "<h")  # its own attack
+            pin_target(e)  # a sword stabs higher than this room's enemies stand
+            run.step(1, "square" if i % every < 2 else "")
+            lost = full - e.read(enemy + 0x3E, "<h")
+            total += lost
+            top = max(top, lost)
+        best = max(best, total / seconds)
+    return best, top
+
+
+@per_character
+def damage_rate(run, ch):
+    """Issue 114: what this character does a second."""
+    e, mb = run.emu, mailbox(run)
+    rate, top = damage_a_second(run, e, mb, ch)
+    run.expect(ALUCARD_RATE * 0.7 < rate < ALUCARD_RATE * 1.3,
+               f"{rate:.0f} damage a second, {top} a hit: near Alucard's {ALUCARD_RATE}")
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def damage_rate_alucard(run):
+    """Issue 114: the yardstick: Alucard with a Short Sword, his weapon at Slogra and Gaibon."""
+    e, mb = run.emu, mailbox(run)
+    rate, top = damage_a_second(run, e, mb, 0)
+    run.expect(abs(rate - ALUCARD_RATE) < 5, f"{rate:.0f} damage a second, {top} a hit", yardstick=ALUCARD_RATE)
+
+
 SKILL_OF_WOLF = 6
 HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC  # g_Status (include/game.h)
 

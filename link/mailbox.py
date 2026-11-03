@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 12
+LINK_VERSION = 15
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -13,11 +13,11 @@ FAMILIAR_SELF, FAMILIAR_PARTNER = 0x807C0000, 0x807E0000
 FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
-STATUS_RANGES = ((0x80097BA0, 0x48), (0x80097BFC, 0x34))
+STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
-_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhHH")  # CoopPresence, 0x2C bytes
+_PRESENCE = struct.Struct("<BBBBHHhhhhhHHHIHhhHhhBBH")  # CoopPresence, 0x2C bytes
 ROLE_NONE, ROLE_AUTHORITY, ROLE_GUEST = 0, 1, 2
 _HEADER = struct.Struct("<III")                # magic, version, heartbeat
 SELF, PARTNER = 0x0C, 0x38                     # offsets in CoopLink
@@ -44,11 +44,31 @@ SELF_PAD, PARTNER_PAD = 0x22428, 0x2242C  # M13: each player's buttons, with the
 PRIM_SIZE, N_PRIMS = 0x30, 32
 SELF_HITS, PARTNER_HITS = 0x22430, 0x224F4  # M15: u32 count, then CoopHit[16] (0xC each): pvp.c
 HIT_SIZE, N_HITS = 0xC, 16
+RULES = 0x225B8  # the castle's rules (D162): u32 RULE_* bits, then u16 exp, dealt, taken, enemy HP, enemy HP alone, pad
+_RULES = struct.Struct("<IHHHHHH")
+RULE_NO_SHARED_LEVEL, RULE_NO_SHARED_GOLD, RULE_NO_REVIVE, RULE_NO_FAERIE_REVIVE = 0x001, 0x002, 0x004, 0x008
+RULE_NO_BOSS_PULL, RULE_NO_SCENE_PULL, RULE_NO_NEAR_TARGET, RULE_NO_MAP_TELEPORT = 0x010, 0x020, 0x040, 0x080
+RULE_NO_OFFHAND, RULE_NO_FAMILIARS = 0x100, 0x200
+OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, OPT_NO_AIR_JUMPS = 0x01000000, 0x02000000, 0x04000000  # to the player overlays too
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
+OPT_ALUCARD_HUD = 4  # options: Richter and Maria use Alucard's health bar (module/character.c)
+OPT_NO_TINT = 0x20000000  # options: two of a kind aren't told apart by a tint (module/partner.c)
+OPT_SPELL_TRIGGERS = 0x40000000  # options: spells on R2 or L2 and a face button (module/spells.c)
+OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
+
+
+FLIP_SKIP_VOTE = 0x20  # CoopPresence.flip_x: this player asked to skip the cutscene (module/arrive.c)
+SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players asking
+
+
+def scene_speed(presences, solo):
+    """How fast a game's scene runs: fast when every player in it asked to skip (issue 107)."""
+    scene = [p for p in presences if p.flags & CUTSCENE]
+    return SCENE_SPEED if scene and (solo or len(scene) == 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
 
 
 def spell_options(spells):
@@ -88,6 +108,7 @@ class Presence:
     scroll_x: int = 0
     scroll_y: int = 0
     role: int = 0
+    stand_slot: int = 0  # a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
     aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
     pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 
@@ -301,6 +322,13 @@ class Mailbox:
 
     def set_pad_extra(self, bits):
         self.adapter.write_bytes(self.address + PAD_EXTRA, struct.pack("<I", bits))
+
+    def set_rules(self, off=0, exp=0, dealt=0, taken=0, enemy_hp=0, enemy_hp_solo=0):
+        """The castle's rules (launcher/rules.py's encode()): all zero is the game as we built it."""
+        self.adapter.write_bytes(self.address + RULES, _RULES.pack(off, exp, dealt, taken, enemy_hp, enemy_hp_solo, 0))
+
+    def rules(self):
+        return _RULES.unpack(self.adapter.read_bytes(self.address + RULES, _RULES.size))[:6]
 
     def set_rank(self, rank):
         self.adapter.write_bytes(self.address + RANK, struct.pack("<I", rank))

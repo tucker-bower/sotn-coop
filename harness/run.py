@@ -36,6 +36,7 @@ import session_m4b  # noqa: F401
 import session_m5  # noqa: F401
 import session_m8  # noqa: F401
 import session_online  # noqa: F401
+import session_rooms  # noqa: F401
 import session_m9  # noqa: F401
 import session_m11  # noqa: F401
 import session_m12  # noqa: F401
@@ -44,6 +45,7 @@ import scenarios_relics  # noqa: F401
 import scenarios_movement  # noqa: F401
 import scenarios_m13  # noqa: F401
 import session_m15  # noqa: F401
+import session_rules  # noqa: F401
 import session_inverted  # noqa: F401
 import session_bossrush  # noqa: F401
 import session_netplay  # noqa: F401

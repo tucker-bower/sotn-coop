@@ -7,6 +7,7 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `backlog-report-sending.md` | **Superseded** by D144: a hosted relay for F9 reports. |
 | `backlog-rescue-menu.md` | Backlog: an "I'm stuck" menu for playtesters. |
 | `boss-rush.md` | Boss rush mode. Done. |
+| `M-castle-rules.md` | Every co-op change to the game as a setting of each castle. Done. |
 | `netplay-suite.md` | The 0.13 playtest's bugs, and the tests that reproduce them. In progress. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |
 | `M1-ghost-p2.md` | **Withdrawn.** A ghost second player in one game, dropped for one game per player. |
@@ -36,3 +37,4 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M8-maria-and-richter.md` | Playable Maria and Richter. Done. |
 | `M8b-character-balance.md` | Their balance and ability mapping. Done. |
 | `M9-android.md` | Android. Done. |
+| `bat-carry.md` | Hanging onto Bat Alucard (#43). Proposed. |

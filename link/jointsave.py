@@ -17,7 +17,7 @@ import base64
 import struct
 from pathlib import Path
 
-from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, DEAD, IN_PLAY, SAVE_DATA_SIZE
+from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, DEAD, IN_PLAY, SAVE_DATA_SIZE
 
 MAGIC, VERSION = b"COOPSAVE", 1
 _INFO = 0x200                      # SaveData.info (include/game.h)
@@ -27,6 +27,8 @@ _LEVEL, _EXP = 0x238 + 0x284, 0x238 + 0x288  # SaveData.status (PlayerStatus) .l
 BOTH_DEAD_FRAMES = 4               # ticks both must be waiting before the launcher acts
 LINKED_FRAMES = 600                # a partner heard from within 10 s (module: PartnerLinked)
 PARTNER_SAVE_FRAMES = 300          # waiting this long for the partner's save: save alone
+PARTNER_GONE_FRAMES = 300          # not heard from for this long: they've left
+RESEND_LOAD_FRAMES = 300           # back, and out of play this long: they get the load again
 ARRIVE_AFTER_FRAMES = 60           # in play this long after a load before a test castle's arrive
 
 
@@ -55,12 +57,14 @@ def with_exp(blob, exp):
     return bytes(out)
 
 
-def both_slots(blobs):
+def both_slots(blobs, shared_level=True):
     """[slot 1, slot 2] to load: slot 2 a copy of slot 1 if it has none yet, both at the
-    higher XP."""
+    higher XP (unless the castle's rules give each player a level of their own: D162)."""
     blobs = [b for b in blobs if b is not None]
     if len(blobs) == 1:
         blobs = [blobs[0], blobs[0]]
+    if not shared_level:
+        return blobs
     exp = max(save_fields(b)[3] for b in blobs)
     return [with_exp(b, exp) for b in blobs]
 
@@ -86,14 +90,20 @@ class JointSave:
         self.mb, self.path = mailboxes, (Path(path) if path else None)
         self.host, self.rank = host, rank
         self.on_write = None  # (blobs) -> None: the launcher updates the castle's info
+        self.shared_level = True  # the castle's rules (D162)
         self.seen = [m.save_seq() for m in mailboxes]
         self.pending = None   # (saver index / "local" / "remote", blob) while the partner saves
         self.dead_frames = 0
         self.saves = 0        # joint saves written
         self.resumed = False  # the session file was loaded in this run
+        self.sent_load = False  # this game (the host) told the partner to load it
+        self.partner_gone = False  # the link was lost since the partner was last in play
+        self.partner_out = 0    # frames the partner has been out of play since coming back
         self._pending_frames = 0
         self.start = None     # (stage, room, x, y): a test castle's start, until its first save
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
+        self.partner_crashed = False  # the partner's app said its game stopped (issue 113)
+        self._load_msg = None  # the host's load, until this game is running: its boot wipes one written sooner (issue 61)
 
     def _write(self, blobs):
         """blobs: [slot 1 (this machine's player), slot 2 or None (keep the file's)]."""
@@ -113,7 +123,9 @@ class JointSave:
         been in play for a moment (an arrive during the load is lost)."""
         for a in list(self._arrive):
             q = a[0].self_presence()
-            if not (q.flags & IN_PLAY) or q.flags & BUSY:
+            if q.flags & CUTSCENE:  # the start's scene: it's there. Sent after it, the fight was reloaded
+                self._arrive.remove(a)  # and the scene played again (the Succubus's, playtest 0.14)
+            elif not (q.flags & IN_PLAY) or q.flags & BUSY:
                 a[1] = 0 if a[1] is None else a[1]  # loading: from here on, count
             elif a[1] is not None:
                 a[1] += 1
@@ -148,8 +160,29 @@ class JointSave:
                 self.pending = (i, blob)
         self._both_dead()
 
+    def _bring_partner(self, m):
+        """A partner who came back to a castle already under way sits at their title screen, and
+        only a load brings them in (playtest 0.14). The host sends it again, once per return."""
+        age = m.partner_age()
+        if age > PARTNER_GONE_FRAMES:
+            self.partner_gone = True
+            self.partner_out = 0
+            return
+        if not self.partner_gone or not self.sent_load or age > 30 or self.path is None or not self.path.exists():
+            return
+        if m.partner_presence().flags & 1:
+            self.partner_gone = False
+            return
+        self.partner_out += 1
+        if self.partner_out >= RESEND_LOAD_FRAMES:
+            self.partner_gone = False
+            blobs = both_slots(read_session(self.path), self.shared_level)
+            b64 = lambda b: base64.b64encode(b).decode("ascii")
+            self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]), "start": None})
+
     def _tick_online(self):
         m = self.mb[0]
+        self._bring_partner(m)
         seq = m.save_seq()
         if seq < self.seen[0]:
             self.seen[0] = seq
@@ -182,26 +215,35 @@ class JointSave:
                 local_blob = self.pending[1] if (self.pending and self.pending[0] == "local") else m.save_out()
                 self._write([local_blob, remote_blob])
                 self.pending = None
-            elif op == "load_save":  # the host's castle: "yours" is this player's slot
-                yours, theirs = base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])
-                if self.path is not None:
-                    write_session(self.path, [yours, theirs])
-                self.resumed = True
-                self.dead_frames = 0
-                m.put_save(yours)
-                m.command(CMD_LOAD_SAVE)
-                # the host's test castle: arrive where it starts. A new load replaces any arrival
-                # still waiting: the last one's sent a boss rush's joiner back to the boss before.
-                self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
+            elif op == "load_save":
+                self._load_msg = msg
             elif op == "game_over":
                 self.dead_frames = 0
                 m.command(CMD_GAME_OVER)
+            elif op == "crashed":
+                self.partner_crashed = True
+        if self._load_msg and m.ready() and m.self_presence().flags:  # its code is running: boot's over
+            self._load(m, self._load_msg)
+            self._load_msg = None
         if self.pending and self.pending[0] == "local":  # the partner never answered: alone
             self._pending_frames += 1
             if self._pending_frames > PARTNER_SAVE_FRAMES:
                 self._write([self.pending[1], None])
                 self.pending = None
         self._both_dead_online()
+
+    def _load(self, m, msg):
+        """The host's castle: "yours" is this player's slot."""
+        yours, theirs = base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])
+        if self.path is not None:
+            write_session(self.path, [yours, theirs])
+        self.resumed = True
+        self.dead_frames = 0
+        m.put_save(yours)
+        m.command(CMD_LOAD_SAVE)
+        # the host's test castle: arrive where it starts. A new load replaces any arrival
+        # still waiting: the last one's sent a boss rush's joiner back to the boss before.
+        self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
 
     def _both_dead_online(self):
         m = self.mb[0]
@@ -240,7 +282,8 @@ class JointSave:
     def resume(self):
         """Loads the session file into both games (from the title screen, or in play)."""
         self.resumed = True
-        blobs = both_slots(read_session(self.path))
+        self.sent_load = True
+        blobs = both_slots(read_session(self.path), self.shared_level)
         self._arrive = [[m, None, tuple(self.start)] for m in self.mb] if self.start else []
         if self.host is not None:
             self.mb[0].put_save(blobs[0])

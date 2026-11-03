@@ -2,6 +2,7 @@
 #include "maria.h"
 
 // Tuning knobs (M8b §5), as for Richter (characters/richter-ps1/coop_ric.c).
+#define BASIC_BASE_PCT 50  // issue 114: her attack's own value, so her damage a second is Alucard's
 #define BASIC_STR_PCT 100  // her own attack gains this % of STR
 #define GUARDIAN_INT_DIV 50 // guardians and their crashes: × (1 + INT / this)
 #define FIRE_PCT 125       // Fire of Bat: her attack burns, for this % of its damage
@@ -39,8 +40,14 @@ void CoopMarPartnerInit(u16 initParam) {
 #endif
 
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
+    if (g_CoopOptions & OPT_NO_GROWTH) {
+        return attack; // the castle's rules: her attacks as in her own game
+    }
+    if (g_Status.D_80097BF8 & 1) {
+        attack /= 2; // poisoned (module/character.c)
+    }
     if (subweapon == COOP_MAR_BASIC) {
-        attack += g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;
+        attack = attack * BASIC_BASE_PCT / 100 + g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;
         if (COOP_CAN(RELIC_FIRE_OF_BAT)) {
             attack = attack * FIRE_PCT / 100;
             entity->attackElement |= ELEMENT_FIRE;

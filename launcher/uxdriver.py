@@ -104,6 +104,7 @@ class Driver:
             drv._hook_display(this.display)
             drv._hook_ui(this.ui)
         launcher_cls.__init__ = init
+        launcher_cls.rules_at_start = lambda _self, *_: None  # flows go straight to the game
         import gameview
         orig_overlay = gameview.GameView.overlay
 
@@ -409,7 +410,12 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("wait", 3),  # Layout: Automatic -> Side by side
         ("expect", lambda d: d.launcher.settings.get("layout") == "side", "the pause menu changes the layout (View, from a controller)"),
         ("call", lambda d: d.launcher.action("layout:auto")),
-        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back to the menu
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Castle rules
+        ("screen", "Castle rules"), ("shot", "castle-rules"), ("key", pg.K_RIGHT), ("wait", 3),
+        ("expect", lambda d: d.view.rules["exp_pct"] == 125 and d.view.playthrough.info["rules"]["exp_pct"] == 125,
+         "a slider moved in a game goes to the game and into the castle"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"),
+        *[("key", pg.K_UP)] * 4, ("key", pg.K_RETURN),  # Save and go back to the menu
         ("screen", "Home"), ("shot", "home-again"),
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
 
@@ -580,6 +586,27 @@ def _report_send(pg):
     ]
 
 
+def _crash(pg):
+    """Issue 113: a game crashes in play (its vector overwritten). The report is saved with the
+    states from before, the crash window is asked for, and the app goes back to its menu."""
+    import zipfile
+    import report
+    opened = []
+
+    def crash(d):
+        d.view.open_crash_window = opened.append
+        d.view.games[0].write(0x80000080, 0x12345678)
+    steps = _solo(pg)
+    i = next(k for k, s in enumerate(steps) if s[0] == "game_frames")
+    return steps[:i] + [
+        ("game_frames", 300), ("call", crash), ("until", lambda d: opened), ("wait", 30), ("shot", "crashed"),
+        ("expect", lambda d: opened[0].parent == report.reports_dir(), "the report is saved before anything is asked"),
+        ("expect", lambda d: any(n.startswith("before") for n in zipfile.ZipFile(opened[0]).namelist()),
+         "it holds states from before the crash"),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+    ]
+
+
 def _window(pg):
     steps = _couch(pg, quit_at_end=False)[:-2]
     i = next(k for k, s in enumerate(steps) if s[0] == "unplug")
@@ -621,6 +648,20 @@ def _menus(pg):
                   ("menu", action), ("until", lambda d: d.heading in ("Debug starts", "Making the debug starts")),
                   ("until", lambda d: d.heading == "Debug starts"), ("shot", action), ("key", pg.K_ESCAPE),
                   ("screen", "Home")]
+    def a_castle(d):
+        from archive import Castle
+        d.castle = Castle.new(name="Rules")
+
+    def saved_rules(d):
+        from archive import Castle
+        return Castle(d.castle.dir).info.get("rules") or {}
+    steps += [("menu", "rules"), ("screen", "Castle rules"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
+              ("call", a_castle), ("menu", "rules"), ("screen", "which castle"), ("key", pg.K_RETURN),
+              ("screen", "Castle rules"), ("shot", "rules"), ("key", pg.K_RIGHT), ("wait", 3),
+              ("expect", lambda d: saved_rules(d).get("exp_pct") == 125, "Options > Open settings: a slider saves to the castle"),
+              *[("key", pg.K_DOWN)] * 6, ("key", pg.K_RETURN), ("wait", 3),
+              ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
+              ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
     steps += [("menu", "quit")]
     return steps
 
@@ -794,7 +835,7 @@ def _characters(pg):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
              ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RETURN),
+             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 8, ("key", pg.K_RETURN),
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
     for path, words, name in wrong:
@@ -898,7 +939,7 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"report_send": _report_send, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

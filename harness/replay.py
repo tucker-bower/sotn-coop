@@ -10,6 +10,7 @@ was seen; now/*.state are the exact moment, for inspecting RAM."""
 
 import argparse
 import json
+import struct
 import tempfile
 import zipfile
 from pathlib import Path
@@ -17,6 +18,18 @@ from pathlib import Path
 from session import Session  # first: puts `link` on the path
 
 from module import COOP_DISC
+
+
+def loadable(state, disc):
+    """A report's state, with this machine's disc: the report blanks its path, in the state's
+    header and in the trailer after its data (docs/research.md)."""
+    b, path = bytearray(state), str(Path(disc).resolve()).encode()
+    title, name_length, data_size = 8 + 8, 8 + 168, 8 + 208
+    size, offset = struct.unpack_from("<II", b, data_size)
+    b[title:title + 128] = path.ljust(128, b"\0")
+    struct.pack_into("<II", b, name_length, len(path), 8)
+    b[8 + offset + size:8 + offset + size + 8] = bytes(8)  # the trailer
+    return bytes(b)
 
 
 def main():
@@ -40,7 +53,7 @@ def main():
         todo = [(pa, pb) for f, pa, pb in inputs if start <= f <= last]
     starts = []
     for f in files:
-        (tmp / Path(f).name).write_bytes(z.read(f))
+        (tmp / Path(f).name).write_bytes(loadable(z.read(f), args.disc))
         starts.append(str(tmp / Path(f).name))
     out = args.report.with_name(args.report.stem + "-replay")
     out.mkdir(exist_ok=True)

@@ -42,7 +42,7 @@ static const Region s_Regions[] = {
     {0x80097D1C, 0x280},                // g_PlayerDraw[16]
     {0x800ACF74, 8},                    // D_800ACF74, g_AlucardChairSleepTimer
     {0x8013B5E8, 4},                    // knockback invincibility, HUD HP delay
-    {STATUS_A, STATUS_A_SIZE},          // g_Status: hp .. statsTotal (the partner's: PutStatus)
+    {STATUS_A, STATUS_A_SIZE},          // g_Status: spellsLearnt .. statsTotal (the partner's: PutStatus)
     {STATUS_B, STATUS_B_SIZE},          // g_Status: subWeapon .. elements
     {0x8013796C, 0x30},                 // g_PlayerHud
     {0x80139828, 0x40},                 // g_StatBuffTimers
@@ -58,7 +58,7 @@ static const Region s_Regions[] = {
     {0x8013AEE4, 0x4},                  // D_8013AEE4
     {0x80097BF8, 0x4},                  // g_Status.D_80097BF8 (bit 0: no MP back), between the two ranges
 };
-#define BODY_SIZE (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + 0x48 + 0x34 + 0x30 + 0x40 + 0x40 + \
+#define BODY_SIZE (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + STATUS_A_SIZE + 0x34 + 0x30 + 0x40 + 0x40 + \
                    0xC + 0x8 + 0x100 + 0x4 + 0x4 + 0x4 + 0x4)
 
 // A partner who runs its own player code (Richter, Maria), or an Alucard partner in their game:
@@ -461,7 +461,9 @@ static void AluPalettes(void) {
 // The partner starts as a copy of player 1, a little to the right.
 #define DRAW_OFS (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)) // g_PlayerDraw in the copy
 
+#define PLAYER_HIT_MARGIN 1000
 static bool s_TeleportSeen; // the partner's FLIP_TELEPORT_IN, last frame
+static bool s_BodyDied;     // dead here while the partner isn't: made again
 static s32 s_PartnerHp = -1; // its HP, as its status last said (a drop: it was hit in its game)
 u32 g_CoopBodyHits; // hits given to the body (tests read it: coop.map)
 u32 g_CoopBodyOff; // tests: no partner body (it's drawn by nothing then)
@@ -573,11 +575,17 @@ static void Make(void) {
 
 // Entity positions are on screen (relative to the camera), and the camera moved while the copy
 // was out of RAM: its slots move with it, as the game moves its own entities.
+// The body's Alucard code checks for a level up, on this player's XP and the partner's stats: that
+// level's gains were swapped out with the stats, and Richter leveled with his growth rule off.
+static s32 s_KeptExp;
+
 static void SwapIn(void) {
     s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
     s32 i;
 
     Swap();
+    s_KeptExp = g_Status.exp;
+    g_Status.exp = 0;
     s_SavedChar = g_CoopCharacter;
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
     s_SfxPos = g_sfxRingBufferWritePos;
@@ -634,6 +642,7 @@ void PartnerBodyOffset(s16* dx, s16* dy) {
 }
 
 static void SwapOut(void) {
+    g_Status.exp += s_KeptExp;
     s_ScrollX = g_Tilemap.scrollX.i.hi;
     s_ScrollY = g_Tilemap.scrollY.i.hi;
     if (s_Code) {
@@ -653,7 +662,10 @@ static void SwapOut(void) {
     Swap();
 }
 
-static bool PartnerLive(void) { return g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES; }
+// Its body outlasts a stall of the link (it blinked in and out with each one: playtest 0.14), standing
+// still once its buttons stop coming.
+#define BODY_STALE_FRAMES 300
+static bool PartnerLive(void) { return g_CoopLink.partnerAge <= BODY_STALE_FRAMES; }
 
 // The partner is in this room, in play, as a character we can run: Alucard (DRA's code), Richter or
 // Maria (their partner builds), in any game.
@@ -835,9 +847,10 @@ void PartnerFrame(void) {
         return;
     }
     if (s_Made && !Spike() &&
-        (!PartnerLive() || !PartnerHere() || g_CoopLink.partner.character != s_Char ||
+        (!PartnerLive() || !PartnerHere() || g_CoopLink.partner.character != s_Char || s_BodyDied ||
          ((g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) && !s_TeleportSeen))) {
         Drop(); // gone (from this room, or for good), or just revived: made again where they are
+        s_BodyDied = false;
     }
     s_TeleportSeen = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN);
     if (!Spike() && !(PartnerLive() && PartnerHere())) {
@@ -859,7 +872,7 @@ void PartnerFrame(void) {
         return;
     }
     s_JustMade = false;
-    pad = PartnerLive() ? g_CoopLink.partnerPad : g_CoopSpikePad;
+    pad = !PartnerLive() ? g_CoopSpikePad : g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES ? g_CoopLink.partnerPad : 0;
     t0 = VSync(1);
     if (PartnerLive()) {
         PutStatus();
@@ -869,9 +882,11 @@ void PartnerFrame(void) {
     // Hit in its own game (its HP dropped): its own hit reaction here, its own code's knockback
     // and voice, from the same HP to the same HP (cosmetic: the body's status is the partner's).
     if (PartnerLive() && ((const CoopStatus*)STATUS_PARTNER_ADDR)->magic == STATUS_MAGIC) {
-        s32 hp = *(const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a; // g_Status.hp
+        s32 hp = ((const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a)[1]; // g_Status.hp
         if (s_PartnerHp > hp && hp > 0) {
-            g_Status.hp = s_PartnerHp;
+            // Its own code's sums can differ from its game's, and a body that died here stayed dead
+            // and unseen while the partner played on (playtest 0.14): it can't die of this.
+            g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + (s_PartnerHp - hp);
             PLAYER.hitParams = DAMAGEKIND_1;
             PLAYER.hitPoints = s_PartnerHp - hp + g_Status.defenseEquip;
             g_CoopBodyHits++;
@@ -911,6 +926,7 @@ void PartnerFrame(void) {
     g_CurrentEntity = cur;
     g_pads[0] = pad0;
     g_CoopOptions = options;
+    s_BodyDied = (g_Player.status & PLAYER_STATUS_DEAD) && !(p->flags & PRESENCE_DEAD);
     Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
     SwapOut();
     g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter: its update and drawing
@@ -932,6 +948,8 @@ static u16 BankClut(u16 c) {
     u16 y = (c >> 6) & 0x1FF;
     return y >= 0xF0 && y < 0x100 && (c & 0x3F) < 0x10 ? c | CLUT_BANK : c;
 }
+
+u16 PartnerClut(u16 clut) { return s_Banked ? BankClut(clut) : clut; }
 
 static void BankPolys(u32 gt4, u32 gt3) {
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
@@ -1032,7 +1050,7 @@ static void Draw(void) {
     for (i = 1; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
-    if (!s_OtherChar) { // only two of a kind need telling apart
+    if (!s_OtherChar && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
         Tint(gt4);
     }
     if (s_Banked) {

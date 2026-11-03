@@ -138,11 +138,11 @@ def partner_status(run):
     # where g_Status's two ranges are in the copy (partner.c's s_Regions, in order)
     body = symbols()["g_CoopSpikeBody"]
     ofs = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4
-    copy = a.read_bytes(body, 0x48, ofs) + a.read_bytes(body, 0x34, ofs + 0x48)
+    copy = a.read_bytes(body, 0x4C, ofs) + a.read_bytes(body, 0x34, ofs + 0x4C)
     run.expect(copy == theirs, "A's copy of B has B's status",
                differ=[i for i in range(len(theirs)) if copy[i] != theirs[i]][:8])
     now = b"".join(a.read_bytes(addr, n) for addr, n in STATUS_RANGES)
-    same = [i for i in range(len(mine)) if now[i] != mine[i] and not 0 <= i < 0x18]  # hp..mpMax may tick
+    same = [i for i in range(len(mine)) if now[i] != mine[i] and not 4 <= i < 0x1C]  # hp..mpMax may tick
     run.expect(not same, "A's own status is its own", differ=same[:8])
 
 
@@ -557,7 +557,7 @@ def _partner_hit(run, cb):
         steps.add(a.read(body, "<H", 0x2C))  # PLAYER.step
     run.expect(a.read(sym["g_CoopBodyHits"]) > hits0, "A's copy of B was hit")
     run.expect(10 in steps, "and played its hit reaction (step 10)", steps=sorted(steps))
-    status_hp = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4  # its g_Status.hp, in the copy
+    status_hp = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4) + 0x280 + 8 + 4 + 4  # its g_Status.hp, in the copy
     run.expect(a.read(body, "<i", status_hp) == b.read("g_Status", "<i", 0x23C), "ending at B's HP",
                body=a.read(body, "<i", status_hp), b=b.read("g_Status", "<i", 0x23C))
 

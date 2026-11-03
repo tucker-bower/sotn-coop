@@ -153,3 +153,27 @@ An extra CD read at boot shifts every savestate made afterwards, and `no_effect_
 
 ## Reading a crash from an F9 report
 A report's `.state` file holds the game. After the header, the `CPU` marker is followed by 8 bytes, then 36 registers (pc is the 35th), and RAM starts 6702 bytes after the marker. A game stuck at pc 0x80000080 with a changed exception vector has been written over. Compare low memory with the partner's report: `g_Timer` stopped while emulator frames went on means the game itself stopped. Reports' `presences` are the player's own, not the partner's.
+
+## Loading an F9 report's state
+A report's state won't load as it is: the disc's path is blanked, in the header and in a trailer after the data. `harness/replay.py` points both at this machine's disc. `scripts/read_report.py` prints who was where from a report's memory, without an emulator.
+
+## Doorways have gaps
+The east door of the Marble Gallery's corridor (room (45,25) to (60,25)) has a one-tile gap in its floor under the door. Alucard's door walk crosses it. Richter's and Maria's walks check for a fall, and they drop in. In there, the wall pushes the player 13 px, which is through the door: the room changes, and the same happens on the other side, forever.
+
+## Camera limits are a floor
+`g_Tilemap.height` isn't only the camera: with no room below, a player is held there. A player past an `EntityLockCamera` it never ran for stands at y 251 on nothing, off the screen. If a report shows that y, look at the limits.
+
+## ANIM_FRAME_LOAD
+Bit 15 of `animCurFrame` means "the sprite is already in VRAM, don't upload it". A dead player's last frame has it: a body stuck at a frame like 0x8022 is a dead body.
+
+## A mailbox can exist before its module runs
+`magic` and `version` are set before the module's code runs, and a command written in that gap is lost. Anything sent to a booting game waits for nonzero presence flags: a running module always sets `IN_PLAY` or `BUSY`.
+
+## The ending's movie stops g_Timer
+`g_Timer` ticks in `MainGame`'s loop, and the ending's movie plays in its own (`VSync`, `StGetNext`). So in `Game_Ending` a stopped timer isn't a hang.
+
+## Primitive chains need their full length
+An entity's primitives are a linked chain, and its code walks them all. A chain cut short when a guest takes an entity over runs that code off the end (a Beelzebub part has 256 and froze the game). `CompleteChains` rebuilds them on hand-over.
+
+## Fist weapons are primitives
+A fist weapon's entity has no sprite (`animCurFrame` stays 0). Its overlay (`w_001.c`) draws four primitives on tpage 0x1A, and Alucard's own body plays the punch. So the link's weapon sprites carry nothing for a fist. Richter and Maria draw a crop of Alucard's own body frames instead (`DrawArm`, D164): frames 125-127 hold the reach, in front of x +12 and above his cape.

@@ -80,7 +80,8 @@ def safe(text):
 
 class Castle:
     """info (castle.json): id, created, name (typed at SOTN's name entry; None until the first
-    save), played, saves, stages, received (a copy from a host, not played here since)."""
+    save), played, saves, stages, received (a copy from a host, not played here since), rules
+    (launcher/rules.py: none yet means the defaults)."""
 
     def __init__(self, folder):
         self.dir = Path(folder)
@@ -186,6 +187,11 @@ class Castle:
     def meta(self):
         """What a host tells its partner about this castle (in its HELO)."""
         return {"id": self.info["id"], "name": self.info.get("name"), "created": self.info["created"]}
+
+    def set_rules(self, rules):
+        """The castle's rules (launcher/rules.py). A joiner's copy gets the host's."""
+        self.info["rules"] = rules
+        self.save_info()
 
     def played_here(self):
         """This player is playing it as their own (solo, couch, hosting): copies from a host go

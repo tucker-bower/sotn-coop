@@ -11,6 +11,7 @@
 #define MESSAGE_WAIT 600 // frames a message waits for the game to be able to show it
 
 static const char* s_Pending;
+static const u8* s_PendingName; // the game's own text (an item's name), not ASCII
 static s32 s_Wait;
 static u8 s_Text[64];
 
@@ -41,8 +42,10 @@ static void Show(const char* text, bool onTop) {
     bottomText = (void*)ovl->bottomText;
     bottomText(s_Text, false);
     if (onTop && g_unkGraphicsStruct.BottomCornerTextPrims > 0) { // above a fade (0x1FD)
+        // Within the 0x200 priorities there are: past them, the letters weren't drawn at all, and
+        // a dead player saw an empty box (playtest 0.14). The box under its letters.
         for (prim = &g_PrimBuf[g_unkGraphicsStruct.BottomCornerTextPrims]; prim; prim = prim->next) {
-            prim->priority += 0x10;
+            prim->priority = prim->type == PRIM_SPRT ? 0x1FF : 0x1FE;
         }
     }
 }
@@ -57,7 +60,34 @@ void CoopMessageNow(const char* text) {
     }
 }
 
+// An item's name, in the box the game shows it in.
+void CoopMessageName(const u8* name) {
+    s_PendingName = name;
+    s_Wait = MESSAGE_WAIT;
+}
+
+static void ShowName(const u8* name) {
+    const OverlayInfo* ovl = FindOverlay(g_StageId);
+
+    if (!ovl || !ovl->bottomText) {
+        return;
+    }
+    if (g_unkGraphicsStruct.BottomCornerTextTimer) {
+        g_api.FreePrimitives(g_unkGraphicsStruct.BottomCornerTextPrims);
+        g_unkGraphicsStruct.BottomCornerTextTimer = 0;
+    }
+    ((void (*)(const u8*, u8))ovl->bottomText)(name, true);
+}
+
 void MessageUpdate(void) {
+    if (s_PendingName) {
+        if (g_GameState == Game_Play && g_GameStep == Play_Default && g_GameEngineStep == Engine_Normal) {
+            ShowName(s_PendingName);
+            s_PendingName = NULL;
+        } else if (--s_Wait <= 0) {
+            s_PendingName = NULL;
+        }
+    }
     if (!s_Pending) {
         return;
     }

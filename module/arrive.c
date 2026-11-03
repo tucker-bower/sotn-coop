@@ -139,13 +139,6 @@ static bool SameRoomAsPartner(void) {
     return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// In this room but half a screen or more away (cameras apart: no shared room).
-static bool FarInRoom(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    s32 dx = p->scrollX - g_Tilemap.scrollX.i.hi, dy = p->scrollY - g_Tilemap.scrollY.i.hi;
-    return SameRoomAsPartner() && (dx >= 128 || dx <= -128 || dy >= 112 || dy <= -112);
-}
-
 static bool PartnerInBossFight(void) {
     return PartnerFresh() && (g_CoopLink.partner.flags & PRESENCE_BOSS) &&
            !(g_CoopLink.partner.flags & PRESENCE_DEAD);
@@ -285,7 +278,7 @@ static void TeleportInput(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
     if (!InNormalPlay() || g_GameEngineStep != Engine_Map || !(g_pads[0].tapped & PAD_CROSS) ||
-        ArriveBusy()) {
+        ArriveBusy() || RULE_OFF(RULE_NO_MAP_TELEPORT)) {
         return;
     }
     if (BossHere()) { // no running from a boss fight (design/M5)
@@ -386,7 +379,7 @@ static bool DeathUpdate(void) {
     if (s_AllowGameOver || !PartnerFresh() || g_StageId == STAGE_ST0) {
         return true; // playing alone, the prologue, or the host said so: the game's own Game Over
     }
-    if (!s_DeathFade && FairyRevive()) {
+    if (!s_DeathFade && !RULE_OFF(RULE_NO_FAERIE_REVIVE) && FairyRevive()) {
         return true;
     }
     if (!(p->flags & PRESENCE_DEAD)) {
@@ -410,6 +403,14 @@ static bool DeathUpdate(void) {
             }
             return false;
         }
+    }
+    // The castle's rules: no revive. Stay down; when the partner falls too, the host decides.
+    if (RULE_OFF(RULE_NO_REVIVE) && !(p->flags & PRESENCE_DEAD)) {
+        if (!s_DownForBoss) {
+            s_DownForBoss = true;
+            CoopMessageNow("Down until your partner falls");
+        }
+        return false;
     }
     if (!(p->flags & PRESENCE_DEAD) && PartnerReachable()) {
         s_DeathFade = 0;
@@ -490,10 +491,8 @@ static void PullIn(void) {
     if (!PartnerInBossFight() || (s_BossPulled && !s_BossPullCooldown && !ArriveBusy() && !SameRoomAsPartner())) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
-               (CanBePulled(false) ||
-                // the same room but too far apart to share it (a wide arena: the Succubus's, when
-                // one player walked on through her intro): each game would fight its own boss
-                (CanBePulled(true) && SharedRole() == ROLE_NONE && p->role == ROLE_NONE && FarInRoom()))) {
+               !RULE_OFF(RULE_NO_BOSS_PULL) &&
+               CanBePulled(false)) { // the same room is never reloaded: the fight is shared (shared.c)
         s_BossPulled = true;
         s_BossPullCooldown = BOSS_PULL_COOLDOWN;
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
@@ -504,7 +503,8 @@ static void PullIn(void) {
     if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || (p->flags & PRESENCE_DEAD) ||
         (p->stage == STAGE_ST0 && g_StageId != STAGE_ST0) || !SAME_WORLD(p)) {
         s_CutscenePulled = false;
-    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled(true)) {
+    } else if (!s_CutscenePulled && !(p->flags & PRESENCE_CS_FOLLOWER) && !s_CsCooldown && CanBePulled(true) &&
+               !RULE_OFF(RULE_NO_SCENE_PULL)) {
         // The partner is busy (the cutscene has control): arrive anyway. This game runs its
         // own copy of the scene; the flags it sets are shared, so it plays out the same.
         s_CutscenePulled = true;
@@ -523,6 +523,7 @@ static void CutsceneTrack(void) {
         s_CsCooldown--;
     }
     if (on && !s_CsOn && !s_CsFollower && !(p->flags & PRESENCE_DEAD) && !BossFinalGone() &&
+        !RULE_OFF(RULE_NO_SCENE_PULL) &&
         ((PartnerFresh() && !(p->flags & PRESENCE_CUTSCENE) && SAME_WORLD(p) &&
           (p->stage != STAGE_ST0 || g_StageId == STAGE_ST0)) ||
          PartnerOnItsWay())) {
@@ -542,6 +543,31 @@ static void CutsceneTrack(void) {
         s_CsFollower = false; // pulled in, but no scene here: an ordinary game again
     }
     s_CsOn = on;
+}
+
+// Start asks to skip a scene (issue 107): this game's Start does nothing else during one, the
+// partner sees a note, and the presence says so. The game itself only lets a scene be skipped after
+// it's been seen in a finished game, and only in some stages, so nothing here ends it: with both
+// asking, the launchers run the scene at high speed (gameview.py).
+static bool s_SkipVote, s_SkipNoted;
+
+bool ArriveSkipVote(void) { return s_SkipVote; }
+
+static void SkipVote(void) {
+    const CoopPresence* p = &g_CoopLink.partner;
+
+    if (!ArriveSharedScene()) {
+        s_SkipVote = s_SkipNoted = false;
+        return;
+    }
+    if (g_pads[0].tapped & PAD_START) {
+        g_pads[0].tapped &= ~PAD_START;
+        s_SkipVote = true;
+    }
+    if (PartnerFresh() && (p->flipX & FLIP_SKIP_VOTE) && !s_SkipVote && !s_SkipNoted) {
+        s_SkipNoted = true;
+        CoopMessage("Skip cutscene: START");
+    }
 }
 
 // True while the leader holds its scene for the partner, or a game whose scene ended waits for
@@ -707,7 +733,8 @@ void ArrivePresence(CoopPresence* p) {
     // During a scene it stays where the scene started, which is where a pulled-in partner must
     // arrive for its own copy to play the same (the scene walks the player on; arriving there,
     // Death's scene walked the partner out of the room, over and over).
-    if (((g_Player.vram_flag & 1) && !g_CutsceneHasControl) || p->roomLeft != s_GroundLeft ||
+    // Not while a door or a scene walks the player: that can cross ground nobody can stand on.
+    if (((g_Player.vram_flag & 1) && !g_CutsceneHasControl && !g_Player.demo_timer) || p->roomLeft != s_GroundLeft ||
         p->roomTop != s_GroundTop || p->stage != s_GroundStage) {
         p->groundX = p->x;
         p->groundY = p->y;
@@ -747,6 +774,7 @@ bool ArriveFrame(void) {
     CommandUpdate();
     TeleportInput();
     CutsceneTrack();
+    SkipVote();
     PullIn();
     StuckWalkRescue();
     ArriveUpdate();
@@ -754,11 +782,6 @@ bool ArriveFrame(void) {
         return false;
     }
     if (CutsceneHold()) {
-        return false;
-    }
-    // Shared-room pause: the partner is in their menu in my room, so my world waits too.
-    if (InNormalPlay() && g_GameEngineStep == Engine_Normal && !ArriveBusy() && PartnerFresh() &&
-        (g_CoopLink.partner.flags & PRESENCE_PAUSED) && SameRoomAsPartner()) {
         return false;
     }
     return true;

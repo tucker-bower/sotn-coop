@@ -9,6 +9,7 @@
 // frames (drawn upright).
 #define COOP_MODULE
 #include <game.h>
+#include "coop_api.h"
 #include "link.h"
 #include "character.h"
 #include "offhand.h"
@@ -129,7 +130,7 @@ static u8 s_PalsIn; // hands whose palettes are in the picture (bits)
 
 // The sheet's pixels [sx, sx + w) x [sy, sy + h) into the picture; *u, *v: where (sx, sy) went,
 // in the window's pixels. False if they don't fit.
-static bool Place(const u16* sheet, s32 sx, s32 sy, s32 w, s32 h, s32* u, s32* v) {
+static bool Place(const u16* sheet, s32 stride, s32 sx, s32 sy, s32 w, s32 h, s32* u, s32* v) {
     s32 w0 = sx >> 2, nw = ((sx + w + 3) >> 2) - w0, row, k;
 
     if (nw > WIN_W || h > WIN_TILES_H) {
@@ -145,7 +146,7 @@ static bool Place(const u16* sheet, s32 sx, s32 sy, s32 w, s32 h, s32* u, s32* v
     }
     for (row = 0; row < h; row++) {
         for (k = 0; k < nw; k++) {
-            s_Win[s_CurY + row][s_CurX + k] = sheet[(sy + row) * SHEET_W + w0 + k];
+            s_Win[s_CurY + row][s_CurX + k] = sheet[(sy + row) * stride + w0 + k];
         }
     }
     *u = s_CurX * 4 + (sx & 3);
@@ -279,7 +280,7 @@ static void Draw(const CoopSprite* s, s32 hand) {
         if (ve > SHEET_H) {
             ve = SHEET_H;
         }
-        if (ue <= sx || ve <= sy || !Place(w->sheet, sx, sy, ue - sx, ve - sy, &u, &v)) {
+        if (ue <= sx || ve <= sy || !Place(w->sheet, SHEET_W, sx, sy, ue - sx, ve - sy, &u, &v)) {
             continue;
         }
         // From the sheet's pixels to the window's (u 0x80 on in its texture page)
@@ -317,6 +318,65 @@ static void Draw(const CoopSprite* s, s32 hand) {
     }
 }
 
+// Issue 123: a fist weapon's punch is Alucard's own arm. Richter and Maria have none, so theirs is
+// his, from his body frames in CoopBoot's copy of ARC_F.BIN: the columns in front of his chest and
+// the rows above his cape, in the puncher's own colours. Frames narrower than ARM_FRAME_W hold
+// no reach yet.
+#define ARM_FRONT 12
+#define ARM_ROWS 12
+#define ARM_FRAME_W 32
+#define ALU_SHEETS 218
+#define ARC_DELTA (ARC_F_ADDR - 0x8013C000)
+#define ARC_SPRITES ((const u32*)ARC_F_ADDR + 8)
+extern s16* D_800CF324[]; // DRA: his frames (src/dra/dra.h)
+
+static void DrawArm(const CoopSprite* s, bool partner) {
+    const s16* frame = D_800CF324[s->animCurFrame];
+    s32 sheet = frame[0] & 0x7FFF;
+    const u8* data;
+    POLY_GT4* poly;
+    s32 w, h, px, py, sx, cw, u, v, x, y, u0, u1;
+
+    if (sheet >= ALU_SHEETS || !ARC_SPRITES[sheet] || g_GpuUsage.gt4 >= MAX_POLY_GT4_COUNT) {
+        return;
+    }
+    data = (const u8*)(ARC_SPRITES[sheet] + ARC_DELTA);
+    w = data[0];
+    h = data[1] < ARM_ROWS ? data[1] : ARM_ROWS;
+    if (w < ARM_FRAME_W) {
+        return;
+    }
+    px = frame[1] + data[2];
+    py = frame[2] + data[3];
+    sx = (ARM_FRONT > px ? ARM_FRONT - px : 0) & ~3;
+    cw = w - sx;
+    if (cw <= 0 || !Place((const u16*)(data + 4), w / 4, sx, 0, cw, h, &u, &v)) {
+        return;
+    }
+    x = s->x - g_Tilemap.scrollX.i.hi + g_cameraOffsetX;
+    y = s->y - g_Tilemap.scrollY.i.hi + g_cameraOffsetY + py;
+    u += 0x80;
+    poly = &g_CurrentBuffer->polyGT4[g_GpuUsage.gt4];
+    setPolyGT4(poly);
+    if (s->facingLeft) {
+        x -= px + sx + cw - 1;
+        u0 = u + cw - 1;
+        u1 = u - 1;
+    } else {
+        x += px + sx;
+        u0 = u;
+        u1 = u + cw;
+    }
+    setXY4(poly, x, y, x + cw, y, x, y + h, x + cw, y + h);
+    setUV4(poly, u0, v, u1, v, u0, v + h, u1, v + h);
+    poly->tpage = WIN_TPAGE;
+    poly->clut = partner ? PartnerClut(g_ClutIds[s->palette]) : g_ClutIds[s->palette];
+    setSemiTrans(poly, false);
+    setShadeTex(poly, true);
+    addPrim(&g_CurrentBuffer->ot[s->zPriority], poly);
+    g_GpuUsage.gt4++;
+}
+
 static bool PartnerHere(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return g_CoopLink.partnerAge <= 30 && (p->flags & PRESENCE_IN_PLAY) && SAME_WORLD(p) &&
@@ -335,18 +395,29 @@ void WeaponsDraw(void) {
     bool sim;
 
     g_CoopWeaponsDrawn = 0;
-    if (g_GameState != Game_Play || !PartnerHere()) {
+    if (g_GameState != Game_Play) {
         return;
     }
     s_CurX = s_CurY = s_ShelfH = 0;
     s_PalsIn = 0;
+    if (WeaponArm(&moved)) {
+        DrawArm(&moved, false);
+    }
     sim = PartnerSimulated();
     if (sim) {
         PartnerBodyOffset(&dx, &dy);
     }
-    for (k = 0; k < (s32)g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
+    for (k = 0; PartnerHere() && k < (s32)g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
         s = &g_CoopLink.partnerSprites[k];
         hand = s->weapon & 1;
+        if (s->weapon & WEAPON_ARM) {
+            moved = *s;
+            moved.x += dx;
+            moved.y += dy;
+            DrawArm(&moved, true);
+            g_CoopWeaponsDrawn++;
+            continue;
+        }
         if (!(s->weapon & WEAPON_SPRITE) || Partner(hand)->magic != WEAPON_MAGIC ||
             (s->animSet & 0x7FFF) != 0x10 + hand * 2) { // the second bank: not yet
             continue;
@@ -370,6 +441,24 @@ void WeaponsDraw(void) {
         r.h = WIN_H;
         LoadImage(&r, (u_long*)s_Win);
     }
+}
+
+// This player's punching arm, if a fist weapon is swinging: as both games draw it.
+bool WeaponArm(CoopSprite* s) {
+    u16 frame = OffhandArmFrame();
+
+    if (!frame) {
+        return false;
+    }
+    __builtin_memset(s, 0, sizeof(*s));
+    s->animCurFrame = frame;
+    s->x = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi;
+    s->y = PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi;
+    s->palette = PLAYER.palette & 0x7FFF;
+    s->facingLeft = PLAYER.facingLeft;
+    s->zPriority = PLAYER.zPriority + 2;
+    s->weapon = WEAPON_ARM;
+    return true;
 }
 
 // This game's sprite of entity e, if it's a hand weapon's (sprites.c): as the partner draws it.

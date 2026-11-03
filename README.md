@@ -31,11 +31,12 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Shared level:** kills give both of you half the XP.
 - **Shared saves:** saving in a coffin saves both games. Anyone can pick up a castle, and whoever joins keeps a copy to play solo or host later.
 - **Save-state safety net:** the launcher keeps savestates at big moments, and never deletes them.
+- **Crash reports:** if a game crashes or hangs, the app saves a report and offers it in its own window. Nothing is sent unless you say so.
 
 **Fight together**
 - **Your partner is a real second player** in your game, with their own character, attacks, familiar and sounds.
 - **Same room, same enemies:** fight them together, and they can target either of you.
-- **Bosses and cutscenes together:** bosses bring your partner in, have 2× HP and switch targets. Cutscenes play for both of you.
+- **Bosses and cutscenes together:** bosses bring your partner in and switch targets, and every enemy has more health with a partner (200% by default). Cutscenes play for both of you.
 - **Revives:** if you die, you come back at your partner's side once any boss fight is over. If you both die, you reload your last save.
 - **Faerie revive:** Alucard's faerie and a Life Apple revive a fallen partner on the spot.
 
@@ -48,6 +49,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 **Extra modes**
 - **Boss rush:** all 22 bosses back to back, timed with splits and a best time, solo, on the couch or online.
 - **PvP:** optional, and off by default.
+- **Castle rules:** each castle has its own, in Options › Open settings or the pause menu: XP, damage and boss HP sliders, button remapping, and a switch for everything co-op changes about the game. The host's rules go for both players.
 - **Test castles:** start right outside any boss or scene.
 
 ## Tips

@@ -9,8 +9,10 @@
 #define COOP_MODULE
 #include <game.h>
 #include "flag_gated.h"
+#include "coop_api.h"
 #include "link.h"
 #include "progress.h"
+#include "message.h"
 #include "boss.h"
 #include "shared.h"
 
@@ -52,6 +54,7 @@ static s32 s_NChanged;
 static bool s_Applying; // the wrappers ignore our own calls
 static void (*s_AddToInventory)(u16, EquipKind);
 static s32 (*s_Grant)(s32, s32);
+static u16 (*s_DealDamage)(Entity*, Entity*);
 
 static bool Emit(u8 type, u16 a, u32 b) {
     CoopRing* r = &g_CoopLink.out;
@@ -102,18 +105,54 @@ static s32 GrantWrap(s32 amount, s32 type) {
     s32 exp = g_Status.exp;
     s32 ret;
 
-    if (kill && !s_Applying && PartnerLinked()) {
-        amount = amount > 1 ? amount / 2 : 1; // before the game scales it by the level gap
+    if (kill && !s_Applying) {
+        amount = amount * RULE_PCT(expPct, 100) / 100;
+        if (PartnerLinked() && !RULE_OFF(RULE_NO_SHARED_LEVEL)) {
+            amount /= 2; // before the game scales it by the level gap
+        }
+        amount = amount > 1 ? amount : 1;
     }
     ret = s_Grant(amount, type);
     if (!s_Applying && ret == 0 &&
         (type == GRANT_LIFE_UP || type == GRANT_HEART_UP || type == GRANT_RELIC)) {
         Emit(EV_GRANT, type, amount);
     }
-    if (kill && !s_Applying && (s32)g_Status.exp > exp) {
+    if (kill && !s_Applying && (s32)g_Status.exp > exp && !RULE_OFF(RULE_NO_SHARED_LEVEL)) {
         Emit(EV_EXP, 0, g_Status.exp - exp);
     }
     return ret;
+}
+
+// The castle's damage rule (D162). The result's top two bits are DealDamage's flags (immune,
+// absorbed); the rest is the damage.
+static u16 DealDamageWrap(Entity* enemy, Entity* attacker) {
+    u16 r = s_DealDamage(enemy, attacker);
+    s32 pct = RULE_PCT(dealtPct, 100);
+    s32 n = r & 0x3FFF;
+
+    if (pct != 100 && n) {
+        n = n * pct / 100;
+        r = (r & 0xC000) | (n < 1 ? 1 : n > 0x3FFF ? 0x3FFF : n);
+    }
+    return r;
+}
+
+// Damage to this game's player. Hit detection left it in PLAYER.hitPoints last frame (PvP this
+// frame), and the player's update takes it in this frame's UpdateGame: scaled here, every
+// character's own damage code does the rest. Alucard's code then takes off his defense, so the
+// rule scales what's left after it: 50% is half of what he'd lose.
+void ProgressDamageTaken(void) {
+    static s32 s_Scaled = -1; // the hit already scaled, if the player's update hasn't taken it
+    s32 pct = RULE_PCT(takenPct, 100);
+    s32 hit = PLAYER.hitPoints;
+    s32 def = g_CoopCharacter == PLAYER_ALUCARD ? g_Status.defenseEquip : 0;
+
+    if (!PLAYER.hitParams || !hit) {
+        s_Scaled = -1;
+    } else if (pct != 100 && g_GameState == Game_Play && hit != s_Scaled && hit > def) {
+        hit = def + (hit - def) * pct / 100;
+        s_Scaled = PLAYER.hitPoints = hit > def ? hit : def + 1;
+    }
 }
 
 // MainGame fills g_api from DRA's table before the main loop: wrap the two entries once
@@ -126,6 +165,10 @@ static void WrapApi(void) {
     if (g_api.func_800FE044 != GrantWrap) {
         s_Grant = g_api.func_800FE044;
         g_api.func_800FE044 = GrantWrap;
+    }
+    if (g_api.DealDamage != DealDamageWrap) {
+        s_DealDamage = g_api.DealDamage;
+        g_api.DealDamage = DealDamageWrap;
     }
 }
 
@@ -197,7 +240,9 @@ static void DetectRecords(void) {
 }
 
 static void DetectGold(void) {
-    if (g_Status.gold != s_Gold && Emit(EV_GOLD, 0, g_Status.gold - s_Gold)) {
+    if (RULE_OFF(RULE_NO_SHARED_GOLD)) {
+        s_Gold = g_Status.gold; // turned back on: only what changes from then on is shared
+    } else if (g_Status.gold != s_Gold && Emit(EV_GOLD, 0, g_Status.gold - s_Gold)) {
         s_Gold = g_Status.gold;
     }
 }
@@ -277,6 +322,9 @@ static void Apply(const CoopEvent* ev) {
         break;
     case EV_ITEM:
         AddToInventory(ev->a, ev->b);
+        // The game whose copy took it showed its name; here it arrives unannounced (playtest 0.14).
+        CoopMessageName(ev->b == EQUIP_HAND ? (const u8*)g_api.equipDefs[ev->a].name
+                                            : (const u8*)g_api.accessoryDefs[ev->a].name);
         break;
     case EV_USED: // the partner used it up (M13's fairy revive): one fewer in the shared bag
         if (ev->a < LEN(g_Status.equipHandCount) && g_Status.equipHandCount[ev->a]) {
@@ -403,6 +451,23 @@ static void Resync(void) {
     s_Visited = 0;
 }
 
+// Death's scene takes Alucard's gear from the players who see it, but the flag it sets also comes
+// with a save or a partner's castle: a player joining later kept the set (playtest 0.14). Looked at
+// when a game comes into play, and before the inverted castle: it has the pieces to find again.
+static void RobbedUpdate(void) {
+    const u32* eq = g_Status.equipment;
+
+    if (g_CastleFlags[IVE_BEEN_ROBBED] && !g_CastleFlags[INVERTED_CASTLE_UNLOCKED] && !g_CutsceneHasControl &&
+        g_StageId != STAGE_ST0 && !(g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
+        (eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SWORD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SHIELD ||
+         eq[LEFT_HAND_SLOT] == ITEM_ALUCARD_SHIELD || eq[RIGHT_HAND_SLOT] == ITEM_ALUCARD_SWORD ||
+         eq[HEAD_SLOT] == ITEM_DRAGON_HELM || eq[ARMOR_SLOT] == ITEM_ALUCARD_MAIL ||
+         eq[CAPE_SLOT] == ITEM_TWILIGHT_CLOAK || eq[ACCESSORY_1_SLOT] == ITEM_NECKLACE_OF_J ||
+         eq[ACCESSORY_2_SLOT] == ITEM_NECKLACE_OF_J)) {
+        g_api.InitStatsAndGear(1);
+    }
+}
+
 void ProgressUpdate(void) {
     bool inPlay = g_GameState == Game_Play && g_GameStep == Play_Default;
 
@@ -414,6 +479,7 @@ void ProgressUpdate(void) {
     if (!s_InPlay) {
         s_InPlay = true;
         Resync();
+        RobbedUpdate();
     }
     DetectFlags();
     DetectMap();

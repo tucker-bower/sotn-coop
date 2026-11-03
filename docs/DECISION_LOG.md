@@ -762,3 +762,44 @@ The door shuts for good behind the first player in, and its castle flag and tile
 
 **D154: The emulated CPU runs at 200%** (agent-default, 2026-11-01; game feel, so Tucker can overrule it)
 The partner's body costs 45–85 of a frame's 263 scanlines. On the playtest's route, the gate room lost up to 11% of its game frames with the body, and 2% without. Doubling the CPU brings the worst room to 1.7%, better than no body at all, and it needs no change to the body or the disc. Compared at 130%, 150% and 200% (`netplay_gate_*`, `realtime.py`): frames kept 99.2%, 99.4%, 99.5%. At 200% the worst half-second on the lab route was 83–90% against 73% at 150%, and the rooms on the gate route became shared sooner (10 s unshared against 33 s). Set in `harness/emu.py`, which the launcher uses too. The cost: rooms where retail slowed down no longer do, and the Android emulator works harder (not yet measured on a device). Options considered: making the body cheaper again (D129 already took the easy savings); drawing it every other frame (visible).
+
+**D155: What acts for one game's player runs in that game** (agent-default, 2026-11-02)
+The 0.14 playtest's stuck players came from the same mistake. Camera limits (`EntityLockCamera`) belong to one game's camera, but a guest only had a copy that never ran, and our targeting patch sent `GetSideToPlayer` to the nearer player, on the authority too. They now run in each game, as doors do, and scenery's `GetSideToPlayer` answers for that game's player. A new entity that reacts to "the player" for that player's own sake belongs on the list in `scripts/gen_overlay_table.py`. Buttons and lifts that a guest must drive for both are still open: #98.
+
+**D156: A guest's hit holds its copy of the enemy until the authority's catches up** (agent-default, 2026-11-02)
+Snapshots from before the authority heard of a hit bring the copy back to hittable, so a whip hit it every frame of the round trip: online, Richter did many times his damage ("so OP"). The guest keeps its own invincibility on that slot.
+
+**D157: A boss room is never reloaded for a player already in it** (agent-default, 2026-11-02)
+Pulling a far-away player in the same room reloaded that game's fight, and the two games could pull each other for ever (#111). A boss makes the room shared at any camera distance instead.
+
+**D158: A pause doesn't stop the partner** (Tucker, #108, boss fights included; how: agent-default)
+The paused game stops sharing the room, and the partner's game runs it. Back from the menu, that game counts as just arrived, so it's the guest and takes the room as it now is.
+
+**D159: Skipping a scene runs it fast** (Tucker, #107; how: agent-default)
+The game only allows a skip after it's been seen in a finished game, and only in some stages. With both players asking, each launcher runs the scene at 8x with no picture or sound, which works for every scene and stays in step.
+
+**D160: Every enemy has more health with a partner, 200% by default** (Tucker, #104)
+A setting, in tens of %, that the host's value decides online. It replaces 2x for bosses only.
+
+**D161: A new castle skips the title** (Tucker, #109; how: agent-default)
+The launcher plays the title's menus through as a player would, on screen. A new castle starts on its rules screen (D162).
+
+**D162: Everything that changes the game is a castle's rule** (Tucker, 2026-11-01: "Each feature that in some way deviates from vanilla game logic needs to be a toggleable option... scoped to the castles"; the list and the details agent-default, `docs/design/M-castle-rules.md`)
+- **The rule:** every feature that deviates from vanilla game logic has a setting in the launcher, stored per castle, shared with the partner, and defaulting to how the game plays now. A new feature adds its rule.
+- Rules live in `castle.json`, go to the joiner in HELO, and reach the game through mailbox words the host writes every frame. PvP, boss aggro and enemy health (D160) moved here from the app's settings; castles from before keep those values. Options › Open settings, the pause menu and Settings › Castle rules edit them, and online only the host can during a session.
+- **Not toggles (agent-default):** castle flags, the map, items and relics, shared rooms, the partner's body, joint saves, and Richter's and Dracula's shared death. Turning one off leaves two games that disagree about the castle.
+- **Controls stay per player (agent-default):** shortcuts and spells are about a player's hands. The button remap is a castle rule, as Tucker asked, and applies to both players.
+- **Revive off (agent-default):** a fallen player stays down until the partner falls too; then the host reloads as for any double death. A Game Over would have dropped them to the title alone.
+- **Merged with 0.15 (agent-default, 2026-11-02):** one rule for all enemies' HP, with a partner and alone: D160's setting and the branch's boss HP sliders are the same thing. Everything from 0.15 that changes the game is either a rule or argued onto the design's list: pausing, scene votes and the fixes are how co-op works; the partner's health bar, tint and spells on triggers are per player. A new castle starts on its rules screen, with no "don't ask again" (test castles and resumed castles skip it).
+
+**D163: A guest's weight and buttons work the authority's solids** (Tucker, #98; how: agent-default)
+Buttons and lifts run only in the authority's game and ask about that game's player. The guest's presence names the solid it stands on (`standSlot`). The authority's collision answers "on top", with the guest's buttons in `g_pads[0]`, and puts its own player and buttons back at the next call or the end of the update. Rejected: running these entities in both games, which breaks one authority per room. It reaches only entities that use the collision call.
+
+**D164: Richter's and Maria's fists are Alucard's arm** (Tucker, #123: "NO NEW ART, just re-use alucards arm, potentially with a recolor"; how: agent-default)
+A crop of his punch frames from `ARC_F.BIN`, in the puncher's own palette, drawn in both games. No new art, in this or anything else.
+
+**D165: Richter's and Maria's status effects, poison first** (Tucker, #102: all of them, stone and curse can wait; how: agent-default)
+Module state, not their player code: timer 0, which Alucard's poison uses, is Richter's flame whip. The rules are Alucard's. The growth rule (`OPT_NO_GROWTH`) turns it off, since it's part of what isn't in their own games.
+
+**D166: Richter's and Maria's damage a second is Alucard's** (Tucker, #114; how: agent-default)
+Measured with the same stats on a held target (`damage_rate_*`): Alucard's Short Sword 30 a second, Maria 39, Richter 87. Their attacks' own values go to 20% (the whip, 32 to 6) and 50% (hers, 12 to 6). STR and the +25% relics stay, so by the design's own numbers (`M8b`) they follow Alucard: about 20 a hit at Slogra and 56 at Succubus. Only the plain attack is tuned and tested: subweapons, crashes and off-hand weapons aren't, and only the early game is measured. The growth rule turns this off with the rest.

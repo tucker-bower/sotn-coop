@@ -3,6 +3,7 @@
 #define VRAM_H
 
 #define VRAM_UPLOADS_MAX 0x2000 // bytes a frame (RECTs and pixels)
+void VramResendIcons(void);     // a guest has just arrived: every icon again
 
 void VramPatch(void);            // once in play: LoadImage comes through the module
 void VramRecord(bool on);        // authority: record this frame's stage uploads

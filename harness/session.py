@@ -240,12 +240,13 @@ class MailboxProxy:
 class CrashGuard:
     """Fails a test the moment a game's exception vector changes: a write through a bad pointer
     (the 0.13 playtest's freeze) leaves the CPU looping there while the emulator runs on, and the
-    test only sees a game that stopped moving, if it looks at all. Read every second of play."""
+    test only sees a game that stopped moving, if it looks at all. A game spinning in its own code
+    leaves the vector alone, so the game's timer must move too. Read every second of play."""
 
-    VECTOR, SIZE, EVERY = 0x80000080, 16, 60
+    VECTOR, SIZE, EVERY, HUNG, GAME_ENDING = 0x80000080, 16, 60, 1200, 9
 
     def __init__(self):
-        self.good, self.frames = {}, 0
+        self.good, self.frames, self.beats = {}, 0, {}
 
     def check(self, games):
         self.frames += 1
@@ -255,6 +256,15 @@ class CrashGuard:
                 if self.good.setdefault(g.name, now) != now:
                     raise RuntimeError(f"game {g.name} crashed: its exception vector was overwritten "
                                        f"by frame {self.frames} ({now.hex()})")
+                beat = g.read("g_Timer")
+                last = self.beats.get(g.name)
+                # The ending's movie plays in a loop of its own, outside MainGame and its timer.
+                if last is None or last[0] != beat or g.read("g_GameState") == self.GAME_ENDING:
+                    self.beats[g.name] = (beat, self.frames)
+                elif beat and self.frames - last[1] >= self.HUNG:
+                    for h in games:  # for reading where it stopped: see docs/research.md
+                        h.save_state_file(str(TOOLS["out"] / f"hung_{h.name}.state"))
+                    raise RuntimeError(f"game {g.name} hung: its timer stopped at frame {last[1]}")
 
 
 class HostProxy:

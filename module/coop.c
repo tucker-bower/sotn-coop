@@ -10,6 +10,7 @@
 #include "boss.h"
 #include "character.h"
 #include "mist.h"
+#include "solid.h"
 #include "progress.h"
 #include "shared.h"
 #include "spells.h"
@@ -28,6 +29,7 @@ static void RenderEntitiesHook(void);
 static void DrawMapCursorHook(void);
 static void StoreSaveDataHook(SaveData* save, s32 block, s32 cardIcon);
 static void RenderPrimitivesHook(void);
+static void PartnerHealth(void);
 void RenderPrimitives(void); // DRA
 
 // Fixed addresses: dra_hooks.ld. One jump per DRA hook.
@@ -42,6 +44,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         ".globl g_CoopOptions\ng_CoopOptions: .word 0\n" // the player's OPT_* (characters/richter-ps1/coop_ric.h)
         ".globl g_CoopWeaponEntity\ng_CoopWeaponEntity: .word CoopWeaponEntity\n" // offhand.c (D105)
         "j RenderPrimitivesHook\nnop\n" // M13 (after the words above: their addresses are fixed)
+        ".globl g_CoopHudCharacter\ng_CoopHudCharacter: .word 0\n" // coop_api.h
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};
@@ -71,7 +74,8 @@ static void CapturePresence(CoopPresence* p) {
     p->zPriority = pl->zPriority;
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
     p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
-               ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0);
+               ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0) |
+               (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0);
     if (pl->animSet && (pl->animCurFrame & 0x7FFF)) {
         p->flags |= PRESENCE_SPRITE;
     }
@@ -161,6 +165,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     CastleDoorUpdate();
     BossUpdate();
     PvpUpdate();
+    ProgressDamageTaken();
     DebugUpdate();
     return ArriveFrame();
 }
@@ -183,6 +188,7 @@ static void __attribute__((used)) StoreSaveDataHook(SaveData* save, s32 block, s
 static void __attribute__((used)) RenderEntitiesHook(void) {
     u16 frame;
 
+    SolidUpdateDone();
     frame = PLAYER.animCurFrame;
 
     MistStepAfter();
@@ -197,10 +203,49 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     WeaponsDraw();
     PLAYER.animCurFrame = frame;
     SharedAfterUpdate();
+    PartnerHealth();
     CapturePresence(&g_CoopLink.self);
     SpritesCapture();
     PrimsCapture();
     PvpCapture();
+}
+
+// The partner's health under this player's (issue 106): a bar, with the partner's game's own
+// numbers, while it's heard from. OPT_PARTNER_HP, in Settings.
+#define HP_BAR_X 8
+#define HP_BAR_Y 46
+#define HP_BAR_W 48
+#define HP_BAR_H 3
+
+static void Tile(s32 x, s32 y, s32 w, u8 r, u8 g, u8 b) {
+    TILE* t = &g_CurrentBuffer->tiles[g_GpuUsage.tile];
+
+    setTile(t);
+    setXY0(t, x, y);
+    setWH(t, w, HP_BAR_H);
+    setRGB0(t, r, g, b);
+    addPrim(&g_CurrentBuffer->ot[0x1F0], t);
+    g_GpuUsage.tile++;
+}
+
+static void PartnerHealth(void) {
+    const CoopStatus* st = (const CoopStatus*)STATUS_PARTNER_ADDR;
+    s32 hp, max, w;
+
+    if (!(g_CoopLink.options & OPT_PARTNER_HP) || g_GameState != Game_Play || st->magic != STATUS_MAGIC ||
+        g_CoopLink.partnerAge > PARTNER_STALE_FRAMES || g_GpuUsage.tile + 2 >= MAX_TILE_COUNT) {
+        return;
+    }
+    hp = ((const s32*)st->a)[1]; // g_Status.hp, hpMax
+    max = ((const s32*)st->a)[2];
+    if (max <= 0) {
+        return;
+    }
+    w = hp <= 0 ? 0 : hp >= max ? HP_BAR_W : hp * HP_BAR_W / max;
+    if (w) {
+        Tile(HP_BAR_X, HP_BAR_Y, w, 0x30, 0xC0, 0x60);
+    }
+    Tile(HP_BAR_X, HP_BAR_Y, HP_BAR_W, 0x20, 0x20, 0x28);
 }
 
 // After the player's map cursor: a second, blue one on the partner's map cell. Same animation

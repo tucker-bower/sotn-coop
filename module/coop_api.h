@@ -57,6 +57,9 @@ void CoopStoreSaveData(SaveData* save, s32 block, s32 cardIcon); // replaces the
 // A word in the module's fixed table (dra_hooks.ld).
 extern s32 g_CoopCharacter;
 #define PL_CHARACTER g_CoopCharacter
+// Which character's health bar this game draws (issue 34): the player's, unless they chose Alucard's.
+extern s32 g_CoopHudCharacter;
+#define PL_HUD g_CoopHudCharacter
 
 #ifdef COOP_MODULE
 // Our Richter on the disc (COOPRIC.BIN), found by CoopBoot; size 0 if it isn't there.

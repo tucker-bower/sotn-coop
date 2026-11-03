@@ -3,8 +3,8 @@
 // - A boss is any stage entity whose enemy definition is one of the bosses below. Boss fights
 //   happen both in boss overlays (BO*, RBO*) and in ordinary stages (Slogra and Gaibon), so the
 //   enemy is the test, not the stage.
-// - Bosses have twice their HP while a partner is linked (D25): the in-RAM enemy table is
-//   patched, so every boss spawned meanwhile gets it from InitializeEntity.
+// - Enemies have more HP while a partner is linked (D25): the in-RAM enemy table is patched, so
+//   every enemy spawned meanwhile gets it from InitializeEntity.
 // - Aggro (D47): a boss goes for one player at a time and may switch after each of its
 //   attacks. While its target is the partner, the boss's update runs with the partner standing
 //   where the player is (PLAYER's position and facing, g_PlayerX/Y), then everything is put
@@ -60,9 +60,7 @@ static const u16 s_Bosses[] = {
 // 386 and 389, the inverted Colosseum's Minotaur and Werewolf, are its ordinary enemies (320 and
 // 280 HP, item drops), not bosses: they were listed, and meeting one pulled the partner in.
 
-static s16 s_BaseHp[LEN(s_Bosses)]; // the table's own values, read once
-static bool s_HpRead, s_HpDoubled;
-static bool s_HpInverted; // the castle the HP were last set for (OrdinaryHere)
+static bool s_HpRead;
 static bool s_BossHere; // a living boss is in this room
 
 // Aggro, per stage slot: the wrapped update, the target, when it was picked
@@ -97,7 +95,7 @@ static bool IsFinalBoss(u16 enemyId) { return enemyId == ENEMY_RICHTER || enemyI
 
 // First-castle bosses that come back in the inverted castle as ordinary enemies, with the same
 // enemy definition: the Lesser Demon (RNZ0), Slogra and Gaibon (RCHI), Karasuman (RNO2). There,
-// no boss rules (no pull-in, no 2x HP) for them.
+// no boss rules (no pull-in) for them.
 static bool OrdinaryHere(u16 enemyId) {
     return (g_StageId & STAGE_INVERTEDCASTLE_FLAG) &&
            (enemyId == 23 || enemyId == 243 || enemyId == 254 || enemyId == 280);
@@ -133,33 +131,39 @@ static bool PartnerFighting(void) {
            p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// --- 2x HP (D25)
+// --- enemies' health: 2x with a partner (D25, D160), unless the castle's rules say otherwise (D162)
+
+#define ENEMY_DEFS 400 // g_EnemyDefs (assets/dra/us/enemydefs.yaml)
+
+static s16 s_BaseHp[ENEMY_DEFS]; // the table's own values, read once
+static s32 s_HpPct = 100;        // what the table holds, in %
 
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
-    bool want = g_CoopLink.partnerAge < 600; // a partner's game has been heard from (10 s)
-    bool inverted;
+    // a partner's game has been heard from (10 s)
+    s32 want = g_CoopLink.partnerAge < 600 ? RULE_PCT(enemyHpPct, 200) : RULE_PCT(enemyHpSoloPct, 100);
     s32 i, hp;
 
     if (!defs) {
         return;
     }
     if (!s_HpRead) {
-        for (i = 0; i < LEN(s_Bosses); i++) {
-            s_BaseHp[i] = defs[s_Bosses[i]].hitPoints;
+        for (i = 0; i < ENEMY_DEFS; i++) {
+            s_BaseHp[i] = defs[i].hitPoints;
         }
         s_HpRead = true;
     }
-    inverted = (g_StageId & STAGE_INVERTEDCASTLE_FLAG) != 0;
-    if ((want == s_HpDoubled && inverted == s_HpInverted) || s_BossHere) { // never mid-fight
+    if (want == s_HpPct || s_BossHere) { // never mid-fight
         return;
     }
-    for (i = 0; i < LEN(s_Bosses); i++) {
-        hp = s_BaseHp[i] * (want && IsBossEnemy(s_Bosses[i]) ? 2 : 1);
-        defs[s_Bosses[i]].hitPoints = hp > HP_MAX ? HP_MAX : hp;
+    for (i = 0; i < ENEMY_DEFS; i++) {
+        hp = s_BaseHp[i] * want / 100;
+        // Parts with no health, or that can't die, stay so.
+        if (s_BaseHp[i] > 0 && s_BaseHp[i] < HP_MAX) {
+            defs[i].hitPoints = hp > HP_MAX ? HP_MAX : hp < 1 ? 1 : hp;
+        }
     }
-    s_HpDoubled = want;
-    s_HpInverted = inverted;
+    s_HpPct = want;
 }
 
 // --- aggro (D47)

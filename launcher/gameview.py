@@ -3,24 +3,32 @@ share. Two games, two pads, one window (or two: launcher/display.py), both games
 game's music, joint saves, savestates at moments worth going back to, and F9 bug reports."""
 
 import collections
+import logging
+import subprocess
+import sys
 import threading
 import time
 from array import array
+from pathlib import Path
 
 import pygame
 
+import crashwatch
 import report
 from display import BAR
-from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY,
+from platform_android import ANDROID
+from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
+import rules as castle_rules
 from winmenu import MENU_EVENT
 
 BACK_KEYS = (pygame.K_ESCAPE, pygame.K_AC_BACK)  # Esc, and Android's Back (pauses, never quits the app)
 
 STUCK_FRAMES = 3600    # a scene with no one moving this long: the status bar says so
 ROLLING_EVERY = 300   # frames between the in-memory states an F9 report keeps (never on disk)
+GAME_TITLE = 1
 REPORT_SECONDS = 60   # inputs and frame times an F9 report keeps
 PARTNER_LOST_S = 10
 
@@ -91,6 +99,9 @@ def same_sound(pa, pb):
     return bool(pa.flags & pb.flags & CUTSCENE) and pa.stage == pb.stage and pa.room == pb.room
 
 
+PRIMED_BYTES = 44100 * 4 // 20  # 50 ms: what the device waits for, after running dry
+
+
 class Audio:
     """The games' sound, through an SDL audio device fed from a small buffer."""
 
@@ -100,6 +111,7 @@ class Audio:
         self.underruns = self.short_bytes = self.dropped_bytes = self.pulls = 0  # F9 reports, tests
         self.pushes = self.clipped = 0  # frames of sound, and those that hit full scale
         self.dev = self.chan = None
+        self.primed = False
         if not getattr(pygame, "IS_CE", False):
             # pygame (not -ce: Android, design/M9): its AudioDevice's Python callback deadlocks on
             # the GIL there, so the sound goes through SDL_mixer, queued from the main thread.
@@ -149,14 +161,18 @@ class Audio:
             self.chan.stop()
 
     def _pull(self, dev, mem):
+        """After running dry it waits for 50 ms of sound first, as _feed does: otherwise each pull
+        comes up a little short, and a slow frame becomes a crackle (issue 134)."""
         with self.lock:
-            n = min(len(mem), len(self.buf))
+            self.pulls += 1
+            self.primed = self.primed or len(self.buf) >= PRIMED_BYTES
+            n = min(len(mem), len(self.buf)) if self.primed else 0
             mem[:n] = self.buf[:n]
             del self.buf[:n]
-            self.pulls += 1
             if n < len(mem):
-                self.underruns += 1
+                self.underruns += self.primed
                 self.short_bytes += len(mem) - n
+                self.primed = False
         for i in range(n, len(mem)):
             mem[i] = 0
 
@@ -266,25 +282,30 @@ class Pads:
         return "+".join(sorted(pressed))
 
 
+def partner_crashed(session):
+    return bool(session.joint and session.joint.partner_crashed)
+
+
 class GameView:
     """Runs the games in the window until the player leaves (Esc: the pause menu)."""
 
-    def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", aggro=50,
-                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, pvp=False, rush=None):
+    def __init__(self, session, display, pads, audio, playthrough=None, goal="", music="auto", rules=None,
+                 save_cards=None, frames=0, profile=False, launcher=None, partner_vol=60, rush=None, joiner=False,
+                 script=()):
         self.s, self.display, self.pads, self.audio = session, display, pads, audio
         self.launcher = launcher
         self.games = tuple(session.games)
         self.online = len(self.games) == 1
+        self.script = [pad for frames, pad in script for _ in range(frames)]  # played from the title on
+        self.scene_speed = 1
+        self.script_on = False
         self.playthrough, self.goal = playthrough, goal
         self.rush = rush  # bossrush.BossRush: ticked every frame, its line on the status bar
         self.music_mode, self.music = music, None
         self.solo = 0  # couch: play one game's sound while both make the same (see same_sound)
-        chance = max(0, min(255, round(aggro * 256 / 100)))
-        self.aggro = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
-        # the partner's sounds, % of their volume (M13: module/partner.c; 0 would mean the default)
-        self.aggro |= max(1, min(100, int(partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
-        if pvp:  # M15: the partner's attacks hurt (the host's setting online)
-            self.aggro |= CONTROL_PVP
+        self.partner_vol = partner_vol
+        self.joiner = joiner  # online, in the host's castle: its rules are the host's
+        self.set_rules(rules)
         self.save_cards = save_cards  # (path A, path B) or (path local,)
         self.frames, self.profile = frames, profile
         self.canvas = display.canvas
@@ -293,6 +314,7 @@ class GameView:
         self.journal = report.Journal()
         self.still = {}
         self.inputs = collections.deque(maxlen=60 * REPORT_SECONDS)
+        self.watch = crashwatch.CrashWatch()
         self.frame_times = collections.deque(maxlen=60 * REPORT_SECONDS)
         self.notice, self.notice_until = "", 0
         self.mismatch = None
@@ -304,8 +326,38 @@ class GameView:
         if not self.online and launcher and launcher.settings.get("netsim"):
             self.set_netsim(launcher.settings["netsim"])
 
+    frame = 0
+
     def say(self, text, frames=300):
         self.notice, self.notice_until = text, self.frame + frames
+
+    def set_rules(self, rules):
+        """The castle's rules (launcher/rules.py), at the start and whenever they change: in the
+        games, and, from the host, on to the partner."""
+        self.rules = castle_rules.clean(rules)
+        chance = max(0, min(255, round(self.rules["aggro"] * 256 / 100)))
+        control = CONTROL_NO_AGGRO if chance == 0 else chance << CONTROL_AGGRO_SHIFT
+        # the partner's sounds, % of their volume (M13: module/partner.c; 0 would mean the default)
+        control |= max(1, min(100, int(self.partner_vol))) << CONTROL_PARTNER_VOL_SHIFT
+        if self.rules["pvp"]:  # M15: the partner's attacks hurt
+            control |= CONTROL_PVP
+        self.aggro = control
+        self.music = None  # couch: the control word is written again, with the music's bit
+        words = castle_rules.encode(self.rules)
+        for g in self.games:
+            g.host("set_rules", words, None if self.joiner else self.rules)
+        if self.s.joint:
+            self.s.joint.shared_level = self.rules["shared_level"]
+
+    def follow_host(self):
+        """A joiner: the host changed the castle's rules. They go on the joiner's copy too."""
+        theirs = (self.games[0].host("status").get("partner_hello") or {}).get("rules")
+        if theirs is None or castle_rules.clean(theirs) == self.rules:
+            return
+        self.set_rules(theirs)
+        if self.playthrough:
+            self.playthrough.set_rules(self.rules)
+        self.say("Your partner changed the castle's rules", 300)
 
     def moment(self, event, where=""):
         if self.playthrough:
@@ -345,8 +397,35 @@ class GameView:
         self.display.present(over_games=True)
         return rects
 
+    def scripted(self, pads):
+        """The game's title menus, played through; nobody's buttons count until they're done."""
+        if any(g.read("g_GameState") != GAME_TITLE for g in self.games) and not self.script_on:
+            return [""] * len(pads)
+        self.script_on = True
+        pad = self.script.pop(0)
+        return [pad] * len(pads)
+
+    def scene_speed_now(self):
+        if not self.online:
+            return scene_speed([g.mailbox("self_presence") for g in self.games], False)
+        g = self.games[0]
+        linked = g.mailbox("partner_age") <= 30
+        return scene_speed([g.mailbox("self_presence")] + ([g.mailbox("partner_presence")] if linked else []), not linked)
+
+    def keep_playing(self):
+        """While a box is up: online, this game runs on with no buttons held, or the partner's game
+        would lose it (playtest 0.14: reporting a problem froze the partner). On the couch both wait."""
+        if self.online:
+            for g in self.games:
+                g.frame_start(0)
+            for g in self.games:
+                g.frame_end()
+            self.frame += 1
+            if self.audio:
+                self.audio.clear()
+
     def ask_note(self):
-        """"What happened?" Typed text, or "" (Enter on nothing, or Esc). The games wait."""
+        """"What happened?" Typed text, or "" (Enter on nothing, or Esc)."""
         text = ""
         pygame.key.start_text_input()
         try:
@@ -372,21 +451,54 @@ class GameView:
                 self.overlay("Report a problem: what happened? (optional)",
                              ["Type, then Enter to save the report (or press Cross / A: no note). Esc: no note."],
                              box_text=shown)
+                self.keep_playing()
                 pygame.time.wait(16)
         finally:
             pygame.key.stop_text_input()
 
-    def report(self, note=None):
+    def open_crash_window(self, path):
+        """Android has one window: the same questions, on its screen. Elsewhere, a process of its
+        own (crash_window.py), asking the player before anything is sent."""
+        if ANDROID:
+            note = self.ask_note()
+            if report.can_send() and self.ask_send():
+                self.send_report(path, note)
+            return
+        app = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, str(Path(__file__).with_name("app.py"))]
+        subprocess.Popen(app + ["--crash-window", str(path)])
+
+    def crashed(self, why):
+        """A game crashed or hung: its report first, while the rolling states still show it
+        happening, then the partner, then the window. Back to the menu: this game is lost."""
+        logging.getLogger("launcher").error("%s", why)
+        live = [g for g in self.games if getattr(g, "proc", None) is None or g.proc.is_alive()]
+        path = None
+        try:
+            path = self.report(note=f"Automatic report: {why}.", games=live)
+        except Exception:  # noqa: BLE001 - the player still has to be told
+            logging.getLogger("launcher").exception("crash report")
+        if self.online and self.s.joint and live:
+            try:
+                self.s.joint.host.send_control({"op": "crashed"})
+            except Exception:  # noqa: BLE001 - nothing more to tell it with
+                logging.getLogger("launcher").exception("telling the partner")
+        if path:
+            self.open_crash_window(path)
+        self.say("The game stopped, so it's going back to the menu.", 180)
+        return "menu"
+
+    def report(self, note=None, games=None):
+        games = self.games if games is None else games
         shot = self.display.screenshot()  # the window as it was: the games, not the note box
         shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
-        taken = report.snapshot(self.games, self.audio)
+        taken = report.snapshot(games, self.audio)
         interactive = note is None
         if interactive:
             note = self.ask_note()
-        kept = zip(*(g.kept_states() for g in self.games))  # the same frames in each game
+        kept = zip(*(g.kept_states() for g in games))  # the same frames in each game
         rolling = [(states[0][0], *(st for _, st in states)) for states in kept]
-        path = report.write(self.games, self.playthrough, shot, rolling, self.inputs,
-                            self.frame_times, self.pads.names(), note, extra={"solo": self.solo},
+        path = report.write(games, self.playthrough, shot, rolling, self.inputs,
+                            self.frame_times, self.pads.names(), note, extra={"solo": self.solo, "rules": self.rules},
                             taken=taken, journal=self.journal)
         if self.audio:
             self.audio.forget_wait(taken["audio"])
@@ -401,7 +513,7 @@ class GameView:
         return path
 
     def ask_send(self):
-        """Send the report, or keep it here? The games wait."""
+        """Send the report, or keep it here?"""
         while True:
             for ev in pygame.event.get():
                 if self.display.handle(ev):
@@ -420,6 +532,7 @@ class GameView:
                          ["It emails your note, screenshots, inputs, logs, game state and memory cards to the",
                           "SOTN Co-op team. Your folders, disc path, typed name and IP address are removed.",
                           "Enter / Cross: send.   Esc / Circle: keep it on this device."])
+            self.keep_playing()
             pygame.time.wait(16)
 
     def send_report(self, path, note):
@@ -444,6 +557,10 @@ class GameView:
             return "pause"
         if action == "report":
             return "report"
+        if action == "moment":  # a savestate of the castle, any time, for the Savestates menu
+            self.moment("Saved", "")
+            self.say("Savestate saved", 180)
+            return None
         if action == "leave":
             return "menu"
         if action == "quit":
@@ -469,7 +586,7 @@ class GameView:
         while True:
             items = ["Resume",
                      f"Layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
-                     "How to play", "Report a problem (F9)", "Save and go back to the menu"]
+                     "How to play", "Castle rules", "Report a problem (F9)", "Save and go back to the menu"]
             for ev in pygame.event.get():
                 if self.display.handle(ev):
                     continue
@@ -517,6 +634,10 @@ class GameView:
                             self.launcher.action("help_play")
                         continue
                     if sel == 3:
+                        if self.launcher:
+                            self.launcher.action("rules")
+                        continue
+                    if sel == 4:
                         self.report()
                         return "resume"
                     return "menu"
@@ -532,7 +653,9 @@ class GameView:
         state = getattr(self, "partner_state", None)
         if state == getattr(self, "_told", None):
             return None
-        self._told = state if state in ("left", "lost") else None
+        self._told = state if state in ("left", "lost", "crashed") else None
+        if state == "crashed":
+            return "Your partner's game stopped. You can keep playing alone."
         if state == "left":
             return "Your partner left the game. You can keep playing alone."
         if state == "lost":
@@ -578,7 +701,8 @@ class GameView:
             age = g.mailbox("partner_age")
             pa, pb = g.mailbox("self_presence"), g.mailbox("partner_presence")
             together = age <= 30 and {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}
-            self.partner_state = ("left" if hst.get("partner_left") else
+            self.partner_state = ("crashed" if partner_crashed(self.s) else
+                                  "left" if hst.get("partner_left") else
                                   "lost" if hst.get("partner_hello") and (hst.get("rx_age") or 0) > PARTNER_LOST_S
                                   else "here" if age <= 30 else getattr(self, "partner_state", None))
             if self.mismatch:
@@ -661,14 +785,26 @@ class GameView:
                 break
             keys = pygame.key.get_pressed()
             t0 = time.perf_counter()
-            pads = [self.pads.mask(i, keys) for i in range(len(self.games))]
+            pads = [castle_rules.remapped(self.pads.mask(i, keys), self.rules) for i in range(len(self.games))]
+            if self.script:
+                pads = self.scripted(pads)
             self.inputs.append((self.frame, *pads))
             if self.frame % ROLLING_EVERY == 0:
                 for g in self.games:
                     g.keep_state(self.frame)
-            for g, pad in zip(self.games, pads):  # both games run their frame at the same time
-                g.frame_start(pad)
-            replies = [g.frame_end() for g in self.games]
+            for k in range(self.scene_speed - 1):  # a scene both players asked to skip: no sound or picture
+                for g in self.games:
+                    g.frame_start(0)
+                for g in self.games:
+                    g.frame_end()
+                self.frame += 1
+            try:
+                for g, pad in zip(self.games, pads):  # both games run their frame at the same time
+                    g.frame_start(pad)
+                replies = [g.frame_end() for g in self.games]
+            except (EOFError, OSError):  # a worker process died
+                result = self.crashed("a game's process ended")
+                break
             t1 = time.perf_counter()
             frames = []
             for i, (g, (picture, sound)) in enumerate(zip(self.games, replies)):
@@ -684,10 +820,17 @@ class GameView:
             if self.audio:
                 self.audio.push(mix([sound for _, sound in replies], self.solo))
             self.frame += 1
+            if self.frame % crashwatch.EVERY == 0:
+                why = self.watch.check(self.games)
+                if why:
+                    result = self.crashed(why)
+                    break
             if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
             if self.rush:
                 self.rush.tick()
+            if self.joiner and self.frame % 60 == 0:
+                self.follow_host()
             if self.frame % 15 == 0:
                 if self.online:
                     self.games[0].mailbox("set_control", self.aggro)  # online: never mute local music (D55)
@@ -700,6 +843,7 @@ class GameView:
                         for i, g in enumerate(self.games):
                             g.mailbox("set_control", (0 if i == self.music else CONTROL_MUTE_MUSIC) | self.aggro)
                 status, pres_list = self.status_line(clock)
+                self.scene_speed = self.scene_speed_now()
                 self.journal.note(self.frame, pres_list, getattr(self, "partner_state", None))
                 status = self.stuck_note(pres_list) or status
                 if self.moments:

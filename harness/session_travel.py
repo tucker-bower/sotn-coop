@@ -161,27 +161,26 @@ def respawn_at_partner(run):
 
 
 @session_scenario(starts=("entrance", "entrance"))
-def pause_freezes_shared_room(run):
-    """M3 criterion 6: B opens its menu in A's room. A's world freezes (player and enemies don't
-    move, the RNG holds) while A holds right; when B closes the menu, A moves again. B pausing in
-    another room has no effect on A."""
+def pause_keeps_the_partner_playing(run):
+    """Issue 108: B opens its menu in A's room, and A plays on. B's world waits, and when B closes
+    its menu, A's room is the room. B pausing in another room has no effect on A."""
     a, b = run.s.a, run.s.b
     run.step(30)
     run.step(1, p1=("", "start"))
     run.step(60)
     run.expect(b.read("g_GameEngineStep") == ENGINE_MENU, "B is in its menu", engine=b.read("g_GameEngineStep"))
-    ents0, x0, rng0 = a.read_bytes("g_Entities", 0xBC * 256), a.snapshot()["world_x"], a.read("g_randomNext")
+    x0 = a.snapshot()["world_x"]
     run.step(120, p1=("right", ""))
-    run.expect(a.snapshot()["world_x"] == x0 and a.read_bytes("g_Entities", 0xBC * 256) == ents0
-               and a.read("g_randomNext") == rng0, "A's world is frozen while B is paused")
+    run.expect(a.snapshot()["world_x"] != x0, "A plays on while B is paused", x0=x0)
+    x0 = a.snapshot()["world_x"]
     for pad in ("triangle", "start", "triangle"):
         if b.read("g_GameEngineStep") == ENGINE_NORMAL:
             break
         run.step(2, p1=("", pad))
         run.step(60)
     run.expect(b.read("g_GameEngineStep") == ENGINE_NORMAL, "B closed its menu", engine=b.read("g_GameEngineStep"))
-    run.step(60, p1=("right", ""))
-    run.expect(a.snapshot()["world_x"] != x0, "A moves again")
+    run.step(60, p1=("left", ""))
+    run.expect(a.snapshot()["world_x"] != x0, "A moves on")
     # Different rooms: A goes elsewhere, B pauses again.
     t = b.mailbox("self_presence")
     arrive(run, a, 0x41, 120, 272, 114)

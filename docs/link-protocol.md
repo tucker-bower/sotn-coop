@@ -1,4 +1,4 @@
-# The co-op link protocol (wire version 10, mailbox version 12)
+# The co-op link protocol (wire version 13, mailbox version 15)
 
 This is everything a **host** needs, so another one can be written without reading our Python: an Android host in Kotlin or C++, or a C++ host inside an emulator.
 - **The reference implementation:** `link/host.py`, `link/transport.py` and `link/mailbox.py`.
@@ -17,7 +17,7 @@ This is everything a **host** needs, so another one can be written without readi
 ## The host's job, once per frame
 0. **Count the frame:** the host's frame counter goes up by one, every frame, whatever happens next. Every datagram carries it.
 1. **Hello:** every 60 frames, send `HELO`.
-2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 12, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
+2. **Check the mailbox:** if `magic` isn't `'COOP'` (`0x504F4F43`) or `version` isn't 15, the game is still booting: handle incoming `HELO`s, drop everything else, and stop here.
 3. **Rank:** write the host's rank (0 or 1, different for the two players) to `rank`.
 4. **Presence:** send `PRES` with the `self` presence (0x2C bytes) and the presence tail (below), whose `pad` is `CoopLink.selfPad`.
 5. **Snapshot:** if `snapOutSeq` changed since last frame, send `snapOut[0:snapOutSize]` as `SNPC` chunks (below).
@@ -45,7 +45,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `SPRT` | the sender's own attack sprites: N × 20-byte `CoopSprite` (below), N ≤ 24 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerSprites` (M12). |
 | `PRIM` | `zlib` of N × 0x30-byte primitives (the sender's attack primitives, below), N ≤ 32 | As `SPRT`. The receiver writes them, decompressed, to `partnerPrims` (M12). |
 | `HITS` | the sender's player's attack hitboxes: N × 12-byte `CoopHit` (below), N ≤ 16 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerHits` (M15). |
-| `HELO` | UTF-8 JSON: `{"link": 10, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "pvp": <the host's PvP setting, online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
+| `HELO` | UTF-8 JSON: `{"link": 12, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "rules": <the castle's rules as a JSON object (launcher/rules.py), online, from the hosting side only>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …
@@ -93,7 +93,8 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | 0x1E | s16 ×2 | last x, y on the ground |
 | 0x22 | u16 | frames in this room |
 | 0x24 | s16 ×2 | camera x, y |
-| 0x28 | u16 | shared-room role: 0 none, 1 authority, 2 guest |
+| 0x28 | u8 | shared-room role: 0 none, 1 authority, 2 guest |
+| 0x29 | u8 | a guest: 1 + the stage slot of the solid it stands on, or 0 (the authority's buttons and lifts feel it) |
 | 0x2A | u16 | the boss target-switch count (tests) |
 
 ## Events (8 bytes: u8 type, u8 pad, u16 a, u32 b)
@@ -111,10 +112,10 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 
 Hosts don't interpret events: they move them between rings.
 
-## The mailbox (`g_CoopLink`, 0x225B8 bytes)
+## The mailbox (`g_CoopLink`, 0x225C8 bytes)
 | offset | field | written by |
 |---|---|---|
-| 0x0000 | magic `'COOP'`, version (12), heartbeat | game |
+| 0x0000 | magic `'COOP'`, version (15), heartbeat | game |
 | 0x000C | `self`: presence | game |
 | 0x0038 | `partner`: presence | host |
 | 0x0064 | `partnerAge` (u32, frames since `partner` was written) | game counts, host zeroes |
@@ -130,6 +131,7 @@ Hosts don't interpret events: they move them between rings.
 | 0x3438 | `snapOutSeq`, `snapOutSize`, `snapOut` (0xF000) | game |
 | 0x12440 | `snapInSeq`, `snapInSize`, `snapIn` (0xF000) | host |
 | 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP | launcher |
+| 0x225B8 | `rulesOff` (`RULE_*`, `OPT_NO_*` bits), then u16 `expPct`, `dealtPct`, `takenPct`, `enemyHpPct`, `enemyHpSoloPct`, pad: the castle's rules, all zero by default | host, every frame |
 | 0x2144C | `character`: the CHAR_* this game's player plays, from its next load (M8) | launcher |
 | 0x21450 | `options`: OPT_* bits, the player's own settings (1 one-button moves, 2 the partner's body; bits 8–23 the spell on each right-stick direction) | launcher |
 | 0x21454 | `padExtra`: buttons a PlayStation pad lacks (right stick: 1 up, 2 right, 4 down, 8 left), every frame | launcher |
@@ -145,7 +147,7 @@ Hosts don't interpret events: they move them between rings.
 **The partner's copies (CTRL, M12–M13):** each is JSON `{"op": …, "data": base64(zlib(blob))}`, sent when the sender's copy changes. The receiver writes the blob, magic last, to the partner's address in expansion RAM.
 - `weapon` (plus `"hand"`: 0 or 1): the `CoopWeapon` (0x7320 bytes: magic `'WPNS'`, seq, item, then the hand's overlay, 256×128 tile sheet and 24 palettes) from `0x80710000 + hand × 0x8000`, to `0x80720000 + hand × 0x8000`. Sent when its seq changes (the game copies a weapon when it loads). The partner draws the swing from it (`weapons.c`).
 - `familiar`: the `CoopFamiliar` (0x10420 bytes: magic `'FAML'`, seq, servant, sprite bank, then its overlay, tile sheet and palettes 0x140–0x15F) from `0x807C0000`, to `0x807E0000` (`familiar.c`).
-- `status`: the sender's `g_Status` from `hp` (0x48 bytes) and from `subWeapon` (0x34 bytes), at most every 10 frames and only when changed, to a `CoopStatus` (magic `'STAT'`) at `0x80730000`. The partner's body runs with these stats, level and equipment (`partner.c`).
+- `status`: the sender's `g_Status` from `spellsLearnt` (0x4C bytes) and from `subWeapon` (0x34 bytes), at most every 10 frames and only when changed, to a `CoopStatus` (magic `'STAT'`) at `0x80730000`. The partner's body runs with these stats, level and equipment (`partner.c`).
 
 **`CoopSprite` (20 bytes, M12):** `animSet` (s16), `animCurFrame` (u16), `x`, `y` (s16, in the room), `palette` (u16), `facingLeft`, `blendMode` (u8), `zPriority`, `drawFlags`, `unk5A` (u16), `weapon` (u16: `0x100 | hand` for a hand weapon's sprite, whose `animSet` is then its bank, 0x10–0x13; else 0).
 

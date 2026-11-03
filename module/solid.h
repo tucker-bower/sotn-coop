@@ -12,6 +12,8 @@ typedef struct {
 } SolidCall; // 8 bytes
 
 u8 CoopPlayerCollision(Entity* self, u16 w, u16 h, u16 flags); // every overlay's, patched
+void SolidUpdateDone(void);  // after the stage's update: undoes what a partner's weight did to PLAYER
+s32 SolidStandSlot(void);    // once per frame: 1 + the slot this guest stood on, or 0
 void SolidRecord(bool on);                       // authority: record this frame's calls
 s32 SolidTake(SolidCall* out, s32 room);         // into a snapshot; returns how many
 void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored); // guest, in its stage update

@@ -514,6 +514,31 @@ ELEVATOR_ROOM, ELEVATOR_SLOT, ELEVATOR_X, ELEVATOR_Y = 176, 96, 144, 96  # NZ0: 
 
 
 @session_scenario(starts=("nz0", "nz0"))
+def guest_works_the_elevator(run):
+    """Issue 98: the elevator only runs in the authority's game, and asks whether that game's
+    player is on it. B (the guest) stands on it and holds Down: it goes, B rides, and A, off to
+    the side, isn't moved or given B's buttons."""
+    from session_progress import arrive
+    a, b = run.s.a, run.s.b
+    arrive(run, a, 0x0C, ELEVATOR_ROOM, ELEVATOR_X - 40, ELEVATOR_Y - 60)
+    run.step(60)
+    arrive(run, b, 0x0C, ELEVATOR_ROOM, ELEVATOR_X, ELEVATOR_Y - 60)
+    run.step(130)
+    run.expect(roles(run.s) == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B the guest", roles=roles(run.s))
+    top = lambda: struct.unpack_from("<h", a.read_bytes(a.entity(ELEVATOR_SLOT), 0xBC), 6)[0] + a.read("g_Tilemap", "<h", 0xE)
+    run.expect(b.mailbox("self_presence").stand_slot == ELEVATOR_SLOT - 64 + 1, "B says it's on the elevator",
+               stand=b.mailbox("self_presence").stand_slot)
+    y0, ay0, ax0 = top(), a.snapshot()["world_y"], a.snapshot()["world_x"]
+    for i in range(30):
+        run.step(1, p1=("", "down"))
+    run.step(180)
+    run.expect(top() != y0, "the elevator moved for the guest", was=y0, now=top())
+    run.expect(abs(b.snapshot()["world_y"] - top()) < 80, "B rode it", b_y=b.snapshot()["world_y"], elevator=top())
+    run.expect((a.snapshot()["world_x"], a.snapshot()["world_y"]) == (ax0, ay0), "A wasn't moved",
+               was=(ax0, ay0), now=(a.snapshot()["world_x"], a.snapshot()["world_y"]))
+
+
+@session_scenario(starts=("nz0", "nz0"))
 def guest_stands_on_elevator(run):
     """D52, fixed: an entity is solid because its update pushes the player out. The Alchemy Lab
     shaft's elevator is one. A (the authority) is in the shaft; B (the guest) drops onto the

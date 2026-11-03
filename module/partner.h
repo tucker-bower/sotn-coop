@@ -2,7 +2,7 @@
 #ifndef PARTNER_H
 #define PARTNER_H
 
-#define PARTNER_STALE_FRAMES 30 // no host update for this long: the partner's gone (no body)
+#define PARTNER_STALE_FRAMES 30 // no host update for this long: the partner's gone
 
 void PartnerBoot(void);  // once, at boot: finds the BIOS's rand() seed (the partner's is its own)
 void PartnerFrame(void); // its update and drawing: after player 1's RenderEntities (coop.c)
@@ -13,6 +13,7 @@ bool PartnerSimulated(void); // the partner's body is the simulated one this fra
 // drawn from the partner's real sprites (weapons.c), moved to where the body is.
 bool PartnerWeaponDiffers(s32 hand);
 void PartnerBodyOffset(s16* dx, s16* dy); // the body's spot minus the partner's real one
+u16 PartnerClut(u16 clut); // a CLUT as the partner's body reads it (second bank, if it's there)
 void PartnerBankPolys(u32 gt4, u32 gt3); // what was drawn since: from the second bank (familiar.c)
 
 #endif

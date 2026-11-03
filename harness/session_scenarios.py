@@ -176,7 +176,8 @@ def map_marker(run):
 
 @session_scenario()
 def stale_link(run):
-    """Criterion 7: kill game B's process. A keeps running, and within a second it stops drawing B."""
+    """Criterion 7: kill game B's process. A keeps running, and its copy of B outlasts a stall of
+    the link, standing still, then goes (partner.c's BODY_STALE_FRAMES)."""
     a, b = run.s.a, run.s.b
     run.step(60, p1=("right", ""))
     run.expect(partner_pixels(a)[0] is not None, "A draws B while B is alive")
@@ -186,6 +187,8 @@ def stale_link(run):
         s = a.step(1, "left")
     run.expect(s["game_state"] == 2 and s["hp"] > 0, "A keeps playing", state=s["game_state"])
     run.expect(a.mailbox("partner_age") > 30, "A's partner went stale", age=a.mailbox("partner_age"))
+    for _ in range(300):
+        a.step(1)
     run.expect(partner_pixels(a)[0] is None, "A no longer draws B")
 
 

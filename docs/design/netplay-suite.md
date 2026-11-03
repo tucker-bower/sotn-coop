@@ -21,8 +21,5 @@ The 2026-11-01 online session on 0.13 froze, got stuck and slowed down, while th
 - `netplay_comings_and_goings_*`: the body made and dropped 30 times.
 
 ## Left
-- The real cause of the lost primitives, if `g_CoopAfterimagesRepaired` ever rises.
-- Tests for pickups' graphics, buttons, and elevators as the guest, and pausing one side.
-- A dead player's black screen shows an empty message box while the partner fights a boss.
-- The app's own crash detection, and the reports' additions (plan step 7).
-- The quick fixes from the playtest notes, each a GitHub issue.
+- The real cause of the lost primitives, if `g_CoopAfterimagesRepaired` ever rises. It was 0 in all 20 reports from the 0.14 playtest.
+- Buttons and lifts driven by a guest (#98).

@@ -72,7 +72,8 @@ static u32 FgSum(s32 n) {
 typedef struct {
     u8 slot;   // 0..191 (+ STAGE_ENTITY_START)
     u8 nPrims; // primitives that follow the entity
-    u16 nEnvs; // then the DR_ENV of each PRIM_ENV among them, in order
+    u8 nEnvs;  // then the DR_ENV of each PRIM_ENV among them, in order
+    u8 nMore;  // how many longer its chain is than the primitives sent (MAX_PRIMS_PER_ENTITY)
 } SnapEntity;
 
 // A PRIM_ENV primitive (a render-to-texture pass: the Warg burning away) points at a DR_ENV from
@@ -92,9 +93,11 @@ static void (*s_OrigUpdate)(void);
 static void (*s_OrigSpawner)(void);
 static s16 s_MirrorPrims[STAGE_SLOTS]; // head index per slot, -1 if none
 static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while the count holds)
+static u8 s_MirrorMore[STAGE_SLOTS];   // what the chain lacks of the authority's (SnapEntity.nMore)
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
+static u8 s_HitHold[STAGE_SLOTS];      // frames a copy this game hit stays invincible, whatever arrives
 #define TAKEN_FRAMES 120 // online: longer than a slow round trip plus the playout delay (M7b)
 #define E_PRIZE_DROP 3 // hearts, gold, subweapons: the same entity id in every stage
 static u32 s_AppliedSeq;
@@ -211,7 +214,7 @@ static bool PartnerShareable(void) {
     s32 dx, dy;
 
     if (g_CoopLink.partnerAge > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
-        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) || !SAME_WORLD(p)) {
+        (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD | PRESENCE_PAUSED)) || !SAME_WORLD(p)) {
         return false;
     }
     if (g_GameState != Game_Play || g_GameStep != Play_Default || g_GameEngineStep != Engine_Normal) {
@@ -230,10 +233,9 @@ static bool PartnerShareable(void) {
     if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
-    // A shared boss fight stays shared, cameras near or not: arenas are up to two screens wide,
-    // and a split would leave each game its own boss (the pull that fixes that reloads the room,
-    // and the fight is gone).
-    if (s_Role != ROLE_NONE && (BossHere() || (p->flags & PRESENCE_BOSS))) {
+    // A boss fight is shared, cameras near or not: arenas are up to two screens wide, and apart
+    // each game would fight its own boss (a pull to fix that reloads the room, and the fight is gone).
+    if (BossHere() || (p->flags & PRESENCE_BOSS)) {
         return true;
     }
     dx = p->scrollX - g_Tilemap.scrollX.i.hi;
@@ -283,8 +285,33 @@ static void DecideRole(void) {
     s_Role = want;
     if (s_Role == ROLE_GUEST) {
         BecomeGuest();
+    } else if (s_Role == ROLE_AUTHORITY) {
+        VramResendIcons();
     }
     s_Settle = 0;
+}
+
+// Back from a menu, the room has gone on in the partner's game: that's the room, and this game's
+// copy of it from before is out of date. Counted as just arrived, this game is its guest.
+static void TrackMenu(void) {
+    static bool paused;
+    bool now = g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70;
+
+    if (paused && !now) {
+        s_RoomFrames = 0;
+    }
+    paused = now;
+}
+
+// A long hold with nothing simulated is a scene's: the Doppleganger's door holds the player 576
+// frames, and the boss's own code lets go. A guest doesn't run the boss, so it stood frozen in the
+// fight (playtest 0.14). Shorter holds are a door's or a hit's, and end on their own.
+#define GUEST_HOLD_MAX 32
+
+static void ReleaseGuestHold(void) {
+    if (s_Role == ROLE_GUEST && g_Player.demo_timer > GUEST_HOLD_MAX && !g_Player.padSim && !g_CutsceneHasControl) {
+        g_Player.demo_timer = 0;
+    }
 }
 
 static void TrackRoom(void) {
@@ -349,9 +376,11 @@ static void BecomeGuest(void) {
     for (i = 0; i < STAGE_SLOTS; i++) {
         s_MirrorPrims[i] = -1;
         s_MirrorCount[i] = 0;
+        s_MirrorMore[i] = 0;
         s_Mirrored[i] = false;
         s_Local[i] = false;
         s_TakenHere[i] = 0;
+        s_HitHold[i] = 0;
     }
     s_OrigUpdate = g_api.o.Update;
     s_OrigSpawner = g_api.o.UpdateRoomPosition;
@@ -401,7 +430,40 @@ static void ResyncSpawner(void) {
 
 // The copies become this game's own world: their primitives are theirs now, and the stage
 // logic runs them from here (that's the hand-over: design/M4, part 1).
+// Taking over: an entity's code walks its chain by its own count. A Beelzebub part's 256, copied as
+// 64, ran off the end into low memory and spun there, and the game froze. Its chain gets its length
+// back, or the entity goes.
+static void CompleteChains(void) {
+    Primitive* p;
+    Entity* e;
+    s32 i, k, idx;
+
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        if (!s_Mirrored[i] || !s_MirrorMore[i] || s_MirrorPrims[i] < 0) {
+            continue;
+        }
+        e = &g_Entities[STAGE_ENTITY_START + i];
+        if (!e->entityId || !(e->flags & FLAG_HAS_PRIMS) || e->primIndex != s_MirrorPrims[i]) {
+            continue; // gone with the room, and the chain with it
+        }
+        idx = AllocPrimitives(PRIM_GT4, s_MirrorMore[i]);
+        if (idx < 0) {
+            DestroyEntity(e);
+            continue;
+        }
+        p = &g_PrimBuf[s_MirrorPrims[i]];
+        for (k = 1; k < s_MirrorCount[i] && p->next; k++) {
+            p = p->next;
+        }
+        p->next = &g_PrimBuf[idx];
+        for (p = p->next; p; p = p->next) {
+            p->drawMode = DRAW_HIDE;
+        }
+    }
+}
+
 static void StopBeingGuest(void) {
+    CompleteChains();
     ResyncSpawner();
     if (g_api.o.Update == GuestUpdate) {
         g_api.o.Update = s_OrigUpdate;
@@ -536,10 +598,17 @@ static void ApplySnapshot(void) {
         }
         s_Local[i] = false;
         CopyWords(e, r, sizeof(Entity));
+        // Snapshots from before the authority heard of a hit bring the copy back to hittable, and a
+        // whip hit it every frame of a round trip: online, it did many times its damage (playtest
+        // 0.14). This game's own hit counts here until the authority's catches up.
+        if (s_HitHold[i] > e->nFramesInvincibility) {
+            e->nFramesInvincibility = s_HitHold[i];
+        }
         r += sizeof(Entity);
         s_Mirrored[i] = true;
         src = (const Primitive*)r;
         n = se->nPrims;
+        s_MirrorMore[i] = se->nMore;
         r += n * sizeof(Primitive);
         env = (const DR_ENV*)r;
         r += se->nEnvs * sizeof(DR_ENV);
@@ -632,7 +701,7 @@ static void CaptureSnapshot(void) {
     u8* end = g_CoopLink.snapOut + SNAP_MAX;
     SnapHeader* h = (SnapHeader*)w;
     const OverlayInfo* ovl = FindOverlay(g_StageId);
-    s32 i, n, k, envs;
+    s32 i, n, k, envs, more;
     Entity* e;
     Primitive* p;
 
@@ -652,10 +721,14 @@ static void CaptureSnapshot(void) {
         if (!e->entityId) {
             continue;
         }
-        n = 0;
+        n = more = 0;
         if (e->flags & FLAG_HAS_PRIMS) {
-            for (p = &g_PrimBuf[e->primIndex]; p && n < MAX_PRIMS_PER_ENTITY; p = p->next) {
-                n++;
+            for (p = &g_PrimBuf[e->primIndex]; p && more < 0xFF; p = p->next) {
+                if (n < MAX_PRIMS_PER_ENTITY) {
+                    n++;
+                } else {
+                    more++;
+                }
             }
         }
         if (w + sizeof(SnapEntity) + sizeof(Entity) + n * sizeof(Primitive) > end) {
@@ -672,6 +745,7 @@ static void CaptureSnapshot(void) {
         ((SnapEntity*)w)->slot = i;
         ((SnapEntity*)w)->nPrims = n;
         ((SnapEntity*)w)->nEnvs = envs;
+        ((SnapEntity*)w)->nMore = more;
         w += sizeof(SnapEntity);
         CopyWords(w, e, sizeof(Entity));
         ((Entity*)w)->pfnUpdate = BossRealUpdate(e); // not the aggro wrapper (module state)
@@ -814,6 +888,9 @@ static void ReportHits(void) {
         }
         ProgressEmit(EV_HIT, i | (e->entityId << 8),
                      (u16)damage | (e->hitFlags << 16) | (((e->flags & FLAG_DEAD) != 0) << 24));
+        if (damage) {
+            s_HitHold[i] = e->nFramesInvincibility;
+        }
         ProgressEmit(EV_HIT2, i | (e->hitParams ? (e->hitParams & 0xFF ? e->hitParams & 0xFF : 0xFF) : 0) << 8,
                      e->nFramesInvincibility | (e->stunFrames & 0xFF) << 8 | (u32)e->hitEffect << 16);
     }
@@ -976,7 +1053,14 @@ static void ApplyHits(void) {
 }
 
 static void HitDetectionWrap(void) {
+    s32 i;
+
     if (s_Role == ROLE_GUEST) {
+        for (i = 0; i < STAGE_SLOTS; i++) {
+            if (s_HitHold[i]) {
+                s_HitHold[i]--;
+            }
+        }
         SaveHitFields();
         s_HitDetection();
         CollectTouchedDrops();
@@ -1004,7 +1088,9 @@ static void NearestPlayer(s16* x, s16* y) {
 
     *x = PLAYER.posX.i.hi;
     *y = PLAYER.posY.i.hi;
-    if (s_Role != ROLE_AUTHORITY) {
+    // Scenery acts for this game's own player: a door or a camera limit that asked about the
+    // nearer one opened for the wrong side, or never (playtest 0.14).
+    if (s_Role != ROLE_AUTHORITY || RULE_OFF(RULE_NO_NEAR_TARGET) || IsScenery(FindOverlay(g_StageId), (u32)g_CurrentEntity->pfnUpdate)) {
         return;
     }
     px = p->x - g_Tilemap.scrollX.i.hi; // partner, in this game's screen space
@@ -1123,6 +1209,8 @@ const OverlayInfo* FindOverlay(s32 stage) {
 
 void SharedUpdate(void) {
     TrackRoom();
+    TrackMenu();
+    ReleaseGuestHold();
     if (g_GameState != Game_Play) {
         return;
     }
@@ -1156,4 +1244,5 @@ void SharedPresence(CoopPresence* p) {
     p->scrollX = g_Tilemap.scrollX.i.hi;
     p->scrollY = g_Tilemap.scrollY.i.hi;
     p->role = s_Role;
+    p->standSlot = SolidStandSlot();
 }

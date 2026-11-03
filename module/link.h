@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 12
+#define COOP_LINK_VERSION 15
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -22,6 +22,8 @@
 // Bit 6: this player's one-button moves are on (OPT_SHORTCUTS): the partner's copy of it reads its
 // buttons the same way (Richter's and Maria's moves check the option in their own code).
 #define FLIP_SHORTCUTS 0x40
+// Bit 5: this player voted to skip the cutscene (arrive.c).
+#define FLIP_SKIP_VOTE 0x20
 
 // One sprite of a player's own entities (sprites.c, M12): the partner's attacks drawn here.
 #define COOP_SPRITES 24
@@ -46,6 +48,7 @@ typedef struct {
     /* 0x12 */ u16 weapon; // a hand weapon's sprite: WEAPON_SPRITE | hand (weapons.c), else 0
 } CoopSprite; // size = 0x14
 #define WEAPON_SPRITE 0x100 // CoopSprite.weapon: animSet is its bank (0x10-0x13), palette its own
+#define WEAPON_ARM 0x200    // CoopSprite.weapon: Alucard's punching arm, animCurFrame his frame (issue 123)
 
 // A player's attack that can hurt (M15, pvp.c): its hitbox in the room, as hit detection reads it.
 #define COOP_HITS 16
@@ -78,19 +81,19 @@ typedef struct {
 #define TPAGE_BANK 0x4000
 #define CLUT_BANK 0x8000
 
-// M13: the partner's status (g_Status from hp to statsTotal, and from subWeapon to the elements:
+// M13: the partner's status (g_Status from spellsLearnt to statsTotal, and from subWeapon to the elements:
 // stats, level, equipment), for the partner's body (partner.c). The host reads it from the
 // partner's game and writes it here, magic last, when it changes.
 #define STATUS_PARTNER_ADDR 0x80730000
 #define STATUS_MAGIC 0x53544154 // 'STAT'
-#define STATUS_A 0x80097BA0     // g_Status.hp
-#define STATUS_A_SIZE 0x48
+#define STATUS_A 0x80097B9C     // g_Status.spellsLearnt (a spell only casts if it's learnt), then hp
+#define STATUS_A_SIZE 0x4C
 #define STATUS_B 0x80097BFC     // g_Status.subWeapon
 #define STATUS_B_SIZE 0x34
 typedef struct {
     /* 0x00 */ u32 magic; // STATUS_MAGIC once written
     /* 0x04 */ u8 a[STATUS_A_SIZE];
-    /* 0x4C */ u8 b[STATUS_B_SIZE];
+    /* 0x50 */ u8 b[STATUS_B_SIZE];
 } CoopStatus; // size = 0x80
 
 // M13 step 4: a player's familiar, for the partner to draw it (familiar.c): each game copies its
@@ -145,7 +148,8 @@ typedef struct {
     /* 0x22 */ u16 roomFrames; // frames since entering this room (the earlier one is authority)
     /* 0x24 */ s16 scrollX;    // camera position in the room (shared rooms need cameras close)
     /* 0x26 */ s16 scrollY;
-    /* 0x28 */ u16 role;       // ROLE_* (design/M4)
+    /* 0x28 */ u8 role;        // ROLE_* (design/M4)
+    /* 0x29 */ u8 standSlot;   // a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
     /* 0x2A */ u16 aggroSwitches; // bosses switching to/from the partner so far (tests)
 } CoopPresence; // size = 0x2C
 
@@ -247,14 +251,44 @@ typedef struct {
     /* 0x22434 */ CoopHit selfHits[COOP_HITS];
     /* 0x224F4 */ u32 partnerHitCount; // host writes
     /* 0x224F8 */ CoopHit partnerHits[COOP_HITS];
-} CoopLink; // size = 0x225B8
+    /* 0x225B8 */ u32 rulesOff;     // host writes every frame: RULE_* bits, the castle's rules (D162)
+    /* 0x225BC */ u16 expPct;       // XP from a kill, % (0: 100)
+    /* 0x225BE */ u16 dealtPct;     // damage the player deals, % (0: 100)
+    /* 0x225C0 */ u16 takenPct;     // damage the player takes, after defense, % (0: 100)
+    /* 0x225C2 */ u16 enemyHpPct;   // enemies' HP with a partner, % (0: 200)
+    /* 0x225C4 */ u16 enemyHpSoloPct; // enemies' HP alone, % (0: 100)
+    /* 0x225C6 */ u16 rulesPad;
+} CoopLink; // size = 0x225C8
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
+#define OPT_NO_TINT 0x20000000 // options: two of a kind aren't told apart by a tint (partner.c)
+#define OPT_SPELL_TRIGGERS 0x40000000 // options: spells on R2 or L2 and a face button (spells.c)
+#define OPT_PARTNER_HP 0x80000000 // options: the partner's health under this player's (issue 106)
 #define CONTROL_MUTE_MUSIC 1
 #define CONTROL_NO_AGGRO 2 // bosses only ever chase this game's player (tests, tuning)
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 #define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 #define CONTROL_PVP 0x1000000 // the host's PvP setting: the partner's attacks hurt (M15, pvp.c)
+
+// The castle's rules (D162, design/M-castle-rules.md): each bit turns a co-op change to the game
+// off, so all zero is the game as we built it. Bits 24 and up also go to the player overlays
+// through g_CoopOptions (OPT_NO_*, characters/richter-ps1/coop_ric.h).
+#define RULE_NO_SHARED_LEVEL 0x001  // no XP split, no XP sent to the partner
+#define RULE_NO_SHARED_GOLD 0x002   // each player keeps their own gold
+#define RULE_NO_REVIVE 0x004        // a fallen player stays down until both are
+#define RULE_NO_FAERIE_REVIVE 0x008 // a partner's faerie doesn't revive
+#define RULE_NO_BOSS_PULL 0x010     // a boss fight doesn't bring the partner
+#define RULE_NO_SCENE_PULL 0x020    // a cutscene doesn't bring the partner
+#define RULE_NO_NEAR_TARGET 0x040   // enemies aim at this game's player, not the nearer one
+#define RULE_NO_MAP_TELEPORT 0x080  // Cross on the map doesn't go to the partner
+#define RULE_NO_OFFHAND 0x100       // Richter and Maria: Circle doesn't use the off-hand item
+#define RULE_NO_FAMILIARS 0x200     // Richter and Maria: no familiars
+#define RULE_OVERLAY_MASK 0xFF000000
+#define OPT_NO_GROWTH 0x01000000      // Richter and Maria: no levels, no STR/INT in their attacks
+#define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: relics teach them nothing
+#define OPT_NO_AIR_JUMPS 0x04000000   // Richter and Maria: their own jumps only (D122 off)
+#define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
+#define RULE_PCT(field, otherwise) (g_CoopLink.field ? (s32)g_CoopLink.field : (otherwise))
 
 // Playable characters (design/M8). Richter and Maria both run in Richter's overlay slot.
 #define CHAR_ALUCARD 0
@@ -262,6 +296,7 @@ typedef struct {
 #define CHAR_MARIA 2
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
+#define OPT_ALUCARD_HUD 4 // Richter and Maria: Alucard's health bar (character.c)
 #define OPT_PARTNER_SIM 2 // M13 spike: the partner simulated by the game's own player code (partner.c)
 // Alucard's spell on each right-stick direction (up, right, down, left): 4 bits each from this
 // bit, SpellIds + 1 (0: none).

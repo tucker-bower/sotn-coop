@@ -79,14 +79,16 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 | Tier | About | When |
 |---|---|---|
 | A handful, by name or `-k` | seconds to minutes | A small change |
-| Everyday (212 tests) | 10 minutes | Before committing a major change, and before opening or updating a PR with code changes |
-| `--full` (299 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
+| Everyday (273 tests) | 10 minutes | Before committing a major change, and before opening or updating a PR with code changes |
+| `--full` (364 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
 
 **After a module change, rebuild first:** `scripts/rebuild_fixtures.sh` (about 15 minutes) rebuilds the disc, Maria's patches and every savestate, because savestates hold the module's code. Don't rebuild while tests are running.
 
 **New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True`). Keep everyday at 10 minutes or less by moving repetition to `--full`.
 
 ## PR template
+Before Issuing a PR, run the everyday test suite. The full test suite should only be run before creating a new release. Additonally, check that all documentation is up-to-date before issuing the PR, including the md roadmap, repo root readme, and status.
+
 ```
 Fixes #<issue>
 Fixes #<issue>

@@ -927,7 +927,7 @@ def guest_opens_red_door(run):
 
 
 # --- the partner's hand-weapon swings (note 2, phase 2: weapons.c) ---------------------------
-def _swing_drawn(run, chars, button, item_index=0):
+def _swing_drawn(run, chars, button, item=None, settle=0):
     """A swings a hand weapon next to B: B gets the weapon's copy (overlay, sheet, palettes)
     through the link, and draws the swing (the same frame of B, from the same state, with and
     without A's sprites, differs; and B drew weapon sprites)."""
@@ -941,7 +941,8 @@ def _swing_drawn(run, chars, button, item_index=0):
     raw = a.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
     items = [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
     hand = 0  # the right hand (○ swings it for Richter and Maria, as in the hand-item tests)
-    a.write(EQUIPMENT, items[item_index], "<I")
+    item = items[0] if item is None else item
+    a.write(EQUIPMENT, item, "<I")
     as_characters(run, *chars)  # the load loads the weapon
     into_hall(run)
     got = False
@@ -950,7 +951,7 @@ def _swing_drawn(run, chars, button, item_index=0):
         if b.read(WEAPON_PARTNER + hand * 0x8000, "<I") == WEAPON_MAGIC:
             got = True
             break
-    run.expect(got, "B has A's weapon (its copy came through the link)", item=items[item_index],
+    run.expect(got, "B has A's weapon (its copy came through the link)", item=item,
                a_seq=a.mailbox("self_weapon_seq", hand))
     drawn_at = None
     drawn_sym = symbols()["g_CoopWeaponsDrawn"]
@@ -960,6 +961,7 @@ def _swing_drawn(run, chars, button, item_index=0):
             drawn_at = i
             break
     run.expect(drawn_at is not None, "B draws A's swing", sprites=b.mailbox("partner_sprite_count"))
+    run.step(settle)
     b.unlink()  # B's host stops writing: the test sets B's partner sprites itself
     state = b.save_state()
     b.mailbox("write_partner_sprites", b"")
@@ -986,6 +988,13 @@ def partner_swing_drawn(run):
 def partner_swing_drawn_richter(run):
     """Note 2, phase 2: Richter swings his off-hand sword (D105) next to Alucard."""
     _swing_drawn(run, (1, 0), "circle")
+
+
+@session_scenario(characters=(1, 0))
+def partner_fist_drawn_richter(run):
+    """Issue 123: Richter punches with an off-hand fist weapon next to Alucard: Alucard's arm, in
+    both games."""
+    _swing_drawn(run, (1, 0), "circle", item=85, settle=6)  # to the arm's full reach
 
 
 # --- the first castle, chained (design/M12-v1-release.md criterion 8; D120) -------------------

@@ -52,11 +52,16 @@ from report import VERSION  # noqa: E402
 from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
+# A new castle goes straight into the game: the castle menu has replaced the game's own (issue 109).
+# Title -> main menu -> file select -> New game -> name "A" (harness/savestates.py's new_game)
+NEW_GAME_INPUTS = ((600, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross"), (120, ""),
+                   (2, "cross"), (20, ""), (2, "start"))
 WINDOW_TITLE = "SOTN Co-op"
 SIZE = CANVAS
 PAGE_TOP, PAGE_LINE = 140, 24  # a help page's first line, and its line height
 INK, DIM, GOLD, BLOOD, BG = (230, 225, 215), (150, 145, 140), (240, 205, 120), (150, 20, 30), (12, 8, 14)
 OK_GREEN = (140, 200, 120)
+BAR_X, BAR_W = SIZE[0] - 220, 180  # a castle rule's slider
 # OpenBIOS built with FASTBOOT (scripts/bootstrap.sh): the game starts 5 s sooner than on
 # PCSX-Redux's standard build, which stays for savestates made before 0.12 (M12 v1.0)
 BUNDLED_BIOS = APP / "bios" / "openbios-fast.bin"
@@ -86,6 +91,8 @@ in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, 
 Whoever joins you online keeps a copy of your castle, to play solo or host later.
 Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
 their normal HP.
+Rules: each castle has its own, set in Options › Open settings (Esc: Castle rules, on a controller or
+phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
 
 Characters: pick Alucard, Richter or Maria in the lobby (Maria needs your Dracula X Chronicles
 disc: Settings › Game files). Richter and Maria learn their moves from Alucard's relics: Leap Stone
@@ -475,6 +482,8 @@ class Launcher:
         self.ui.pads = self.pads
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
+        self.new_castle_start = False  # the next game view starts a new game (issue 109)
+        self.view = None  # the game view, while one runs
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
             from archive import Castle
             Castle.install_bundled()
@@ -515,6 +524,8 @@ class Launcher:
                          "A co-op mod of Castlevania: Symphony of the Night, built on sotn-decomp.\n"
                          "No game data is included: the co-op disc is made from your own.\n"
                          f"Your saves and bug reports: {paths.data_dir()}\n{self.room_info}")
+        elif action == "rules":
+            self.open_rules()
         elif action in ("pause", "report", "leave"):
             pass  # these only mean something in a game (gameview.py)
         else:
@@ -576,8 +587,12 @@ class Launcher:
 
     def options(self, seat):
         """The OPT_* bits for that seat's game (link/mailbox.py)."""
-        from link.mailbox import OPT_SHORTCUTS, spell_options
-        return (OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat))
+        from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
+        return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat)) |
+                (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
+                (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
+                (OPT_ALUCARD_HUD if self.settings.get("alucard_hud") else 0) |
+                (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
 
     def controls_menu(self):
         """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
@@ -927,7 +942,7 @@ class Launcher:
 
     def storage_line(self):
         from archive import total_savestates_size
-        return f"Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
+        return f"Version {VERSION}   ·   Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
 
     def home(self):
         pending = None
@@ -940,7 +955,7 @@ class Launcher:
                 items = [("Solo", "Play a castle by yourself: any castle, any time", "solo"),
                          ("Couch co-op", "Two players on this PC, each with a controller", "couch"),
                          ("Online co-op", "Play with a friend on their own PC or phone", "online"),
-                         ("Settings", "Layout, pixels, music, boss aggro, game files (Maria), controls", "settings"),
+                         ("Settings", "Layout, music, each castle's rules, game files (Maria), controls", "settings"),
                          ("Quit", "", "quit")]
                 if ANDROID:  # one game per device on Android (design/M9)
                     items = [i for i in items if i[2] != "couch"]
@@ -1073,9 +1088,16 @@ class Launcher:
         finally:
             castle.tidy()
 
+    def rules_at_start(self, castle, fresh):
+        """A new castle starts on its rules (D161): the castle's, so they stay with it (D162)."""
+        import rules as castle_rules
+        if fresh:
+            self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules, start=True)
+
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
         if fresh:
+            self.new_castle_start = True
             return
         self.load_cards(s, castle)
         if castle.joint_save.exists() and self.boot_to_title(s, f"Continuing {castle.name}"):
@@ -1098,7 +1120,8 @@ class Launcher:
         for i, g in enumerate(s.games):
             g.host("set_player", character=self.characters[i], options=self.options(i), blob=blob)
 
-    def run_view(self, s, playthrough, goal="", pvp=None):
+    def run_view(self, s, playthrough, goal="", rules=None, joiner=False):
+        import rules as castle_rules
         from gameview import GameView
         self.apply_players(s)
         if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
@@ -1119,11 +1142,17 @@ class Launcher:
             rush = bossrush.BossRush(s.joint, s.games, info["rush"], changed)
             goal = goal or f"Boss rush: {len(rush.rows)} bosses. Beat one and you're both at the next."
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
-                        self.settings.get("music", "auto"), self.settings.get("aggro", 50), cards,
+                        self.settings.get("music", "auto"),
+                        castle_rules.for_castle(playthrough, self.settings) if rules is None else rules, cards,
                         profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
-                        partner_vol=self.settings.get("partner_vol", 60),
-                        pvp=bool(self.settings.get("pvp")) if pvp is None else pvp, rush=rush)
-        result = view.run()
+                        partner_vol=self.settings.get("partner_vol", 60), rush=rush, joiner=joiner,
+                        script=NEW_GAME_INPUTS if self.new_castle_start else ())
+        self.new_castle_start = False
+        self.view = view
+        try:
+            result = view.run()
+        finally:
+            self.view = None
         if result == "quit":
             raise SystemExit
         if isinstance(result, tuple) and result[0] == "navigate":
@@ -1155,6 +1184,7 @@ class Launcher:
 
     def play(self, castle, fresh=False):
         castle.played_here()
+        self.rules_at_start(castle, fresh)
         try:
             with self.session((None, None), castle) as s:
                 s.joint.on_write = castle.saved
@@ -1287,24 +1317,27 @@ class Launcher:
 
     def host_online(self, castle, fresh=False):
         castle.played_here()
+        self.rules_at_start(castle, fresh)
         try:
             self._host_online(castle, fresh)
         finally:
             castle.tidy()
 
     def _host_online(self, playthrough, fresh):
+        import rules as castle_rules
         from link.rendezvous import make_room_code
         with self.online_session(None, playthrough, rank=0) as s:
             s.joint.on_write = playthrough.saved
             s.local.host("set_castle", playthrough.meta())  # the joiner keeps a copy (design/M11)
-            pvp = bool(self.settings.get("pvp"))
-            s.local.host("set_pvp", pvp)  # the host's setting covers the session (M15)
+            s.local.host("set_fresh", fresh)
+            rules = castle_rules.for_castle(playthrough, self.settings)
+            s.local.host("set_rules", castle_rules.encode(rules), rules)  # the castle's: for the session (D162)
             room = make_room_code()
             self._clip_put(room)
             s.local.host("start_connect", room, "host", app=VERSION)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
-                pvp_line = "\nPvP is on." if pvp else ""
+                pvp_line = "\nPvP is on." if rules["pvp"] else ""
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them.{pvp_line}"),
                               f"Give your partner the room code {room}: it's on your clipboard.") is None:
                     return
@@ -1317,6 +1350,7 @@ class Launcher:
             self.run_view(s, playthrough)
 
     def join_online(self):
+        import rules as castle_rules
         from archive import Castle
         from link.rendezvous import ConnectError, parse_connect_input
         code = ""
@@ -1347,14 +1381,17 @@ class Launcher:
                 # The host's castle: this player's copy of it (design/M11)
                 theirs = s.local.host("status").get("partner_hello") or {}
                 meta = theirs.get("castle")
-                pvp = bool(theirs.get("pvp"))  # the host's setting (M15)
                 castle = Castle.receive(meta) if meta else Castle.new(received=True)
+                rules = castle_rules.clean(theirs.get("rules"))  # the host's castle, the host's rules (D162)
+                castle.set_rules(rules)
                 s.joint.path = castle.joint_save
                 s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
                 self.load_cards(s, castle)
+                self.new_castle_start = bool(theirs.get("fresh"))
                 try:
-                    self.run_view(s, castle, goal="PvP is on (your partner's setting): your attacks hurt each other." if pvp else "",
-                                  pvp=pvp)
+                    changed = castle_rules.changed(rules)
+                    self.run_view(s, castle, rules=rules, joiner=True,
+                                  goal="This castle's rules differ: " + ", ".join(changed) if changed else "")
                 finally:
                     s.joint.on_write = None
                 castle.tidy()
@@ -1440,6 +1477,128 @@ class Launcher:
         with self.session((file, file), None) as s:
             self.run_view(s, None, goal=f"Debug start: {names[k]} — {starts[names[k]]['about']}")
 
+    def open_rules(self):
+        """Options › Open settings: the rules of the castle being played; from the menus, pick one."""
+        import rules as castle_rules
+        from archive import Castle
+        view = self.view
+        if view:
+            def apply(rules):
+                view.set_rules(rules)
+                if view.playthrough:
+                    view.playthrough.set_rules(view.rules)
+            self.rules_menu(view.playthrough.name if view.playthrough else "This session", dict(view.rules), apply, view.joiner)
+            return
+        while True:
+            castles = Castle.all()
+            if not castles:
+                self.ui.message("Castle rules", "Each castle has its own rules: start one first.")
+                return
+            k = self.ui.menu("Castle rules: which castle?", [(c.name, c.summary()) for c in castles],
+                             "Each castle has its own rules. Online, the host's go for both players.")
+            if k is None:
+                return
+            castle = castles[k]
+            self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules)
+
+    def rules_menu(self, name, rules, apply, read_only=False, start=False):
+        """The rules, one per row: sliders move with left / right (or a click on the bar), toggles
+        with OK. Each change goes through apply(rules) at once."""
+        import rules as castle_rules
+        ui, sel = self.ui, 0
+        rules = castle_rules.clean(rules)
+        sliders = {s[0]: s for s in castle_rules.SLIDERS}
+        toggles = {t[0]: t for t in castle_rules.TOGGLES}
+
+        def rows():
+            out = [("start", "")] if start else []
+            out += [("slider", key) for key in sliders] + [("toggle", key) for key in toggles]
+            if rules["remap"]:
+                out += [("button", b) for b in castle_rules.REMAP_BUTTONS]
+            return out + ([] if read_only else [("defaults", "")])
+
+        def row_text(kind, key):
+            names = castle_rules.BUTTON_NAMES
+            if kind == "start":
+                return "Start", "Play with these rules"
+            if kind == "slider":
+                return f"{sliders[key][1]}: {rules[key]}%", sliders[key][2]
+            if kind == "toggle":
+                return f"{toggles[key][1]}: {'on' if rules[key] else 'off'}", toggles[key][2]
+            if kind == "button":
+                return f"{names[key]} acts as: {names[rules['remap_map'].get(key, key)]}", "For both players"
+            return "Back to the defaults", "Every rule as it comes"
+
+        def change(row, step):
+            kind, key = row
+            if read_only:
+                return
+            if kind == "slider":
+                _, _, _, _, low, high, each = sliders[key]
+                rules[key] = max(low, min(high, rules[key] + step * each))
+            elif kind == "toggle":
+                rules[key] = not rules[key]
+            elif kind == "button":
+                castle_rules.set_target(rules, key, castle_rules.next_target(rules, key))
+            else:
+                rules.clear()
+                rules.update(castle_rules.clean({}))
+            apply(dict(rules))
+
+        while True:
+            table = rows()
+            sel = min(sel, len(table) - 1)
+            for a in ui.events():
+                if a == "quit":
+                    raise SystemExit
+                if a == "back":
+                    return
+                if a == "up":
+                    sel = (sel - 1) % len(table)
+                elif a == "down":
+                    sel = (sel + 1) % len(table)
+                elif a in ("left", "right"):
+                    if table[sel][0] == "slider":
+                        change(table[sel], 1 if a == "right" else -1)
+                elif a == "ok":
+                    if table[sel][0] == "start":
+                        return
+                    if table[sel][0] != "slider":
+                        change(table[sel], 0)
+                elif isinstance(a, tuple) and a[0] == "hover" and a[1] < len(table):
+                    sel = a[1]
+                elif isinstance(a, tuple) and a[0] == "click":
+                    if a[1] >= 1000:  # a slider's bar: where it was clicked
+                        sel = a[1] - 1000
+                        low, high, each = sliders[table[sel][1]][4:]
+                        at = self.display.to_canvas(pygame.mouse.get_pos())
+                        share = ((at[0] if at else BAR_X) - BAR_X) / BAR_W
+                        rules[table[sel][1]] = low + round(max(0, min(1, share)) * (high - low) / each) * each
+                        if not read_only:
+                            apply(dict(rules))
+                    elif a[1] < len(table):
+                        sel = a[1]
+                        if table[sel][0] != "slider":
+                            change(table[sel], 0)
+                    continue
+            table = rows()
+            sel = min(sel, len(table) - 1)
+            ui.frame("Castle rules", name + ("\nThe host's rules: only the host can change them." if read_only else ""))
+            ui.items([row_text(*r) for r in table], sel, top=172)
+            for k, rect in list(ui._rects):
+                if table[k][0] == "slider":
+                    key = table[k][1]
+                    low, high = sliders[key][4:6]
+                    bar = pygame.Rect(BAR_X, rect.y + 13, BAR_W, 8)
+                    pygame.draw.rect(self.screen, (60, 40, 50), bar, border_radius=4)
+                    done = pygame.Rect(bar.x, bar.y, bar.w * (rules[key] - low) // (high - low), 8)
+                    pygame.draw.rect(self.screen, GOLD if k == sel else DIM, done, border_radius=4)
+                    ui._rects.append((1000 + k, bar.inflate(8, 20)))
+            ui.footer("Left / right: change a slider   ·   Cross / A / Enter: switch a rule   ·   Esc: back"
+                      if not read_only else "Esc: back")
+            ui.flip()
+            pygame.time.wait(16)
+
     def settings_menu(self):
         ui = self.ui
         sel = 0
@@ -1447,9 +1606,12 @@ class Launcher:
             st = self.settings
             items = [(f"Layout: {LAYOUT_NAMES[st.get('layout', 'auto')]}", "Couch: how the two games share the window"),
                      (f"Music: {st.get('music', 'auto')}", "Couch: which game plays the music (auto: the left one while it's in play)"),
-                     (f"Boss aggro: {st.get('aggro', 50)}%", "A boss's chance to switch to the other player, every 3 s"),
                      (f"Partner's sounds: {st.get('partner_vol', 60)}%", "How loud your partner's attacks and steps are, in your game"),
-                     (f"PvP: {'on' if st.get('pvp') else 'off'}", "Players' attacks hurt each other (online, the host's setting counts)"),
+                     (f"Partner's health bar: {'on' if st.get('partner_hp', True) else 'off'}", "Under your own health, while you play together"),
+                     (f"Tint the partner: {'on' if st.get('partner_tint', True) else 'off'}", "Tell two players of the same character apart"),
+                     (f"Spells on triggers: {'on' if st.get('spell_triggers') else 'off'}", "Alucard: hold R2 with Square, Circle, Cross or Triangle: Dark Metamorphosis, Summon Spirit, Hellfire, Tetra Spirit. L2 with Square or Circle: Soul Steal, Sword Brothers"),
+                     (f"Alucard's health bar: {'on' if st.get('alucard_hud') else 'off'}", "Richter and Maria: his health and hearts display"),
+                     ("Castle rules", "XP, damage, enemy HP, PvP and everything co-op changes: each castle has its own"),
                      ("Game files", "Your Symphony of the Night disc, Dracula X Chronicles (adds Maria), the BIOS"),
                      ("Controls", "Each player's button shortcuts, and Alucard's spells on the right stick"),
                      ("Open the data folder", str(paths.data_dir()))]
@@ -1463,16 +1625,22 @@ class Launcher:
             elif k == 1:
                 st["music"] = {"auto": "left", "left": "right", "right": "auto"}[st.get("music", "auto")]
             elif k == 2:
-                st["aggro"] = (st.get("aggro", 50) + 10) % 110
-            elif k == 3:
                 st["partner_vol"] = {20: 40, 40: 60, 60: 80, 80: 100}.get(st.get("partner_vol", 60), 20)
+            elif k == 3:
+                st["partner_hp"] = not st.get("partner_hp", True)
             elif k == 4:
-                st["pvp"] = not st.get("pvp")
+                st["partner_tint"] = not st.get("partner_tint", True)
             elif k == 5:
-                self.game_files()
+                st["spell_triggers"] = not st.get("spell_triggers")
             elif k == 6:
-                self.controls_menu()
+                st["alucard_hud"] = not st.get("alucard_hud")
             elif k == 7:
+                self.open_rules()
+            elif k == 8:
+                self.game_files()
+            elif k == 9:
+                self.controls_menu()
+            elif k == 10:
                 paths.open_folder(paths.data_dir())
             save_settings(st)
             self.menubar.update(st)
@@ -1496,6 +1664,10 @@ class Launcher:
 
 
 def main():
+    if "--crash-window" in sys.argv:  # crash_window.py: the game's stopped, in another process
+        import crash_window
+        crash_window.run(sys.argv[sys.argv.index("--crash-window") + 1])
+        return
     logging.basicConfig(filename=paths.data_dir() / "launcher.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     if ANDROID:  # and to logcat too, where android/device.py log reads it

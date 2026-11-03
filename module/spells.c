@@ -57,16 +57,56 @@ static bool s_FacingLeft;   // when it started: "forward" stays the same through
 static u16 s_PrevPressed;   // what the sequence pressed last frame
 static u32 s_PrevExtra;
 
-// The spell the player put on that direction (OPT_SPELL_*), if Alucard can cast it now.
+// If Alucard can cast it now.
+static bool CanCast(s32 spell) {
+    if (spell < 0 || spell >= NUM_SPELLS || !s_Spells[spell].steps ||
+        !(g_Status.spellsLearnt & (1 << spell)) || g_Status.mp < g_SpellDefs[spell].mpUsage ||
+        (spell == SPELL_SWORD_BROTHERS && g_Servant != FAM_ACTIVE_SWORD)) { // as 704D0.c's rule
+        return false;
+    }
+    return true;
+}
+
+// The spell the player put on that direction (OPT_SPELL_*).
 static s32 Chosen(u32 dir) {
     s32 spell = (g_CoopLink.options >> (OPT_SPELL_SHIFT + dir * 4) & 0xF) - 1;
 
-    if (!(g_CoopLink.options & OPT_SHORTCUTS) || spell < 0 || spell >= NUM_SPELLS || !s_Spells[spell].steps ||
-        !(g_Status.spellsLearnt & (1 << spell)) || g_Status.mp < g_SpellDefs[spell].mpUsage ||
-        (spell == SPELL_SWORD_BROTHERS && g_Servant != FAM_ACTIVE_SWORD)) { // as 704D0.c's rule
+    return (g_CoopLink.options & OPT_SHORTCUTS) && CanCast(spell) ? spell : -1;
+}
+
+// Spells on the triggers (OPT_SPELL_TRIGGERS, issue 115): hold R2 or L2 and press a face button.
+// While one is held, the trigger and the buttons do nothing else: in the game, those triggers
+// change form, so a player who turns this on moves those to L1 and R1 in the game's own settings.
+static const u8 s_R2Spells[4] = {SPELL_DARK_METAMORPHOSIS, SPELL_SUMMON_SPIRIT, SPELL_HELLFIRE, SPELL_TETRA_SPIRIT};
+static const u8 s_L2Spells[2] = {SPELL_SOUL_STEAL, SPELL_SWORD_BROTHERS};
+static const u16 s_Faces[4] = {PAD_SQUARE, PAD_CIRCLE, PAD_CROSS, PAD_TRIANGLE};
+
+static s32 Triggered(void) {
+    u16 held = g_pads[0].pressed & (PAD_R2 | PAD_L2);
+    const u8* spells = held & PAD_R2 ? s_R2Spells : s_L2Spells;
+    u32 count = held & PAD_R2 ? LEN(s_R2Spells) : LEN(s_L2Spells);
+    s32 found = -1;
+    u32 k;
+
+    if (!(g_CoopLink.options & OPT_SPELL_TRIGGERS) || !held) {
         return -1;
     }
-    return spell;
+    for (k = 0; k < count; k++) {
+        if (g_pads[0].tapped & s_Faces[k]) {
+            found = spells[k];
+        }
+    }
+    g_pads[0].pressed &= ~(PAD_R2 | PAD_L2 | PAD_SQUARE | PAD_CIRCLE | PAD_CROSS | PAD_TRIANGLE);
+    g_pads[0].tapped &= ~(PAD_R2 | PAD_L2 | PAD_SQUARE | PAD_CIRCLE | PAD_CROSS | PAD_TRIANGLE);
+    return found >= 0 && CanCast(found) ? found : -1;
+}
+
+static void Start(s32 spell) {
+    s_Steps = s_Spells[spell].steps;
+    s_Count = s_Spells[spell].count;
+    s_Step = s_Held = 0;
+    s_FacingLeft = PLAYER.facingLeft;
+    s_PrevPressed = 0;
 }
 
 static u16 Buttons(u8 b) {
@@ -105,14 +145,13 @@ void SpellsUpdate(void) {
     if (!s_Steps && flicked) {
         for (dir = 0; dir < 4; dir++) {
             if ((flicked & (PADX_RS_UP << dir)) && (spell = Chosen(dir)) >= 0) {
-                s_Steps = s_Spells[spell].steps;
-                s_Count = s_Spells[spell].count;
-                s_Step = s_Held = 0;
-                s_FacingLeft = PLAYER.facingLeft;
-                s_PrevPressed = 0;
+                Start(spell);
                 break;
             }
         }
+    }
+    if ((spell = Triggered()) >= 0 && !s_Steps) {
+        Start(spell);
     }
     if (!s_Steps) {
         return;
