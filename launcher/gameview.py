@@ -787,6 +787,13 @@ class GameView:
         return (f"{'Together' if together else 'Apart'}   ·   music: {'left' if self.music == 0 else 'right'} "
                 f"({self.music_mode}, F1)   ·   F9: report a problem   ·   Esc: pause   ·   {fps}{sim}"), (pa, pb)
 
+    def ping_text(self):
+        st = self.launcher.settings if self.launcher else {}
+        if not (self.online and st.get("show_ping")):
+            return None
+        rtt = self.games[0].host("status").get("rtt_ms")
+        return f"{rtt} ms" if rtt is not None else "… ms"
+
     def stuck_note(self, presences):
         """Says so if a player has stood still in a scene for a long time."""
         for i, p in enumerate(presences):
@@ -919,6 +926,8 @@ class GameView:
                 text = self.goal[:150]
             if not self.started:  # the game's boot: say so instead of the black (Tucker, 2026-10-26)
                 self.started = self.frame > 3600 or any(f is not None and _not_black(f) for f in frames)
+            if self.frame % 30 == 0:  # Settings > Show ping: the round trip to the partner, online
+                self.display.corner = self.ping_text()
             if self.started:
                 self.display.present_games(frames, [text], (255, 160, 160) if self.mismatch else (230, 230, 230))
             else:

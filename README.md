@@ -49,6 +49,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 **Extra modes**
 - **Boss rush:** all 22 bosses back to back, timed with splits and a best time, solo, on the couch or online.
 - **PvP:** optional, and off by default.
+- **Show ping:** an option in Settings: the round trip to your partner, in the top right while you play online.
 - **Castle rules:** each castle has its own, in Options › Open settings or the pause menu: XP, damage and boss HP sliders, button remapping, a switch for everything co-op changes about the game, and an optional rule that lets a partner hang onto Alucard's bat. The host's rules go for both players.
 - **Test castles:** start right outside any boss or scene.
 

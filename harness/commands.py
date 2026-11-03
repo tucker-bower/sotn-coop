@@ -17,6 +17,8 @@ UI_FLOWS = ("solo", "couch", "characters", "startup", "test_castles", "boss_rush
 COMMANDS = {}  # name -> (argv, extra environment); "{out}" in argv: the test's out folder
 for _f in sorted((ROOT / "launcher").glob("test_*.py")):
     COMMANDS["launcher_" + _f.stem[len("test_"):]] = ([str(_f)], {})
+for _f in sorted((ROOT / "link").glob("test_*.py")):  # the NAT matrix and router port mapping, no games
+    COMMANDS["link_" + _f.stem[len("test_"):]] = ([str(_f)], {})
 COMMANDS["patcher_round_trip"] = ([str(ROOT / "patcher" / "test_patcher.py")], {})
 for _flow in UI_FLOWS:
     COMMANDS["ui_" + _flow] = ([str(ROOT / "launcher" / "uxdriver.py"), _flow, "--out", "{out}"], {})

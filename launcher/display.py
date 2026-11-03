@@ -154,6 +154,9 @@ class Display:
         self._bar_tex = None
         self._bar_key = None
         self.font = pygame.font.SysFont("consolas", 15)
+        self.small = pygame.font.SysFont("consolas", 13)
+        self.corner = None  # Settings > Show ping: e.g. "62 ms", top right over the games
+        self._corner_tex = self._corner_key = None
         self.on_resize = []
         self.on_fullscreen = []  # f(fullscreen): the menu bar hides in fullscreen
         self._last = ("canvas", False)  # what the window shows: the canvas (over the games?), or the games
@@ -233,6 +236,7 @@ class Display:
             r.clear()
             self._draw_games()
             self._draw_bar(*arg)
+            self._draw_corner()
             return
         r.draw_color = (12, 8, 14, 255)
         r.clear()
@@ -286,6 +290,16 @@ class Display:
             ren.clear()
             tex.draw(fit((0, 0, *win.size)))
             ren.present()
+
+    def _draw_corner(self):
+        if not self.corner:
+            return
+        if self.corner != self._corner_key:
+            self._corner_tex = Texture.from_surface(self.renderer, self.small.render(self.corner, True, (80, 220, 100)))
+            self._corner_key = self.corner
+        w, _ = self.window.size
+        tw, th = self._corner_tex.width, self._corner_tex.height
+        self._corner_tex.draw(dstrect=(w - tw - 6, 4, tw, th))
 
     def _draw_bar(self, lines, color):
         w, h = self.window.size

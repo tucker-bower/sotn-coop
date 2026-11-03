@@ -10,7 +10,11 @@ own PC opened by sending out first, to that same address. So:
    account, no server of ours), and read the other side's.
 3. Punching: both send HELO to every candidate of the other, ten times a second. The first
    HELO that comes back with the room's token is the partner (link/host.py accepts it), and
-   from then on only that address is listened to.
+   from then on only that address is listened to. A symmetric router that hands out its ports
+   in steps (seen in its two STUN answers) posts the step, and the partner also punches to the
+   next ports it will give out (port prediction, issue 58).
+   With IPv6 on both sides, its global address is a candidate too: no NAT, so punching only has
+   to get through the firewalls.
 4. On the same Wi-Fi, without the relay: both also broadcast HELO to the game's usual port
    (GAME_PORT, which every game tries first), so two games in one house find each other even
    when the relay or STUN can't be reached (a real device test, 2026-10-24).
@@ -38,6 +42,8 @@ GAME_PORT = 47811  # the game's port when it's free (the launcher asks for it fi
 BROADCAST_EVERY_S = 0.5
 log = logging.getLogger(__name__)
 TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
+PREDICT_PORTS = 32   # ports punched past a symmetric router's last one (issue 58)
+PREDICT_STEP_MAX = 16  # a bigger step between its two STUN answers: random ports, no prediction
 RELAY_AFTER_S = 6.0  # punching this long without a reply: both go through a relay, if one is set (M14; unused, D123)
 
 
@@ -188,6 +194,7 @@ class Connector:
         self.mine, self.theirs = [], []
         self.their_nat = None
         self.nat = None
+        self.predict = self.their_predict = None  # (public ip, last port, step): a symmetric router's next ports
         self._t0 = None
         self._stun = []
         self._stun_sent = None
@@ -261,12 +268,20 @@ class Connector:
             if done or now - self._t0 > STUN_WAIT_S * 2:
                 public = sorted(set(got.values()))
                 self.nat = "none" if not public else ("symmetric" if len({p for _, p in public}) > 1 else "cone")
+                ports = sorted(p for _, p in public)
+                if self.nat == "symmetric" and len({ip for ip, _ in public}) == 1 and 0 < ports[-1] - ports[0] <= PREDICT_STEP_MAX:
+                    self.predict = (public[0][0], ports[-1], ports[-1] - ports[0])
                 ip = self.lan_ip or self.t.sock.getsockname()[0]
                 if ip in ("0.0.0.0", ""):  # listening everywhere: the address the LAN knows us by
                     from .rendezvous import local_ip
                     ip = local_ip()
                 lan = (ip, self.t.port)
                 self.mine = [list(lan)] + [list(p) for p in public if p != lan]
+                if getattr(self.t, "sock6", None) is not None:  # IPv6: no router to get through, only a firewall (issue 58)
+                    from .rendezvous import global_ip6
+                    ip6 = global_ip6()
+                    if ip6:
+                        self.mine.append([ip6, self.t.port])
                 # the LAN broadcast: everywhere on this network, and this /24's own broadcast address
                 # (some routers don't pass 255.255.255.255 between Wi-Fi and wired)
                 self._broadcasts = [("255.255.255.255", GAME_PORT), (ip.rsplit(".", 1)[0] + ".255", GAME_PORT)]
@@ -288,6 +303,8 @@ class Connector:
             if self._published is None or now - self._published > every:
                 msg = {"role": self.role, "nonce": self.nonce, "cands": self.mine,
                        "nat": self.nat, "token": room_token(self.room), "ver": self.version}
+                if self.predict:
+                    msg["predict"] = list(self.predict)
                 if self.role == "host" and self.relays:  # the host picks the relay both will use
                     msg["relay"] = list(self.relays[0])
                 self.relay.publish(self.topic, msg)
@@ -308,6 +325,8 @@ class Connector:
                 if newest.get("relay"):
                     self._their_relay = tuple(newest["relay"])
                 cands = [tuple(c) for c in newest.get("cands", []) if len(c) == 2]
+                pred = newest.get("predict")
+                self.their_predict = tuple(pred) if isinstance(pred, list) and len(pred) == 3 else None
                 if cands != self.theirs:
                     self.theirs, self.their_nat = cands, newest.get("nat")
                     log.info("connect %s: partner's addresses %s (router: %s, version %s); punching",
@@ -323,7 +342,7 @@ class Connector:
             log.info("connect %s: no direct path after %.0f s; through the relay %s", self.role, RELAY_AFTER_S, self.via)
         if self.state == "punching" and now - self._punched >= PUNCH_EVERY_S:
             self._punched = now
-            for c in self.theirs + ([self.via] if self.via else []):
+            for c in self.theirs + ([self.via] if self.via else []) + self._predicted():
                 self.t.probe(c, TAG_HELLO, self.hello())
         # 4. the LAN broadcast (needs no relay)
         if self._broadcasts and (self._broadcast_at is None or now - self._broadcast_at >= BROADCAST_EVERY_S):
@@ -335,6 +354,14 @@ class Connector:
             self._done("failed")
             log.warning("connect %s: gave up (%s): %s", self.role, self.state, self.reason)
         return self.state
+
+    def _predicted(self):
+        """Where a symmetric partner's router will put its next ports: punching there opens our
+        own router to them, so its first packet from a new port gets in."""
+        if not self.their_predict or self.nat == "symmetric":
+            return []
+        ip, last, step = self.their_predict
+        return [(ip, last + step * k) for k in range(1, PREDICT_PORTS + 1) if last + step * k < 65536]
 
     def _why(self):
         if not self.theirs and getattr(self.relay, "error", None):
