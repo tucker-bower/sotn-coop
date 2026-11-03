@@ -21,9 +21,9 @@ WALK = 300            # frames each way
 LOAD_LIMIT = 600      # a load (BUSY, no scene) longer than this is stuck
 SPLIT_ROLES = 30      # two authorities or two guests in one room this long: they disagree
 STALE = 120           # frames without hearing the partner
-# Doors a lone Alucard goes back and forth through too: the next room's edge is a wall at the
-# door's height (issue 140: the original game's layout, to be checked on a real copy).
-KNOWN_LOOPS = {(0x09, 35, 27): "issue 140"}
+# Secret rooms behind a breakable wall: arriving inside without breaking it, the way out is the
+# wall's back (issue 140). Players can't get in that way; secret_wall_broken_for_both covers it.
+KNOWN_LOOPS = {(0x09, 35, 27): "a secret room, its wall not broken"}
 AREAS = {"no3": 0x41, "np3": 0x07, "no0": 0x00, "no1": 0x01, "lib": 0x02, "cat": 0x03, "no2": 0x04, "chi": 0x05,
          "dai": 0x06, "cen": 0x08, "no4": 0x09, "are": 0x0A, "top": 0x0B, "nz0": 0x0C, "nz1": 0x0D, "dre": 0x12}
 
@@ -175,3 +175,59 @@ def scene_pull_ignores_a_partner_mid_load(run):
     run.expect((q.stage, q.room_id) == (r.stage, r.room_id) and r.flags & IN_PLAY and not r.flags & BUSY,
                "B arrives next to A", a=str(q), b=str(r))
 
+
+
+
+def _rooms_walked(run, g, way, frames, attack_every=12):
+    bot = walker(way, attack_every=attack_every)
+    pads = (lambda p: (p, "")) if g is run.s.a else (lambda p: ("", p))
+    seen = []
+    for t in range(frames):
+        run.step(1, p1=pads(bot(g.snapshot(), t)))
+        for x in (run.s.a, run.s.b):
+            _alive(x)
+        q = g.mailbox("self_presence")
+        if q.flags & IN_PLAY and not q.flags & BUSY and (not seen or seen[-1] != (q.room_left, q.room_top)):
+            seen.append((q.room_left, q.room_top))
+    return seen
+
+
+@session_scenario(starts=(START, START))
+def secret_wall_broken_for_both(run):
+    """A breaks the Underground Caverns' breakable wall into its secret room (36,27) to (35,27);
+    B teleports to A there, and walks out. If B's game didn't know the wall was broken, B would be
+    walled in, bounced back by the wall's other side (what issue 140 was: the crawl had arrived in
+    the sealed room)."""
+    a, b = run.s.a, run.s.b
+    out = next(r for r in roommap.rooms("no4") if (r.left, r.top) == (36, 27))
+    spot = out.spot_near(80, 151)
+    run.expect(_arrive(run, a, AREAS["no4"], out.room_id, *spot), "A arrives beside the wall")
+    run.expect(_arrive(run, b, AREAS["no4"], out.room_id, spot[0] + 120, spot[1]), "B, a little way off")
+    seen = _rooms_walked(run, a, "left", 600)
+    run.expect((35, 27) in seen, "A breaks the wall and goes in", rooms=seen)
+    run.step(60)
+    p = a.mailbox("self_presence")
+    run.expect(_arrive(run, b, p.stage, p.room_id, p.ground_x - 24, p.ground_y), "B teleports to A, in the secret room")
+    seen = _rooms_walked(run, b, "right", 400)
+    run.expect(seen[-1:] == [(36, 27)] and seen.count((35, 27)) == 1, "B walks out through the broken wall, once",
+               rooms=seen)
+
+
+@session_scenario(starts=(START, START), full=True)
+def crawl_probe_exits(run):
+    a, b = run.s.a, run.s.b
+    g = next(r for r in roommap.rooms("no0") if r.room_id == 0)
+    _arrive(run, b, AREAS["no0"], 0, *g.spot_near(g.w // 2, g.h // 2))  # out of Richter's scene
+    for area in ("np3", "no0"):
+        stage = AREAS[area]
+        for room in roommap.rooms(area):
+            spot = room.spot_near(room.w // 2, room.h // 2)
+            if spot is None:
+                continue
+            exits = {}
+            for way in ("left", "right"):
+                if not _arrive(run, a, stage, room.room_id, *spot):
+                    break
+                seen = _rooms_walked(run, a, way, 360, attack_every=24)
+                exits[way] = seen[1] if len(seen) > 1 else None
+            print("X", area, (room.left, room.top), room.room_id, spot, exits, flush=True)

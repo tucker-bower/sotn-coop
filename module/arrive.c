@@ -223,16 +223,25 @@ static void ArriveStart(void) {
 
 // First frame back in play: put the table entry back, then move the player to the exact spot.
 // The door path already put the camera on the right screen, so this is a small move.
+// Never in a doorway, and with no speed: a partner's ground spot is where it came in until it
+// lands, and a player put there (pulled into a boss's room just after the partner) slid out
+// through the door again (edges_boss_pull_mid_door).
+#define ARRIVE_EDGE 40
+
 static void ArriveFinish(void) {
-    s32 dx, dy;
+    s32 dx, dy, x = s_X, w = g_Tilemap.hSize << 8;
 
     D_800A245C[BORROWED_TELEPORT] = s_Saved;
-    dx = s_X - (PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi);
+    if (w > 2 * ARRIVE_EDGE) {
+        x = x < ARRIVE_EDGE ? ARRIVE_EDGE : x > w - ARRIVE_EDGE ? w - ARRIVE_EDGE : x;
+    }
+    dx = x - (PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi);
     dy = s_Y - (PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi);
     if (dx > -256 && dx < 256 && dy > -256 && dy < 256) {
         PLAYER.posX.i.hi += dx;
         PLAYER.posY.i.hi += dy;
     }
+    PLAYER.velocityX = PLAYER.velocityY = 0;
     s_State = ARRIVE_IDLE;
     if (s_ArriveText) {
         CoopMessage(s_ArriveText);
