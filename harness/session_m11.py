@@ -356,3 +356,40 @@ def test_castle_hosted(run):
         ok = coffin_save(s0, s1, s0, lambda: s0.joint.saves > 0)
         run.expect(ok and s0.joint.start is None and "start" not in Castle(c.dir).info,
                    "its first save ends the start: it goes on from the save")
+
+
+@session_scenario(starts=(None, None))
+def castle_continue_keeps_character(run):
+    """0.16.0: Continue on a solo or online castle played Alucard, whoever was picked. The
+    launcher's way (app.continue_castle): title screen, set_player, then the joint save's load
+    in the same breath; the load must see the picked character."""
+    from coop_env import TOOLS
+    from link.jointsave import write_session
+    starts = TOOLS["out"].parent / "fixtures" / "debug-starts"
+    save = (starts / "Scene - The Librarian.save").read_bytes()
+    for character, name in ((1, "Richter"), (2, "Maria")):
+        path = data(f"continue-{name}") / "session.coop"
+        write_session(path, [save])
+        blob = None
+        if character == 2:
+            from module import maria_blob
+            blob = maria_blob()
+        with OnlineSession(COOP_DISC, start=None, rank=0, bind_host="127.0.0.1", joint=True,
+                           session_file=path, blob=blob) as s:
+            g = s.local
+            for _ in range(9000):
+                s.step(1)
+                if g.read("g_GameState") == 1:
+                    break
+            run.expect(g.read("g_GameState") == 1, f"{name}: the title screen")
+            g.host("set_player", character=character, blob=blob)
+            s.joint.resume()
+            for i in range(3000):
+                s.step(1)
+                p = g.mailbox("self_presence")
+                if p.flags & IN_PLAY and not p.flags & BUSY:
+                    break
+            s.step(60)
+            got = g.read(0x80280020, "<i")  # g_CoopCharacter: PLAYER_ALUCARD 0, PLAYER_RICHTER 1
+            run.expect(p.flags & IN_PLAY and got == 1, f"continued as {name}, not Alucard",
+                       g_CoopCharacter=got, frames=i)
