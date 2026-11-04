@@ -54,8 +54,11 @@ from winmenu import MENU_EVENT, WinMenu  # noqa: E402
 TITLE = "Castlevania: Symphony of the Night  —  Co-op"
 # A new castle goes straight into the game: the castle menu has replaced the game's own (issue 109).
 # Title -> main menu -> file select -> New game -> name "A" (harness/savestates.py's new_game)
-NEW_GAME_INPUTS = ((600, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross"), (120, ""),
-                   (2, "cross"), (20, ""), (2, "start"))
+# A new castle's way past the title (issue 109): Press Start, File Select, New Game, then at name
+# entry "A" and Start. A castle left unnamed stops at name entry instead, so the player types the
+# name it takes (D126; issue 149: the script typed "A" for them).
+NEW_GAME_TO_NAME_ENTRY = ((600, ""), (2, "start"), (360, ""), (2, "cross"), (300, ""), (2, "cross"), (120, ""))
+NEW_GAME_INPUTS = NEW_GAME_TO_NAME_ENTRY + ((2, "cross"), (20, ""), (2, "start"))
 WINDOW_TITLE = "SOTN Co-op"
 SIZE = CANVAS
 PAGE_TOP, PAGE_LINE = 140, 24  # a help page's first line, and its line height
@@ -1146,7 +1149,7 @@ class Launcher:
                         castle_rules.for_castle(playthrough, self.settings) if rules is None else rules, cards,
                         profile=bool(os.environ.get("COOP_PROFILE")), launcher=self,
                         partner_vol=self.settings.get("partner_vol", 60), rush=rush, joiner=joiner,
-                        script=NEW_GAME_INPUTS if self.new_castle_start else ())
+                        script=self.new_game_script(playthrough, joiner) if self.new_castle_start else ())
         self.new_castle_start = False
         self.view = view
         try:
@@ -1157,6 +1160,12 @@ class Launcher:
             raise SystemExit
         if isinstance(result, tuple) and result[0] == "navigate":
             raise Navigate(result[1])
+
+    @staticmethod
+    def new_game_script(castle, joiner):
+        """The host's unnamed castle stops at name entry (D126); a joiner's name isn't the castle's."""
+        unnamed = castle is not None and not castle.info.get("name") and not joiner
+        return NEW_GAME_TO_NAME_ENTRY if unnamed else NEW_GAME_INPUTS
 
     def load_cards(self, s, playthrough):
         if len(s.games) == 1:
