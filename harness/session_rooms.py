@@ -231,3 +231,28 @@ def pickup_name_shows_for_both_players(run):
 
 def symbols_status(g):
     return g.addr("g_Status") + 0x23C
+
+
+@session_scenario(starts=(MARBLE, MARBLE))
+def crashwatch_pause_menu_is_not_a_hang(run):
+    """Issues 150 and 152 (0.16.0): 10 s in the pause or equip menu was taken for a hang, and
+    the game went back to the menu (online, the partner saw a disconnect)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import crashwatch
+    from link.mailbox import PAUSED
+    a = run.s.a
+    run.step(60)
+    run.step(2, ("start", ""))
+    run.step(60)
+    p = a.mailbox("self_presence")
+    run.expect(p.flags & PAUSED, "the pause menu is open", flags=p.flags)
+    watch, frame, beat, why = crashwatch.CrashWatch(), p.frame, a.mailbox("heartbeat"), None
+    for _ in range(15):
+        run.step(crashwatch.EVERY)
+        why = why or watch.check(run.s.games)
+    run.expect(a.mailbox("self_presence").frame == frame and a.mailbox("heartbeat") != beat,
+               "in the menu the game's timer stops and its main loop runs",
+               frame=(frame, a.mailbox("self_presence").frame), beat=(beat, a.mailbox("heartbeat")))
+    run.expect(why is None, "15 s in the pause menu isn't a hang", why=why)
