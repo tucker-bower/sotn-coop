@@ -357,7 +357,7 @@ def pvp_familiar(run):
     pressing nothing else, with A just behind it. The sword fights the zombies; when its attacks
     catch A, they count."""
     from session_m8 import reload_game
-    from session_shared import into_hall
+    from session_shared import into_hall, stage_entities
     a, b = run.s.a, run.s.b
     b.write(0x80097964 + 22, 3, "<B")  # the sword card, on (g_Status.relics)
     run.expect(reload_game(run, b), "B reloads with the sword card on")
@@ -373,6 +373,11 @@ def pvp_familiar(run):
         if i % 20 == 0:
             for g in (a, b):
                 g.write("g_Status", status(g)["hp_max"], "<i", 0x23C)
+                # the hall's enemies go down at the sword's first hit: it's free to find A (a warg,
+                # hit once per swing since issue 157, kept it busy for the whole test)
+                for slot, v in stage_entities(g).items():
+                    if 1 < v[3] < 32767:
+                        g.write("g_Entities", 1, "<h", slot * 0xBC + 0x3E)
         if pvp_hits(a) > t0:
             break
     run.expect(pvp_hits(a) > t0, "the Sword familiar's attacks reached A", frames=i, touches=pvp_hits(a) - t0,
