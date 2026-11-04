@@ -6,6 +6,7 @@ What we've learned that the code and `TECHNICAL_SUMMARY.md` don't say: game inte
 **Testing**
 - **Test the path players use.** Android's Python has no CA certificates, so every request to the room-code relay failed silently, and the Android tests never caught it because they joined by `ip:port`. `android/test_pair.py --room` now uses the real relay.
 - **A character applies from a game's next load.** The first PvP pairing tests were all two Alucards. Check that a test really runs as its character.
+- **`set_player` writes into the game at once.** It used to wait for the host's next frame, and Continue sends the joint save's load right after it: solo and online castles continued as Alucard in 0.16.0. Couch never showed it, because its session is created with the characters (`castle_continue_keeps_character`).
 - **A scripted boss kill can skip the death sequence** that writes the time-attack record.
 - **UI flows test the last release patch**, which `rebuild_fixtures.sh` now remakes. Before that, they tested a three-day-old build.
 - **Frame-drop baselines vary between soak runs:** sessions link over real loopback UDP with wall-clock hosts. Each game stays deterministic; the soak's 0.5% tolerance covers it.

@@ -75,6 +75,12 @@ class Host:
             self.character = character
         if options is not None:
             self.options = options
+        # Into the game now too, not only after its next frame: the launcher's Continue sends the
+        # joint save's load right after this, and the game picks its player as that load starts.
+        # Waiting a frame continued solo and online castles as Alucard (0.16.0).
+        if self.mailbox.ready():
+            self.mailbox.set_character(self.character)
+            self.mailbox.set_options(self.options)
         if blob is not None:
             self.blob = blob
             self._put_blob()

@@ -41,7 +41,7 @@ from link.jointsave import read_session, save_fields
 from link.mailbox import BUSY, CS_FOLLOWER, CUTSCENE, DEAD, SAVE_DATA_SIZE
 from paths import data_dir, load_settings, reports_dir
 
-VERSION = "0.16.1"  # the launcher's
+VERSION = "0.16.2"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
 SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
