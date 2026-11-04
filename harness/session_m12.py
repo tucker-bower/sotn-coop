@@ -1111,23 +1111,29 @@ def boss_music_after_fight_as_guest(run):
     music on through the stage. It ends with the stage's music in both games."""
     from link.mailbox import BOSS
     a, b = run.s.a, run.s.b
+    from bots import walker
+    bot_a, bot_b = walker("left"), walker("left")
     before = [g.read(XA_PLAYING, "<h") for g in (a, b)]
-    fought, t = False, 0
+    fought, t, during = False, 0, set()
     for t in range(9000):
         flags = [g.mailbox("self_presence").flags for g in (a, b)]
         fought = fought or all(f & BOSS for f in flags)
         if fought and not any(f & BOSS for f in flags):
             break
+        if fought:
+            during |= {g.read(XA_PLAYING, "<h") for g in (a, b)}
         if fought and t % 30 == 0:  # the test is about the music, not the fight
             for g in (a, b):
                 for slot, (eid, _, _, hp) in enemies(g).items():
                     if hp > 4:
                         g.write("g_Entities", 4, "<h", slot * 0xBC + 0x3E)
-        pads = ("left", "left") if not fought else (fight_pad(a, t=t), fight_pad(b, t=t + 6))
+        pads = (bot_a(a.snapshot(), t), bot_b(b.snapshot(), t)) if not fought else (fight_pad(a, t=t), fight_pad(b, t=t + 6))
         run.step(1, pads)
     roles = [g.mailbox("self_presence").role for g in (a, b)]
     run.expect(fought, "both fought", frames=t)
     run.expect(not any(g.mailbox("self_presence").flags & BOSS for g in (a, b)), "the fight ended in both", frames=t)
     run.step(600)
     after = [g.read(XA_PLAYING, "<h") for g in (a, b)]
-    run.expect(after[0] == after[1], "both games play the same music after the fight", before=before, after=after, roles=roles)
+    run.expect(during - set(before), "the fight had music of its own", before=before, during=sorted(during))
+    run.expect(after[0] == after[1] == before[0], "after it, both games play the stage's music again",
+               before=before, after=after, roles=roles)

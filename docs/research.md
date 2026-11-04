@@ -13,6 +13,10 @@ What we've learned that the code and `TECHNICAL_SUMMARY.md` don't say: game inte
 - **Android emulator hosts can't be reached in tests:** two emulators sit behind the PC's NAT, and they can lose outside access after a WSL restart. Real devices aren't affected.
 - **Writes through NULL land in BIOS RAM.** Player 1's controller dying for good has been this, three different ways (M13).
 
+- **An attack hits an entity once through `unk6D[attack's enemyId]`**, a per-attacker cooldown the stage's hit detection counts down (`src/st/collision.h`), not through `nFramesInvincibility`. A guest's mirrored copy keeps its own cooldowns over each snapshot (`shared.c`): the authority's snapshot, from before it heard of the hit, had them at 0, and Richter's whip landed on every frame of the round trip (issues 157, 158).
+- **The game's timer stops in the pause and equip menus.** A hang is the module's heartbeat stopping (it ticks every main-loop frame), not the timer: 10 s in a menu used to count as a hang (issues 150, 152).
+- **Mirrored copies never run their update,** so whatever a stage's manager entity does at the end of a fight (NZ0's music, steps 5 and 6) doesn't happen in a guest's game. The module puts the music back (`boss.c`, issue 175).
+
 **Debugging with real devices**
 - **Check installed versions first.** Four rounds of a device connection failure came from old builds on one side. Different versions now say so by name.
 - `android/device.py` runs Windows adb on port 5038: the default port reaches WSL's adb server, which can't see USB.
