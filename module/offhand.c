@@ -254,7 +254,9 @@ static void AluSwing(s32 hand) {
     }
     __builtin_memset(&s_Alu, 0, sizeof(s_Alu));
     s_Grounded = g_Player.vram_flag & 1;
-    s_Alu.ext.player.anim = eq->playerAnim + (s_Grounded ? 0 : 4); // in the air: his jump swing
+    // As his (src/dra/6E42C.c): standing 0, crouching 2, in the air 4. Crouched, Richter and Maria
+    // swung at standing height (issue 162).
+    s_Alu.ext.player.anim = eq->playerAnim + (!s_Grounded ? 4 : g_pads[0].pressed & PAD_DOWN ? 2 : 0);
     s_Unk46 = eq->unk11 + 0x7FFF + 2;
     s_Swinging = true;
     s_Fist = eq->itemCategory == ITEM_FIST;

@@ -1070,3 +1070,33 @@ def chain(run, which):
                diff=[i for i in range(0x300) if flags[0][i] != flags[1][i]][:10])
     (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
+
+
+@session_scenario(starts=("st0_fight", "st0_fight"))
+def prologue_guest_hits_land_once(run):
+    """Issue 158 (0.16.0): Dracula's HP drained away under the guest's attacks. The guest's
+    swings, every 30 frames, never take his HP down (in the authority's world) on frames close
+    together."""
+    from session_scenarios import heal
+    a, b = run.s.a, run.s.b
+    for _ in range(600):  # someone becomes the authority
+        run.step(1)
+        roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
+        if sorted(roles) == [1, 2]:
+            break
+    run.expect(sorted(roles) == [1, 2], "the throne room is shared", roles=roles)
+    auth, guest = (a, b) if roles[0] == 1 else (b, a)
+    drops, last = [], {s: v[3] for s, v in enemies(auth).items()}
+    for t in range(9000):
+        if t % 30 == 0:
+            heal(auth), heal(guest)
+        pad = fight_pad(guest, period=30, t=t)
+        run.step(1, ("", pad) if guest is b else (pad, ""))
+        now = {s: v[3] for s, v in enemies(auth).items()}
+        drops += [(t, s) for s, hp in now.items() if s in last and hp < last[s]]
+        last = now
+        if len(drops) >= 10:
+            break
+    close = [(x, y) for x, y in zip(drops, drops[1:]) if x[1] == y[1] and y[0] - x[0] < 10]
+    run.expect(drops, "the guest's swings hit", frames=t)
+    run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)

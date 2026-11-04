@@ -256,3 +256,21 @@ def crashwatch_pause_menu_is_not_a_hang(run):
                "in the menu the game's timer stops and its main loop runs",
                frame=(frame, a.mailbox("self_presence").frame), beat=(beat, a.mailbox("heartbeat")))
     run.expect(why is None, "15 s in the pause menu isn't a hang", why=why)
+
+
+@session_scenario(starts=(MARBLE, MARBLE))
+def partner_pad_quiet_in_menus(run):
+    """Issue 151 (0.16.0): the buttons sent for the partner's copy of this player are the ones
+    moving the player: none while the pause menu is open (the copy walked as they browsed)."""
+    from link.mailbox import PAUSED
+    a = run.s.a
+    run.step(60, ("right", ""))
+    run.expect(a.mailbox("self_presence").pad != 0, "in play, holding right is sent")
+    run.step(2, ("start", ""))
+    run.step(60)
+    run.expect(a.mailbox("self_presence").flags & PAUSED, "the pause menu is open")
+    pads = []
+    for pad in ("right", "left", "down", "cross", "up"):
+        run.step(10, (pad, ""))
+        pads.append(a.mailbox("self_presence").pad)
+    run.expect(pads == [0] * 5, "in the menu, nothing is sent", pads=pads)

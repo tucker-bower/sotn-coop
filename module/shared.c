@@ -98,6 +98,7 @@ static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local ent
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
 static u8 s_HitHold[STAGE_SLOTS];      // frames a copy this game hit stays invincible, whatever arrives
+static u8 s_Cooldowns[sizeof(((Entity*)0)->unk6D)]; // a copy's per-attacker hit cooldowns, kept over a snapshot
 #define TAKEN_FRAMES 120 // online: longer than a slow round trip plus the playout delay (M7b)
 #define E_PRIZE_DROP 3 // hearts, gold, subweapons: the same entity id in every stage
 static u32 s_AppliedSeq;
@@ -538,7 +539,7 @@ static void ApplySnapshot(void) {
     const SnapHeader* h = (const SnapHeader*)r;
     const OverlayInfo* ovl;
     u8 present[STAGE_SLOTS];
-    s32 i, k, dx, dy, sx, sy, n, idx = -1;
+    s32 i, k, c, dx, dy, sx, sy, n, idx = -1;
     Entity* e;
     Primitive* p;
     Primitive* next;
@@ -604,7 +605,22 @@ static void ApplySnapshot(void) {
             DestroyEntity(e);
         }
         s_Local[i] = false;
-        CopyWords(e, r, sizeof(Entity));
+        // Hit detection lets each attack hit an entity once, through its per-attacker cooldowns
+        // (unk6D[attack's enemyId], counted down by the hit detection: src/st/collision.h). A
+        // snapshot from before the authority heard of this game's hit had them at 0, and Richter's
+        // whip hit a copy on every frame of the round trip (issue 157). This game's own count
+        // stands, the larger of the two.
+        if (s_Mirrored[i] && e->entityId == ((const Entity*)r)->entityId) {
+            __builtin_memcpy(s_Cooldowns, e->unk6D, sizeof(s_Cooldowns));
+            CopyWords(e, r, sizeof(Entity));
+            for (c = 0; c < (s32)sizeof(s_Cooldowns); c++) {
+                if (s_Cooldowns[c] > e->unk6D[c]) {
+                    e->unk6D[c] = s_Cooldowns[c];
+                }
+            }
+        } else {
+            CopyWords(e, r, sizeof(Entity));
+        }
         // Snapshots from before the authority heard of a hit bring the copy back to hittable, and a
         // whip hit it every frame of a round trip: online, it did many times its damage (playtest
         // 0.14). This game's own hit counts here until the authority's catches up.
