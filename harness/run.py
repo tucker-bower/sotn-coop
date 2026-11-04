@@ -54,6 +54,7 @@ import session_crawl  # noqa: F401
 import session_edges  # noqa: F401
 import session_bossrush  # noqa: F401
 import session_netplay  # noqa: F401
+import session_mods  # noqa: F401
 import spec_test  # noqa: F401
 from commands import COMMANDS, run_command
 from scenario import FULL_ONLY, SCENARIOS, run_scenario
