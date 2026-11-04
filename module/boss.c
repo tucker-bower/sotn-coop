@@ -277,6 +277,39 @@ static void FollowEnding(void) {
 
 bool BossFinalGone(void) { return s_FinalGone != 0; }
 
+// The music after a fight (issue 175). A stage's own fight manager puts the stage's music back
+// once its bosses fall (NZ0's EntityBossFightManager, steps 5 and 6), but in a guest's game the
+// manager is a copy that never runs, and the boss's music played on through the stage. A guest
+// whose fight ends in the room it began in gets back the music from before the fight.
+extern s16 g_PlayingXaBgmId; // DRA (src/dra/bss.c): the XA music playing, as PlaySfx's id - 0x300
+void PlaySfx(s32 sfxId);     // DRA
+#define MUSIC_BACK_AFTER 180 // frames after the last boss falls: the authority's game has its say first
+#define XA_MUSIC 0x300
+static s16 s_MusicBefore;
+static s16 s_MusicIn = -1; // frames until the music comes back; -1: nothing to do
+static s16 s_FightLeft, s_FightTop;
+static bool s_WasHere;
+
+static void MusicAfterFight(void) {
+    if (s_BossHere && !s_WasHere) {
+        s_MusicBefore = g_PlayingXaBgmId;
+        s_FightLeft = g_Tilemap.left;
+        s_FightTop = g_Tilemap.top;
+        s_MusicIn = -1;
+    } else if (!s_BossHere && s_WasHere && SharedRole() == ROLE_GUEST && s_MusicBefore &&
+               g_Tilemap.left == s_FightLeft && g_Tilemap.top == s_FightTop) {
+        s_MusicIn = MUSIC_BACK_AFTER;
+    }
+    s_WasHere = s_BossHere;
+    if (s_MusicIn < 0 || s_BossHere) {
+        s_MusicIn = -1;
+        return;
+    }
+    if (s_MusicIn-- == 0 && g_PlayingXaBgmId != s_MusicBefore) {
+        PlaySfx(XA_MUSIC + s_MusicBefore);
+    }
+}
+
 static void ScanBosses(void) {
     Entity* e;
     s32 i;
@@ -329,6 +362,7 @@ void BossUpdate(void) {
     }
     ScanBosses();
     UpdateHp();
+    MusicAfterFight();
 }
 
 bool BossHere(void) { return s_BossHere; }

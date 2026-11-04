@@ -1100,3 +1100,34 @@ def prologue_guest_hits_land_once(run):
     close = [(x, y) for x, y in zip(drops, drops[1:]) if x[1] == y[1] and y[0] - x[0] < 10]
     run.expect(drops, "the guest's swings hit", frames=t)
     run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)
+
+
+XA_PLAYING = 0x8013901C  # g_PlayingXaBgmId (DRA's bss.c; build/us/dra.map)
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2)
+def boss_music_after_fight_as_guest(run):
+    """Issue 175 (0.16.0): after Slogra and Gaibon fell, the guest's game played their fight's
+    music on through the stage. It ends with the stage's music in both games."""
+    from link.mailbox import BOSS
+    a, b = run.s.a, run.s.b
+    before = [g.read(XA_PLAYING, "<h") for g in (a, b)]
+    fought, t = False, 0
+    for t in range(9000):
+        flags = [g.mailbox("self_presence").flags for g in (a, b)]
+        fought = fought or all(f & BOSS for f in flags)
+        if fought and not any(f & BOSS for f in flags):
+            break
+        if fought and t % 30 == 0:  # the test is about the music, not the fight
+            for g in (a, b):
+                for slot, (eid, _, _, hp) in enemies(g).items():
+                    if hp > 4:
+                        g.write("g_Entities", 4, "<h", slot * 0xBC + 0x3E)
+        pads = ("left", "left") if not fought else (fight_pad(a, t=t), fight_pad(b, t=t + 6))
+        run.step(1, pads)
+    roles = [g.mailbox("self_presence").role for g in (a, b)]
+    run.expect(fought, "both fought", frames=t)
+    run.expect(not any(g.mailbox("self_presence").flags & BOSS for g in (a, b)), "the fight ended in both", frames=t)
+    run.step(600)
+    after = [g.read(XA_PLAYING, "<h") for g in (a, b)]
+    run.expect(after[0] == after[1], "both games play the same music after the fight", before=before, after=after, roles=roles)
