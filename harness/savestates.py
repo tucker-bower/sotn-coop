@@ -43,18 +43,21 @@ def new_game(e):
     e.step(2, "cross"); e.step(120)   # New game -> name entry
     e.step(2, "cross"); e.step(20)    # type "A"
     e.step(2, "start")                # decide
-    wait_until(e, lambda: e.read("g_GameState") == GAME_VIDEO, 600, "opening video")
-    wait_until(e, lambda: e.read("g_GameState") == GAME_PLAY, 9000, "prologue gameplay")
-    e.step(600)
+    # Some mods (Alternate Scarlet Symphony) skip the opening video and the prologue
+    wait_until(e, lambda: e.read("g_GameState") in (GAME_VIDEO, GAME_PROLOGUE_END), 600, "opening video")
+    if e.read("g_GameState") == GAME_VIDEO:
+        wait_until(e, lambda: e.read("g_GameState") == GAME_PLAY, 9000, "prologue gameplay")
+        e.step(600)
 
 
 def skip_prologue(e):
     """Harness-only shortcut: does what SetGameState(Game_PrologueEnd) does when Richter's game over
     ends in ST0 (src/dra/game_handlers.c). Richter is at full HP, so Alucard gets the no-damage
     bonus (+1 STR/CON/INT/LCK, InitStatsAndGear)."""
-    assert e.read("g_StageId") == STAGE_ST0
-    e.write("g_GameState", GAME_PROLOGUE_END)
-    e.write("g_GameStep", 0)
+    if e.read("g_GameState") != GAME_PROLOGUE_END:  # already on its way (a mod without the prologue)
+        assert e.read("g_StageId") == STAGE_ST0
+        e.write("g_GameState", GAME_PROLOGUE_END)
+        e.write("g_GameStep", 0)
     wait_until(e, lambda: e.read("g_StageId") == STAGE_NO3 and e.read("g_GameState") == GAME_PLAY,
                12000, "castle entrance")
 
@@ -118,7 +121,14 @@ def build(disc):
     with Emu(disc) as e:
         new_game(e)
         skip_prologue(e)
-        play_to_death(e)
+        castle = e.save_state()
+        try:
+            play_to_death(e)
+        except RuntimeError as exc:  # a mod that changed the entrance (enemies, rooms): start where it starts
+            print(f"entrance: {exc}; using the castle's first room instead", flush=True)
+            e.load_state(castle)
+            e.step(600)
+            index["entrance_fallback"] = True
         checkpoint(e, "entrance")
         entrance = e.save_state()
         for name, stage in WARPS.items():
