@@ -146,10 +146,10 @@ static u32 PadDrivingPlayer(void) {
     if (g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70) {
         return 0;
     }
-    if (g_Player.demo_timer) {
-        return g_Player.padSim & 0xFFFF; // as the player code reads it (src/dra/692E8.c)
+    if (g_CutsceneHasControl) { // the scene's steering, as the player code reads it (src/dra/692E8.c)
+        return g_Player.demo_timer ? g_Player.padSim & 0xFFFF : 0;
     }
-    return g_CutsceneHasControl ? 0 : g_pads[0].pressed;
+    return g_pads[0].pressed; // spells steer with demo_timer too, from these buttons: the copy needs them
 }
 
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
