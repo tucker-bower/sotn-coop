@@ -12,6 +12,7 @@ Setup, build, generator and release tools.
 | `check_dra_symbols.py` | Checks every DRA symbol stays at its retail address. |
 | `doctor.py` | Checks this machine has everything needed. |
 | `export_test_castles.py` | Exports the test castles the app ships. |
+| `gen_collectibles.py` | Generates `module/collectibles.c`: what each placed collectible gives. |
 | `gen_flag_gated.py` | Generates `module/flag_gated.c` and `docs/flag-gated-entities.md`. |
 | `gen_overlay_table.py` | Generates `module/overlay_table.c`. |
 | `install_launcher.sh` | **Vestigial.** Installed developer presets on Windows; the real installer replaced it. |

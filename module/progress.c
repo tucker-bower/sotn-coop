@@ -31,6 +31,10 @@ extern s32 g_ExpNext[];                                      // DRA: XP for each
 #define E_RELIC_ORB 0x0B
 #define E_PERSISTENT_ITEM_DROP 0x0C
 #define PERSISTENT_DROP_FLAG(e) (*(u16*)((u8*)(e) + 0xB4)) // ET_PersistentDrop.unkB4
+extern const u16 g_Collectibles[]; // collectibles.c (scripts/gen_collectibles.py)
+extern const s32 g_NCollectibles;
+#define COLLECT_LIFE_VESSEL 1
+#define COLLECT_HEART_VESSEL 2
 
 // Castle flags that aren't progress, and the two that count up (castle_flags.h).
 #define FLAG_NO1_WEATHER 0x13
@@ -49,6 +53,8 @@ static s32 s_Records[TIMEATTACK_EVENT_END];
 static s32 s_Visited;
 #define RECORD_VISITED 0xFFFF // EV_RECORD a: the visited bits (D_8003CB00), not a record
 static bool s_InPlay;  // last frame was in play: the shadows are valid
+static bool s_PartnerGone; // no word from the partner for PARTNER_GONE_FRAMES
+#define PARTNER_GONE_FRAMES 300
 static u16 s_Changed[16]; // castle flags the partner changed this frame
 static s32 s_NChanged;
 static bool s_Applying; // the wrappers ignore our own calls
@@ -89,9 +95,23 @@ static u8 MergeFlag(s32 i, u8 mine, u8 theirs) {
     return mine | theirs;
 }
 
+static bool CollectingA(u16 entityId) {
+    Entity* e = g_CurrentEntity;
+
+    return e >= &g_Entities[STAGE_ENTITY_START] && e < &g_Entities[TOTAL_ENTITY_COUNT] && e->entityId == entityId;
+}
+
+// An item an enemy dropped (#156): one kill, one item, for whoever takes it. Shared, it gave
+// every player a copy. Placed items (params 0x8000) are finds, and stay shared (D37).
+static bool EnemyDrop(void) { return CollectingA(E_EQUIP_ITEM_DROP) && !(g_CurrentEntity->params & 0x8000); }
+
+// A placed collectible (items, vessels) reaches the partner as its castle flag, not as an event:
+// the flag also comes with a reconnect, so a find a player made and didn't save isn't lost (#154).
+static bool PlacedFind(void) { return CollectingA(E_PERSISTENT_ITEM_DROP); }
+
 static void AddToInventoryWrap(u16 id, EquipKind kind) {
     s_AddToInventory(id, kind);
-    if (!s_Applying) {
+    if (!s_Applying && !EnemyDrop() && !PlacedFind()) {
         Emit(EV_ITEM, id, kind);
     }
 }
@@ -113,7 +133,7 @@ static s32 GrantWrap(s32 amount, s32 type) {
         amount = amount > 1 ? amount : 1;
     }
     ret = s_Grant(amount, type);
-    if (!s_Applying && ret == 0 &&
+    if (!s_Applying && ret == 0 && !PlacedFind() &&
         (type == GRANT_LIFE_UP || type == GRANT_HEART_UP || type == GRANT_RELIC)) {
         Emit(EV_GRANT, type, amount);
     }
@@ -300,6 +320,28 @@ static void ApplyMap(s32 idx, u8 bits) {
     }
 }
 
+// The partner's game has taken placed collectibles this one hasn't (#154): live, or before this
+// player reconnected without saving. This player gets their own, as D37 shares every find.
+static void Collect(s32 idx, u8 added) {
+    s32 bit, flag;
+    u16 c;
+    const u8* name;
+
+    for (bit = 0; bit < 8; bit++) {
+        flag = (idx - FLAG_COLLECTIBLES) * 8 + bit;
+        if (!(added & (1 << bit)) || flag >= g_NCollectibles || !(c = g_Collectibles[flag])) {
+            continue;
+        }
+        if (c == COLLECT_LIFE_VESSEL || c == COLLECT_HEART_VESSEL) {
+            func_800FE044(5, c == COLLECT_LIFE_VESSEL ? GRANT_LIFE_UP : GRANT_HEART_UP);
+            continue;
+        }
+        AddToInventory(c & 0x3FFF, c & 0x8000 ? EQUIP_HAND : EQUIP_ARMOR);
+        name = c & 0x8000 ? (const u8*)g_api.equipDefs[c & 0x3FFF].name : (const u8*)g_api.accessoryDefs[c & 0x3FFF].name;
+        CoopMessageName(name);
+    }
+}
+
 static void Apply(const CoopEvent* ev) {
     s32 delta;
 
@@ -310,6 +352,9 @@ static void Apply(const CoopEvent* ev) {
             u8 merged = MergeFlag(ev->a, g_CastleFlags[ev->a], ev->b);
             if (merged != g_CastleFlags[ev->a] && s_NChanged < LEN(s_Changed)) {
                 s_Changed[s_NChanged++] = ev->a;
+            }
+            if (ev->a >= FLAG_COLLECTIBLES && !IsCounter(ev->a)) {
+                Collect(ev->a, merged & ~g_CastleFlags[ev->a]);
             }
             g_CastleFlags[ev->a] = merged;
             s_Flags[ev->a] = merged;
@@ -480,6 +525,14 @@ void ProgressUpdate(void) {
         s_InPlay = true;
         Resync();
         RobbedUpdate();
+    }
+    // A partner back after 5 s away may have restarted from an older save: send everything
+    // again, so they catch up on what was found meanwhile, or taken and not saved (#154).
+    if (g_CoopLink.partnerAge > PARTNER_GONE_FRAMES) {
+        s_PartnerGone = true;
+    } else if (s_PartnerGone && g_CoopLink.partnerAge <= 30) {
+        s_PartnerGone = false;
+        Resync();
     }
     DetectFlags();
     DetectMap();
