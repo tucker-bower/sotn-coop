@@ -159,6 +159,8 @@ An extra CD read at boot shifts every savestate made afterwards, and `no_effect_
 ## Reading a crash from an F9 report
 A report's `.state` file holds the game. After the header, the `CPU` marker is followed by 8 bytes, then 36 registers (pc is the 35th), and RAM starts 6702 bytes after the marker. A game stuck at pc 0x80000080 with a changed exception vector has been written over. Compare low memory with the partner's report: `g_Timer` stopped while emulator frames went on means the game itself stopped. Reports' `presences` are the player's own, not the partner's.
 
+A game parked in the BIOS (pc 0xBFC0xxxx, sp near 0x8444, a black screen) took an exception the kernel didn't handle. The kernel saved the game's registers in the current thread's control block: the word at 0x108 points to it, and its word holds the block's address. The 32 registers start 8 bytes in, followed by epc, hi, lo, sr and cause. Cause bits 2-6 give the exception: 6 means a jump to an address with no memory behind it, and epc is where it landed. `ra` names the caller. In report 20261104-104320, epc 0x2F0F1F00 and ra in `func_8010A234` meant the menu's exit called a weapon overlay that was never loaded.
+
 ## Loading an F9 report's state
 A report's state won't load as it is: the disc's path is blanked, in the header and in a trailer after the data. `harness/replay.py` points both at this machine's disc. `scripts/read_report.py` prints who was where from a report's memory, without an emulator.
 

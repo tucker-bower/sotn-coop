@@ -69,6 +69,32 @@ static bool InPlay(void) {
            CharacterLoaded() != CHAR_ALUCARD;
 }
 
+// After a load the game leaves the weapon overlays out for Richter's player code (DRA's
+// Play_WaitStagePrg: g_EquippedWeaponIds -1), and the menu loads none for an empty hand (0xFF).
+// Its exit still calls through the right hand's table (func_8010A234: GetWeaponId) and both hands'
+// InitWeapon (LoadWeaponPalette), and with no overlay there that table is whatever the memory last
+// held: Maria's game jumped to 0x2F0F1F00 on unpausing (report 20261104-104320). So a hand with
+// no overlay gets a table that does nothing until one loads.
+static void NoWeapon(void) {}
+static s32 NoWeaponId(void) { return 0; }
+#define WEAPON_HDR_WORDS 16 // the Weapon table (include/weapon.h)
+#define GET_WEAPON_ID 6     // its word
+
+static void StubUnloaded(void) {
+    s32 hand, k;
+    u32* hdr;
+
+    for (hand = 0; hand < 2; hand++) {
+        if (g_EquippedWeaponIds[hand] != -1) {
+            continue;
+        }
+        hdr = (u32*)WEAPON_PRG(hand);
+        for (k = 0; k < WEAPON_HDR_WORDS; k++) {
+            hdr[k] = (u32)(k == GET_WEAPON_ID ? (void*)NoWeaponId : (void*)NoWeapon);
+        }
+    }
+}
+
 static u8 Category(s32 hand) { return g_EquipDefs[g_Status.equipment[hand]].itemCategory; }
 
 static bool IsWeapon(u8 category) {
@@ -456,6 +482,9 @@ void OffhandUpdate(void) {
 
     if (g_GameState == Game_NowLoading) {
         s_HaveOwn = false;
+    }
+    if (g_GameState == Game_Play && CharacterLoaded() != CHAR_ALUCARD) {
+        StubUnloaded();
     }
     if (!InPlay()) {
         s_PrevEngine = g_GameEngineStep;
