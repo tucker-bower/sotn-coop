@@ -1070,3 +1070,70 @@ def chain(run, which):
                diff=[i for i in range(0x300) if flags[0][i] != flags[1][i]][:10])
     (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
+
+
+@session_scenario(starts=("st0_fight", "st0_fight"))
+def prologue_guest_hits_land_once(run):
+    """Issue 158 (0.16.0): Dracula's HP drained away under the guest's attacks. The guest's
+    swings, every 30 frames, never take his HP down (in the authority's world) on frames close
+    together."""
+    from session_scenarios import heal
+    a, b = run.s.a, run.s.b
+    for _ in range(600):  # someone becomes the authority
+        run.step(1)
+        roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
+        if sorted(roles) == [1, 2]:
+            break
+    run.expect(sorted(roles) == [1, 2], "the throne room is shared", roles=roles)
+    auth, guest = (a, b) if roles[0] == 1 else (b, a)
+    drops, last = [], {s: v[3] for s, v in enemies(auth).items()}
+    for t in range(9000):
+        if t % 30 == 0:
+            heal(auth), heal(guest)
+        pad = fight_pad(guest, period=30, t=t)
+        run.step(1, ("", pad) if guest is b else (pad, ""))
+        now = {s: v[3] for s, v in enemies(auth).items()}
+        drops += [(t, s) for s, hp in now.items() if s in last and hp < last[s]]
+        last = now
+        if len(drops) >= 10:
+            break
+    close = [(x, y) for x, y in zip(drops, drops[1:]) if x[1] == y[1] and y[0] - x[0] < 10]
+    run.expect(drops, "the guest's swings hit", frames=t)
+    run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)
+
+
+XA_PLAYING = 0x8013901C  # g_PlayingXaBgmId (DRA's bss.c; build/us/dra.map)
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2)
+def boss_music_after_fight_as_guest(run):
+    """Issue 175 (0.16.0): after Slogra and Gaibon fell, the guest's game played their fight's
+    music on through the stage. It ends with the stage's music in both games."""
+    from link.mailbox import BOSS
+    a, b = run.s.a, run.s.b
+    from bots import walker
+    bot_a, bot_b = walker("left"), walker("left")
+    before = [g.read(XA_PLAYING, "<h") for g in (a, b)]
+    fought, t, during = False, 0, set()
+    for t in range(9000):
+        flags = [g.mailbox("self_presence").flags for g in (a, b)]
+        fought = fought or all(f & BOSS for f in flags)
+        if fought and not any(f & BOSS for f in flags):
+            break
+        if fought:
+            during |= {g.read(XA_PLAYING, "<h") for g in (a, b)}
+        if fought and t % 30 == 0:  # the test is about the music, not the fight
+            for g in (a, b):
+                for slot, (eid, _, _, hp) in enemies(g).items():
+                    if hp > 4:
+                        g.write("g_Entities", 4, "<h", slot * 0xBC + 0x3E)
+        pads = (bot_a(a.snapshot(), t), bot_b(b.snapshot(), t)) if not fought else (fight_pad(a, t=t), fight_pad(b, t=t + 6))
+        run.step(1, pads)
+    roles = [g.mailbox("self_presence").role for g in (a, b)]
+    run.expect(fought, "both fought", frames=t)
+    run.expect(not any(g.mailbox("self_presence").flags & BOSS for g in (a, b)), "the fight ended in both", frames=t)
+    run.step(600)
+    after = [g.read(XA_PLAYING, "<h") for g in (a, b)]
+    run.expect(during - set(before), "the fight had music of its own", before=before, during=sorted(during))
+    run.expect(after[0] == after[1] == before[0], "after it, both games play the stage's music again",
+               before=before, after=after, roles=roles)

@@ -5,12 +5,13 @@ import struct
 
 from session import session_scenario
 
-from link.mailbox import CUTSCENE, FLIP_SKIP_VOTE
+from link.mailbox import CUTSCENE, FLIP_SKIP_VOTE, PAUSED
 
 from coop_env import TOOLS
 from link.mailbox import scene_speed
 from module import symbols
 from session_progress import arrive
+from session_m8 import reload_game
 
 MARBLE = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Marble Gallery.state")
 NO0 = 0
@@ -231,3 +232,98 @@ def pickup_name_shows_for_both_players(run):
 
 def symbols_status(g):
     return g.addr("g_Status") + 0x23C
+
+
+@session_scenario(starts=(MARBLE, MARBLE))
+def crashwatch_pause_menu_is_not_a_hang(run):
+    """Issues 150 and 152 (0.16.0): 10 s in the pause or equip menu was taken for a hang, and
+    the game went back to the menu (online, the partner saw a disconnect)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import crashwatch
+    from link.mailbox import PAUSED
+    a = run.s.a
+    run.step(60)
+    run.step(2, ("start", ""))
+    run.step(60)
+    p = a.mailbox("self_presence")
+    run.expect(p.flags & PAUSED, "the pause menu is open", flags=p.flags)
+    watch, frame, beat, why = crashwatch.CrashWatch(), p.frame, a.mailbox("heartbeat"), None
+    for _ in range(15):
+        run.step(crashwatch.EVERY)
+        why = why or watch.check(run.s.games)
+    run.expect(a.mailbox("self_presence").frame == frame and a.mailbox("heartbeat") != beat,
+               "in the menu the game's timer stops and its main loop runs",
+               frame=(frame, a.mailbox("self_presence").frame), beat=(beat, a.mailbox("heartbeat")))
+    run.expect(why is None, "15 s in the pause menu isn't a hang", why=why)
+
+
+@session_scenario(starts=(MARBLE, MARBLE))
+def partner_pad_quiet_in_menus(run):
+    """Issue 151 (0.16.0): the buttons sent for the partner's copy of this player are the ones
+    moving the player: none while the pause menu is open (the copy walked as they browsed)."""
+    from link.mailbox import PAUSED
+    a = run.s.a
+    run.step(60, ("right", ""))
+    run.expect(a.mailbox("self_presence").pad != 0, "in play, holding right is sent")
+    run.step(2, ("start", ""))
+    run.step(60)
+    run.expect(a.mailbox("self_presence").flags & PAUSED, "the pause menu is open")
+    pads = []
+    for pad in ("right", "left", "down", "cross", "up"):
+        run.step(10, (pad, ""))
+        pads.append(a.mailbox("self_presence").pad)
+    run.expect(pads == [0] * 5, "in the menu, nothing is sent", pads=pads)
+
+
+
+EQUIPPED_WEAPON_IDS = 0x8003C90C  # g_EquippedWeaponIds (main.exe)
+EQUIPMENT = 0x80097C00            # g_Status.equipment: the hands
+WEAPON_PRG = (0x8017A000, 0x8017D000)
+LAB = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Alchemy Laboratory.state")
+# What report 20261104-104320's Maria game had at 0x8017A000: no overlay, old data
+LEFTOVER = bytes.fromhex("0200ed04 0e023e00 e22f2cf1 10fd0110 02000f00 3d1fffe3 001f0f2f 00de352c"
+                         "0200cf03 e1501c1e e25ca340 002ce0f0 02001629 02ee53fc d2201f2f 0df220fe")
+
+
+def _unpause_with_no_weapons_loaded(run, character):
+    """Report 20261104-104320 (0.16.0, couch): Maria, both hands empty, paused and unpaused, and
+    her game jumped to 0x2F0F1F00. After a load the game leaves the weapon overlays out for her
+    and Richter, and the menu loads none for an empty hand, but its exit calls GetWeaponId
+    through the right hand's table: whatever that memory last held."""
+    a = run.s.a
+    run.step(30)
+    a.write(EQUIPMENT, 0)
+    a.write(EQUIPMENT + 4, 0)
+    run.expect(reload_game(run, a), "Continue's load brings this game's player in")
+    for hand in (0, 1):  # what the report's game had there: old data, no overlay
+        a.write_bytes(WEAPON_PRG[hand], LEFTOVER)
+    run.step(60)
+    p = a.mailbox("self_presence")
+    ids = [a.read(EQUIPPED_WEAPON_IDS + 4 * h, "<i") for h in (0, 1)]
+    run.expect(p.character == character and ids == [-1, -1], "the load left the weapons out",
+               character=p.character, ids=ids)
+    tables = [a.read_bytes(WEAPON_PRG[h], len(LEFTOVER)) for h in (0, 1)]
+    run.expect(LEFTOVER not in tables, "the module put a table there that does nothing")
+    for button, frames, gap in (("start", 7, 25), ("cross", 8, 61), ("down", 2, 6),
+                                ("triangle", 7, 6), ("triangle", 5, 8), ("triangle", 5, 47)):
+        run.step(frames, (button, ""))  # the report's presses: Start, Cross, Down, Triangle x3
+        run.step(gap)
+    beat, frame = a.mailbox("heartbeat"), a.mailbox("self_presence").frame
+    run.step(300)
+    p = a.mailbox("self_presence")
+    run.expect(a.mailbox("heartbeat") != beat, "the main loop runs after unpausing",
+               beat=(beat, a.mailbox("heartbeat")))
+    run.expect(p.frame != frame and not p.flags & PAUSED, "the game's timer runs after unpausing",
+               frame=(frame, p.frame), flags=p.flags)
+
+
+@session_scenario(starts=(LAB, LAB), characters=(2, 0))
+def unpause_with_empty_hands_maria_and_alucard(run):
+    _unpause_with_no_weapons_loaded(run, 2)
+
+
+@session_scenario(starts=(LAB, LAB), characters=(1, 0), full=True)
+def unpause_with_empty_hands_richter_and_alucard(run):
+    _unpause_with_no_weapons_loaded(run, 1)

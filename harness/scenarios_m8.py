@@ -299,6 +299,31 @@ def offhand_weapons(run, ch):
 
 
 @scenario(start="entrance", disc=COOP_DISC)
+def offhand_crouching_swings_low_richter(run):
+    """Issue 162: crouched, ○'s swing is Alucard's crouching one, lower than standing."""
+    e, mb = run.emu, mailbox(run)
+    e.write(EQUIPMENT, OFFHAND_ITEMS[0][0])
+    reload_as(run, mb, CHAR_RICHTER)
+    run.step(90)  # the module loads the weapon
+    start = e.save_state()
+    ys = {}
+    for how, pad in (("standing", ""), ("crouching", "down")):
+        e.load_state(start)
+        run.step(20, pad)
+        run.step(2, (pad + "+circle").strip("+"))
+        y = None
+        for _ in range(20):  # the hitbox's centre, once it has one
+            run.step(1, pad)
+            sw = offhand_entity(e)
+            if sw and e.read(e.entity(sw[0]), "<B", 0x47):
+                y = e.read(e.entity(sw[0]), "<h", 6) + e.read(e.entity(sw[0]), "<h", 0x12)
+                break
+        ys[how] = y
+    run.expect(None not in ys.values(), "○ swings both ways", ys=ys)
+    run.expect(None not in ys.values() and ys["crouching"] > ys["standing"], "crouched, the swing is lower", ys=ys)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
 def offhand_one_attack_at_a_time_richter(run):
     """Issue 29: ○ waits for the whip to end, and the whip waits for ○'s swing: never both."""
     e, mb, ch = run.emu, mailbox(run), CHAR_RICHTER

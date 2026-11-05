@@ -69,6 +69,32 @@ static bool InPlay(void) {
            CharacterLoaded() != CHAR_ALUCARD;
 }
 
+// After a load the game leaves the weapon overlays out for Richter's player code (DRA's
+// Play_WaitStagePrg: g_EquippedWeaponIds -1), and the menu loads none for an empty hand (0xFF).
+// Its exit still calls through the right hand's table (func_8010A234: GetWeaponId) and both hands'
+// InitWeapon (LoadWeaponPalette), and with no overlay there that table is whatever the memory last
+// held: Maria's game jumped to 0x2F0F1F00 on unpausing (report 20261104-104320). So a hand with
+// no overlay gets a table that does nothing until one loads.
+static void NoWeapon(void) {}
+static s32 NoWeaponId(void) { return 0; }
+#define WEAPON_HDR_WORDS 16 // the Weapon table (include/weapon.h)
+#define GET_WEAPON_ID 6     // its word
+
+static void StubUnloaded(void) {
+    s32 hand, k;
+    u32* hdr;
+
+    for (hand = 0; hand < 2; hand++) {
+        if (g_EquippedWeaponIds[hand] != -1) {
+            continue;
+        }
+        hdr = (u32*)WEAPON_PRG(hand);
+        for (k = 0; k < WEAPON_HDR_WORDS; k++) {
+            hdr[k] = (u32)(k == GET_WEAPON_ID ? (void*)NoWeaponId : (void*)NoWeapon);
+        }
+    }
+}
+
 static u8 Category(s32 hand) { return g_EquipDefs[g_Status.equipment[hand]].itemCategory; }
 
 static bool IsWeapon(u8 category) {
@@ -254,7 +280,9 @@ static void AluSwing(s32 hand) {
     }
     __builtin_memset(&s_Alu, 0, sizeof(s_Alu));
     s_Grounded = g_Player.vram_flag & 1;
-    s_Alu.ext.player.anim = eq->playerAnim + (s_Grounded ? 0 : 4); // in the air: his jump swing
+    // As his (src/dra/6E42C.c): standing 0, crouching 2, in the air 4. Crouched, Richter and Maria
+    // swung at standing height (issue 162).
+    s_Alu.ext.player.anim = eq->playerAnim + (!s_Grounded ? 4 : g_pads[0].pressed & PAD_DOWN ? 2 : 0);
     s_Unk46 = eq->unk11 + 0x7FFF + 2;
     s_Swinging = true;
     s_Fist = eq->itemCategory == ITEM_FIST;
@@ -454,6 +482,9 @@ void OffhandUpdate(void) {
 
     if (g_GameState == Game_NowLoading) {
         s_HaveOwn = false;
+    }
+    if (g_GameState == Game_Play && CharacterLoaded() != CHAR_ALUCARD) {
+        StubUnloaded();
     }
     if (!InPlay()) {
         s_PrevEngine = g_GameEngineStep;

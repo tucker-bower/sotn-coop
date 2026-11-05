@@ -31,13 +31,13 @@ class Game:
     name = "A"
 
     def __init__(self):
-        self.vector, self.frame, self.flags = bytes(16), 1, IN_PLAY
+        self.vector, self.frame, self.beat, self.flags = bytes(16), 1, 1, IN_PLAY
 
     def read_bytes(self, where, size):
         return self.vector
 
     def mailbox(self, name):
-        return NS(frame=self.frame, flags=self.flags)
+        return self.beat if name == "heartbeat" else NS(frame=self.frame, flags=self.flags)
 
 
 def watched(step, seconds):
@@ -53,11 +53,17 @@ def watched(step, seconds):
 
 def ticks(g):
     g.frame += 60
+    g.beat += 60
+
+
+def in_a_menu(g):  # the pause and equip menus: the game's timer stops, its main loop runs
+    g.beat += 60
 
 
 check(watched(ticks, 60) is None, "a game that's running is left alone")
 check("hung" in (watched(lambda g: None, 30) or ""), "a timer stopped in play is a hang")
 check(watched(lambda g: None, 9) is None, "not within nine seconds")
+check(watched(in_a_menu, 60) is None, "a minute in the pause menu isn't a hang (issues 150, 152)")
 
 
 def not_in_play(g):

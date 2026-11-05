@@ -420,6 +420,12 @@ def _couch(pg, quit_at_end=True):
     ] + ([("key", pg.K_UP), ("key", pg.K_RETURN)] if quit_at_end else [])  # Quit
 
 
+def game_state(d):
+    """Game A's g_GameState while a game view is up, else None."""
+    v = d.launcher.view
+    return v.games[0].read("g_GameState") if v else None
+
+
 def _solo(pg):
     """M11 criterion 1, from the launcher: Home > Solo plays a new castle at once (no castles
     yet); back on Home, Solo lists it."""
@@ -439,6 +445,14 @@ def _solo(pg):
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", in_game), ("expect", lambda d: d.inputs <= 5, "home to playing solo in 5 inputs (4, plus New castle now the test castles ship: D136)"),
         ("expect", lambda d: len(castles()) == 1, "a new castle"),
+        # Issue 149: unnamed, the scripted start stops at the game's name entry for the player (D126)
+        ("until", lambda d: d.launcher.view and not d.launcher.view.script and game_state(d) == 8),
+        ("shot", "name-entry"), ("wait", 60),
+        ("expect", lambda d: game_state(d) == 8, "an unnamed castle waits at the game's name entry"),
+        ("hold", 0, "cross"), ("wait", 4), ("hold", 0, ""), ("wait", 30),
+        ("hold", 0, "start"), ("wait", 4), ("hold", 0, ""),
+        ("until", lambda d: game_state(d) not in (8, None)),
+        ("expect", lambda d: game_state(d) != 8, "the player's own name entry starts the game"),
         ("game_frames", 900), ("shot", "solo-game"),
         ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
         ("game_frames", 3000), ("shot", "solo-game-later"),

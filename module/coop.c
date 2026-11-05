@@ -139,6 +139,19 @@ static void CastleDoorUpdate(void) {
     }
 }
 
+// The buttons this game's player is moved by, for the partner's copy of them: none in a menu or
+// on the map, and a scene's own steering while it holds the player (issue 151: the copy walked and
+// jumped as the partner pressed buttons in their menu or through a scene).
+static u32 PadDrivingPlayer(void) {
+    if (g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70) {
+        return 0;
+    }
+    if (g_CutsceneHasControl) { // the scene's steering, as the player code reads it (src/dra/692E8.c)
+        return g_Player.demo_timer ? g_Player.padSim & 0xFFFF : 0;
+    }
+    return g_pads[0].pressed; // spells steer with demo_timer too, from these buttons: the copy needs them
+}
+
 // Main loop, before UpdateGame. M2 applies the host's inbox here.
 //
 // The main loop runs UpdateGame only if DebugUpdate() returns nonzero, but in the US build
@@ -151,7 +164,7 @@ static bool __attribute__((used)) UpdateHook(void) {
     CharacterFrame();
     SpellsUpdate();
     // M13: the partner's copy of us runs on these: after a spell shortcut has played its input in
-    g_CoopLink.selfPad = g_pads[0].pressed;
+    g_CoopLink.selfPad = PadDrivingPlayer();
     OffhandUpdate();
     WeaponsUpdate();
     FamiliarUpdate();

@@ -13,6 +13,10 @@ What we've learned that the code and `TECHNICAL_SUMMARY.md` don't say: game inte
 - **Android emulator hosts can't be reached in tests:** two emulators sit behind the PC's NAT, and they can lose outside access after a WSL restart. Real devices aren't affected.
 - **Writes through NULL land in BIOS RAM.** Player 1's controller dying for good has been this, three different ways (M13).
 
+- **An attack hits an entity once through `unk6D[attack's enemyId]`**, a per-attacker cooldown the stage's hit detection counts down (`src/st/collision.h`), not through `nFramesInvincibility`. A guest's mirrored copy keeps its own cooldowns over each snapshot (`shared.c`): the authority's snapshot, from before it heard of the hit, had them at 0, and Richter's whip landed on every frame of the round trip (issues 157, 158).
+- **The game's timer stops in the pause and equip menus.** A hang is the module's heartbeat stopping (it ticks every main-loop frame), not the timer: 10 s in a menu used to count as a hang (issues 150, 152).
+- **Mirrored copies never run their update,** so whatever a stage's manager entity does at the end of a fight (NZ0's music, steps 5 and 6) doesn't happen in a guest's game. The module puts the music back (`boss.c`, issue 175).
+
 **Debugging with real devices**
 - **Check installed versions first.** Four rounds of a device connection failure came from old builds on one side. Different versions now say so by name.
 - `android/device.py` runs Windows adb on port 5038: the default port reaches WSL's adb server, which can't see USB.
@@ -154,6 +158,8 @@ An extra CD read at boot shifts every savestate made afterwards, and `no_effect_
 
 ## Reading a crash from an F9 report
 A report's `.state` file holds the game. After the header, the `CPU` marker is followed by 8 bytes, then 36 registers (pc is the 35th), and RAM starts 6702 bytes after the marker. A game stuck at pc 0x80000080 with a changed exception vector has been written over. Compare low memory with the partner's report: `g_Timer` stopped while emulator frames went on means the game itself stopped. Reports' `presences` are the player's own, not the partner's.
+
+A game parked in the BIOS (pc 0xBFC0xxxx, sp near 0x8444, a black screen) took an exception the kernel didn't handle. The kernel saved the game's registers in the current thread's control block: the word at 0x108 points to it, and its word holds the block's address. The 32 registers start 8 bytes in, followed by epc, hi, lo, sr and cause. Cause bits 2-6 give the exception: 6 means a jump to an address with no memory behind it, and epc is where it landed. `ra` names the caller. In report 20261104-104320, epc 0x2F0F1F00 and ra in `func_8010A234` meant the menu's exit called a weapon overlay that was never loaded.
 
 ## Loading an F9 report's state
 A report's state won't load as it is: the disc's path is blanked, in the header and in a trailer after the data. `harness/replay.py` points both at this machine's disc. `scripts/read_report.py` prints who was where from a report's memory, without an emulator.

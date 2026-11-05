@@ -420,3 +420,34 @@ def cutscene_then_leave_one_by_one(run):
 @session_scenario(starts=("no0", "entrance"))
 def cutscene_then_leave_together(run):
     _scene_then_leave(run, together=True)
+
+
+@session_scenario(starts=("no1", "entrance"), characters=(0, 1))
+def boss_guest_richter_swing_lands_once(run):
+    """Issue 157 (0.16.0): Richter's hits in a boss fight, as the guest, landed every frame. He
+    swings every 45 frames; the boss's HP (in the authority's world) never drops on frames close
+    together."""
+    a, b = run.s.a, run.s.b
+    into_boss_room(run, a)
+    run.expect(wait_pulled(run, b, a, 600) is not None, "Richter is pulled in")
+    run.step(60)
+    slot = next(iter(bosses(a)))
+    hp, drops = bosses(a)[slot][1], []
+    for i in range(3600):
+        if i % 20 == 0:
+            heal(a), heal(b)
+        raw = a.read_bytes(a.entity(slot), 0xBC)
+        boss_x = struct.unpack_from("<h", raw, 2)[0] + a.read("g_Tilemap", "<h", 0xA)
+        me = b.snapshot()["world_x"]
+        side = "right" if boss_x > me else "left"
+        pad = side if abs(boss_x - me) > 36 else side + "+square" if i % 45 < 2 else ""
+        run.step(1, p1=("", pad))
+        now = bosses(a).get(slot, (0, 0, 0))[1]
+        if now < hp:
+            drops.append((i, hp - now))
+        hp = now
+        if len(drops) >= 8 or slot not in bosses(a) or hp <= 0:
+            break
+    close = [(x, y) for x, y in zip(drops, drops[1:]) if y[0] - x[0] < 10]
+    run.expect(drops, "Richter's swings hit the boss", frames=i)
+    run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)
