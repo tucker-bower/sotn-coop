@@ -20,6 +20,7 @@ from check_disc_layout import files  # noqa: E402
 
 SECTOR = sectors.SECTOR
 CHECKED = 2072  # sync, header, subheader and a form 1 sector's 2048 data bytes: the rest are checksums
+DATA = 24  # where a form 1 sector's data starts (after sync, header and subheader)
 
 
 def merge(retail, mod, coop):
@@ -61,6 +62,61 @@ def merge(retail, mod, coop):
     return out, report
 
 
+def _conflict_runs(report):
+    """Conflicting bytes as runs of whole instruction words: (sector, first byte, end byte)."""
+    by_sector = {}
+    for i, k in report["conflicts"]:
+        if k >= DATA:
+            by_sector.setdefault(i, set()).add(DATA + (k - DATA) // 4 * 4)
+    runs = []
+    for i, words in sorted(by_sector.items()):
+        for w in sorted(words):
+            if runs and runs[-1][0] == i and runs[-1][2] == w:
+                runs[-1][2] = w + 4
+            else:
+                runs.append([i, w, w + 4])
+    return runs
+
+
+def relocate(out, retail, mod, coop, report):
+    """Resolves the one kind of conflict a mod can't avoid: the mod put its own hook (a jal to a
+    trampoline) on an instruction co-op also changed, and the trampoline runs the instructions it
+    displaced. Then co-op's instructions go into the trampoline instead, and the mod's hook stays.
+    The randomizer's FrameHook does this to the g_PlayableCharacter read co-op redirects.
+    Changes out in place; moves what it resolved from report["conflicts"] to report["relocated"]."""
+    report.setdefault("relocated", [])
+    left = []
+    for i, start, end in _conflict_runs(report):
+        at = i * SECTOR
+        was, ours = bytes(retail[at + start:at + end]), bytes(coop[at + start:at + end])
+        # Words around the run that both sides also changed (bytes that happened to agree) belong to it.
+        while start > DATA and retail[at + start - 4:at + start] != coop[at + start - 4:at + start] \
+                and retail[at + start - 4:at + start] != mod[at + start - 4:at + start]:
+            start -= 4
+        while end < CHECKED and retail[at + end:at + end + 4] != coop[at + end:at + end + 4] \
+                and retail[at + end:at + end + 4] != mod[at + end:at + end + 4]:
+            end += 4
+        was, ours = bytes(retail[at + start:at + end]), bytes(coop[at + start:at + end])
+        found, j = [], mod.find(was)
+        while j >= 0:
+            s = j // SECTOR
+            if s != i and retail[j:j + len(was)] != was and (j + len(was) - 1) // SECTOR == s:
+                found.append(j)
+            j = mod.find(was, j + 1)
+        if len(found) != 1:
+            left.extend((i, k) for i2, k in report["conflicts"] if i2 == i and start <= k < end)
+            continue
+        j = found[0]
+        out[at + start:at + end] = mod[at + start:at + end]
+        out[j:j + len(ours)] = ours
+        for s in {i, j // SECTOR}:
+            sec = out[s * SECTOR:(s + 1) * SECTOR]
+            sectors.seal(sec)
+            out[s * SECTOR:(s + 1) * SECTOR] = sec
+        report["relocated"].append((i, start, j // SECTOR, j % SECTOR))
+    report["conflicts"] = left
+
+
 def table_problems(retail, mod, coop, out):
     """Directory records the byte merge got wrong (paths of image files): each file must be where
     the side that moved or resized it put it. A record both sides changed is a conflict."""
@@ -87,7 +143,11 @@ def where(image_path, sector):
 
 def main():
     retail, mod, coop, out = sys.argv[1:5]
-    image, report = merge(*(Path(p).read_bytes() for p in (retail, mod, coop)))
+    sides = [Path(p).read_bytes() for p in (retail, mod, coop)]
+    image, report = merge(*sides)
+    relocate(image, *sides, report)
+    for i, k, s, o in report["relocated"]:
+        print(f"  relocated: co-op's hook at sector {i}+{k} ({where(retail, i)}) into the mod's trampoline at {s}+{o}")
     print(f"{report['mod']} sectors from the mod, {report['coop']} from co-op, {len(report['merged'])} merged")
     for i in report["merged"]:
         print(f"  merged: sector {i} ({where(retail, i)})")

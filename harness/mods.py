@@ -149,7 +149,11 @@ def build(name, boot=False):
     try:
         mod_image(name, raw)
         coop = bin_path(COOP_DISC)
-        image, report = layer.merge(*(Path(p).read_bytes() for p in (RETAIL, raw, coop)))
+        sides = [Path(p).read_bytes() for p in (RETAIL, raw, coop)]
+        image, report = layer.merge(*sides)
+        layer.relocate(image, *sides, report)
+        info["relocated"] = [f"{i}+{k} {layer.where(RETAIL, i)} -> {s}+{o} {layer.where(RETAIL, s)}"
+                             for i, k, s, o in report["relocated"]]
         info["merged"] = [f"{i} {layer.where(RETAIL, i)}" for i in report["merged"]]
         info["conflicts"] = [f"{i}+{k} {layer.where(RETAIL, i)}" for i, k in report["conflicts"]]
         if report["conflicts"]:
