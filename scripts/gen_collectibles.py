@@ -3,7 +3,11 @@
 its partner that one was taken can give its own player one too, whenever that was: live, or
 before a player reconnected without saving.
 
-    gen_collectibles.py   -> module/collectibles.c
+    gen_collectibles.py   -> module/collectibles.c, patcher/collectibles.json
+
+collectibles.json says where each stage's PrizeDrops sits in its file on the disc (offsets only,
+no game data), so patcher/layer.py can make the same table from a modded disc: the randomizer
+moves items by rewriting PrizeDrops in place (design/M20-randomizer.md).
 
 A placed collectible (EntityPersistentItemDrop, src/st/e_collect.h) is stage index `i` of the
 stage's PrizeDrops[] (d_prize_drops.c); its castle flag is bit HEART_DROP_CASTLE_FLAG + i of
@@ -11,6 +15,7 @@ g_CastleFlags[CASTLE_COLLECTIBLES_100...]. Only what's progress is kept: items, 
 and heart vessels. Hearts, gold and subweapons are left out (gold is pooled already).
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -20,6 +25,8 @@ from coop_env import COOP, REPO as ROOT  # noqa: E402
 
 ST = ROOT / "src/st"
 OUT_C = COOP / "module/collectibles.c"
+OUT_JSON = COOP / "patcher/collectibles.json"
+MAGIC = "COOPCLT1"  # what layer.py looks for in COOP.BIN, just before the table
 SKIP = {"st0", "tek", "mad"}  # no placed collectibles (prologue), or not in the retail castle
 NUM_HAND_ITEMS = 0xA9
 LIFE_VESSEL, HEART_VESSEL = 1, 2  # module/progress.c: COLLECT_*
@@ -46,6 +53,12 @@ def stage_table(stage, values):
     return base, [values[n] for n in re.findall(r"ITEMDROP_\w+", body)]
 
 
+def prize_drops_offset(stage):
+    """PrizeDrops' offset in the stage's file (the overlay loads at 0x80180000), from its map."""
+    m = re.search(r"^\s+0x([0-9a-f]+)\s+PrizeDrops$", (ROOT / f"build/us/st{stage}.map").read_text(), re.M)
+    return int(m[1], 16) - 0x80180000 if m else None
+
+
 def code(v, values):
     if v == values["ITEMDROP_LIFE_VESSEL"]:
         return LIFE_VESSEL
@@ -59,12 +72,16 @@ def code(v, values):
 
 def main():
     values = itemdrops()
-    flags = {}
+    flags, stages = {}, []
     for d in sorted(p for p in ST.iterdir() if p.is_dir() and p.name not in SKIP):
         t = stage_table(d.name, values)
         if not t:
             continue
         base, drops = t
+        at = prize_drops_offset(d.name)
+        if at is None:
+            sys.exit(f"{d.name}: no PrizeDrops in build/us/st{d.name}.map")
+        stages.append({"file": f"ST/{d.name.upper()}/{d.name.upper()}.BIN", "at": at, "count": len(drops), "flag": base})
         for i, v in enumerate(drops):
             c = code(v, values)
             if flags.get(base + i, c) != c:
@@ -78,12 +95,17 @@ def main():
         "#define COOP_MODULE",
         "#include <game.h>",
         "",
-        f"const u16 g_Collectibles[{n}] = {{",
+        f"typedef struct {{ char tag[8]; s32 n; u16 table[{n}]; }} CoopCollectibles;",
+        "// patcher/layer.py finds the table by its tag and rewrites it for a modded disc's items.",
+        f"const CoopCollectibles g_Collectibles = {{\"{MAGIC}\", {n}, {{",
     ]
     for i in range(0, n, 8):
         lines.append("    " + " ".join(f"0x{flags.get(j, 0):04X}," for j in range(i, min(i + 8, n))) + f" // {i:#x}")
-    lines += ["};", f"const s32 g_NCollectibles = {n};", ""]
+    lines += ["}};", ""]
     OUT_C.write_text("\n".join(lines))
+    OUT_JSON.write_text(json.dumps({"magic": MAGIC, "n": n, "life_vessel": values["ITEMDROP_LIFE_VESSEL"],
+                                    "heart_vessel": values["ITEMDROP_HEART_VESSEL"], "hand_items": NUM_HAND_ITEMS,
+                                    "stages": stages}, indent=1) + "\n")
     print(f"{OUT_C.relative_to(COOP)}: {n} flags, {sum(1 for v in flags.values() if v)} kept")
 
 

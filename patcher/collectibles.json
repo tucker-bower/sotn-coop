@@ -1,0 +1,201 @@
+{
+ "magic": "COOPCLT1",
+ "n": 740,
+ "life_vessel": 23,
+ "heart_vessel": 12,
+ "hand_items": 169,
+ "stages": [
+  {
+   "file": "ST/ARE/ARE.BIN",
+   "at": 4072,
+   "count": 8,
+   "flag": 208
+  },
+  {
+   "file": "ST/CAT/CAT.BIN",
+   "at": 5964,
+   "count": 21,
+   "flag": 128
+  },
+  {
+   "file": "ST/CEN/CEN.BIN",
+   "at": 1496,
+   "count": 0,
+   "flag": 192
+  },
+  {
+   "file": "ST/CHI/CHI.BIN",
+   "at": 2532,
+   "count": 13,
+   "flag": 176
+  },
+  {
+   "file": "ST/DAI/DAI.BIN",
+   "at": 3776,
+   "count": 16,
+   "flag": 152
+  },
+  {
+   "file": "ST/DRE/DRE.BIN",
+   "at": 1632,
+   "count": 0,
+   "flag": 280
+  },
+  {
+   "file": "ST/LIB/LIB.BIN",
+   "at": 6800,
+   "count": 11,
+   "flag": 112
+  },
+  {
+   "file": "ST/NO0/NO0.BIN",
+   "at": 4352,
+   "count": 14,
+   "flag": 0
+  },
+  {
+   "file": "ST/NO1/NO1.BIN",
+   "at": 6700,
+   "count": 7,
+   "flag": 16
+  },
+  {
+   "file": "ST/NO2/NO2.BIN",
+   "at": 4076,
+   "count": 13,
+   "flag": 32
+  },
+  {
+   "file": "ST/NO3/NO3.BIN",
+   "at": 7308,
+   "count": 10,
+   "flag": 48
+  },
+  {
+   "file": "ST/NO4/NO4.BIN",
+   "at": 6440,
+   "count": 37,
+   "flag": 64
+  },
+  {
+   "file": "ST/NP3/NP3.BIN",
+   "at": 5656,
+   "count": 10,
+   "flag": 48
+  },
+  {
+   "file": "ST/NZ0/NZ0.BIN",
+   "at": 5040,
+   "count": 11,
+   "flag": 248
+  },
+  {
+   "file": "ST/NZ1/NZ1.BIN",
+   "at": 4380,
+   "count": 12,
+   "flag": 264
+  },
+  {
+   "file": "ST/RARE/RARE.BIN",
+   "at": 2620,
+   "count": 16,
+   "flag": 632
+  },
+  {
+   "file": "ST/RCAT/RCAT.BIN",
+   "at": 5064,
+   "count": 32,
+   "flag": 504
+  },
+  {
+   "file": "ST/RCEN/RCEN.BIN",
+   "at": 1676,
+   "count": 0,
+   "flag": 600
+  },
+  {
+   "file": "ST/RCHI/RCHI.BIN",
+   "at": 1996,
+   "count": 15,
+   "flag": 568
+  },
+  {
+   "file": "ST/RDAI/RDAI.BIN",
+   "at": 3372,
+   "count": 21,
+   "flag": 536
+  },
+  {
+   "file": "ST/RLIB/RLIB.BIN",
+   "at": 3016,
+   "count": 18,
+   "flag": 472
+  },
+  {
+   "file": "ST/RNO0/RNO0.BIN",
+   "at": 3980,
+   "count": 16,
+   "flag": 312
+  },
+  {
+   "file": "ST/RNO1/RNO1.BIN",
+   "at": 2788,
+   "count": 16,
+   "flag": 344
+  },
+  {
+   "file": "ST/RNO2/RNO2.BIN",
+   "at": 3392,
+   "count": 12,
+   "flag": 376
+  },
+  {
+   "file": "ST/RNO3/RNO3.BIN",
+   "at": 3856,
+   "count": 19,
+   "flag": 408
+  },
+  {
+   "file": "ST/RNO4/RNO4.BIN",
+   "at": 5664,
+   "count": 16,
+   "flag": 440
+  },
+  {
+   "file": "ST/RNZ0/RNZ0.BIN",
+   "at": 3272,
+   "count": 16,
+   "flag": 696
+  },
+  {
+   "file": "ST/RNZ1/RNZ1.BIN",
+   "at": 3784,
+   "count": 12,
+   "flag": 728
+  },
+  {
+   "file": "ST/RTOP/RTOP.BIN",
+   "at": 1992,
+   "count": 32,
+   "flag": 664
+  },
+  {
+   "file": "ST/RWRP/RWRP.BIN",
+   "at": 1544,
+   "count": 0,
+   "flag": 760
+  },
+  {
+   "file": "ST/TOP/TOP.BIN",
+   "at": 3344,
+   "count": 19,
+   "flag": 224
+  },
+  {
+   "file": "ST/WRP/WRP.BIN",
+   "at": 1544,
+   "count": 0,
+   "flag": 280
+  }
+ ]
+}

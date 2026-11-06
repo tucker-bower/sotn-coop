@@ -19,7 +19,8 @@ from bots import walker
 from link.jointsave import read_session, save_room
 from link.mailbox import BUSY, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 import mods
-from session_progress import CUBE_OF_ZOE, NO3, arrive, counts, status
+from session_progress import (CUBE_OF_ZOE, HEART_VESSEL, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, NO3, SHIELD_POTION,
+                              arrive, counts, status, take)
 from session_shared import into_hall, stage_entities
 
 # The smoke test's own share of what each part of co-op needs. One session: cheaper than five.
@@ -102,10 +103,66 @@ def smoke(mod):
     return test
 
 
+COLLECT_BASE = 0x100  # g_CastleFlags index of the first placed collectible's byte (progress.c FLAG_COLLECTIBLES)
+SPOTS = (SHIELD_POTION, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, HEART_VESSEL)  # the entrance's placed items
+
+
+def gained(before, after):
+    """What a player got, as collectibles.c codes: 0x8000 | hand item, 0x4000 | body item, 1 life up, 2 heart up."""
+    out = [0x8000 | i for i, (x, y) in enumerate(zip(before["hand"], after["hand"])) for _ in range(y - x)]
+    out += [0x4000 | i for i, (x, y) in enumerate(zip(before["body"], after["body"])) for _ in range(y - x)]
+    out += [1] * ((after["hp_max"] - before["hp_max"]) // 5) + [2] * ((after["hearts_max"] - before["hearts_max"]) // 5)
+    return sorted(out)
+
+
+def taken(before, after):
+    """Placed collectibles' flags set between two copies of g_CastleFlags."""
+    return [(i - COLLECT_BASE) * 8 + k for i in range(COLLECT_BASE, len(after)) for k in range(8)
+            if after[i] >> k & 1 and not before[i] >> k & 1]
+
+
+def finds(mod):
+    def test(run):
+        """B takes the entrance's five placed finds, whatever the randomizer put there. A gets the
+        same, live, as the item the randomizer placed (patcher/layer.adapt's table, made from the
+        disc). Then B restarts without saving and relinks: B gets them back from A's flags."""
+        import layer
+        from check_disc_layout import bin_path
+        a, b = run.s.a, run.s.b
+        table = layer.collectibles(bin_path(mods.disc(mod)).read_bytes())
+        retail = layer.collectibles(mods.RETAIL.read_bytes())
+        run.step(5)
+        saved, a0, b0, f0 = b.save_state(), status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
+        for spot in SPOTS:
+            take(run, b, spot)
+        run.step(10)
+        a1, b1, f1 = status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
+        flags = taken(f0, f1)
+        want = sorted(table[f] for f in flags if table[f])
+        run.expect(gained(b0, b1) == want, "B got what the randomizer placed", flags=flags,
+                   got=[hex(c) for c in gained(b0, b1)], want=[hex(c) for c in want])
+        run.expect(any(table[f] != retail[f] for f in flags), "at least one of them isn't retail's item",
+                   rando=[hex(table[f]) for f in flags], retail=[hex(retail[f]) for f in flags])
+        run.expect(gained(a0, a1) == want, "A got the same, live", got=[hex(c) for c in gained(a0, a1)])
+        b.unlink()
+        b.load_state(saved)
+        run.step(400)
+        b.link()
+        run.step(120)
+        a2, b2 = status(a), status(b)
+        run.expect(gained(b0, b2) == want, "back, B has them again", got=[hex(c) for c in gained(b0, b2)])
+        run.expect(gained(a1, a2) == [], "A got nothing twice", got=[hex(c) for c in gained(a1, a2)])
+    test.__name__ = f"rando_finds_{mod[len('rando-'):].replace('-', '_')}"
+    return test
+
+
 for _name in mods.MODS:
     if mods.built(_name).get("booted"):
         _cue = mods.disc(_name)
         session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), full=True)(smoke(_name))
+        if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
+            session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),
+                             full=_name != "rando-casual")(finds(_name))
 
 # The control: the same test on the plain co-op disc. A mod's failure counts only where this passes.
 from module import COOP_DISC  # noqa: E402

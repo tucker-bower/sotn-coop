@@ -10,6 +10,7 @@ byte, and a byte both changed to different values is a conflict: the disc can't 
 The merged sectors' checksums are recomputed (sectors.py).
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -117,6 +118,68 @@ def relocate(out, retail, mod, coop, report):
     report["conflicts"] = left
 
 
+COLLECTIBLES = json.loads((Path(__file__).resolve().parent / "collectibles.json").read_text())
+
+
+def _file(image, path):
+    """A file's bytes from a raw image, and where each 2048-byte piece of it starts in the image."""
+    from patcher import find_file
+    lba, size = find_file(image, path)
+    starts = [(lba + k) * SECTOR + DATA for k in range((size + 2047) // 2048)]
+    return b"".join(image[a:a + 2048] for a in starts)[:size], starts
+
+
+def collectibles(image):
+    """What each placed collectible's castle flag gives on this disc: scripts/gen_collectibles.py's
+    table, made from the disc's own PrizeDrops instead of the decomp's source. On retail it's the
+    module's own table; on a randomized disc it follows the items the randomizer placed."""
+    c = COLLECTIBLES
+    table = [0] * c["n"]
+    for st in c["stages"]:
+        data, _ = _file(image, st["file"])
+        for i in range(st["count"]):
+            v = int.from_bytes(data[st["at"] + 2 * i:st["at"] + 2 * i + 2], "little")
+            if v == c["life_vessel"]:
+                code = 1
+            elif v == c["heart_vessel"]:
+                code = 2
+            elif 0x80 <= v < 0x80 + 0x4000:
+                v -= 0x80
+                code = 0x8000 | v if v < c["hand_items"] else 0x4000 | (v - c["hand_items"])
+            else:
+                code = 0
+            table[st["flag"] + i] = code
+    return table
+
+
+def adapt(image):
+    """Fits co-op to the mod under it, in place: COOP.BIN's collectibles table is remade from the
+    image's own stages. Returns how many entries changed."""
+    data, starts = _file(image, "COOP.BIN")
+    tag = COLLECTIBLES["magic"].encode()
+    at = data.find(tag)
+    if at < 0 or data.find(tag, at + 1) >= 0:
+        raise ValueError("COOP.BIN's collectibles table isn't where it should be")
+    n = int.from_bytes(data[at + 8:at + 12], "little")
+    if n != COLLECTIBLES["n"]:
+        raise ValueError(f"COOP.BIN's collectibles table has {n} entries, collectibles.json {COLLECTIBLES['n']}")
+    new = b"".join(v.to_bytes(2, "little") for v in collectibles(image))
+    old = data[at + 12:at + 12 + 2 * n]
+    if new == old:
+        return 0
+    blob = bytearray(data)
+    blob[at + 12:at + 12 + 2 * n] = new
+    for k, a in enumerate(starts):
+        piece = blob[k * 2048:(k + 1) * 2048]
+        if image[a:a + len(piece)] != piece:
+            image[a:a + len(piece)] = piece
+            sec = a - DATA
+            s = image[sec:sec + SECTOR]
+            sectors.seal(s)
+            image[sec:sec + SECTOR] = s
+    return sum(1 for i in range(n) if new[2 * i:2 * i + 2] != old[2 * i:2 * i + 2])
+
+
 def table_problems(retail, mod, coop, out):
     """Directory records the byte merge got wrong (paths of image files): each file must be where
     the side that moved or resized it put it. A record both sides changed is a conflict."""
@@ -146,6 +209,7 @@ def main():
     sides = [Path(p).read_bytes() for p in (retail, mod, coop)]
     image, report = merge(*sides)
     relocate(image, *sides, report)
+    print(f"  {adapt(image)} collectibles follow the mod's items")
     for i, k, s, o in report["relocated"]:
         print(f"  relocated: co-op's hook at sector {i}+{k} ({where(retail, i)}) into the mod's trampoline at {s}+{o}")
     print(f"{report['mod']} sectors from the mod, {report['coop']} from co-op, {len(report['merged'])} merged")

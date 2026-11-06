@@ -84,15 +84,21 @@ def source(name):
     return path
 
 
+def _stale(path):
+    """Built before the current co-op disc: its COOP.BIN (and savestates) are an old module's."""
+    from module import COOP_DISC
+    return path.stat().st_mtime < bin_path(COOP_DISC).stat().st_mtime
+
+
 def disc(name):
-    """A mod's co-op disc (.cue), if it's been built."""
+    """A mod's co-op disc (.cue), if it's been built on the current co-op disc."""
     cue = MODS_DIR / name / f"mod-{name}.cue"
-    return cue if cue.exists() else None
+    return cue if cue.exists() and not _stale(cue) else None
 
 
 def built(name):
     p = MODS_DIR / name / "build.json"
-    return json.loads(p.read_text()) if p.exists() else {}
+    return json.loads(p.read_text()) if p.exists() and not _stale(p) else {}
 
 
 def _write_files(image, changed):
@@ -152,6 +158,7 @@ def build(name, boot=False):
         sides = [Path(p).read_bytes() for p in (RETAIL, raw, coop)]
         image, report = layer.merge(*sides)
         layer.relocate(image, *sides, report)
+        info["collectibles_changed"] = layer.adapt(image)
         info["relocated"] = [f"{i}+{k} {layer.where(RETAIL, i)} -> {s}+{o} {layer.where(RETAIL, s)}"
                              for i, k, s, o in report["relocated"]]
         info["merged"] = [f"{i} {layer.where(RETAIL, i)}" for i in report["merged"]]
