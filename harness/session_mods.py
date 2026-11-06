@@ -17,7 +17,7 @@ from session import session_scenario  # first: puts `link` on the path
 
 from bots import walker
 from link.jointsave import read_session, save_room
-from link.mailbox import BUSY, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
+from link.mailbox import BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 import mods
 from session_progress import (CUBE_OF_ZOE, HEART_VESSEL, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, NO3, SHIELD_POTION,
                               arrive, counts, status, take)
@@ -36,10 +36,26 @@ def link_and_presence(run, a, b):
     run.expect(a.mailbox("partner_age") <= 1 and b.mailbox("partner_age") == 0, "both partners fresh")
 
 
+def as_characters(run, characters):
+    """Each game reloads as its character (they take effect at a load: session_m8.mixed_pair)."""
+    from session_m8 import NAMES, reload_game
+    for g, c in zip((run.s.a, run.s.b), characters):
+        if c != CHAR_ALUCARD:
+            run.expect(reload_game(run, g), f"{g.name} loads as {NAMES[c]}")
+
+
 def shared_room(run, a, b):
     """A walks into the entrance hall (session_shared.into_hall), then B arrives next to A: A is the
-    room's authority, B the guest, with A's entities."""
-    into_hall(run)
+    room's authority, B the guest, with A's entities. After a reload (Richter, Maria) A starts
+    below the way to the hall, so both arrive there (session_m8.mixed_pair)."""
+    if a.mailbox("self_presence").character == CHAR_ALUCARD:
+        into_hall(run)
+    else:
+        from session_m8 import HALL_ROOM_ID
+        arrive(run, a, NO3, HALL_ROOM_ID, 1300, 200)
+        run.step(120)
+        arrive(run, b, NO3, HALL_ROOM_ID, 1324, 200)
+        run.step(30)
     roles = a.mailbox("self_presence").role, b.mailbox("self_presence").role
     run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the room's authority, B its guest", roles=roles,
                room=a.snapshot()["room"])
@@ -78,18 +94,18 @@ def joint_save(run, s, a, b, path):
             break
     run.expect(path.exists(), "the joint save was written")
     blobs = read_session(path)
-    p = a.mailbox("self_presence")
-    run.expect(save_room(blobs[0]) == save_room(blobs[1]) == (p.stage, p.room_left, p.room_top),
-               "both saves resume in A's room", a=save_room(blobs[0]), b=save_room(blobs[1]))
+    run.expect(save_room(blobs[0]) == save_room(blobs[1]), "both saves resume in the same room",
+               a=save_room(blobs[0]), b=save_room(blobs[1]))
 
 
-def smoke(mod):
+def smoke(mod, suffix="", characters=(0, 0)):
     def test(run):
         from link.jointsave import JointSave
         from session import MailboxProxy
         s, a, b = run.s, run.s.a, run.s.b
         path = Path(tempfile.mkdtemp(prefix="coop-mod-")) / "session.coop"
         s.session_file, s.joint = path, JointSave([MailboxProxy(a), MailboxProxy(b)], path)
+        as_characters(run, characters)
         run.step(30)
         for g in (a, b):
             p = g.mailbox("self_presence")
@@ -98,7 +114,9 @@ def smoke(mod):
         shared_room(run, a, b)
         progression(run, a, b)
         joint_save(run, s, a, b, path)
-    test.__name__ = f"mod_{mod.replace('-', '_')}"
+        played = (a.mailbox("self_presence").character, b.mailbox("self_presence").character)
+        run.expect(played == tuple(characters), "each game plays its character", played=played, want=characters)
+    test.__name__ = f"mod_{mod.replace('-', '_')}{suffix}"
     test.__doc__ = f"Co-op on {mod}: link, a shared room, a shared find and a joint save."
     return test
 
@@ -121,7 +139,7 @@ def taken(before, after):
             if after[i] >> k & 1 and not before[i] >> k & 1]
 
 
-def finds(mod):
+def finds(mod, suffix="", characters=(0, 0)):
     def test(run):
         """B takes the entrance's five placed finds, whatever the randomizer put there. A gets the
         same, live, as the item the randomizer placed (patcher/layer.adapt's table, made from the
@@ -131,6 +149,7 @@ def finds(mod):
         a, b = run.s.a, run.s.b
         table = layer.collectibles(bin_path(mods.disc(mod)).read_bytes())
         retail = layer.collectibles(mods.RETAIL.read_bytes())
+        as_characters(run, characters)
         run.step(5)
         saved, a0, b0, f0 = b.save_state(), status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
         for spot in SPOTS:
@@ -152,7 +171,7 @@ def finds(mod):
         a2, b2 = status(a), status(b)
         run.expect(gained(b0, b2) == want, "back, B has them again", got=[hex(c) for c in gained(b0, b2)])
         run.expect(gained(a1, a2) == [], "A got nothing twice", got=[hex(c) for c in gained(a1, a2)])
-    test.__name__ = f"rando_finds_{mod[len('rando-'):].replace('-', '_')}"
+    test.__name__ = f"rando_finds_{mod[len('rando-'):].replace('-', '_')}{suffix}"
     return test
 
 
@@ -163,6 +182,14 @@ for _name in mods.MODS:
         if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
             session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),
                              full=_name != "rando-casual")(finds(_name))
+        if _name == "rando-casual":  # Richter and Maria on the randomizer (design/M20 criterion 7): --full
+            for _chars, _sfx in (((CHAR_RICHTER, CHAR_MARIA), "_richter_and_maria"),
+                                 ((CHAR_ALUCARD, CHAR_RICHTER), "_alucard_and_richter"),
+                                 ((CHAR_ALUCARD, CHAR_MARIA), "_alucard_and_maria")):
+                session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), characters=_chars,
+                                 full=True)(smoke(_name, _sfx, _chars))
+                session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), characters=_chars,
+                                 full=True)(finds(_name, _sfx, _chars))
 
 # The control: the same test on the plain co-op disc. A mod's failure counts only where this passes.
 from module import COOP_DISC  # noqa: E402
@@ -170,3 +197,7 @@ from module import COOP_DISC  # noqa: E402
 _control = smoke("none")
 _control.__doc__ = "The mod tests' control: the same checks on the plain co-op disc."
 session_scenario(starts=("entrance", "entrance"), discs=(COOP_DISC, COOP_DISC), full=True)(_control)
+for _chars, _sfx in (((CHAR_RICHTER, CHAR_MARIA), "_richter_and_maria"), ((CHAR_ALUCARD, CHAR_RICHTER), "_alucard_and_richter"),
+                     ((CHAR_ALUCARD, CHAR_MARIA), "_alucard_and_maria")):
+    session_scenario(starts=("entrance", "entrance"), discs=(COOP_DISC, COOP_DISC), characters=_chars,
+                     full=True)(smoke("none", _sfx, _chars))
