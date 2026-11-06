@@ -83,6 +83,7 @@ log = logging.getLogger("launcher")
 
 HELP_PLAY = """Each of you plays your own game, on your own half of the window.
 Whatever one of you finds (relics, items, gold, the map) the other gets too, at once.
+An item an enemy drops is for whoever picks it up.
 Meet in the same room to fight the same enemies. Bosses pull you both in.
 
 Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.

@@ -345,8 +345,48 @@ static void DoorWalkGround(void) {
     }
 }
 
+// The Outer Wall's telescope (NO1, func_us_801BA290) works when the player's status is exactly
+// 0x10000000, Alucard standing. Richter's and Maria's player code also sets NO_AFTERIMAGE when
+// they stand, and 0x200000 with hearts enough for a crash, so neither could ever look through it
+// (#173; retail Richter neither). For them, its compare (lui v0; lui v1; lw v1, status; nop) asks
+// the module instead, and the bne after it sees 0 != 1 for no. The first word is the delay slot
+// of the branch before it, so the call comes one word later.
+#define TELESCOPE_AT ((u32*)0x801BA3E4)
+static const u32 s_TelescopeRetail[4] = {0x3C021000, 0x3C038007, 0x8C632F2C, 0x00000000};
+
+static u32 CoopTelescopeNo(void) {
+    return (g_Player.status & ~(NO_AFTERIMAGE | PLAYER_STATUS_UNK200000)) != PLAYER_STATUS_UNK10000000;
+}
+
+static void TelescopeFix(void) {
+    u32 ours[4] = {0x00000000,                                             // nop (a delay slot)
+                   0x0C000000 | (((u32)CoopTelescopeNo >> 2) & 0x3FFFFFF), // jal CoopTelescopeNo
+                   0x00000000,                                             // nop
+                   0x00001821};                                            // addu v1, zero, zero
+    const u32* want;
+    s32 i;
+
+    if (g_StageId != STAGE_NO1 || g_GameState != Game_Play) {
+        return;
+    }
+    want = CharacterLoaded() == CHAR_ALUCARD ? s_TelescopeRetail : ours;
+    for (i = 0; i < 4; i++) { // only NO1's code, once it's loaded: one of the two is there
+        if (TELESCOPE_AT[i] != s_TelescopeRetail[i] && TELESCOPE_AT[i] != ours[i]) {
+            return;
+        }
+    }
+    if (TELESCOPE_AT[1] != want[1]) {
+        for (i = 0; i < 4; i++) {
+            TELESCOPE_AT[i] = want[i];
+        }
+        FlushCache();
+    }
+}
+
 void CharacterFrame(void) {
     const CharBlob* b;
+
+    TelescopeFix();
 
     // for the player overlays, with the castle's rules for them
     g_CoopOptions = g_CoopLink.options | (g_CoopLink.rulesOff & RULE_OVERLAY_MASK);

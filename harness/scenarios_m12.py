@@ -262,3 +262,32 @@ def wait_for(run, cond, frames, bot=None):
             return True
         run.step(1, bot(run.emu.snapshot(), i) if bot else "")
     return False
+
+
+GAME_PROLOGUE_END = 7  # g_GameState: the prologue's text crawl (src/dra/game_handlers.c)
+CRAWL_STEP, CRAWL_SKIP_STEP = 6, 16  # PrologueScroll's steps: the crawl, its fade-out
+
+
+@scenario(start="st0_end", disc=COOP_DISC)
+def prologue_crawl_skips_on_start(run):
+    """#159: after Dracula falls, Start skips the prologue's text crawl, even on a castle that has
+    never seen it (the game itself skips only once it has: 110 s every new castle)."""
+    e = run.emu
+    for i in range(6000):
+        if e.read("g_GameState") == GAME_PROLOGUE_END and e.read("g_GameStep") == CRAWL_STEP:
+            break
+        run.step(1)
+    run.expect(e.read("g_GameStep") == CRAWL_STEP, "the text crawl started", frames=i, state=e.read("g_GameState"))
+    seen, cleared = e.read("g_Settings", "<i", 0x10C) & 2, e.read("g_GameClearFlag", "<i")
+    run.expect(not seen and not cleared, "the game itself wouldn't let it be skipped", seen=seen, cleared=cleared)
+    run.step(120)
+    run.expect(e.read("g_GameStep") == CRAWL_STEP, "it runs on by itself (not yet skipped)")
+    run.step(2, "start")
+    run.step(4)
+    run.expect(e.read("g_GameStep") >= CRAWL_SKIP_STEP or e.read("g_GameState") != GAME_PROLOGUE_END,
+               "Start skipped it", step=e.read("g_GameStep"), state=e.read("g_GameState"))
+    for i in range(3000):
+        if e.read("g_StageId") == 0x41 and e.read("g_GameState") == 2:
+            break
+        run.step(1)
+    run.expect(e.read("g_StageId") == 0x41, "and the castle's entrance comes next", frames=i)

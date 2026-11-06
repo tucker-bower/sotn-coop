@@ -120,6 +120,37 @@ def items_and_maxups_shared(run):
 
 
 @session_scenario()
+def finds_caught_up_after_reconnect(run):
+    """#154: B takes the Life Apple and a Life Max Up, then quits without saving and comes back
+    (B's game back where it was before, away long enough for A to see it gone). The pickups stay
+    taken in the castle, and B gets them again when A sends B everything on its return. A gets
+    nothing twice."""
+    a, b = run.s.a, run.s.b
+    run.step(5)
+    saved, a0, b0 = b.save_state(), status(a), status(b)
+    for spot in (LIFE_APPLE, LIFE_VESSEL):
+        take(run, b, spot)
+    run.step(10)
+    a1 = status(a)
+    run.expect(counts(a1) - counts(a0) == 1 and a1["hp_max"] - a0["hp_max"] == 5,
+               "A got B's finds once, live", items=counts(a1) - counts(a0), hp_max=a1["hp_max"] - a0["hp_max"])
+    b.unlink()
+    b.load_state(saved)  # B's game restarted from the save before the pickups
+    run.step(400)  # A's side: no word from B for 400 frames
+    run.expect(counts(status(b)) == counts(b0), "B lost its unsaved finds")
+    b.link()
+    run.step(120)
+    a2, b2 = status(a), status(b)
+    run.expect(counts(b2) - counts(b0) == 1 and b2["hp_max"] - b0["hp_max"] == 5,
+               "back, B has the Life Apple and +5 max HP again", items=counts(b2) - counts(b0),
+               hp_max=b2["hp_max"] - b0["hp_max"])
+    run.expect(counts(a2) == counts(a1) and a2["hp_max"] == a1["hp_max"], "A got nothing twice",
+               items=counts(a2) - counts(a1), hp_max=a2["hp_max"] - a1["hp_max"])
+    fa, fb = a.read_bytes("g_CastleFlags", 0x300), b.read_bytes("g_CastleFlags", 0x300)
+    run.expect(fa[0x100:0x190] == fb[0x100:0x190], "and the pickups are taken in both worlds")
+
+
+@session_scenario()
 def gold_pooled(run):
     """D38: gold is one purse. A's gold changes (a stand-in for a money bag or a purchase: a
     harness poke) reach B as the same change, and B's spending reaches A."""
@@ -178,6 +209,39 @@ def live_despawn(run):
     b1 = status(b)
     run.expect(b1["relics"][RELIC_CUBE_OF_ZOE] & 1 and counts(b1) - counts(b0) == 1,
                "B got the relic once and the potion once", items=counts(b1) - counts(b0))
+
+
+E_RED_DOOR = 5
+
+
+def red_doors(g):
+    """(slot, x, y) of each red door in g's room, in world space."""
+    sx, sy = g.read("g_Tilemap", "<h", 0xA), g.read("g_Tilemap", "<h", 0xE)
+    out = []
+    for slot in range(64, 256):
+        e = g.entity(slot)
+        if g.read(e + 0x26, "<H") == E_RED_DOOR and g.read(e + 0x2C, "<H"):
+            out.append((slot, g.read(e + 2, "<h") + sx, g.read(e + 6, "<h") + sy))
+    return out
+
+
+@session_scenario()
+def red_door_guest_copy_in_place(run):
+    """#163: A (the authority) waits by the Cube of Zoe room's left door; B stands between the orb
+    and the potion, almost a screen to the right, so B's game takes the door from A's snapshot
+    instead of from its own layout. B's door is where A's is: the copy's setup used to move it a
+    second time, 4 px right and 31 px down, out of reach, and it never opened for B (the report's
+    state: Richter walks into the wall at x 38, the door at 16, and it opens within 16)."""
+    a, b = run.s.a, run.s.b
+    arrive(run, a, NO3, 120, 60, 120)
+    run.step(60)
+    arrive(run, b, NO3, 120, 360, 153 - STAND)
+    run.step(120)
+    run.expect(b.mailbox("self_presence").role == 2, "B is the guest", a=str(a.mailbox("self_presence")),
+               b=str(b.mailbox("self_presence")))
+    da, db = red_doors(a), red_doors(b)
+    left = lambda ds: sorted((x, y) for _, x, y in ds if x < 64)
+    run.expect(left(da) and left(db) == left(da), "B's left door is where A's is", a=da, b=db)
 
 
 @session_scenario()

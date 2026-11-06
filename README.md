@@ -27,7 +27,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 
 **A shared castle**
 - **Explore independently,** each on your own screen, and see your partner on the map.
-- **Shared progress, live:** relics, unlocked areas, the explored map, beaten bosses and max HP/MP/heart upgrades count for both of you. Gold is pooled, and each of you gets a copy of every item found.
+- **Shared progress, live:** relics, unlocked areas, the explored map, beaten bosses and max HP/MP/heart upgrades count for both of you. Gold is pooled, and each of you gets a copy of every item found in the castle, even one taken just before a disconnect. An item an enemy drops goes to whoever picks it up.
 - **Shared level:** kills give both of you half the XP.
 - **Shared saves:** saving in a coffin saves both games. Anyone can pick up a castle, and whoever joins keeps a copy to play solo or host later.
 - **Save-state safety net:** the launcher keeps savestates at big moments, and never deletes them.

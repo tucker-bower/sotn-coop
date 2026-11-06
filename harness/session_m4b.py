@@ -510,6 +510,62 @@ def guest_takes_heart(run):
     run.expect(slot not in drops(a) and slot not in drops(b), "the drop is gone from both worlds")
 
 
+E_EQUIP_ITEM_DROP = 0x0A  # every stage's id for an item drop (module/shared.h)
+ITEM_LIFE_APPLE = 0x92
+APPLES = 0x26 + ITEM_LIFE_APPLE  # g_Status.equipHandCount[ITEM_LIFE_APPLE], from g_Status
+
+
+def item_drop(run, taker):
+    """An item drop (a Life Apple) made in A's world just ahead of `taker`, as an enemy's kill
+    makes one. Then `taker` walks over it. Returns
+    (A's apples before, after), (B's apples before, after), and whether the drop is gone from both."""
+    from module import stage_symbol
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    into_hall(run)
+    run.expect(roles(run.s) == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B the guest", roles=roles(run.s))
+    slot = next(k for k in range(160, 192) if not a.read(a.entity(k) + 0x26, "<H"))
+    e = a.entity(slot)
+    a.write_bytes(e, bytes(0xBC))
+    a.write(e, E_EQUIP_ITEM_DROP, "<H", 0x26)
+    a.write(e, stage_symbol("stno3", "EntityEquipItemDrop"), "<I", 0x28)
+    a.write(e, ITEM_LIFE_APPLE, "<H", 0x30)
+    a.write(e, taker.snapshot()["world_x"] + 40 - a.read("g_Tilemap", "<h", 0xA), "<h", 2)
+    a.write(e, taker.snapshot()["world_y"] - 40 - a.read("g_Tilemap", "<h", 0xE), "<h", 6)
+    apples = lambda g: g.read("g_Status", "<B", APPLES)
+    for g in (a, b):
+        g.write("g_Status", 0, "<B", APPLES)
+    item = lambda g: {k for k in range(160, 192) if g.read(g.entity(k) + 0x26, "<H") == E_EQUIP_ITEM_DROP}
+    run.step(60)  # it falls to the floor
+    run.expect(slot in item(a) and slot in item(b), "the item is there in both worlds")
+    pad = ("right", "") if taker is a else ("", "right")
+    for i in range(300):
+        run.step(1, p1=pad)
+        if apples(taker):
+            break
+    run.step(120)  # the partner's copy arrives as an event, if there is one
+    return (0, apples(a)), (0, apples(b)), slot not in item(a) and slot not in item(b)
+
+
+@session_scenario()
+def drop_enemy_item_goes_to_guest_only(run):
+    """#156: an item an enemy drops is one item, for whoever takes it. B, the guest, walks over
+    it: B has it, A doesn't (it used to be shared, so every kill gave each player one)."""
+    (_, na), (_, nb), gone = item_drop(run, run.s.b)
+    run.expect(nb == 1, "B got the Life Apple", b=nb)
+    run.expect(na == 0, "A didn't", a=na)
+    run.expect(gone, "the drop is gone from both worlds")
+
+
+@session_scenario()
+def drop_enemy_item_goes_to_authority_only(run):
+    """#156: A, the authority, takes an enemy's item drop: A has it, B doesn't."""
+    (_, na), (_, nb), gone = item_drop(run, run.s.a)
+    run.expect(na == 1, "A got the Life Apple", a=na)
+    run.expect(nb == 0, "B didn't", b=nb)
+    run.expect(gone, "the drop is gone from both worlds")
+
+
 ELEVATOR_ROOM, ELEVATOR_SLOT, ELEVATOR_X, ELEVATOR_Y = 176, 96, 144, 96  # NZ0: a tall shaft
 
 

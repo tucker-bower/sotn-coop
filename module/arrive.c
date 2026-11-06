@@ -576,10 +576,26 @@ static bool s_SkipVote, s_SkipNoted;
 
 bool ArriveSkipVote(void) { return s_SkipVote; }
 
+// The prologue's text crawl, after Dracula falls (src/st/st0/prologue_scroll.c, steps 6 and 7).
+// The game lets Start skip it only once it's been seen or the game finished; every new castle has
+// a fresh card, so it was 110 s each time (#159). Here Start skips it, as the game's own skip does.
+// It's each player's own: nothing in it is shared, and nobody waits for it.
+#define CRAWL_SKIP_STEP 16 // Play_16: the crawl's fade-out
+static bool PrologueCrawlSkip(void) {
+    if (g_GameState != Game_PrologueEnd || g_StageId != STAGE_ST0 || (g_GameStep != 6 && g_GameStep != 7)) {
+        return false;
+    }
+    if (g_pads[0].tapped & PAD_START) {
+        g_pads[0].tapped &= ~PAD_START;
+        g_GameStep = CRAWL_SKIP_STEP;
+    }
+    return true;
+}
+
 static void SkipVote(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
-    if (!ArriveSharedScene()) {
+    if (PrologueCrawlSkip() || !ArriveSharedScene()) {
         s_SkipVote = s_SkipNoted = false;
         return;
     }

@@ -670,3 +670,39 @@ def relic_gates_more(run, ch):
     for what, without, with_, margin in got:
         run.expect(with_ >= without + margin, f"{what} needs its relic", without=without, with_relic=with_,
                    all=[g[:3] for g in got])
+
+
+NO1, TELESCOPE_ROOM, TELESCOPE_X, TELESCOPE_Y = 0x01, 24, 339, 160  # the Outer Wall's foot (layout: E_ID_28)
+E_TELESCOPE = 0x28
+PLAYER_STATUS = 0x80072F2C - 0x80072BD0  # g_Player.status
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def telescope_alucard(run):
+    """#173's control: Alucard still looks through the telescope (his compare is the game's own)."""
+    telescope(run, CHAR_ALUCARD)
+
+
+@per_character
+def telescope(run, ch):
+    """#173: Richter and Maria look through the telescope at the foot of the Outer Wall: standing
+    at it and pressing Up starts it (its step goes past 1), as it does for Alucard."""
+    e, mb = run.emu, mailbox(run)
+    if ch != CHAR_ALUCARD:
+        reload_as(run, mb, ch)
+    mb.command(CMD_ARRIVE, NO1, TELESCOPE_ROOM, TELESCOPE_X + 48, TELESCOPE_Y - 40)
+    wait(run, lambda: (lambda p: p.stage == NO1 and p.room_id == TELESCOPE_ROOM and p.flags & IN_PLAY and
+                       not p.flags & BUSY)(mb.self_presence()), 900, "arrived by the telescope")
+    run.step(90)
+    scope = next((s for s in range(64, 256) if e.read(e.entity(s), "<H", 0x26) == E_TELESCOPE), None)
+    run.expect(scope is not None, "the telescope is in the room")
+    for _ in range(120):  # walk up to it (a wall stops Richter and Maria a few pixels sooner)
+        if e.read(e.entity(0), "<h", 2) <= e.read(e.entity(scope), "<h", 2) + 2:
+            break
+        run.step(1, "left")
+    run.step(20)
+    standing = e.read("g_Player", "<I", PLAYER_STATUS)
+    run.step(20, "up")
+    step = e.read(e.entity(scope), "<H", 0x2C)
+    run.expect(step >= 2, f"{NAMES.get(ch, 'Alucard')} looks through it", step=step, status=hex(standing),
+               dx=e.read(e.entity(0), "<h", 2) - e.read(e.entity(scope), "<h", 2))

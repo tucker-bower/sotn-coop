@@ -99,8 +99,9 @@ static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs 
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
 static u8 s_HitHold[STAGE_SLOTS];      // frames a copy this game hit stays invincible, whatever arrives
 static u8 s_Cooldowns[sizeof(((Entity*)0)->unk6D)]; // a copy's per-attacker hit cooldowns, kept over a snapshot
+#define E_RED_DOOR 5 // the same entity id in every stage (src/st/*/*.h)
+#define RED_DOOR_DROP 0x1F // its setup's move down, from where the layout puts it
 #define TAKEN_FRAMES 120 // online: longer than a slow round trip plus the playout delay (M7b)
-#define E_PRIZE_DROP 3 // hearts, gold, subweapons: the same entity id in every stage
 static u32 s_AppliedSeq;
 
 // Hit detection wrapper, and hits the guest made (authority applies them)
@@ -576,7 +577,7 @@ static void ApplySnapshot(void) {
         i = se->slot;
         present[i] = true;
         e = &g_Entities[STAGE_ENTITY_START + i];
-        if (s_TakenHere[i] && se_e->entityId == E_PRIZE_DROP) { // a drop this game just took
+        if (s_TakenHere[i] && IS_DROP(se_e->entityId)) { // a drop this game just took
             r += sizeof(Entity) + se->nPrims * sizeof(Primitive) + se->nEnvs * sizeof(DR_ENV);
             continue;
         }
@@ -590,6 +591,12 @@ static void ApplySnapshot(void) {
             CopyWords(e, se_e, sizeof(Entity)); // a fresh one: it sets itself up on its first update
             e->flags &= ~FLAG_HAS_PRIMS;
             e->primIndex = 0;
+            if (e->entityId == E_RED_DOOR && e->step) {
+                // Its setup moves it from its layout spot (src/st/e_red_door.h); the copy has
+                // moved already. Twice moved, it stood 4 px off and never opened (#163).
+                e->posX.i.hi -= e->ext.redDoor.xOffset;
+                e->posY.i.hi -= RED_DOOR_DROP;
+            }
             e->step = 0;
             if (e->unk68) {
                 e->posX.val += dx * e->unk68 * 0x100;
@@ -816,10 +823,11 @@ static void CaptureSnapshot(void) {
 
 // --- hits
 
-// A prize drop (hearts, gold, a subweapon: entity 3 in every stage, src/st/e_collect.h) the
-// guest touches is the guest's: its own copy collects it right away (the drop's update does,
+// A drop (hearts, gold, a subweapon, an item: src/st/e_collect.h) the guest touches is the
+// guest's: its own copy collects it right away (the drop's update does,
 // in the frame it's touched), and the authority removes the real one, rewarding nobody. Before,
-// the authority's player got the hearts, or the subweapon (D51).
+// the authority's player got the hearts, or the subweapon (D51), or an enemy's item (#156: it
+// isn't shared, so it has to reach the one who took it).
 static u8 s_Taken[16];
 static u16 s_TakenId[16];
 static s32 s_NTaken;
@@ -831,7 +839,7 @@ static void CollectTouchedDrops(void) {
 
     for (i = 0; i < STAGE_SLOTS; i++) {
         e = &g_Entities[STAGE_ENTITY_START + i];
-        if (!s_Mirrored[i] || e->entityId != E_PRIZE_DROP || !e->hitFlags || !e->pfnUpdate ||
+        if (!s_Mirrored[i] || !IS_DROP(e->entityId) || !e->hitFlags || !e->pfnUpdate ||
             e->step < 2 || e->step >= 5) {
             continue;
         }
