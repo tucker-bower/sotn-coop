@@ -34,4 +34,5 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | M17 | 3+ players, online then couch | #49 | `M17-more-players` |
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |
 | M19 | Widescreen | #51 | `M19-widescreen` |
+| M20 | Co-op on the randomizer, the first supported mod | #144 | `M20-randomizer` |
 

@@ -17,7 +17,7 @@ Measured on every preset at sotnrando `3522dc6` (`harness/mods.py`):
 | B. The player brings a seed's `.ppf` | The same merge, from a PPF applied to retail first | ✅ Too, almost free once A exists (`patcher/ppf.py`) |
 | C. The launcher runs the randomizer | Ship node and the randomizer, and pick a preset in the app | ❌ Not for now: a second app's UI, its updates, and its licence inside ours |
 
-**Recommendation: A, with B.** A randomized disc belongs to its castle: **New castle › Randomizer** asks for the disc (or `.ppf`), and opening that castle plays it. The lobby shows the seed and preset that the randomizer writes on its title screen, so partners can see they match before connecting.
+**Chosen: A, with B (D174).** **Settings › Game files › Randomizer** takes the randomized disc (or `.ppf`) and turns it on or off; new castles use it and keep its seed, and opening a castle on another disc asks first (D175). The seed and preset are read from what the randomizer writes on its title screen, and HELO carries them, so partners on different seeds are told both. A disc per castle was the first idea: the online joiner boots before it knows the host's castle, so it would have to restart mid-connect.
 
 ## Acceptance criteria
 1. **Every preset layers.** `mods.py` builds every preset's co-op disc with no conflict, and with the collectibles table matching its own `PrizeDrops` (`patcher/test_layer.py`).

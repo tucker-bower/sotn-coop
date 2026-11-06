@@ -15,9 +15,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import sectors  # noqa: E402
-from check_disc_layout import files  # noqa: E402
+
+
+def files(image_path):
+    """{path: (lba, size)} on an image file: scripts/check_disc_layout.py's (developer tools only;
+    the app ships the patcher without scripts/)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from check_disc_layout import files as listing
+    return listing(image_path)
 
 SECTOR = sectors.SECTOR
 CHECKED = 2072  # sync, header, subheader and a form 1 sector's 2048 data bytes: the rest are checksums

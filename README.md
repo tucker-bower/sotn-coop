@@ -10,7 +10,7 @@ This co-op mod utilizes custom SwanStation launcher running *two instances* of P
 AI wrote all of this code. However, this is not just low effort slop that will be abandon. A lot of human time, effort, and love has gone into designing, architecting, and playtesting this work. I plan to finish this mod and support it into the future. All of the code is public amd open for anyone to use, and all the prior works that made this possible are credited below.
 
 ## Getting started
-You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional.
+You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional. To play the [randomizer](https://sotn.io) in co-op, randomize your own disc there and choose it in Settings › Game files › Randomizer: both players need the same seed and preset.
 
 1. Download from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest):
    - **Windows 10 or 11:** [SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)

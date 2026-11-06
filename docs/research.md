@@ -211,3 +211,12 @@ A teleport (a pull, a map teleport, a revive) puts the player at the partner's g
 Each game process writes a native stack trace (faulthandler) to `coop-worker-<pid>.txt` in the temp folder, and the harness reports the exit code (a negative one is the signal) and that trace. Issue 142 was found this way: a SwanStation segfault in `UncheckedReadMemoryHalfWord`. For a native crash, swap in a `RelWithDebInfo` build of the core (`cmake -B build-dbg`), run with `ulimit -c unlimited` (the core file lands in the worktree), and read it with gdb: `CPU::g_state.regs`, and `Bus::g_ram` plus a PSX address for the game's RAM. Then map the PSX pc through `coop.elf` with `mipsel-linux-gnu-objdump -d -l`.
 
 During a stage change, `g_StageId` is the next stage from `Play_PrepareNextStage` (4) on, but its overlay isn't in RAM until `Play_LoadStagePrg` (9) is done. Anything that looks up the current stage's addresses (`FindOverlay(g_StageId)`) only does so with `g_GameStep == Play_Default`. Issue 142 was `ResyncSpawner` walking the old stage's memory as the new one's layout list.
+
+## The randomizer's disc (sotnrando 26.07.13, checked 2026-11-05)
+- It writes raw offsets in the track 1 image (sector headers included) and recomputes each sector's checksums itself; its `.ppf` leaves the checksums to the player.
+- Items: `zone.items + 2 * index` is the stage's `PrizeDrops` (same offsets as the decomp's maps), and the value is `(candle << 8 | id) + 0x80` for an item. Candles and enemy drops are other tables.
+- Its own code lives in low RAM (`0x8000C000`, its `FrameHook` target) and in `WARNING.TIM`'s sectors on the disc, which it overwrites. Co-op uses neither.
+- The seed and `<version> <preset>` are Shift-JIS text at `0x04389C6C` and `0x04389C8C` (its `setSeedText`). A hyphen comes back as U+2212 after NFKC.
+- One seed URL on one randomizer version gives the same disc byte for byte, so two players' co-op discs match.
+- Some presets take minutes to generate (glitch took 11), since the randomizer retries placements until a seed is completable.
+

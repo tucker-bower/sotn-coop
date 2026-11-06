@@ -824,3 +824,13 @@ A placed item or vessel taken in one game reaches the other as the flag it sets,
 
 **D173: Start skips the prologue's text crawl, for each player alone** (agent-default, 2026-11-05, #159; Tucker asked for it as a skippable scene)
 The game skips the crawl only once it's been seen or the game finished, and every new castle has a fresh card. Start now skips it as the game's own skip does (step 16, the fade-out). It's each player's own: the crawl isn't shared and nobody waits on it, so the scene vote (issue 107) would only make one player wait for the other.
+
+**D174: The randomizer is the first supported mod, layered on the player's machine** (Tucker, 2026-11-05: the randomizer first and only, double Alucard first; how: agent-default, #144)
+The player randomizes their own disc on sotn.io (or brings a seed's `.ppf`), and the launcher merges three discs locally: retail, theirs and the co-op disc (`patcher/randomizer.py`, `layer.py`). Nothing of the game or the randomizer is shipped. Options: run the randomizer inside the app (node and its UI in ours, and its updates); a patch per randomizer release (it makes a different disc per seed, so it can't work). The seven presets whose `FrameHook` takes the instruction co-op redirects get co-op's version moved into their trampoline (`layer.relocate`). Design: `design/M20-randomizer.md`.
+
+**D175: One randomized disc at a time, in Game files; each castle keeps its seed** (agent-default, 2026-11-06, #144)
+Settings › Game files › Randomizer chooses the randomized disc and turns it on or off. New castles use it, and keep the seed in `castle.json` (`mod`), and opening one on another disc asks first. HELO carries the seed (`mod`), so partners on different seeds are told both. Options: a disc per castle, picked at New castle (the online joiner boots its game before it knows the host's castle, so it would need a restart mid-connect); a randomizer switch per session. Reversible: the castle already records its seed.
+
+**D176: Placed finds give the item the disc holds, not retail's** (agent-default, 2026-11-06, #144; amends D172)
+The randomizer moves items by rewriting each stage's `PrizeDrops`, and D172's table came from retail, so about 300 of 740 finds would have given the partner the wrong item. The table is tagged (`COOPCLT1`) in `COOP.BIN`, and layering remakes it from the disc's own `PrizeDrops` (`layer.adapt`, positions in `patcher/collectibles.json`). On retail it reproduces the built table exactly (`patcher_layer`). Options: send the item with each find (lost for finds caught up after a reconnect, which carry only flags); read `PrizeDrops` at run time (only the loaded stage's is in RAM).
+

@@ -958,7 +958,62 @@ def _hud(pg):
     return steps
 
 
-SCRIPTS = {"report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+def _randomizer(pg):
+    """design/M20-randomizer.md criterion 5: Settings › Game files › Randomizer. The retail disc is
+    refused (not randomized); a seed's .ppf (made here by the randomizer) makes the randomized
+    co-op disc; a new solo castle plays it, and its game holds the randomizer's items, not retail's."""
+    import subprocess
+    sys.path.insert(0, str(ROOT / "harness"))
+    sys.path.insert(0, str(ROOT / "patcher"))
+    import layer
+    import mods
+    A = pg.CONTROLLER_BUTTON_A
+    tmp = Path(tempfile.mkdtemp(prefix="coop-ux-rando-"))
+    seed_ppf = tmp / "seed.ppf"
+    subprocess.run(["node", "randomize", "-s", "sotn-coop-ux", "-p", "casual", "-q", "-o", str(seed_ppf)],
+                   cwd=mods.source("randomizer"), check=True)
+
+    def pick(path):
+        return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
+
+    def in_ram(d):
+        """The running game's collectibles table (the module's, from COOP.BIN) is the randomized disc's."""
+        r = d.launcher.randomizer()
+        g = d.launcher.view.games[0]
+        n = layer.COLLECTIBLES["n"]
+        from module import symbols
+        raw = g.read_bytes(symbols()["g_Collectibles"], 12 + 2 * n)[12:]
+        want = layer.collectibles(Path(r["cue"]).with_name(Path(r["cue"]).stem + " (Track 1).bin").read_bytes())
+        return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(n)] == want
+
+    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
+                ("screen", "Settings"), *[("key", pg.K_DOWN)] * 9, ("key", pg.K_RETURN), ("screen", "Game files")]
+    return [
+        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *to_files, ("shot", "game-files"),
+        *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Randomizer"), ("shot", "randomizer-empty"),
+        pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
+        ("screen", "That randomized disc won't work"), ("shot", "retail-refused"),
+        ("expect", lambda d: "isn't randomized" in d.subtitle, "the retail disc: it isn't randomized"),
+        ("key", pg.K_RETURN), ("screen", "Randomizer"),
+        pick(seed_ppf), ("key", pg.K_RETURN),
+        ("screen", "Randomizer on"), ("shot", "randomizer-on"),
+        ("expect", lambda d: "sotn-coop-ux" in d.subtitle and "casual" in d.subtitle, "it names the seed and preset"),
+        ("key", pg.K_RETURN), ("screen", "Randomizer"), ("key", pg.K_ESCAPE), ("screen", "Game files"),
+        ("expect", lambda d: d.launcher.randomizer() and "Randomizer" in d.launcher.disc().name, "the games play the randomized disc"),
+        ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE),
+        ("screen", "Home"), ("key", pg.K_RETURN),  # Solo
+        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle
+        ("screen", "Name your castle"), ("pad", 0, A),
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", lambda d: d.heading == "Game"), ("game_frames", 600), ("shot", "randomized-game"),
+        ("expect", in_ram, "the game's collectibles are the randomizer's"),
+        ("expect", lambda d: "sotn-coop-ux" in (d.view.playthrough.info.get("mod") or ""), "the castle keeps its seed"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+
+
+SCRIPTS = {"randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

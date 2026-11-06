@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-UI_FLOWS = ("solo", "couch", "characters", "startup", "test_castles", "boss_rush", "hud", "window", "menus", "report_send", "crash")
+UI_FLOWS = ("randomizer", "solo", "couch", "characters", "startup", "test_castles", "boss_rush", "hud", "window", "menus", "report_send", "crash")
 
 COMMANDS = {}  # name -> (argv, extra environment); "{out}" in argv: the test's out folder
 for _f in sorted((ROOT / "launcher").glob("test_*.py")):

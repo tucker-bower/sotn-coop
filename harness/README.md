@@ -13,6 +13,8 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `emu.py` | One headless, frame-stepped game on SwanStation. |
 | `fixtures_m12.py` | Builds the savestates the coverage tests start from. |
 | `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
+| `editor_hacks.js` | **Manual.** Applies SOTN Editor hacks for `mods.py` (not a supported mod: D174). |
+| `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates, for the mod tests. |
 | `module.py` | Reads the co-op module's symbols and state from RAM. |
 | `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |
 | `power_curve.py` | **Vestigial.** One-off balance measurement across the boss starts; nothing runs it. |
@@ -46,6 +48,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |
+| `session_mods.py` | Co-op on the randomizer: a smoke test and a randomized find per built preset. |
 | `session_m9.py` | Android's way of running a game, online with a PC. |
 | `session_net.py` | **Vestigial.** Measures a session over simulated bad networks; left out of `run.py`. |
 | `session_online.py` | Online PC co-op: connect codes and version checks. |
