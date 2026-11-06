@@ -123,7 +123,7 @@ def mod_image(name, out):
     kind, arg = MODS[name]
     if kind == "randomizer":
         subprocess.run(["node", "randomize", "-i", str(RETAIL), "-o", str(out), "-s", SEED, "-q", *arg],
-                       cwd=source("randomizer"), check=True)
+                       cwd=source("randomizer"), check=True, timeout=900)  # some seeds never settle
     elif kind == "ppf":
         out.write_bytes(ppf.apply(RETAIL.read_bytes(), (source("editor") / arg).read_bytes()))
     elif kind == "hacks":
