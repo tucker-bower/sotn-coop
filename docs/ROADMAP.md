@@ -5,7 +5,7 @@
 Project tracking is in [GitHub issues](https://github.com/tucker-bower/sotn-coop/issues), on the [tracker](https://github.com/users/tucker-bower/projects/1) (D150).
 
 ## Decisions needed
-None right now.
+- **Co-op on top of other mods (#144):** `design/M20-mod-compat.md`. Phase 1, the randomizer and editor patches, then an SOTN Ultimate pilot, both after v1.0? Replace M16 with "Ultimate + co-op"? Should we contact Ultimate's author and sotn-decomp's maintainers?
 
 ## Milestones
 What's been built so far. Each milestone's acceptance criteria are in its design doc, in `design/`.
@@ -34,4 +34,5 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | M17 | 3+ players, online then couch | #49 | `M17-more-players` |
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |
 | M19 | Widescreen | #51 | `M19-widescreen` |
+| M20 | Co-op on top of other mods: the randomizer, editor patches, SOTN Ultimate | #144 | `M20-mod-compat` |
 
