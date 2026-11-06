@@ -834,3 +834,6 @@ Settings › Game files › Randomizer chooses the randomized disc and turns it 
 **D176: Placed finds give the item the disc holds, not retail's** (agent-default, 2026-11-06, #144; amends D172)
 The randomizer moves items by rewriting each stage's `PrizeDrops`, and D172's table came from retail, so about 300 of 740 finds would have given the partner the wrong item. The table is tagged (`COOPCLT1`) in `COOP.BIN`, and layering remakes it from the disc's own `PrizeDrops` (`layer.adapt`, positions in `patcher/collectibles.json`). On retail it reproduces the built table exactly (`patcher_layer`). Options: send the item with each find (lost for finds caught up after a reconnect, which carry only flags); read `PrizeDrops` at run time (only the loaded stage's is in RAM).
 
+**D177: "Relics teach Richter and Maria" off gives them every move from the start** (Tucker, 2026-11-06, #168)
+Off used to mean they learn nothing, so a castle with it off had no slide or rolling attack for Maria. Now off means every move a relic would teach is theirs at once (`COOP_CAN` in `characters/richter-ps1/coop_ric.h`, which Maria shares). Extra jumps keep their own rule.
+

@@ -12,8 +12,9 @@ extern unsigned int g_CoopOptions; // included before game.h: no u32 yet
 #define OPT_NO_RELIC_MOVES 0x02000000
 #define OPT_NO_AIR_JUMPS 0x04000000
 
-// A move Alucard's relic unlocks (M8b §3): the relic is found and switched on.
-#define COOP_CAN(relic) (!(g_CoopOptions & OPT_NO_RELIC_MOVES) && (g_Status.relics[relic] & RELIC_FLAG_ACTIVE))
+// A move Alucard's relic unlocks (M8b §3): the relic is found and switched on. With the castle's
+// "Relics teach Richter and Maria" off, they know every move from the start (#168, Tucker).
+#define COOP_CAN(relic) ((g_CoopOptions & OPT_NO_RELIC_MOVES) || (g_Status.relics[relic] & RELIC_FLAG_ACTIVE))
 struct Entity;
 int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
 #define COOP_SHORTCUT(pad) ((g_CoopOptions & OPT_SHORTCUTS) && (g_Player.padTapped & (pad)))
@@ -23,8 +24,8 @@ int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
 // jump). g_CoopAirJumps: Richter's, how many he's used since the ground; Maria's, bits (src/maria
 // pl_collision.c). Both coop_ric.c / coop_maria.c, refilled on the ground in RicMain / MarMain.
 extern int g_CoopAirJumps;
-// COOP_RETAIL_JUMPS: the castle's rules turned them off: the character's own, as in its game.
-#define COOP_RETAIL_JUMPS (g_CoopOptions & (OPT_NO_RELIC_MOVES | OPT_NO_AIR_JUMPS))
+// COOP_RETAIL_JUMPS: the castle's rule turned them off: the character's own, as in its game.
+#define COOP_RETAIL_JUMPS (g_CoopOptions & OPT_NO_AIR_JUMPS)
 #define COOP_AIR_JUMPS (COOP_RETAIL_JUMPS ? 0 : (COOP_CAN(RELIC_LEAP_STONE) != 0) + (COOP_CAN(RELIC_GRAVITY_BOOTS) != 0))
 #define COOP_AIR_JUMP_LEFT (g_CoopAirJumps < COOP_AIR_JUMPS)
 
