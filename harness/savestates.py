@@ -54,8 +54,10 @@ def skip_prologue(e):
     """Harness-only shortcut: does what SetGameState(Game_PrologueEnd) does when Richter's game over
     ends in ST0 (src/dra/game_handlers.c). Richter is at full HP, so Alucard gets the no-damage
     bonus (+1 STR/CON/INT/LCK, InitStatsAndGear)."""
+    if e.read("g_GameState") == GAME_PLAY and e.read("g_StageId") != STAGE_ST0:
+        return  # the randomizer's no-prologue and random start room: the castle starts where it is
     if e.read("g_GameState") != GAME_PROLOGUE_END:  # already on its way (a mod without the prologue)
-        assert e.read("g_StageId") == STAGE_ST0
+        assert e.read("g_StageId") == STAGE_ST0, f"not in the prologue: {e.snapshot()}"
         e.write("g_GameState", GAME_PROLOGUE_END)
         e.write("g_GameStep", 0)
     wait_until(e, lambda: e.read("g_StageId") == STAGE_NO3 and e.read("g_GameState") == GAME_PLAY,
