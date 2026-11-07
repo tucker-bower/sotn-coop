@@ -185,7 +185,8 @@ def build(name, boot=False):
         info["error"] = f"{type(exc).__name__}: {exc}"
     finally:
         raw.unlink(missing_ok=True)
-    (d / "build.json").write_text(json.dumps(info, indent=1))
+    (d / "build.json.part").write_text(json.dumps(info, indent=1))
+    (d / "build.json.part").replace(d / "build.json")  # whole or not at all, even if WSL stops
     return info
 
 
