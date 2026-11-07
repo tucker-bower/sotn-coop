@@ -9,6 +9,7 @@ Setup, build, generator and release tools.
 | `build_disc.sh` | Builds the co-op disc and enforces its layout rules. |
 | `build_release.sh` | Builds the Windows installer. |
 | `check_disc_layout.py` | Checks every retail file stays at its sector. |
+| `disk_space.py` | Stops a big job when C: (under WSL) has less than 30 GB free. |
 | `check_dra_symbols.py` | Checks every DRA symbol stays at its retail address. |
 | `doctor.py` | Checks this machine has everything needed. |
 | `export_test_castles.py` | Exports the test castles the app ships. |

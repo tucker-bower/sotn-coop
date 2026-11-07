@@ -176,8 +176,8 @@ def finds(mod, suffix="", characters=(0, 0)):
 
 
 for _name in mods.MODS:
-    if mods.built(_name).get("booted"):
-        _cue = mods.disc(_name)
+    _cue = mods.disc(_name)  # only presets whose disc is kept (mods.TESTED, or built with --keep)
+    if mods.built(_name).get("booted") and _cue:
         session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), full=True)(smoke(_name))
         if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
             session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),

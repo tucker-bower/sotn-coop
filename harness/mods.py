@@ -1,8 +1,9 @@
 """Other mods under co-op (design/M20, #144): each mod's disc, made from the retail disc on this
 machine, with co-op layered on top (patcher/layer.py), and its savestates.
 
-    python harness/mods.py [--boot] [name ...]   # build (every mod by default)
+    python harness/mods.py [--boot] [--keep] [name ...]   # build (every mod by default)
     python harness/mods.py --list
+    python harness/mods.py --drop [--all] [name ...]   # delete discs (all but TESTED, or every one)
 
 The mods come from their own repositories, checked out at pinned commits into .env/mods/src:
 the randomizer (node), and SOTN Editor (its PPFs and its Extra Hacks, applied with the editor's
@@ -10,6 +11,10 @@ own code by editor_hacks.js). Everything built is game data: it stays in .env/mo
 --boot also makes each disc's savestates (savestates.py's route), which the mod_* tests need.
 Each mod's build.json says how far it got: layered (with what was merged), booted, and whether the
 entrance savestate fell back to the castle's first room (a mod that changed the entrance).
+
+Disk space (AGENTS.md): each disc is 540 MB. Only the presets the tests use (TESTED) keep theirs;
+any other is checked (layered, booted) and its disc deleted, unless --keep. --drop deletes discs.
+Every build first checks scripts/disk_space.py.
 """
 
 import json
@@ -23,6 +28,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "patcher"))
 sys.path.insert(0, str(HERE.parent / "scripts"))
+import disk_space  # noqa: E402
 import layer  # noqa: E402
 import ppf  # noqa: E402
 import sectors  # noqa: E402
@@ -37,6 +43,9 @@ SOURCES = {
     "editor": ("https://github.com/pddmergilla/sotn-editor", "7bf42de068e07068d439eebf29b9657b255e275f"),
 }
 SEED = "sotn-coop"
+# The presets whose discs the tests use (session_mods.py): kept. Every other preset's disc is
+# deleted once it has been checked (disk space, AGENTS.md).
+TESTED = ("rando-casual", "rando-safe", "rando-boss-rush")
 
 # The randomizer's presets, all of them (package.json). Each is one seed of that preset.
 RANDO_PRESETS = [
@@ -145,9 +154,21 @@ def mod_image(name, out):
             _write_files(out, {p: (dst / p).read_bytes() for p in result["changed"]})
 
 
-def build(name, boot=False):
-    """Makes the mod's co-op disc (and with boot, its savestates). Returns its build.json."""
+def drop(name):
+    """Deletes a mod's disc and savestates (its build.json stays: what was found)."""
+    d = MODS_DIR / name
+    for f in (d / f"mod-{name}.bin", d / f"mod-{name}.cue", d / "mod.bin"):
+        f.unlink(missing_ok=True)
+    states = savestate(d / f"mod-{name}.cue", "x").parent
+    if states.exists():
+        shutil.rmtree(states)
+
+
+def build(name, boot=False, keep=False):
+    """Makes the mod's co-op disc (and with boot, its savestates). Returns its build.json.
+    Unless keep, or the tests use it (TESTED), the disc is deleted afterwards: disk space."""
     from module import COOP_DISC
+    disk_space.check()
     d = MODS_DIR / name
     d.mkdir(parents=True, exist_ok=True)
     info = {"mod": name}
@@ -185,6 +206,8 @@ def build(name, boot=False):
         info["error"] = f"{type(exc).__name__}: {exc}"
     finally:
         raw.unlink(missing_ok=True)
+        if not (keep or name in TESTED):
+            drop(name)
     (d / "build.json.part").write_text(json.dumps(info, indent=1))
     (d / "build.json.part").replace(d / "build.json")  # whole or not at all, even if WSL stops
     return info
@@ -197,8 +220,13 @@ if __name__ == "__main__":
             b = built(n)
             print(f"{n:32} {'booted' if b.get('booted') else 'layered' if b.get('layered') else b.get('error', 'not built')}")
         sys.exit(0)
-    boot = "--boot" in args
+    boot, keep = "--boot" in args, "--keep" in args
     names = [a for a in args if not a.startswith("--")] or list(MODS)
+    if "--drop" in args:
+        for n in names:
+            if n not in TESTED or "--all" in args:
+                drop(n)
+        sys.exit(0)
     for n in names:
-        b = build(n, boot)
+        b = build(n, boot, keep)
         print(n, "->", "booted" if b.get("booted") else "layered" if b.get("layered") else b.get("error"), flush=True)
