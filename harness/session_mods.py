@@ -66,18 +66,34 @@ def shared_room(run, a, b):
                only_a=sorted(set(ea) - set(eb))[:6], only_b=sorted(set(eb) - set(ea))[:6])
 
 
-def progression(run, a, b):
-    """A takes whatever the mod put at the Cube of Zoe's spot; B gets the same find. Then the castle
-    flags and map agree."""
+# The Cube of Zoe's entity in NO3's layout (the randomizer's relics.js): some presets erase it
+# (id 0xFFFF: nothing there, on the mod's own disc), and then the Shield Potion's, in the same room, is used.
+CUBE_ENTITY = ("ST/NO3/NO3.BIN", 0x411A)
+
+
+def find_spot(cue):
+    data, _ = mods.layer._file(mods.bin_path(cue).read_bytes(), CUBE_ENTITY[0])
+    erased = int.from_bytes(data[CUBE_ENTITY[1] + 4:CUBE_ENTITY[1] + 6], "little") == 0xFFFF
+    return ("the Shield Potion's spot (the mod erased the Cube of Zoe's)", SHIELD_POTION) if erased else \
+        ("the Cube of Zoe's spot", CUBE_OF_ZOE)
+
+
+def progression(run, a, b, cue):
+    """A takes whatever the mod put at the Cube of Zoe's spot (or, if the mod erased it, the
+    Shield Potion's); B gets the same find. Then the castle flags and map agree."""
+    where, spot = find_spot(cue)
     s0a, s0b = status(a), status(b)
-    arrive(run, a, NO3, *CUBE_OF_ZOE)
-    run.step(300)
+    take(run, a, spot, 300)
     s1a, s1b = status(a), status(b)
     relics_a = [i for i in range(30) if s1a["relics"][i] != s0a["relics"][i]]
     relics_b = [i for i in range(30) if s1b["relics"][i] != s0b["relics"][i]]
-    found = relics_a or counts(s1a) != counts(s0a) or s1a["hp_max"] != s0a["hp_max"]
-    run.expect(found, "A found something at the Cube of Zoe's spot", relics=relics_a,
-               items=counts(s1a) - counts(s0a))
+    # Whatever the mod put there: a relic, an item, a vessel, a sub-weapon, gold, or gear put on.
+    changed = sorted(k for k in s0a if k not in ("hp", "exp", "level") and s1a[k] != s0a[k])
+    run.expect(bool(changed), f"A found something at {where}", relics=relics_a,
+               items=counts(s1a) - counts(s0a), changed=changed,
+               near=[(hex(e[0]), e[1], e[2]) for e in stage_entities(a).values()
+                     if abs(e[1] - spot[1]) < 96 and abs(e[2] - spot[2]) < 96] if not changed else None,
+               at=(a.snapshot()["world_x"], a.snapshot()["world_y"]))
     run.expect(relics_a == relics_b and [s1b["relics"][i] for i in relics_b] == [s1a["relics"][i] for i in relics_a],
                "B has the same relics, found and active as for A", a=relics_a, b=relics_b)
     run.expect(counts(s1b) - counts(s0b) == counts(s1a) - counts(s0a), "B gained the same items",
@@ -106,13 +122,21 @@ def smoke(mod, suffix="", characters=(0, 0)):
         path = Path(tempfile.mkdtemp(prefix="coop-mod-")) / "session.coop"
         s.session_file, s.joint = path, JointSave([MailboxProxy(a), MailboxProxy(b)], path)
         as_characters(run, characters)
+        def free(g):
+            p = g.mailbox("self_presence")
+            return p.flags & IN_PLAY and not p.flags & BUSY
+        waited = 30
         run.step(30)
+        while waited < 600 and not (free(a) and free(b)):  # a preset may start with a message up
+            run.step(10)
+            waited += 10
         for g in (a, b):
             p = g.mailbox("self_presence")
-            run.expect(p.flags & IN_PLAY and not p.flags & BUSY, f"game {g.name} is in play on the mod's disc")
+            run.expect(free(g), f"game {g.name} is in play on the mod's disc", frames=waited,
+                       in_play=bool(p.flags & IN_PLAY), busy=bool(p.flags & BUSY), snapshot=g.snapshot())
         link_and_presence(run, a, b)
         shared_room(run, a, b)
-        progression(run, a, b)
+        progression(run, a, b, mods.disc(mod) if mod != "none" else COOP_DISC)
         joint_save(run, s, a, b, path)
         played = (a.mailbox("self_presence").character, b.mailbox("self_presence").character)
         run.expect(played == tuple(characters), "each game plays its character", played=played, want=characters)
