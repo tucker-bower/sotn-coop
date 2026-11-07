@@ -1,1 +1,2 @@
 libretro.py
+pygame-ce==2.5.8  # the launcher and its UI tests
