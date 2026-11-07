@@ -67,7 +67,8 @@ RANDO_PRESETS = [
 # The randomizer's extras that patch code (its --help), all on at once, over the safe preset.
 RANDO_EXTRAS = ["--turkey", "--colorrando", "--magicmax", "--antifreeze", "--mypurse", "--iws", "--fastwarp",
                 "--noprologue", "--itemNameRandoMode"]
-# SOTN Editor's Extra Hacks that it offers on a vanilla disc (its extra-hacks-catalog.js).
+# SOTN Editor's Extra Hacks that it offers on a vanilla disc: 28 of its 62 (extra-hacks-catalog.js). The other
+# 34 need an Alternate Scarlet Symphony image and aren't tested yet (#181).
 EDITOR_HACKS = [
     "minimap", "fast-warp", "damage-colors", "mist-gas-swap", "aggressive-enemy", "karasuman", "slogra",
     "dopplegangers", "succubus", "richter-no-flinch", "richter-ai", "richter-save", "quick-items", "mp-items",

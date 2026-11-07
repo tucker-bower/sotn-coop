@@ -33,7 +33,10 @@ def main():
     check(len(bits) == len(set(bits)) and all(b and not b & (b - 1) for b in bits), "each rule has a bit of its own")
     for t in rules.TOGGLES:
         if t[4]:
-            check(rules.encode({t[0]: False})[0] == t[4], f"{t[0]} off sets its bit")
+            check(rules.encode(dict(rules.clean({}), **{t[0]: False}))[0] == t[4], f"{t[0]} off sets its bit")
+    old = rules.clean({"growth": False})
+    check(not old["growth"] and not old["alucard_stats"], "a castle from before Alucard's stats had its own rule: growth off was both")
+    check(rules.clean({"growth": False, "alucard_stats": True})["alucard_stats"], "levels off, Alucard's stats on: each is its own")
     check(rules.encode({"exp_pct": 200, "dealt_pct": 50, "taken_pct": 75, "enemy_hp_pct": 100, "enemy_hp_solo_pct": 300}) ==
           (0, 200, 50, 75, 100, 300), "each slider reaches the game")
     check(rules.clean({"exp_pct": 100000, "aggro": -5})["exp_pct"] == 400 and rules.clean({"aggro": -5})["aggro"] == 0,

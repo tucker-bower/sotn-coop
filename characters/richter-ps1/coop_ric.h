@@ -11,6 +11,7 @@ extern unsigned int g_CoopOptions; // included before game.h: no u32 yet
 #define OPT_NO_GROWTH 0x01000000
 #define OPT_NO_RELIC_MOVES 0x02000000
 #define OPT_NO_AIR_JUMPS 0x04000000
+#define OPT_NO_ALUCARD_STATS 0x08000000
 
 // A move Alucard's relic unlocks (M8b §3): the relic is found and switched on. With the castle's
 // "Relics teach Richter and Maria" off, they know every move from the start (#168, Tucker).

@@ -837,3 +837,6 @@ The randomizer moves items by rewriting each stage's `PrizeDrops`, and D172's ta
 **D177: "Relics teach Richter and Maria" off gives them every move from the start** (Tucker, 2026-11-06, #168)
 Off used to mean they learn nothing, so a castle with it off had no slide or rolling attack for Maria. Now off means every move a relic would teach is theirs at once (`COOP_CAN` in `characters/richter-ps1/coop_ric.h`, which Maria shares). Extra jumps keep their own rule.
 
+
+**D178: "Use Alucard's stats" is its own rule, apart from levelling up** (Tucker, 2026-11-07: an optional launcher rule, and every character-balance change optional and modular; the split: agent-default, #160)
+"Richter and Maria grow" was one switch for levels, STR and INT in their attacks, and poison. It's now two: **level up** (`OPT_NO_GROWTH`: XP gives levels) and **use Alucard's stats** (`OPT_NO_ALUCARD_STATS`: STR and INT in their attacks, poison, and Alucard's damage rules on hits they take: weakness, resistance, immunity, then defense, at least 1, in `progress.c`'s `TheirDefense`). Both default on. A castle saved before the split with growth off gets both off. Options: defense under the growth switch (Tucker: no, its own rule); a switch per stat (more switches than anyone will use; split later if asked).

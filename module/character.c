@@ -268,7 +268,7 @@ void CharacterCurePoison(void) {
 }
 
 static void Poison(void) {
-    if (CharacterLoaded() == CHAR_ALUCARD || g_GameState != Game_Play || RULE_OFF(OPT_NO_GROWTH) ||
+    if (CharacterLoaded() == CHAR_ALUCARD || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
         !g_Status.hp) {
         if (s_Poison) {
             CharacterCurePoison();

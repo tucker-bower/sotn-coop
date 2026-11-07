@@ -40,7 +40,7 @@ void CoopMarPartnerInit(u16 initParam) {
 #endif
 
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
-    if (g_CoopOptions & OPT_NO_GROWTH) {
+    if (g_CoopOptions & OPT_NO_ALUCARD_STATS) {
         return attack; // the castle's rules: her attacks as in her own game
     }
     if (g_Status.D_80097BF8 & 1) {

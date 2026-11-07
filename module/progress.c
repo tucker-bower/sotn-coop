@@ -163,21 +163,61 @@ static u16 DealDamageWrap(Entity* enemy, Entity* attacker) {
     return r;
 }
 
+// Richter's and Maria's own damage code takes a hit's points as they come (DRA's CalcPlayerDamage):
+// no defense, no resistances. With the castle's "Alucard's stats" rule on, his gear and stats are theirs
+// too, so their hits go through his rules first (src/dra/5D5BC.c, HandleDamage): weakness
+// doubles, resistance halves, immunity stops it, then defense comes off, leaving at least 1
+// (issue 160). Hits that take a share of max HP (kind 16 and up) stay as they are.
+void make_all(void); // DRA (src/dra/menu.c): gear's stat bonuses, attack and defense, as HandleDamage does
+
+static s32 TheirDefense(s32 hit) {
+    u16 effects = PLAYER.hitParams & ~0x1F;
+
+    make_all(); // nothing else updates their defense: levels and gear change it
+    if ((PLAYER.hitParams & 0x1F) >= DAMAGEKIND_16) {
+        return hit;
+    }
+    if (g_Status.elementsWeakTo & effects) {
+        hit *= 2;
+    }
+    if (g_Status.elementsResist & effects) {
+        hit /= 2;
+    }
+    if (g_Status.elementsImmune & effects) {
+        return 0;
+    }
+    hit -= g_Status.defenseEquip;
+    return hit < 1 ? 1 : hit;
+}
+
 // Damage to this game's player. Hit detection left it in PLAYER.hitPoints last frame (PvP this
-// frame), and the player's update takes it in this frame's UpdateGame: scaled here, every
-// character's own damage code does the rest. Alucard's code then takes off his defense, so the
-// rule scales what's left after it: 50% is half of what he'd lose.
+// frame), and the player's update takes it in this frame's UpdateGame: each hit is changed here
+// once. Alucard's code then takes off his defense, so the castle's damage rule scales what's left
+// after it: 50% is half of what he'd lose. Richter's and Maria's defense is applied here first.
 void ProgressDamageTaken(void) {
-    static s32 s_Scaled = -1; // the hit already scaled, if the player's update hasn't taken it
+    static s32 s_Scaled = -1; // the hit already changed, if the player's update hasn't taken it
     s32 pct = RULE_PCT(takenPct, 100);
     s32 hit = PLAYER.hitPoints;
-    s32 def = g_CoopCharacter == PLAYER_ALUCARD ? g_Status.defenseEquip : 0;
+    s32 def = 0;
 
     if (!PLAYER.hitParams || !hit) {
         s_Scaled = -1;
-    } else if (pct != 100 && g_GameState == Game_Play && hit != s_Scaled && hit > def) {
+        return;
+    }
+    if (g_GameState != Game_Play || hit == s_Scaled) {
+        return;
+    }
+    if (g_CoopCharacter == PLAYER_ALUCARD) {
+        def = g_Status.defenseEquip;
+    } else if (!RULE_OFF(OPT_NO_ALUCARD_STATS)) {
+        hit = TheirDefense(hit);
+    }
+    if (pct != 100 && hit > def) {
         hit = def + (hit - def) * pct / 100;
-        s_Scaled = PLAYER.hitPoints = hit > def ? hit : def + 1;
+        hit = hit > def ? hit : def + 1;
+    }
+    if (hit != PLAYER.hitPoints) {
+        s_Scaled = PLAYER.hitPoints = hit;
     }
 }
 
