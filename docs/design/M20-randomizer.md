@@ -27,7 +27,7 @@ Measured on every preset at sotnrando `3522dc6` (`harness/mods.py`):
 5. **The launcher makes a randomized castle** from a randomized `.cue` and from a `.ppf`, and refuses a disc it can't layer, with a message, never a crash (`ux_rando_castle`).
 6. **No retail or randomizer data is shipped:** `collectibles.json` holds offsets only, and D90's check still passes.
 7. Then **Richter and Maria**: the same smoke slice per pairing, in `--full`.
-8. **Every preset plays:** `mods.py --test` passes each preset's smoke and finds tests, one disc at a time (a disc is 540 MB, so only casual, safe and boss-rush keep theirs).
+8. **Every preset plays:** `mods.py --test` passes each preset's smoke and finds tests, one disc at a time (a disc is 540 MB, so only casual, safe, boss-rush and lycanthrope-spr26te keep theirs). On a start-room preset, a player who walks in reaches the seed's start room and the partner can join them there (`rando_start_room_*`, #178).
 
 ## Risks
 - **A new randomizer version** can add code patches that overlap ours. `mods.py` rebuilds every preset at a pinned commit. Moving the pin is a deliberate step that runs the layer test, and the launcher names the conflict instead of making a broken disc.
