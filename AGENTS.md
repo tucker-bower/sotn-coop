@@ -52,6 +52,7 @@ The game is mostly built, so the work is now feature requests and bug fixes, and
 - **Never end a session with unsaved work.** At every natural checkpoint, and before you could run out of usage, update the docs, then commit and push, even if the work is unfinished. Mark unfinished work as such.
 - **Keep the repo clean of personal setup.** Local paths, device workflow and playtest sheets go in `LOCAL.md` and `local/`, which are git-ignored.
 - **Never commit game data:** disc images, extracted files, ROM-derived assets, or savestates containing game RAM. Check `git status` before every commit.
+- **Never fill the disk.** Under WSL, Linux's disk is a file on C: that grows and never shrinks, so `df` inside WSL shows plenty free while C: fills, and a full C: stops WSL dead. Before anything that writes gigabytes, run `scripts/disk_space.py` (30 GB free on C:, or stop). Each disc image is 540 MB: keep only the ones tests use, delete the rest as you go (`harness/mods.py` does), and never keep one per preset or per run. Run at most one or two disc-image jobs at once, and never put disc images in `/tmp` (it's RAM).
 - **Keep each game deterministic.** Timing-dependent behavior belongs in the host, never in the game.
 - **Emulator calls go through the one thin adapter.**
 - **DRA hooks stay size-neutral, and no retail file moves on the disc.** `build_disc.sh` enforces both.

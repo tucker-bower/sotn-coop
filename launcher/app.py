@@ -548,8 +548,72 @@ class Launcher:
         os.environ["COOP_BIOS"] = str(bios or self.bios())
 
     def disc(self):
+        """The disc the games play: the randomized one while the randomizer is on, else the co-op disc."""
+        r = self.randomizer()
+        if r:
+            return Path(r["cue"])
         d = self.settings.get("disc")
         return Path(d) if d and Path(d).exists() else None
+
+    # --- the randomizer (design/M20-randomizer.md)
+
+    def randomizer(self):
+        """The randomized co-op disc while it's on and made: {"cue", "source", "info", "crc", "on"}."""
+        r = self.settings.get("randomizer") or {}
+        return r if r.get("on") and r.get("cue") and Path(r["cue"]).exists() else None
+
+    def mod_line(self):
+        """The seed in words (link/host.py set_mod), or None for the plain co-op disc."""
+        import randomizer
+        r = self.randomizer()
+        return randomizer.describe(r["info"]) if r else None
+
+    def make_randomized(self, source, quiet=False):
+        """Layers co-op onto the player's randomized disc (or a seed's .ppf). Returns True if made;
+        says why not, unless quiet."""
+        import patcher
+        import randomizer
+        retail, coop = self.settings.get("disc_source"), self.settings.get("disc")
+        if not retail or not coop:
+            return False
+        try:
+            cue, info, crc = self.ui.wait_for(
+                "Making the randomized co-op disc", f"From {Path(source).name}\nThis takes about a minute.",
+                lambda progress: randomizer.make(retail, source, coop, Path(coop).parent))
+        except (patcher.DiscError, OSError) as e:
+            log.warning("randomizer disc from %s: %s", source, e)
+            if not quiet:
+                self.ui.message("That randomized disc won't work", str(e))
+            return False
+        self.settings["randomizer"] = {"cue": str(cue), "source": str(source), "info": info, "crc": crc,
+                                       "on": True, "patch": self.coop_patch_crc()}
+        save_settings(self.settings)
+        return True
+
+    def randomizer_menu(self):
+        """Settings › Game files › Randomizer: choose a randomized disc, or turn it off and on."""
+        import randomizer
+        ui = self.ui
+        while True:
+            r = self.settings.get("randomizer") or {}
+            made = r.get("cue") and Path(r["cue"]).exists()
+            rows = [("Choose a randomized disc", "Randomize your own disc on sotn.io, then choose the .cue it made "
+                     "(or the seed's .ppf). Your partner needs the same seed and preset.")]
+            if made:
+                rows.append((f"Randomizer: {'On' if r.get('on') else 'Off'}", randomizer.describe(r.get("info")) +
+                             ("   (new castles are randomized)" if r.get("on") else "   (new castles are the original game)")))
+            k = ui.menu("Randomizer", rows, "Co-op on the randomizer: both players play the same randomized castle.")
+            if k is None:
+                return
+            if k == 0:
+                path = pick_file("Your randomized disc (.cue) or the seed's .ppf",
+                                 [("Randomized disc or PPF", "*.cue *.bin *.ppf"), ("All", "*.*")], ui)
+                if path and self.make_randomized(path):
+                    ui.message("Randomizer on", randomizer.describe(self.settings["randomizer"]["info"]) +
+                               "\nNew castles are randomized. Your partner needs this seed too.")
+            elif k == 1:
+                r["on"] = not r.get("on")
+                save_settings(self.settings)
 
     # --- characters (design/M8)
 
@@ -658,7 +722,7 @@ class Launcher:
     def game_files(self):
         ui = self.ui
         while True:
-            disc, iso = self.disc(), self.settings.get("dxc_iso")
+            disc, iso = self.settings.get("disc") and Path(self.settings["disc"]), self.settings.get("dxc_iso")
             bios = "OpenBIOS (free, built in). Your own BIOS works too." if self.bios() == BUNDLED_BIOS \
                 else f"Your BIOS: {self.bios().name}"
             k = ui.menu("Game files", [
@@ -667,7 +731,9 @@ class Launcher:
                 (f"Dracula X Chronicles (PSP, USA):  optional, {'Maria added' if self.maria_ready() else 'adds Maria'}",
                  (Path(iso).name + "   (choose again)") if iso and self.maria_ready()
                  else "Adds Maria as a playable character. Choose your .iso"),
-                ("PlayStation BIOS:  included", bios + "   (change)")],
+                ("PlayStation BIOS:  included", bios + "   (change)"),
+                (f"Randomizer:  optional, {'on' if self.randomizer() else 'off'}",
+                 (self.mod_line() + "   (change)") if self.randomizer() else "Co-op on a disc you randomized on sotn.io")],
                 "Only the Symphony of the Night disc is needed to play.")
             if k is None:
                 return
@@ -679,11 +745,18 @@ class Launcher:
                 self.add_dxc()
             elif k == 2:
                 self.choose_bios()
+            elif k == 3:
+                self.randomizer_menu()
 
     def starts_dir(self):
         return paths.debug_starts_dir() / f"{self.disc().stem}@{self.bios().stem}"
 
     def patch_crc(self):
+        """The CRC partners compare (HELO): the randomized disc's while the randomizer is on."""
+        r = self.randomizer()
+        return r["crc"] if r else self.coop_patch_crc()
+
+    def coop_patch_crc(self):
         import json
         manifest = APP / "patcher" / "manifest.json"
         if manifest.exists():
@@ -699,13 +772,13 @@ class Launcher:
         """After an update, remakes the co-op disc from the player's own disc for this version's
         patch, once. An old one would play a different game from the partner's, who'd be told
         it's the same (HELO carries this version's patch CRC)."""
-        want = self.patch_crc()
-        if not self.disc() or want is None or self.settings.get("disc_patch") == want:
+        want = self.coop_patch_crc()
+        if not self.settings.get("disc") or want is None or self.settings.get("disc_patch") == want:
             return
         import patcher
         src = self.settings.get("disc_source")
         if not src:  # made before 0.9.0: the player's disc is next to it, named as it was
-            coop = self.disc()
+            coop = Path(self.settings["disc"])
             stem = coop.name.replace(" (Co-op).cue", "")
             src = next((p for p in (coop.with_name(stem + ".cue"), coop.with_name(stem + ".bin"),
                                     coop.with_name(stem + " (Track 1).bin")) if p.exists()), coop.with_name(stem + ".cue"))
@@ -723,6 +796,14 @@ class Launcher:
             return
         self.settings.update(disc=str(cue), disc_source=str(src), disc_patch=want)
         save_settings(self.settings)
+        r = self.settings.get("randomizer") or {}
+        if r.get("source") and Path(r["source"]).exists():  # its co-op part changed too: remade, quietly
+            on = r.get("on")
+            if self.make_randomized(r["source"], quiet=True):
+                self.settings["randomizer"]["on"] = on
+            else:
+                self.settings["randomizer"] = dict(r, on=False, cue=None)
+            save_settings(self.settings)
 
     def wizard(self):
         ui = self.ui
@@ -764,7 +845,7 @@ class Launcher:
                     shutil.rmtree(paths.data_dir() / "discs", ignore_errors=True)
                 ui.message("That disc won't work", str(e))
                 continue
-            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.patch_crc())
+            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.coop_patch_crc())
             save_settings(self.settings)
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
@@ -1082,6 +1163,8 @@ class Launcher:
         if not picked or self.lobby(1, subtitle="Playing solo.") is None:
             return
         castle, fresh = picked
+        if not self.castle_on_disc(castle, fresh):
+            return
         castle.played_here()
         try:
             with self.online_session(None, castle, rank=0) as s:
@@ -1192,7 +1275,26 @@ class Launcher:
             self.ui.flip()
         return False
 
+    def castle_on_disc(self, castle, fresh):
+        """A castle keeps the disc it was made on: the randomizer's seed, or the original game
+        (castle.json "mod"). Playing it on another asks first: its finds and rooms differ."""
+        mine = self.mod_line()
+        if fresh:
+            castle.info["mod"] = mine
+            castle.save_info()
+            return True
+        theirs = castle.info.get("mod")
+        if theirs == mine:
+            return True
+        return self.ui.confirm("This castle is on another disc",
+                               f"{castle.name} was made on {('randomizer ' + theirs) if theirs else 'the original game'}, "
+                               f"and you're set to {('randomizer ' + mine) if mine else 'the original game'}\n"
+                               "(Settings › Game files › Randomizer). Its items and rooms won't match. Play it anyway?",
+                               yes="Play anyway", no="Back")
+
     def play(self, castle, fresh=False):
+        if not self.castle_on_disc(castle, fresh):
+            return
         castle.played_here()
         self.rules_at_start(castle, fresh)
         try:
@@ -1298,7 +1400,7 @@ class Launcher:
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True, joint=True,
             session_file=playthrough.joint_save if playthrough else None,
-            patch_crc=self.patch_crc(), blob=self.blob(),
+            patch_crc=self.patch_crc(), blob=self.blob(), mod=self.mod_line(),
             # tests: a fixed port (Android emulators: design/M9); else the usual one, which the LAN
             # broadcast finds (link/connect.py), or any free one
             port=int(os.environ["COOP_PORT"]) if os.environ.get("COOP_PORT") else (GAME_PORT, 0),
@@ -1326,6 +1428,8 @@ class Launcher:
         return waiting, False
 
     def host_online(self, castle, fresh=False):
+        if not self.castle_on_disc(castle, fresh):
+            return
         castle.played_here()
         self.rules_at_start(castle, fresh)
         try:
@@ -1394,6 +1498,8 @@ class Launcher:
                 castle = Castle.receive(meta) if meta else Castle.new(received=True)
                 rules = castle_rules.clean(theirs.get("rules"))  # the host's castle, the host's rules (D162)
                 castle.set_rules(rules)
+                castle.info["mod"] = self.mod_line()  # the host's too: HELO refused any other (link/host.py)
+                castle.save_info()
                 s.joint.path = castle.joint_save
                 s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
                 self.load_cards(s, castle)

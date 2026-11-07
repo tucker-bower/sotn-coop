@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-UI_FLOWS = ("solo", "couch", "characters", "startup", "test_castles", "boss_rush", "hud", "window", "menus", "report_send", "crash")
+UI_FLOWS = ("randomizer", "solo", "couch", "characters", "startup", "test_castles", "boss_rush", "hud", "window", "menus", "report_send", "crash")
 
 COMMANDS = {}  # name -> (argv, extra environment); "{out}" in argv: the test's out folder
 for _f in sorted((ROOT / "launcher").glob("test_*.py")):
@@ -20,6 +20,7 @@ for _f in sorted((ROOT / "launcher").glob("test_*.py")):
 for _f in sorted((ROOT / "link").glob("test_*.py")):  # the NAT matrix and router port mapping, no games
     COMMANDS["link_" + _f.stem[len("test_"):]] = ([str(_f)], {})
 COMMANDS["patcher_round_trip"] = ([str(ROOT / "patcher" / "test_patcher.py")], {})
+COMMANDS["patcher_layer"] = ([str(ROOT / "patcher" / "test_layer.py")], {})
 for _flow in UI_FLOWS:
     COMMANDS["ui_" + _flow] = ([str(ROOT / "launcher" / "uxdriver.py"), _flow, "--out", "{out}"], {})
 COMMANDS["ui_online"] = ([str(ROOT / "launcher" / "uxdriver.py"), "online", "--out", "{out}"], {})

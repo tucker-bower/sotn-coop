@@ -5,6 +5,7 @@
 set -eo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PY=${PY:-$ROOT/.env/src/sotn-decomp/.venv/bin/python}
+python3 "$ROOT/scripts/disk_space.py"  # stop before the disk fills (AGENTS.md)
 cd "$ROOT" && scripts/build_disc.sh 2>&1 | tail -1
 make -C characters/maria-dx >/dev/null 2>&1 && $PY characters/maria-dx/make_patches.py .env/out/maria 2>&1 | tail -1
 cd "$ROOT/harness"

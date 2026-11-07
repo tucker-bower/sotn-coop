@@ -81,7 +81,8 @@ def safe(text):
 class Castle:
     """info (castle.json): id, created, name (typed at SOTN's name entry; None until the first
     save), played, saves, stages, received (a copy from a host, not played here since), rules
-    (launcher/rules.py: none yet means the defaults)."""
+    (launcher/rules.py: none yet means the defaults), mod (the randomizer seed it's played on, in
+    words; none means the original game: design/M20-randomizer.md)."""
 
     def __init__(self, folder):
         self.dir = Path(folder)
@@ -236,7 +237,8 @@ class Castle:
 
     def summary(self):
         """For the castle list: whose (a copy of a partner's), where, level, last played."""
-        bits = ["your partner's" if self.info.get("joined") or self.info.get("received") else None, self.info.get("where"), f"Lv {self.info['level']}" if self.info.get("level") else None,
+        bits = ["your partner's" if self.info.get("joined") or self.info.get("received") else None,
+                "randomizer " + self.info["mod"] if self.info.get("mod") else None, self.info.get("where"), f"Lv {self.info['level']}" if self.info.get("level") else None,
                 "played " + time.strftime("%b %d, %H:%M", time.localtime(self.info.get("played", 0)))]
         return "  ·  ".join(b for b in bits if b)
 

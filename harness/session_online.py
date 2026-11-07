@@ -129,6 +129,38 @@ def online_version_mismatch(run):
 
 
 @session_scenario()
+def online_randomizer_seed_mismatch(run):
+    """design/M20-randomizer.md criterion 4: partners on different randomizer seeds, or one
+    randomized and one not, are refused, and the message names the seeds. Same seed: connected."""
+    a_seed, b_seed = "seed abc · casual (26.07.13)", "seed xyz · casual (26.07.13)"
+    with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1", patch_crc=0x11111111,
+                       mod=a_seed) as s0, \
+         OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1", patch_crc=0x22222222,
+                       mod=b_seed) as s1:
+        s0.connect(("127.0.0.1", s1.port))
+        s1.connect(("127.0.0.1", s0.port))
+        step_pair(s0, s1, 70)
+        why0, why1 = s0.local.host("status")["mismatch"], s1.local.host("status")["mismatch"]
+        run.expect(why0 and "seed xyz" in why0 and "seed abc" in why0, "different seeds: refused, both named", why=why0)
+        run.expect(why1 and "seed abc" in why1, "the partner hears it too", why=why1)
+        s1.local.host("set_mod", None)
+        step_pair(s0, s1, 70)
+        why0, why1 = s0.local.host("status")["mismatch"], s1.local.host("status")["mismatch"]
+        run.expect(why0 and "your partner doesn't" in why0 and "seed abc" in why0,
+                   "randomized and not: the randomized side is told to share its seed", why=why0)
+        run.expect(why1 and "plays a randomized castle: seed abc" in why1,
+                   "the other side is told the seed to randomize with", why=why1)
+        s1.local.host("set_mod", a_seed)
+        s1.local.host("set_hello", patch_crc=0x11111111)
+        step_pair(s0, s1, 70)
+        st0, st1 = s0.local.host("status"), s1.local.host("status")
+        run.expect(st0["mismatch"] is None and st1["mismatch"] is None, "same seed: connected")
+        step_pair(s0, s1, 70)
+        ages = s0.local.mailbox("partner_age"), s1.local.mailbox("partner_age")
+        run.expect(ages == (0, 0), "and presence relays", ages=ages)
+
+
+@session_scenario()
 def online_mtu_and_loss(run):
     """M7 criterion 3: with a strict 1200-byte UDP MTU limit (any packet > 1200 bytes is dropped)
     and 2% random packet loss, shared rooms, compressed chunked snapshots, enemy kills, and

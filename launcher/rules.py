@@ -37,7 +37,7 @@ TOGGLES = (
     ("near_target", "Enemies pick the nearer player", "Off: in a shared room, enemies only aim at its first player",
      True, RULE_NO_NEAR_TARGET),
     ("growth", "Richter and Maria grow", "They level up, and STR and INT add to their attacks", True, OPT_NO_GROWTH),
-    ("relic_moves", "Relics teach Richter and Maria", "Off: they don't learn moves. Parts of the castle may be out of reach",
+    ("relic_moves", "Relics teach Richter and Maria", "Off: they know every move from the start",
      True, OPT_NO_RELIC_MOVES),
     ("air_jumps", "Extra jumps", "Richter's and Maria's jumps from the Leap Stone and Gravity Boots. "
      "Off: parts of the castle may be out of reach", True, OPT_NO_AIR_JUMPS),
