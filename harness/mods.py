@@ -47,6 +47,10 @@ SEED = "sotn-coop"
 # The presets whose discs the tests use (session_mods.py): kept. Every other preset's disc is
 # deleted once it has been checked (disk space, AGENTS.md).
 TESTED = ("rando-casual", "rando-safe", "rando-boss-rush")
+# Presets the randomizer's own command line can't make at the pinned commit, with any seed: not
+# co-op's (#144). gem-farmer and bingo crash in randomize_relics.js (target.min, no complexity
+# goal); glitch and glitch-legacy search for over 15 minutes. Left out of every-preset runs.
+RANDO_CANT_MAKE = ("rando-gem-farmer", "rando-bingo", "rando-glitch", "rando-glitch-legacy")
 
 # The randomizer's presets, all of them (package.json). Each is one seed of that preset.
 RANDO_PRESETS = [
@@ -245,7 +249,7 @@ if __name__ == "__main__":
             print(f"{n:32} {state}")
         sys.exit(0)
     boot, keep = "--boot" in args, "--keep" in args
-    names = [a for a in args if not a.startswith("--")] or list(MODS)
+    names = [a for a in args if not a.startswith("--")] or [n for n in MODS if n not in RANDO_CANT_MAKE]
     if "--test" in args:
         for n in names:
             b = test(n)
