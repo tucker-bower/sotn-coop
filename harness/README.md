@@ -14,7 +14,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `fixtures_m12.py` | Builds the savestates the coverage tests start from. |
 | `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
 | `editor_hacks.js` | **Manual.** Applies SOTN Editor hacks for `mods.py` (not a supported mod: D174). |
-| `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates, for the mod tests. |
+| `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates. Keeps only the tested presets' discs (540 MB each); `--test` checks every preset one disc at a time. |
 | `module.py` | Reads the co-op module's symbols and state from RAM. |
 | `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |
 | `power_curve.py` | **Vestigial.** One-off balance measurement across the boss starts; nothing runs it. |
