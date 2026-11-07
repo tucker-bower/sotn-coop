@@ -4,6 +4,7 @@ machine, with co-op layered on top (patcher/layer.py), and its savestates.
     python harness/mods.py [--boot] [--keep] [name ...]   # build (every mod by default)
     python harness/mods.py --list
     python harness/mods.py --drop [--all] [name ...]   # delete discs (all but TESTED, or every one)
+    python harness/mods.py --test [name ...]   # one at a time: build, boot, its tests, record, delete
 
 The mods come from their own repositories, checked out at pinned commits into .env/mods/src:
 the randomizer (node), and SOTN Editor (its PPFs and its Extra Hacks, applied with the editor's
@@ -164,6 +165,27 @@ def drop(name):
         shutil.rmtree(states)
 
 
+def test(name):
+    """The whole check of one mod, holding one disc at a time: build and boot it, run its smoke test
+    (and a randomizer preset's finds test) through run.py, record the result in build.json, then
+    delete the disc unless the tests keep it (TESTED). For every preset: --test with no names."""
+    info = build(name, boot=True, keep=True)
+    if info.get("booted"):
+        tests = [f"mod_{name.replace('-', '_')}"]
+        if name.startswith("rando-"):
+            tests.append(f"rando_finds_{name[len('rando-'):].replace('-', '_')}")
+        r = subprocess.run([sys.executable, str(HERE / "run.py"), *tests], capture_output=True, text=True)
+        info["tests"] = {t: f"PASS {t}:" in r.stdout for t in tests}
+        info["tested"] = r.returncode == 0
+        tail = r.stdout.strip().splitlines()[-1:] or [""]
+        info["test_summary"] = tail[0][:200]
+        (MODS_DIR / name / "build.json.part").write_text(json.dumps(info, indent=1))
+        (MODS_DIR / name / "build.json.part").replace(MODS_DIR / name / "build.json")
+    if name not in TESTED:
+        drop(name)
+    return info
+
+
 def build(name, boot=False, keep=False):
     """Makes the mod's co-op disc (and with boot, its savestates). Returns its build.json.
     Unless keep, or the tests use it (TESTED), the disc is deleted afterwards: disk space."""
@@ -218,10 +240,18 @@ if __name__ == "__main__":
     if "--list" in args:
         for n in MODS:
             b = built(n)
-            print(f"{n:32} {'booted' if b.get('booted') else 'layered' if b.get('layered') else b.get('error', 'not built')}")
+            state = ("tests pass" if b.get("tested") else "tests FAIL") if "tested" in b else \
+                "booted" if b.get("booted") else "layered" if b.get("layered") else b.get("error", "not built")
+            print(f"{n:32} {state}")
         sys.exit(0)
     boot, keep = "--boot" in args, "--keep" in args
     names = [a for a in args if not a.startswith("--")] or list(MODS)
+    if "--test" in args:
+        for n in names:
+            b = test(n)
+            print(n, "->", ("tests pass" if b.get("tested") else f"tests FAIL {b.get('tests')}")
+                  if b.get("booted") else b.get("error"), flush=True)
+        sys.exit(0)
     if "--drop" in args:
         for n in names:
             if n not in TESTED or "--all" in args:
