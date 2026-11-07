@@ -10,6 +10,7 @@ Nothing here assumes the mod keeps retail's items, rooms or enemies: the checks 
 games with each other, not with retail.
 """
 
+import struct
 import tempfile
 from pathlib import Path
 
@@ -44,11 +45,16 @@ def as_characters(run, characters):
             run.expect(reload_game(run, g), f"{g.name} loads as {NAMES[c]}")
 
 
-def shared_room(run, a, b):
+def shared_room(run, a, b, replaced=()):
     """A walks into the entrance hall (session_shared.into_hall), then B arrives next to A: A is the
     room's authority, B the guest, with A's entities. After a reload (Richter, Maria) A starts
-    below the way to the hall, so both arrive there (session_m8.mixed_pair)."""
-    if a.mailbox("self_presence").character == CHAR_ALUCARD:
+    below the way to the hall, so both arrive there (session_m8.mixed_pair). If the mod replaced
+    the way in (replaced_rooms), B arrives next to A where A starts."""
+    if replaced:
+        p = a.mailbox("self_presence")
+        arrive(run, b, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
+        run.step(30)
+    elif a.mailbox("self_presence").character == CHAR_ALUCARD:
         into_hall(run)
     else:
         from session_m8 import HALL_ROOM_ID
@@ -83,6 +89,22 @@ def find_spot(cue, relics):
     if eid == E_RELIC_ORB and relic < len(relics) and relics[relic]:
         return f"the Shield Potion's spot (A starts with relic {relic}, the one at the Cube of Zoe's)", SHIELD_POTION
     return "the Cube of Zoe's spot", CUBE_OF_ZOE
+
+
+NO3_ROOMS = ("ST/NO3/NO3.BIN", 0x3CC4, 32)  # NO3's room table (RoomHeader: left, top, right, bottom, load)
+
+
+def replaced_rooms(cue):
+    """NO3 room ids whose RoomHeader the mod changed. The randomizer's start-room presets
+    (startRoomRandoMode, startRoomRando2ndMode) turn the entrance's rooms 16 and 24 into a one-cell
+    "CD room" and a teleport into the random start room (#178): nobody gets into them, so the tests
+    don't send anyone there. Co-op's own teleport only goes to a room the partner is in."""
+    if cue is None:
+        return set()
+    path, at, n = NO3_ROOMS
+    mod, _ = mods.layer._file(mods.bin_path(cue).read_bytes(), path)
+    retail, _ = mods.layer._file(mods.RETAIL.read_bytes(), path)
+    return {8 * i for i in range(n) if mod[at + 8 * i:at + 8 * i + 8] != retail[at + 8 * i:at + 8 * i + 8]}
 
 
 def progression(run, a, b, cue):
@@ -142,8 +164,9 @@ def smoke(mod, suffix="", characters=(0, 0)):
             run.expect(free(g), f"game {g.name} is in play on the mod's disc", frames=waited,
                        in_play=bool(p.flags & IN_PLAY), busy=bool(p.flags & BUSY), snapshot=g.snapshot())
         link_and_presence(run, a, b)
-        shared_room(run, a, b)
-        progression(run, a, b, mods.disc(mod) if mod != "none" else COOP_DISC)
+        cue = mods.disc(mod) if mod != "none" else COOP_DISC
+        shared_room(run, a, b, replaced_rooms(cue) & ENTRANCE_WAY if mod != "none" else set())
+        progression(run, a, b, cue)
         joint_save(run, s, a, b, path)
         played = (a.mailbox("self_presence").character, b.mailbox("self_presence").character)
         run.expect(played == tuple(characters), "each game plays its character", played=played, want=characters)
@@ -153,6 +176,7 @@ def smoke(mod, suffix="", characters=(0, 0)):
 
 
 COLLECT_BASE = 0x100  # g_CastleFlags index of the first placed collectible's byte (progress.c FLAG_COLLECTIBLES)
+ENTRANCE_WAY = {16, 24}  # NO3's rooms between the drawbridge and the entrance hall
 SPOTS = (SHIELD_POTION, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, HEART_VESSEL)  # the entrance's placed items
 
 
@@ -183,16 +207,19 @@ def finds(mod, suffix="", characters=(0, 0)):
         as_characters(run, characters)
         run.step(5)
         saved, a0, b0, f0 = b.save_state(), status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
+        gone = replaced_rooms(mods.disc(mod))
         for spot in SPOTS:
-            take(run, b, spot)
+            if spot[0] not in gone:  # a start-room preset's teleport room: nobody gets there (#178)
+                take(run, b, spot)
         run.step(10)
         a1, b1, f1 = status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
         flags = taken(f0, f1)
         want = sorted(table[f] for f in flags if table[f])
         run.expect(gained(b0, b1) == want, "B got what the randomizer placed", flags=flags,
                    got=[hex(c) for c in gained(b0, b1)], want=[hex(c) for c in want])
-        run.expect(any(table[f] != retail[f] for f in flags), "at least one of them isn't retail's item",
-                   rando=[hex(table[f]) for f in flags], retail=[hex(retail[f]) for f in flags])
+        if table != retail:  # vanilla keeps retail's items: nothing to tell apart
+            run.expect(any(table[f] != retail[f] for f in flags), "at least one of them isn't retail's item",
+                       rando=[hex(table[f]) for f in flags], retail=[hex(retail[f]) for f in flags])
         run.expect(gained(a0, a1) == want, "A got the same, live", got=[hex(c) for c in gained(a0, a1)])
         b.unlink()
         b.load_state(saved)
@@ -206,6 +233,45 @@ def finds(mod, suffix="", characters=(0, 0)):
     return test
 
 
+def start_room(mod):
+    def test(run):
+        """A start-room preset (#178): A walks into the castle, through the preset's CD room, and
+        the game sends A to the seed's random start room. B goes to A, as the map teleport does:
+        both are in that room, A its authority and B its guest."""
+        a, b = run.s.a, run.s.b
+        run.expect(replaced_rooms(mods.disc(mod)) & ENTRANCE_WAY, "the preset replaced the way in")
+        to = dict(zip(("x", "y", "room", "from", "stage"), struct.unpack("<5H", a.read_bytes(TELEPORTS + 10 * 100, 10))))
+        left, right = walker("left", attack_every=0), walker("right", attack_every=0)
+        for i in range(3600):  # left from the drawbridge into room 0, then right into the CD room
+            p = a.mailbox("self_presence")
+            if p.stage == to["stage"] and p.room_id == to["room"] and p.flags & IN_PLAY and not p.flags & BUSY:
+                break
+            bot = right if p.stage == NO3 and p.room_id in (0, 16) else left
+            run.step(1, p1=(bot(a.snapshot(), i), ""))
+        run.step(60)
+        p = a.mailbox("self_presence")
+        run.expect(p.stage == to["stage"] and p.room_id == to["room"] and p.flags & IN_PLAY,
+                   "A walked in and the game sent A to the seed's start room", want=to, stage=hex(p.stage),
+                   room=p.room_id, snapshot=a.snapshot())
+        arrive(run, b, p.stage, p.room_id, p.ground_x, p.ground_y)
+        for _ in range(60):
+            run.step(1)
+            if b.mailbox("self_presence").role == ROLE_GUEST:
+                break
+        run.step(10)
+        roles = a.mailbox("self_presence").role, b.mailbox("self_presence").role
+        run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the start room's authority, B its guest",
+                   roles=roles, room=p.room_id)
+        ea, eb = stage_entities(a), stage_entities(b)
+        run.expect(set(ea) == set(eb), "B's world has exactly A's stage entities", a=len(ea), b=len(eb))
+    test.__name__ = f"rando_start_room_{mod[len('rando-'):].replace('-', '_')}"
+    return test
+
+
+TELEPORTS = 0x800A245C  # DRA's D_800A245C; the start-room presets' CD room exits through entry 100
+START_ROOM_PRESET = "rando-lycanthrope-spr26te"  # startRoomRandoMode alone (mods.TESTED keeps its disc)
+
+
 for _name in mods.MODS:
     _cue = mods.disc(_name)  # only presets whose disc is kept (mods.TESTED, or built with --keep)
     if mods.built(_name).get("booted") and _cue:
@@ -213,6 +279,8 @@ for _name in mods.MODS:
         if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
             session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),
                              full=_name != "rando-casual")(finds(_name))
+        if _name == START_ROOM_PRESET:  # everyday: start-room presets are a fifth of the randomizer's
+            session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue))(start_room(_name))
         if _name == "rando-casual":  # Richter and Maria on the randomizer (design/M20 criterion 7): --full
             for _chars, _sfx in (((CHAR_RICHTER, CHAR_MARIA), "_richter_and_maria"),
                                  ((CHAR_ALUCARD, CHAR_RICHTER), "_alucard_and_richter"),
