@@ -976,6 +976,13 @@ def _randomizer(pg):
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
 
+    def forget_disc(d):
+        """The randomized disc (540 MB, next to the co-op disc) is deleted: disk space (AGENTS.md)."""
+        cue = d.launcher.disc()
+        for f in [cue, *cue.parent.glob(cue.stem + " (Track *).bin")]:
+            if "Randomizer" in f.name:
+                f.unlink(missing_ok=True)
+
     def in_ram(d):
         """The running game's collectibles table (the module's, from COOP.BIN) is the randomized disc's."""
         r = d.launcher.randomizer()
@@ -1010,7 +1017,7 @@ def _randomizer(pg):
         ("expect", in_ram, "the game's collectibles are the randomizer's"),
         ("expect", lambda d: "sotn-coop-ux" in (d.view.playthrough.info.get("mod") or ""), "the castle keeps its seed"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+        ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
 SCRIPTS = {"randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
