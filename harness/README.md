@@ -6,6 +6,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | File | What it does |
 |---|---|
 | `bots.py` | Scripted players. |
+| `categories.py` | The test categories, which source files touch which, and the PR gate's list (D179). |
 | `commands.py` | Registers the launcher checks, UI flows and patcher test with the runner. |
 | `coop_env.py` | Loads `env.example.toml` and `env.toml`. |
 | `core_check.py` | **Manual.** Checks a SwanStation core build on this machine. |
@@ -67,13 +68,13 @@ Run these with the venv: `.env/src/sotn-decomp/.venv/bin/python <script>`. How t
 | Command | What it does |
 |---|---|
 | `python savestates.py [disc.cue]` | Builds the savestate library for that disc (~20 s): `entrance` (after Death takes the gear), `nz0` Alchemy Lab, `no0` Marble Gallery, `no1` Outer Wall. |
-| `python run.py` | The test runner: see `../AGENTS.md`. Writes `.env/out/<name>/report.json`, `clip.gif` and `log.txt`. |
+| `python run.py` | The test runner: see `../AGENTS.md` for what to run when (`-c CATEGORY`, `--changed`, the gate, `--full`). Writes `.env/out/<name>/report.json`, `clip.gif` and `log.txt`, adds each result to `.env/out/history.jsonl`, and skips tests already passed on this build. |
 | `python lockstep.py --minutes 10` | Determinism check from M0: two processes, same inputs, rollback-style state reloads, RAM hashes compared every second. `--inject-desync N` proves it can fail. A check that each game is deterministic. |
 | `../scripts/build_disc.sh` | Builds `.env/out/disc/sotn_coop.us.cue`: DRA with its hooks, the boot stub, and `COOP.BIN`. Fails if a hook changes DRA's size or a retail file moves (`check_disc_layout.py`). Then run `savestates.py` on it. |
 | `../scripts/redux_check.sh` | The same module check in the Windows PCSX-Redux, headless, via `redux_check.lua`. |
 
 ## Writing a scenario
-Name it for what it checks (no milestone prefix): `<feature>_<what>`, pairings `_<A>_and_<B>` (`_vs_` for PvP). `@scenario(..., full=True)` / `@session_scenario(..., full=True)` puts it in `--full` only: for soaks and for more pairings of what the everyday suite already covers.
+Name it for what it checks (no milestone prefix): `<feature>_<what>`, pairings `_<A>_and_<B>` (`_vs_` for PvP). `@scenario(..., full=True)` / `@session_scenario(..., full=True)` puts it in `--full` only: for soaks and for more pairings of what its category already covers. Its name must match a category in `categories.py` (`run.py --list` shows each test's). Add it to `categories.EVERYDAY` (the PR gate) only if it covers something no gate test does.
 ```python
 @scenario(start="entrance")                  # savestate name; disc=... for a co-op build
 def my_test(run):
