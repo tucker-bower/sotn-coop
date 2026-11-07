@@ -27,8 +27,8 @@ from session_shared import into_hall, stage_entities
 # The smoke test's own share of what each part of co-op needs. One session: cheaper than five.
 
 
-def link_and_presence(run, a, b):
-    bot = walker("right", attack_every=0)
+def link_and_presence(run, a, b, way="right"):
+    bot = walker(way, attack_every=0)
     mismatches = 0
     for i in range(240):
         run.step(1, p1=(bot(a.snapshot(), i), ""))
@@ -51,9 +51,14 @@ def shared_room(run, a, b, replaced=()):
     below the way to the hall, so both arrive there (session_m8.mixed_pair). If the mod replaced
     the way in (replaced_rooms), B arrives next to A where A starts."""
     if replaced:
-        p = a.mailbox("self_presence")
-        arrive(run, b, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
-        run.step(30)
+        p, q = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if (q.stage, q.room_id) != (p.stage, p.room_id):  # the preset may have walked both in already
+            arrive(run, b, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
+        for _ in range(120):  # as into_hall: the roles settle once both are in play here
+            run.step(1)
+            if b.mailbox("self_presence").role == ROLE_GUEST:
+                break
+        run.step(10)
     elif a.mailbox("self_presence").character == CHAR_ALUCARD:
         into_hall(run)
     else:
@@ -163,9 +168,12 @@ def smoke(mod, suffix="", characters=(0, 0)):
             p = g.mailbox("self_presence")
             run.expect(free(g), f"game {g.name} is in play on the mod's disc", frames=waited,
                        in_play=bool(p.flags & IN_PLAY), busy=bool(p.flags & BUSY), snapshot=g.snapshot())
-        link_and_presence(run, a, b)
         cue = mods.disc(mod) if mod != "none" else COOP_DISC
-        shared_room(run, a, b, replaced_rooms(cue) & ENTRANCE_WAY if mod != "none" else set())
+        replaced = replaced_rooms(cue) & ENTRANCE_WAY if mod != "none" else set()
+        # A start-room preset's way in leads to its start room (rando_start_room_*): A walks the
+        # other way, staying where it starts.
+        link_and_presence(run, a, b, "left" if replaced else "right")
+        shared_room(run, a, b, replaced)
         progression(run, a, b, cue)
         joint_save(run, s, a, b, path)
         played = (a.mailbox("self_presence").character, b.mailbox("self_presence").character)
