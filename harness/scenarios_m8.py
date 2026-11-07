@@ -493,6 +493,7 @@ def poison_water(run, ch):
 
 POISON_MARK = 0x80097BF8  # g_Status.D_80097BF8: bit 0, the game's own "poisoned"
 ELEMENT_POISON, ELEMENTS_IMMUNE = 0x80, 0x80097C2C
+DEFENSE = 0x80097C24  # g_Status.defenseEquip
 HIT_POINTS, HIT_PARAMS, ENTITY_PALETTE = 0x3E, 0x44, 0x16
 PAL_POISON = 0x8166  # PAL_FLAG(PAL_CC_DARK_EFFECT), as built
 
@@ -523,7 +524,9 @@ def poison_hits(run, ch):
     first = _hit(run, e, 5, ELEMENT_POISON)
     run.expect(e.read(POISON_MARK, "<I") & 1, "a poison hit poisons")
     second = _hit(run, e, 5)
-    run.expect((first, second) == (5, 10), "hits do double while poisoned", first=first, second=second)
+    d = e.read(DEFENSE, "<H")  # Alucard's stats rule: his defense comes off theirs too (#160)
+    run.expect((first, second) == (max(1, 5 - d), max(1, 10 - d)), "hits do double while poisoned",
+               first=first, second=second, defense=d)
     seen = False
     for _ in range(90):
         run.step(1)
