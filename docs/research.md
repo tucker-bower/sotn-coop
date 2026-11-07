@@ -218,5 +218,6 @@ During a stage change, `g_StageId` is the next stage from `Play_PrepareNextStage
 - Its own code lives in low RAM (`0x8000C000`, its `FrameHook` target) and in `WARNING.TIM`'s sectors on the disc, which it overwrites. Co-op uses neither.
 - The seed and `<version> <preset>` are Shift-JIS text at `0x04389C6C` and `0x04389C8C` (its `setSeedText`). A hyphen comes back as U+2212 after NFKC.
 - One seed URL on one randomizer version gives the same disc byte for byte, so two players' co-op discs match.
-- Some presets take minutes to generate (glitch took 11), since the randomizer retries placements until a seed is completable.
+- Some presets take minutes to generate, since the randomizer retries placements until a seed is completable. From its command line (`node randomize`, pinned `3522dc6`), four presets never finish: **gem-farmer** and **bingo** crash in `randomize_relics.js:1249` (`target.min`: they have no `complexityGoal`), and **glitch** and **glitch-legacy** search past 15 minutes with every seed tried. That's the command line, not co-op: `mods.py` leaves them out (`RANDO_CANT_MAKE`), and a player's disc from sotn.io layers the same way as any other.
+- A disc image is 540 MB, and under WSL Linux's disk is a file on C: that never shrinks: keeping one per preset (72) filled C: and stopped WSL. Only the tested presets keep theirs (`mods.TESTED`).
 
