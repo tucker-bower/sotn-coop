@@ -68,21 +68,28 @@ def shared_room(run, a, b):
 
 # The Cube of Zoe's entity in NO3's layout (the randomizer's relics.js): some presets erase it
 # (id 0xFFFF: nothing there, on the mod's own disc), and then the Shield Potion's, in the same room, is used.
-CUBE_ENTITY = ("ST/NO3/NO3.BIN", 0x411A)
+CUBE_ENTITY = ("ST/NO3/NO3.BIN", 0x411A)  # x, y, id, slots, params (the relic's id)
+E_RELIC_ORB = 0x0B
 
 
-def find_spot(cue):
+def find_spot(cue, relics):
+    """Where A finds something: the Cube of Zoe's spot, unless the mod erased it or put a relic
+    there that A starts with (lucky-sevens, gear-rush: the game doesn't spawn an owned relic)."""
     data, _ = mods.layer._file(mods.bin_path(cue).read_bytes(), CUBE_ENTITY[0])
-    erased = int.from_bytes(data[CUBE_ENTITY[1] + 4:CUBE_ENTITY[1] + 6], "little") == 0xFFFF
-    return ("the Shield Potion's spot (the mod erased the Cube of Zoe's)", SHIELD_POTION) if erased else \
-        ("the Cube of Zoe's spot", CUBE_OF_ZOE)
+    at = CUBE_ENTITY[1]
+    eid, relic = (int.from_bytes(data[at + o:at + o + 2], "little") for o in (4, 8))
+    if eid == 0xFFFF:
+        return "the Shield Potion's spot (the mod erased the Cube of Zoe's)", SHIELD_POTION
+    if eid == E_RELIC_ORB and relic < len(relics) and relics[relic]:
+        return f"the Shield Potion's spot (A starts with relic {relic}, the one at the Cube of Zoe's)", SHIELD_POTION
+    return "the Cube of Zoe's spot", CUBE_OF_ZOE
 
 
 def progression(run, a, b, cue):
     """A takes whatever the mod put at the Cube of Zoe's spot (or, if the mod erased it, the
     Shield Potion's); B gets the same find. Then the castle flags and map agree."""
-    where, spot = find_spot(cue)
     s0a, s0b = status(a), status(b)
+    where, spot = find_spot(cue, s0a["relics"])
     take(run, a, spot, 300)
     s1a, s1b = status(a), status(b)
     relics_a = [i for i in range(30) if s1a["relics"][i] != s0a["relics"][i]]
