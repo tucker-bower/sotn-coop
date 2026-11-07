@@ -1,0 +1,310 @@
+"""Co-op on top of other mods (#144): one two-game smoke test per mod disc that harness/mods.py
+has built and booted. Both games run that mod's co-op disc, from its own savestates.
+
+A mod's disc is never in the repo or in a release: mods.py makes it on this machine from the
+retail disc and the mod's own tools. So only built mods register a test: `mod_<name>`, in the
+--full tier (they're one more pairing of what the everyday suite covers). Run them with
+`run.py -k mod_` after `mods.py --boot`.
+
+Nothing here assumes the mod keeps retail's items, rooms or enemies: the checks compare the two
+games with each other, not with retail.
+"""
+
+import struct
+import tempfile
+from pathlib import Path
+
+from session import session_scenario  # first: puts `link` on the path
+
+from bots import walker
+from link.jointsave import read_session, save_room
+from link.mailbox import BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
+import mods
+from session_progress import (CUBE_OF_ZOE, HEART_VESSEL, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, NO3, SHIELD_POTION,
+                              arrive, counts, status, take)
+from session_shared import into_hall, stage_entities
+
+# The smoke test's own share of what each part of co-op needs. One session: cheaper than five.
+
+
+def link_and_presence(run, a, b, way="right"):
+    bot = walker(way, attack_every=0)
+    mismatches = 0
+    for i in range(240):
+        run.step(1, p1=(bot(a.snapshot(), i), ""))
+        mismatches += a.mailbox("self_presence") != b.mailbox("partner_presence")
+    run.expect(mismatches == 0, "B holds A's presence after every frame", mismatches=mismatches)
+    run.expect(a.mailbox("partner_age") <= 1 and b.mailbox("partner_age") == 0, "both partners fresh")
+
+
+def as_characters(run, characters):
+    """Each game reloads as its character (they take effect at a load: session_m8.mixed_pair)."""
+    from session_m8 import NAMES, reload_game
+    for g, c in zip((run.s.a, run.s.b), characters):
+        if c != CHAR_ALUCARD:
+            run.expect(reload_game(run, g), f"{g.name} loads as {NAMES[c]}")
+
+
+def shared_room(run, a, b, replaced=()):
+    """A walks into the entrance hall (session_shared.into_hall), then B arrives next to A: A is the
+    room's authority, B the guest, with A's entities. After a reload (Richter, Maria) A starts
+    below the way to the hall, so both arrive there (session_m8.mixed_pair). If the mod replaced
+    the way in (replaced_rooms), B arrives next to A where A starts."""
+    if replaced:
+        p, q = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if (q.stage, q.room_id) != (p.stage, p.room_id):  # the preset may have walked both in already
+            arrive(run, b, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
+        for _ in range(120):  # as into_hall: the roles settle once both are in play here
+            run.step(1)
+            if b.mailbox("self_presence").role == ROLE_GUEST:
+                break
+        run.step(10)
+    elif a.mailbox("self_presence").character == CHAR_ALUCARD:
+        into_hall(run)
+    else:
+        from session_m8 import HALL_ROOM_ID
+        arrive(run, a, NO3, HALL_ROOM_ID, 1300, 200)
+        run.step(120)
+        arrive(run, b, NO3, HALL_ROOM_ID, 1324, 200)
+        run.step(30)
+    roles = a.mailbox("self_presence").role, b.mailbox("self_presence").role
+    run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the room's authority, B its guest", roles=roles,
+               room=a.snapshot()["room"])
+    run.step(30)
+    ea, eb = stage_entities(a), stage_entities(b)
+    run.expect(set(ea) == set(eb) and all(ea[k][0] == eb[k][0] for k in ea),
+               "B's world has exactly A's stage entities", a=len(ea), b=len(eb),
+               only_a=sorted(set(ea) - set(eb))[:6], only_b=sorted(set(eb) - set(ea))[:6])
+
+
+# The Cube of Zoe's entity in NO3's layout (the randomizer's relics.js): some presets erase it
+# (id 0xFFFF: nothing there, on the mod's own disc), and then the Shield Potion's, in the same room, is used.
+CUBE_ENTITY = ("ST/NO3/NO3.BIN", 0x411A)  # x, y, id, slots, params (the relic's id)
+E_RELIC_ORB = 0x0B
+
+
+def find_spot(cue, relics):
+    """Where A finds something: the Cube of Zoe's spot, unless the mod erased it or put a relic
+    there that A starts with (lucky-sevens, gear-rush: the game doesn't spawn an owned relic)."""
+    data, _ = mods.layer._file(mods.bin_path(cue).read_bytes(), CUBE_ENTITY[0])
+    at = CUBE_ENTITY[1]
+    eid, relic = (int.from_bytes(data[at + o:at + o + 2], "little") for o in (4, 8))
+    if eid == 0xFFFF:
+        return "the Shield Potion's spot (the mod erased the Cube of Zoe's)", SHIELD_POTION
+    if eid == E_RELIC_ORB and relic < len(relics) and relics[relic]:
+        return f"the Shield Potion's spot (A starts with relic {relic}, the one at the Cube of Zoe's)", SHIELD_POTION
+    return "the Cube of Zoe's spot", CUBE_OF_ZOE
+
+
+NO3_ROOMS = ("ST/NO3/NO3.BIN", 0x3CC4, 32)  # NO3's room table (RoomHeader: left, top, right, bottom, load)
+
+
+def replaced_rooms(cue):
+    """NO3 room ids whose RoomHeader the mod changed. The randomizer's start-room presets
+    (startRoomRandoMode, startRoomRando2ndMode) turn the entrance's rooms 16 and 24 into a one-cell
+    "CD room" and a teleport into the random start room (#178): nobody gets into them, so the tests
+    don't send anyone there. Co-op's own teleport only goes to a room the partner is in."""
+    if cue is None:
+        return set()
+    path, at, n = NO3_ROOMS
+    mod, _ = mods.layer._file(mods.bin_path(cue).read_bytes(), path)
+    retail, _ = mods.layer._file(mods.RETAIL.read_bytes(), path)
+    return {8 * i for i in range(n) if mod[at + 8 * i:at + 8 * i + 8] != retail[at + 8 * i:at + 8 * i + 8]}
+
+
+def progression(run, a, b, cue):
+    """A takes whatever the mod put at the Cube of Zoe's spot (or, if the mod erased it, the
+    Shield Potion's); B gets the same find. Then the castle flags and map agree."""
+    s0a, s0b = status(a), status(b)
+    where, spot = find_spot(cue, s0a["relics"])
+    take(run, a, spot, 300)
+    s1a, s1b = status(a), status(b)
+    relics_a = [i for i in range(30) if s1a["relics"][i] != s0a["relics"][i]]
+    relics_b = [i for i in range(30) if s1b["relics"][i] != s0b["relics"][i]]
+    # Whatever the mod put there: a relic, an item, a vessel, a sub-weapon, gold, or gear put on.
+    changed = sorted(k for k in s0a if k not in ("hp", "exp", "level") and s1a[k] != s0a[k])
+    run.expect(bool(changed), f"A found something at {where}", relics=relics_a,
+               items=counts(s1a) - counts(s0a), changed=changed,
+               near=[(hex(e[0]), e[1], e[2]) for e in stage_entities(a).values()
+                     if abs(e[1] - spot[1]) < 96 and abs(e[2] - spot[2]) < 96] if not changed else None,
+               at=(a.snapshot()["world_x"], a.snapshot()["world_y"]))
+    run.expect(relics_a == relics_b and [s1b["relics"][i] for i in relics_b] == [s1a["relics"][i] for i in relics_a],
+               "B has the same relics, found and active as for A", a=relics_a, b=relics_b)
+    run.expect(counts(s1b) - counts(s0b) == counts(s1a) - counts(s0a), "B gained the same items",
+               a=counts(s1a) - counts(s0a), b=counts(s1b) - counts(s0b))
+    fa, fb = a.read_bytes("g_CastleFlags", 0x300), b.read_bytes("g_CastleFlags", 0x300)
+    run.expect(fa == fb, "same castle flags", differ=[i for i in range(0x300) if fa[i] != fb[i]][:8])
+
+
+def joint_save(run, s, a, b, path):
+    s.joint.request(0)
+    for _ in range(600):
+        run.step(1)
+        if path.exists():
+            break
+    run.expect(path.exists(), "the joint save was written")
+    blobs = read_session(path)
+    run.expect(save_room(blobs[0]) == save_room(blobs[1]), "both saves resume in the same room",
+               a=save_room(blobs[0]), b=save_room(blobs[1]))
+
+
+def smoke(mod, suffix="", characters=(0, 0)):
+    def test(run):
+        from link.jointsave import JointSave
+        from session import MailboxProxy
+        s, a, b = run.s, run.s.a, run.s.b
+        path = Path(tempfile.mkdtemp(prefix="coop-mod-")) / "session.coop"
+        s.session_file, s.joint = path, JointSave([MailboxProxy(a), MailboxProxy(b)], path)
+        as_characters(run, characters)
+        def free(g):
+            p = g.mailbox("self_presence")
+            return p.flags & IN_PLAY and not p.flags & BUSY
+        waited = 30
+        run.step(30)
+        while waited < 600 and not (free(a) and free(b)):  # a preset may start with a message up
+            run.step(10)
+            waited += 10
+        for g in (a, b):
+            p = g.mailbox("self_presence")
+            run.expect(free(g), f"game {g.name} is in play on the mod's disc", frames=waited,
+                       in_play=bool(p.flags & IN_PLAY), busy=bool(p.flags & BUSY), snapshot=g.snapshot())
+        cue = mods.disc(mod) if mod != "none" else COOP_DISC
+        replaced = replaced_rooms(cue) & ENTRANCE_WAY if mod != "none" else set()
+        # A start-room preset's way in leads to its start room (rando_start_room_*): A walks the
+        # other way, staying where it starts.
+        link_and_presence(run, a, b, "left" if replaced else "right")
+        shared_room(run, a, b, replaced)
+        progression(run, a, b, cue)
+        joint_save(run, s, a, b, path)
+        played = (a.mailbox("self_presence").character, b.mailbox("self_presence").character)
+        run.expect(played == tuple(characters), "each game plays its character", played=played, want=characters)
+    test.__name__ = f"mod_{mod.replace('-', '_')}{suffix}"
+    test.__doc__ = f"Co-op on {mod}: link, a shared room, a shared find and a joint save."
+    return test
+
+
+COLLECT_BASE = 0x100  # g_CastleFlags index of the first placed collectible's byte (progress.c FLAG_COLLECTIBLES)
+ENTRANCE_WAY = {16, 24}  # NO3's rooms between the drawbridge and the entrance hall
+SPOTS = (SHIELD_POTION, HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, HEART_VESSEL)  # the entrance's placed items
+
+
+def gained(before, after):
+    """What a player got, as collectibles.c codes: 0x8000 | hand item, 0x4000 | body item, 1 life up, 2 heart up."""
+    out = [0x8000 | i for i, (x, y) in enumerate(zip(before["hand"], after["hand"])) for _ in range(y - x)]
+    out += [0x4000 | i for i, (x, y) in enumerate(zip(before["body"], after["body"])) for _ in range(y - x)]
+    out += [1] * ((after["hp_max"] - before["hp_max"]) // 5) + [2] * ((after["hearts_max"] - before["hearts_max"]) // 5)
+    return sorted(out)
+
+
+def taken(before, after):
+    """Placed collectibles' flags set between two copies of g_CastleFlags."""
+    return [(i - COLLECT_BASE) * 8 + k for i in range(COLLECT_BASE, len(after)) for k in range(8)
+            if after[i] >> k & 1 and not before[i] >> k & 1]
+
+
+def finds(mod, suffix="", characters=(0, 0)):
+    def test(run):
+        """B takes the entrance's five placed finds, whatever the randomizer put there. A gets the
+        same, live, as the item the randomizer placed (patcher/layer.adapt's table, made from the
+        disc). Then B restarts without saving and relinks: B gets them back from A's flags."""
+        import layer
+        from check_disc_layout import bin_path
+        a, b = run.s.a, run.s.b
+        table = layer.collectibles(bin_path(mods.disc(mod)).read_bytes())
+        retail = layer.collectibles(mods.RETAIL.read_bytes())
+        as_characters(run, characters)
+        run.step(5)
+        saved, a0, b0, f0 = b.save_state(), status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
+        gone = replaced_rooms(mods.disc(mod))
+        for spot in SPOTS:
+            if spot[0] not in gone:  # a start-room preset's teleport room: nobody gets there (#178)
+                take(run, b, spot)
+        run.step(10)
+        a1, b1, f1 = status(a), status(b), b.read_bytes("g_CastleFlags", 0x300)
+        flags = taken(f0, f1)
+        want = sorted(table[f] for f in flags if table[f])
+        run.expect(gained(b0, b1) == want, "B got what the randomizer placed", flags=flags,
+                   got=[hex(c) for c in gained(b0, b1)], want=[hex(c) for c in want])
+        if table != retail:  # vanilla keeps retail's items: nothing to tell apart
+            run.expect(any(table[f] != retail[f] for f in flags), "at least one of them isn't retail's item",
+                       rando=[hex(table[f]) for f in flags], retail=[hex(retail[f]) for f in flags])
+        run.expect(gained(a0, a1) == want, "A got the same, live", got=[hex(c) for c in gained(a0, a1)])
+        b.unlink()
+        b.load_state(saved)
+        run.step(400)
+        b.link()
+        run.step(120)
+        a2, b2 = status(a), status(b)
+        run.expect(gained(b0, b2) == want, "back, B has them again", got=[hex(c) for c in gained(b0, b2)])
+        run.expect(gained(a1, a2) == [], "A got nothing twice", got=[hex(c) for c in gained(a1, a2)])
+    test.__name__ = f"rando_finds_{mod[len('rando-'):].replace('-', '_')}{suffix}"
+    return test
+
+
+def start_room(mod):
+    def test(run):
+        """A start-room preset (#178): A walks into the castle, through the preset's CD room, and
+        the game sends A to the seed's random start room. B goes to A, as the map teleport does:
+        both are in that room, A its authority and B its guest."""
+        a, b = run.s.a, run.s.b
+        run.expect(replaced_rooms(mods.disc(mod)) & ENTRANCE_WAY, "the preset replaced the way in")
+        to = dict(zip(("x", "y", "room", "from", "stage"), struct.unpack("<5H", a.read_bytes(TELEPORTS + 10 * 100, 10))))
+        left, right = walker("left", attack_every=0), walker("right", attack_every=0)
+        for i in range(3600):  # left from the drawbridge into room 0, then right into the CD room
+            p = a.mailbox("self_presence")
+            if p.stage == to["stage"] and p.room_id == to["room"] and p.flags & IN_PLAY and not p.flags & BUSY:
+                break
+            bot = right if p.stage == NO3 and p.room_id in (0, 16) else left
+            run.step(1, p1=(bot(a.snapshot(), i), ""))
+        run.step(60)
+        p = a.mailbox("self_presence")
+        run.expect(p.stage == to["stage"] and p.room_id == to["room"] and p.flags & IN_PLAY,
+                   "A walked in and the game sent A to the seed's start room", want=to, stage=hex(p.stage),
+                   room=p.room_id, snapshot=a.snapshot())
+        arrive(run, b, p.stage, p.room_id, p.ground_x, p.ground_y)
+        for _ in range(60):
+            run.step(1)
+            if b.mailbox("self_presence").role == ROLE_GUEST:
+                break
+        run.step(10)
+        roles = a.mailbox("self_presence").role, b.mailbox("self_presence").role
+        run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the start room's authority, B its guest",
+                   roles=roles, room=p.room_id)
+        ea, eb = stage_entities(a), stage_entities(b)
+        run.expect(set(ea) == set(eb), "B's world has exactly A's stage entities", a=len(ea), b=len(eb))
+    test.__name__ = f"rando_start_room_{mod[len('rando-'):].replace('-', '_')}"
+    return test
+
+
+TELEPORTS = 0x800A245C  # DRA's D_800A245C; the start-room presets' CD room exits through entry 100
+START_ROOM_PRESET = "rando-lycanthrope-spr26te"  # startRoomRandoMode alone (mods.TESTED keeps its disc)
+
+
+for _name in mods.MODS:
+    _cue = mods.disc(_name)  # only presets whose disc is kept (mods.TESTED, or built with --keep)
+    if mods.built(_name).get("booted") and _cue:
+        session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), full=True)(smoke(_name))
+        if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
+            session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),
+                             full=_name != "rando-casual")(finds(_name))
+        if _name == START_ROOM_PRESET:  # everyday: start-room presets are a fifth of the randomizer's
+            session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue))(start_room(_name))
+        if _name == "rando-casual":  # Richter and Maria on the randomizer (design/M20 criterion 7): --full
+            for _chars, _sfx in (((CHAR_RICHTER, CHAR_MARIA), "_richter_and_maria"),
+                                 ((CHAR_ALUCARD, CHAR_RICHTER), "_alucard_and_richter"),
+                                 ((CHAR_ALUCARD, CHAR_MARIA), "_alucard_and_maria")):
+                session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), characters=_chars,
+                                 full=True)(smoke(_name, _sfx, _chars))
+                session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue), characters=_chars,
+                                 full=True)(finds(_name, _sfx, _chars))
+
+# The control: the same test on the plain co-op disc. A mod's failure counts only where this passes.
+from module import COOP_DISC  # noqa: E402
+
+_control = smoke("none")
+_control.__doc__ = "The mod tests' control: the same checks on the plain co-op disc."
+session_scenario(starts=("entrance", "entrance"), discs=(COOP_DISC, COOP_DISC), full=True)(_control)
+for _chars, _sfx in (((CHAR_RICHTER, CHAR_MARIA), "_richter_and_maria"), ((CHAR_ALUCARD, CHAR_RICHTER), "_alucard_and_richter"),
+                     ((CHAR_ALUCARD, CHAR_MARIA), "_alucard_and_maria")):
+    session_scenario(starts=("entrance", "entrance"), discs=(COOP_DISC, COOP_DISC), characters=_chars,
+                     full=True)(smoke("none", _sfx, _chars))

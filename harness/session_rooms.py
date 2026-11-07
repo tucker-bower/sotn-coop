@@ -327,3 +327,35 @@ def unpause_with_empty_hands_maria_and_alucard(run):
 @session_scenario(starts=(LAB, LAB), characters=(1, 0), full=True)
 def unpause_with_empty_hands_richter_and_alucard(run):
     _unpause_with_no_weapons_loaded(run, 1)
+
+
+SPELL_HELLFIRE_STEP = 34  # Player_SpellHellfire (include/player_steps.h)
+
+
+@session_scenario(starts=(MARBLE, MARBLE), characters=(0, 0))
+def spell_by_hand_with_partner_near(run):
+    """Issue 167: A types Hellfire's own inputs (up, down, down-forward, forward, attack), each
+    held 1 to 3 frames as a player's thumb does, while B, in the same room, stands or walks. The
+    partner's body runs Alucard's input code in A's game too: it mustn't spoil A's sequence."""
+    from scenarios_m8 import MP, MP_MAX, SPELLS_LEARNT
+    a, b = run.s.a, run.s.b
+    for g in (a, b):
+        g.write(SPELLS_LEARNT, 0xFF)
+    run.step(60, ("right", ""))  # A faces right: forward is right
+    run.step(30)
+    missed = []
+    for b_pad in ("", "left", "right+square"):
+        for hold in (1, 2, 3):
+            for g in (a, b):
+                g.write(MP, 99, "<i")
+                g.write(MP_MAX, 99, "<i")
+            seq = [p for p in ("up", "down", "down+right", "right", "square") for _ in range(hold)]
+            cast = False
+            for t in range(len(seq) + 30):
+                run.step(1, (seq[t] if t < len(seq) else "", b_pad))
+                cast |= a.read(a.entity(0) + PLAYER_STEP, "<H") == SPELL_HELLFIRE_STEP
+            if not cast:
+                missed.append((b_pad or "idle", hold))
+            run.step(150, ("", b_pad))  # the spell ends
+            run.step(60, ("right", ""))  # facing right again
+    run.expect(not missed, "A's Hellfire comes out every time, whatever B does", missed=missed)

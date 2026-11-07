@@ -292,7 +292,7 @@ typedef struct {
 #define RULE_BAT_CARRY 0x400        // on, unlike the others: a partner can hang onto the bat (carry.c)
 #define RULE_OVERLAY_MASK 0xFF000000
 #define OPT_NO_GROWTH 0x01000000      // Richter and Maria: no levels, no STR/INT in their attacks
-#define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: relics teach them nothing
+#define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: every move from the start (#168)
 #define OPT_NO_AIR_JUMPS 0x04000000   // Richter and Maria: their own jumps only (D122 off)
 #define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
 #define RULE_PCT(field, otherwise) (g_CoopLink.field ? (s32)g_CoopLink.field : (otherwise))

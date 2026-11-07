@@ -31,8 +31,14 @@ extern s32 g_ExpNext[];                                      // DRA: XP for each
 #define E_RELIC_ORB 0x0B
 #define E_PERSISTENT_ITEM_DROP 0x0C
 #define PERSISTENT_DROP_FLAG(e) (*(u16*)((u8*)(e) + 0xB4)) // ET_PersistentDrop.unkB4
-extern const u16 g_Collectibles[]; // collectibles.c (scripts/gen_collectibles.py)
-extern const s32 g_NCollectibles;
+// collectibles.c (scripts/gen_collectibles.py). Tagged so patcher/layer.py can rewrite it for a
+// modded disc whose items moved (the randomizer).
+typedef struct {
+    char tag[8];
+    s32 n;
+    u16 table[1];
+} CoopCollectiblesHead;
+extern const CoopCollectiblesHead g_Collectibles;
 #define COLLECT_LIFE_VESSEL 1
 #define COLLECT_HEART_VESSEL 2
 
@@ -329,7 +335,7 @@ static void Collect(s32 idx, u8 added) {
 
     for (bit = 0; bit < 8; bit++) {
         flag = (idx - FLAG_COLLECTIBLES) * 8 + bit;
-        if (!(added & (1 << bit)) || flag >= g_NCollectibles || !(c = g_Collectibles[flag])) {
+        if (!(added & (1 << bit)) || flag >= g_Collectibles.n || !(c = g_Collectibles.table[flag])) {
             continue;
         }
         if (c == COLLECT_LIFE_VESSEL || c == COLLECT_HEART_VESSEL) {

@@ -291,7 +291,24 @@ def _register(name, doc, bit):
 
 
 _register("rules_no_air_jumps", "Extra jumps off: the Leap Stone gives Richter no jump in the air.", OPT_NO_AIR_JUMPS)
-_register("rules_no_relic_moves", "Relics teach off: the same, by the wider rule.", OPT_NO_RELIC_MOVES)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, 0))
+def rules_relic_moves_off_teaches_every_move(run):
+    """#168: with "Relics teach Richter and Maria" off they know every move from the start.
+    Richter without the Leap Stone has no jump in the air; with the rule off, he has it."""
+    a = run.s.a
+    load_characters(run)
+    a.write(STATUS, 0, "<B", RELICS + LEAP_STONE)
+    arrive(run, a, NO3, HALL_ROOM, 1300, 200)  # room to jump: the zombie hall
+    run.step(90)
+    without_relic = highest_jump(run, a)
+    rules(run, OPT_NO_RELIC_MOVES)
+    every_move = highest_jump(run, a)
+    run.expect(every_move > without_relic, "higher: the Leap Stone's jump with no Leap Stone",
+               relic_rule_on=without_relic, off=every_move)
+    rules(run, OPT_NO_RELIC_MOVES | OPT_NO_AIR_JUMPS)
+    run.expect(highest_jump(run, a) == without_relic, "extra jumps off still takes them away")
 
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, 0))

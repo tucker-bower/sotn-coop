@@ -118,6 +118,13 @@ class Host:
         self.hello["castle"] = meta
         return True
 
+    def set_mod(self, mod):
+        """The randomizer seed this game's disc was made from, in words ("seed abc · casual
+        (26.07.13)"), or None for the plain co-op disc (design/M20-randomizer.md). Told in every
+        HELO, so a partner on another seed hears which one, not just "a different disc"."""
+        self.hello["mod"] = mod
+        return True
+
     def set_fresh(self, fresh):
         """A new castle: the joiner starts its game too, past the title screen."""
         self.hello["fresh"] = bool(fresh)
@@ -288,6 +295,14 @@ class Host:
         if theirs.get("link") != self.hello["link"]:
             self.mismatch = (f"Your partner's co-op version is different (link {theirs.get('link')}, "
                              f"yours {self.hello['link']}): both need the same version.")
+        elif theirs.get("mod") != self.hello.get("mod"):
+            mine, other = self.hello.get("mod"), theirs.get("mod")
+            self.mismatch = ("Your partner plays a randomized castle: " + other + ". Randomize your disc with the same "
+                             "seed and preset (Settings › Game files › Randomizer)." if other and not mine else
+                             "You play a randomized castle, and your partner doesn't. Both need the same disc: "
+                             "turn the randomizer off, or give them your seed (" + mine + ")." if mine and not other else
+                             f"Your partner's randomizer seed is different: theirs is {other}, yours {mine}. "
+                             "Both need the same seed, preset and randomizer version.")
         elif theirs.get("patch") and self.hello["patch"] and theirs["patch"] != self.hello["patch"]:
             self.mismatch = "Your partner's co-op disc is a different version: both need the same."
         else:
