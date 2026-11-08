@@ -156,11 +156,9 @@ def rules_richter_defense(run):
     run.expect(raw == 40, "off: the whole hit, as in his own game", lost=raw)
 
 
-@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ULT_MARIA, CHAR_ULT_MARIA))
-def rules_ultimate_maria_plays_as_ultimate(run):
-    """Ultimate Maria plays as SOTN Ultimate built her, with every co-op character rule on (the
-    default): Alucard's defense doesn't cut her hits, and EXP doesn't level her up
-    (docs/design/character-mods.md)."""
+def plays_as_their_mod(run):
+    """With every co-op character rule on (the default), Alucard's defense doesn't cut this
+    character's hits, and EXP doesn't level them up (docs/design/character-mods.md)."""
     load_characters(run)
     b = run.s.b
     base = scripted_hit(run, b, 0)
@@ -172,6 +170,24 @@ def rules_ultimate_maria_plays_as_ultimate(run):
     b.write(STATUS, 5000, "<I", EXP)
     run.step(60)
     run.expect(status(b)["level"] == level, "EXP doesn't level her up", level=(level, status(b)["level"]))
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ULT_MARIA, CHAR_ULT_MARIA))
+def rules_ultimate_maria_plays_as_ultimate(run):
+    """Ultimate Maria plays as SOTN Ultimate built her, whatever the castle's rules."""
+    plays_as_their_mod(run)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(5, 5))
+def rules_ultimate_richter_plays_as_ultimate(run):
+    """Ultimate Richter plays as retail Richter (SOTN Ultimate's), whatever the castle's rules."""
+    plays_as_their_mod(run)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(4, 4))
+def rules_saturn_maria_plays_as_ultimate(run):
+    """Saturn Maria plays as SOTN Ultimate built her, whatever the castle's rules."""
+    plays_as_their_mod(run)
 
 
 @session_scenario()

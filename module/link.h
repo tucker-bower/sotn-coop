@@ -305,7 +305,9 @@ typedef struct {
 // Other mods' characters (docs/design/character-mods.md): they play as their mod built them, with
 // none of the co-op characters' features (levels, Alucard's stats and gear, relic moves).
 #define CHAR_ULT_MARIA 3 // SOTN Ultimate's PSP Maria (characters/maria-ultimate)
-#define CHAR_LAST CHAR_ULT_MARIA
+#define CHAR_SAT_MARIA 4 // SOTN Ultimate's Saturn Maria, a fork of Richter's code (characters/maria-saturn)
+#define CHAR_ULT_RICHTER 5 // SOTN Ultimate's Richter: retail Richter in the Saturn's coat (launcher/saturn_richter.py)
+#define CHAR_LAST CHAR_ULT_RICHTER
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
 #define OPT_ALUCARD_HUD 4 // Richter and Maria: Alucard's health bar (character.c)
@@ -321,7 +323,7 @@ typedef struct {
 // The launcher writes the chosen character's overlay and sound bank into expansion RAM before
 // the game boots: a CharBlob header, then the overlay, the .VH and the .VB. Without one (or for
 // another character), Richter's retail files from the disc are used.
-#define CHAR_BLOB_ADDR 0x80400000
+#define CHAR_BLOB_ADDR 0x80300000 // after the module (coop.ld checks it ends before)
 #define CHAR_BLOB_MAGIC 0x52414843 // 'CHAR'
 typedef struct {
     u32 magic;     // CHAR_BLOB_MAGIC
@@ -330,16 +332,20 @@ typedef struct {
     u32 vhSize;    // the sound bank, replacing SD_RIH (0: keep Richter's)
     u32 vbSize;
     u32 partnerSize; // her build as the partner (design/M13 step 3: MARIAP.BIN), 0: none
-    u32 pad[2];
-} CharBlob; // size = 0x20, then the overlay, the .VH, the .VB and the partner build, each 4-byte aligned
+    u32 vh2Size;     // a second sound bank, replacing SD_MAR (vab 2; Saturn Maria's), 0: keep it
+    u32 vb2Size;
+} CharBlob; // size = 0x20, then the overlay, the .VH, the .VB, the partner build, the .VH and .VB of
+            // vab 2, each 4-byte aligned
 // One blob for each character in the session that needs one (the player's, the partner's), one
 // after another; the first word after the last is not CHAR_BLOB_MAGIC.
 #define CHAR_BLOB_ALIGN(n) (((n) + 3) & ~3)
+#define CHAR_BLOB_VH2(b) \
+    ((const u8*)((b) + 1) + CHAR_BLOB_ALIGN((b)->ovlSize) + CHAR_BLOB_ALIGN((b)->vhSize) + \
+     CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize))
 #define CHAR_BLOB_NEXT(b) \
-    ((const CharBlob*)((const u8*)((b) + 1) + CHAR_BLOB_ALIGN((b)->ovlSize) + CHAR_BLOB_ALIGN((b)->vhSize) + \
-                       CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize)))
-#define CHAR_BLOBS_MAX 2
-#define CHAR_BLOBS_END 0x80500000 // COOPRIC_ADDR (module/coop_api.h): the blobs end before it
+    ((const CharBlob*)(CHAR_BLOB_VH2(b) + CHAR_BLOB_ALIGN((b)->vh2Size) + CHAR_BLOB_ALIGN((b)->vb2Size)))
+#define CHAR_BLOBS_MAX 4 // Co-op Maria, Ultimate Maria, Saturn Maria, Ultimate Richter
+#define CHAR_BLOBS_END 0x804C0000 // PARTNER_ULT_ADDR (module/coop_api.h): the blobs end before it (1.75 MB)
 extern CoopLink g_CoopLink;
 
 #endif

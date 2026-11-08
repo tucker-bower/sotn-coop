@@ -20,5 +20,6 @@ SECTIONS {
         *(COMMON)
         . = ALIGN(4);
     }
+    ASSERT(. <= 0x80300000, "the module runs into the character blobs (link.h CHAR_BLOB_ADDR)")
     /DISCARD/ : { *(.MIPS.abiflags) *(.reginfo) *(.pdr) *(.comment) *(.gnu.attributes) }
 }

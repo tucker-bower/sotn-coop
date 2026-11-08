@@ -12,6 +12,7 @@
 #define COOP_MODULE
 #include <game.h>
 #include <disk.h>
+#include <sfx.h>
 #include <psxsdk/libcd.h>
 #include "coop_api.h"
 #include "link.h"
@@ -106,37 +107,70 @@ void SsVabClose(s16 vabId); // main.exe (libsnd)
 // frame, as the game's own CD loader does (src/dra/cd.c).
 static const CharBlob* s_Bank; // being sent
 static u32 s_BankSent;
+static s16 s_BankVab; // PLAYER_VAB (1), then 2 (Saturn Maria's second bank, over SD_MAR)
 
-static void SoundBankStart(const CharBlob* b) {
-    u8* vh = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3);
+static const u8* BankVh(const CharBlob* b, s16 vab) {
+    return vab == PLAYER_VAB ? (const u8*)(b + 1) + CHAR_BLOB_ALIGN(b->ovlSize) : CHAR_BLOB_VH2(b);
+}
 
-    SsVabClose(PLAYER_VAB);
-    if (SsVabOpenHeadSticky(vh, PLAYER_VAB, g_VabAddrs[PLAYER_VAB]) < 0) {
+static void BankOpen(const CharBlob* b, s16 vab) {
+    SsVabClose(vab);
+    if (SsVabOpenHeadSticky((u8*)BankVh(b, vab), vab, g_VabAddrs[vab]) < 0) {
+        s_Bank = NULL;
         return;
     }
     s_Bank = b;
+    s_BankVab = vab;
     s_BankSent = 0;
 }
 
+static void SoundBankStart(const CharBlob* b) { BankOpen(b, PLAYER_VAB); }
+
 static void SoundBankStep(void) {
     const CharBlob* b = s_Bank;
-    u8* vb;
-    u32 n;
+    const u8* vb;
+    u32 n, size;
 
     if (!b || (s_BankSent && (s16)SsVabTransCompleted(SS_IMEDIATE) != 1)) {
         return;
     }
-    if (s_BankSent >= b->vbSize) {
+    size = s_BankVab == PLAYER_VAB ? b->vbSize : b->vb2Size;
+    if (s_BankSent >= size) {
         s_Bank = NULL;
+        if (s_BankVab == PLAYER_VAB && b->vh2Size && b->vb2Size) {
+            BankOpen(b, 2); // then her second bank
+        }
         return;
     }
-    vb = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3);
-    n = b->vbSize - s_BankSent < VAB_CHUNK ? b->vbSize - s_BankSent : VAB_CHUNK;
-    if (SsVabTransBodyPartly(vb + s_BankSent, n, PLAYER_VAB) == -1) {
+    vb = BankVh(b, s_BankVab) + CHAR_BLOB_ALIGN(s_BankVab == PLAYER_VAB ? b->vhSize : b->vh2Size);
+    n = size - s_BankSent < VAB_CHUNK ? size - s_BankSent : VAB_CHUNK;
+    if (SsVabTransBodyPartly((u8*)vb + s_BankSent, n, s_BankVab) == -1) {
         s_Bank = NULL;
         return;
     }
     s_BankSent += n;
+}
+
+// Saturn Maria's sounds take Richter's and the prologue Maria's ids (her banks, above), so their
+// priorities are hers while she's loaded: her voice 90, her effects under it, her slide 85; and
+// Seiryuu's loop plays on channels 22/23, which her dragon releases. Retail for anyone else (DRA
+// keeps the table for the session). SOTN Ultimate's DRA does this (cd_mod_files.h ModMarSfxPrio).
+static const u16 s_SatMarSfxPrio[][3] = {
+    // id, retail, Saturn Maria
+    {0x6F9, 80, 90}, {0x6FA, 80, 90}, {0x6FB, 80, 90}, {0x6FC, 80, 90}, {0x702, 81, 90},
+    {0x703, 81, 90}, {0x704, 81, 90}, {0x678, 40, 65}, {0x62D, 30, 65}, {0x62E, 32, 65},
+    {0x6FD, 80, 60}, {0x6FE, 80, 60}, {0x700, 80, 60}, {0x6F4, 80, 60}, {0x6F5, 80, 60},
+    {0x6F7, 50, 60}, {0x887, 90, 70}, {0x888, 90, 70}, {0x889, 90, 70}, {0x88A, 90, 70},
+    {0x707, 40, 85}, {0x617, 30, 85},
+};
+extern Unkstruct_800BF554 g_SfxData[];
+static void SaturnMariaSfx(bool hers) {
+    s32 i;
+
+    for (i = 0; i < LEN(s_SatMarSfxPrio); i++) {
+        g_SfxData[s_SatMarSfxPrio[i][0] - 0x600].unk6 = s_SatMarSfxPrio[i][hers ? 2 : 1];
+    }
+    g_SfxData[0x889 - 0x600].mode = hers ? SFX_MODE_CHANNELS_22_23 : SFX_MODE_CHANNELS_12_19;
 }
 
 static void CopyOverlay(const CharBlob* b) {
@@ -150,6 +184,49 @@ static void CopyOverlay(const CharBlob* b) {
     }
     PlaceFar(file, b->ovlSize); // flushes the cache too
     FlushCache();
+}
+
+// Ultimate Richter's coat (launcher/saturn_richter.py, D184): his blob is retail RIC.BIN's start with
+// the Saturn's coat sheet, ending ({magic, pointer} at the sheet's end) with a block of his
+// recoloured palettes and the coat-sleeved whip arm, which SOTN Ultimate's DRA uploads after his
+// load (cd_mod_files.h ModRicCostumeApply). Ours has no room; so it's here. The pointer is the
+// block's address where the file runs (0x8013C000); `file` is where it is now.
+#define RIC2_HDR_AT (0x170AC - 8)
+#define RIC2_MAGIC 0x32434952 // "RIC2"
+void CharacterRicCoat(const u8* file, bool partner) {
+    const u32* hdr = (const u32*)(file + RIC2_HDR_AT);
+    const u32* p;
+    s32 n, i;
+    u16 id;
+    RECT rect;
+
+    if (hdr[0] != RIC2_MAGIC) {
+        return;
+    }
+    p = (const u32*)(file + (hdr[1] - PLAYER_OVL_ADDR));
+    for (n = *p++; n > 0; n--) {
+        id = *p++;
+        if (!partner) { // the game's copy; a partner's palettes are only in the second bank
+            for (i = 0; i < COLORS_PER_PAL; i++) {
+                g_Clut[1][(id - 0x100) * COLORS_PER_PAL + i] = ((const u16*)p)[i];
+            }
+        }
+        rect.x = (g_ClutIds[id] & 0x3F) << 4;
+        rect.y = (g_ClutIds[id] >> 6) | (partner ? VRAM_BANK : 0);
+        rect.w = COLORS_PER_PAL;
+        rect.h = 1;
+        LoadImage(&rect, (u_long*)p);
+        p += COLORS_PER_PAL / 2;
+    }
+    for (n = *p++; n > 0; n--) {
+        rect.x = ((const u16*)p)[0];
+        rect.y = ((const u16*)p)[1] | (partner ? VRAM_BANK : 0);
+        rect.w = ((const u16*)p)[2];
+        rect.h = ((const u16*)p)[3];
+        p += 2;
+        LoadImage(&rect, (u_long*)p);
+        p += (rect.w * rect.h + 1) / 2;
+    }
 }
 
 // Our Richter's file, as CoopBoot read it into expansion RAM.
@@ -190,6 +267,7 @@ void CharacterApply(void) {
     }
     g_CoopCharacter = want == CHAR_ALUCARD ? PLAYER_ALUCARD : PLAYER_RICHTER;
     s_Loaded = want;
+    SaturnMariaSfx(want == CHAR_SAT_MARIA);
     PointRichterLoad();
 }
 
@@ -395,10 +473,51 @@ static void TelescopeFix(void) {
 // icons, drawn over the sprite DRA's Richter HUD just drew. Ultimate's own DRA calls her from the
 // HUD; ours has no room for that, so it's here, once the frame's HUD is done.
 #define ULT_MAR_HUD_HOOK ((void (**)(void))0x8013C7F8) // characters/maria-ultimate/ult_maria.ld
-void CharacterBeforePrims(void) {
-    void (*hud)(void) = *ULT_MAR_HUD_HOOK;
+// ...and Saturn Maria's own HUD, which Ultimate's DRA draws in place of Richter's
+// (characters/maria-saturn/coop_sat_hud.c): hers hides his and draws itself.
+#define SAT_MAR_HUD_HOOK ((void (**)(void))0x8013C588) // characters/maria-saturn/sat_maria.ld
+// Saturn Maria (characters/maria-saturn) walks in steps that pass over x 0x7F-0x80, so the save
+// room's walk to the save point (src/dra/62DEC.c func_80105428, step 1) paced her back and forth
+// forever. Ultimate's DRA snaps her there; ours has no room, so it's here, after the frame's
+// update: to the centre, with the world position along, and no step for the next frame.
+#define SAVE_ROOM_ON (*(u8*)0x80137598)    // D_80137598: func_80105428 runs (src/dra/5087C.c)
+#define SAVE_ROOM_STEP (*(s32*)0x801379BC) // D_801379BC: its step; 1, the walk to the centre
+static void SaturnMariaSaveWalk(void) {
+    s16 dx = 0x80 - PLAYER.posX.i.hi;
 
-    if (s_Loaded == CHAR_ULT_MARIA && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
+    if (s_Loaded == CHAR_SAT_MARIA && g_GameState == Game_Play && SAVE_ROOM_ON && SAVE_ROOM_STEP == 1 &&
+        (u16)(dx + 2) < 5) {
+        PLAYER.posX.i.hi += dx;
+        g_PlayerX += dx;
+        g_Player.padSim = 0;
+    }
+}
+
+// Saturn Maria's Byakko and Seiryuu halt the game (Engine_5, unk28 4) until her own code ends the
+// halt. DRA's US build runs only the stage's entities in a halt for any player but Alucard, so it
+// never ended. Ultimate's DRA runs her player code there, as in the prologue; so does this, the
+// prologue's way (src/dra/5087C.c, Engine_5 in ST0). DRA still runs the stage's entities after.
+static void SaturnMariaHalt(void) {
+    s16 x, y;
+
+    if (s_Loaded != CHAR_SAT_MARIA || g_GameState != Game_Play || g_GameEngineStep != Engine_5 ||
+        g_unkGraphicsStruct.unk28 != 4 || g_StageId == STAGE_ST0) {
+        return;
+    }
+    x = PLAYER.posX.i.hi;
+    y = PLAYER.posY.i.hi;
+    g_PlOvl.D_8013C000();
+    g_PlOvl.D_8013C008();
+    g_PlayerX -= x - PLAYER.posX.i.hi;
+    g_PlayerY -= y - PLAYER.posY.i.hi;
+}
+
+void CharacterBeforePrims(void) {
+    void (*hud)(void) = *(s_Loaded == CHAR_SAT_MARIA ? SAT_MAR_HUD_HOOK : ULT_MAR_HUD_HOOK);
+
+    SaturnMariaSaveWalk();
+
+    if ((s_Loaded == CHAR_ULT_MARIA || s_Loaded == CHAR_SAT_MARIA) && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
         g_CoopHudCharacter != PLAYER_ALUCARD && g_LoadFile == CdFile_None &&
         (u32)hud >= COOP_PLAYER_FAR && (u32)hud < COOP_PLAYER_FAR_END) { // hers, not a load's
         hud();
@@ -422,6 +541,9 @@ void CharacterFrame(void) {
     if (s_PrevLoadFile == CdFile_RichterPrg && g_LoadFile != CdFile_RichterPrg && g_StageId != STAGE_ST0) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
+            if (s_Loaded == CHAR_ULT_RICHTER) { // after F_GAME2, which his load always follows
+                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, false);
+            }
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
             PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
         }
@@ -460,6 +582,7 @@ void CharacterFrame(void) {
         g_StageId != STAGE_ST0 && CharacterLoaded() != CHAR_ALUCARD) {
         g_api.o.UpdateStageEntities();
     }
+    SaturnMariaHalt();
     Familiar();
     PoisonWater();
     Poison();

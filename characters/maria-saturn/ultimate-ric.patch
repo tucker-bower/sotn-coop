@@ -1,0 +1,2162 @@
+diff --git a/src/ric/2F8E8.c b/src/ric/2F8E8.c
+--- a/src/ric/2F8E8.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/2F8E8.c	2026-11-07 13:57:39.924997450 -0800
+@@ -370,6 +370,10 @@
+             temp = -temp;
+         }
+         if (--self->ext.subweapon.timer == 0) {
++#if defined(MOD_MARIA_SAT)
++            // Saturn 060B1474: her vibhuti leaves a puff (MarEntityAsh)
++            RicCreateEntFactoryFromEntity(self, BP_MAR_ASH, 0);
++#endif
+             DestroyEntity(self);
+             return;
+         }
+@@ -793,6 +797,7 @@
+     POSE(3, 5, 0),  POSE(3, 6, 0),  POSE(3, 7, 0),  POSE(3, 8, 0),
+     POSE(3, 9, 0),  POSE(3, 10, 0), POSE(3, 11, 0), POSE(3, 12, 0),
+     POSE(3, 13, 0), POSE_LOOP(0)};
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityVibhutiCrashCloud(Entity* entity) {
+     s32 angle;
+ 
+@@ -836,12 +841,17 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityVibhutiCrashCloud(Entity* entity) { DestroyEntity(entity); }
++#endif
+ 
+ #if defined(VERSION_PSP)
+ extern s32 crash_vibhuti_timer;
+ #else
+ static s32 crash_vibhuti_timer;
+ #endif
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashVibhuti(Entity* self) {
+     FakePrim* prim;
+     s32 angle;
+@@ -939,7 +949,12 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashVibhuti(Entity* self) { DestroyEntity(self); }
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashReboundStoneParticles(Entity* entity) {
+     switch (entity->step) {
+     case 0:
+@@ -958,3 +973,9 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashReboundStoneParticles(Entity* entity) {
++    DestroyEntity(entity);
++}
++#endif
+diff --git a/src/ric/319C4.c b/src/ric/319C4.c
+--- a/src/ric/319C4.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/319C4.c	2026-11-07 13:57:39.927899664 -0800
+@@ -8,6 +8,7 @@
+ // the crash of subweapon 7. And subweapon 7 is the rebound stone. This is an
+ // entity spawned from the rebound stone crash.
+ static s32 angles_80155EE0[] = {0x00000F80, 0x00000100, 0x00000700, 0x00000880};
++#if !defined(MOD_MARIA_SAT)
+ void func_8016D9C4(Entity* self) {
+     PrimLineG2* prim;
+     Primitive* prim2;
+@@ -177,8 +178,13 @@
+         prim2 = prim2->next;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void func_8016D9C4(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // RIC Entity #50. Blueprint 58. Also created by rebound stone crash. Weird!
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashReboundStoneExplosion(Entity* self) {
+     Primitive* prim;
+     s32 i;
+@@ -282,7 +288,12 @@
+         prim = prim->next;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashReboundStoneExplosion(Entity* self) { DestroyEntity(self); }
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashReboundStone(Entity* entity) {
+     switch (entity->step) {
+     case 0:
+@@ -321,6 +332,10 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashReboundStone(Entity* entity) { DestroyEntity(entity); }
++#endif
+ 
+ #define BIBLE_PAGE_COUNT 6
+ #if defined(VERSION_PSP)
+@@ -328,6 +343,7 @@
+ #else
+ static Point16 bible_pages_pos[BIBLE_PAGE_COUNT];
+ #endif
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashBibleBeam(Entity* self) {
+     Primitive* prim;
+     s32 i;
+@@ -433,6 +449,10 @@
+     self->hitboxWidth = abs(self->hitboxOffX);
+     self->hitboxHeight = var_s7 - self->posY.i.hi;
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashBibleBeam(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ static s16 bible_page_angles[BIBLE_PAGE_COUNT] = {
+     0x0400, 0x06AB, 0x0955, 0x0C00, 0x0EAB, 0x1155,
+@@ -442,6 +462,7 @@
+ #else
+ static s32 bible_pages_volume;
+ #endif
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashBible(Entity* self) {
+     Primitive* prim;
+     s32 i;
+@@ -641,6 +662,10 @@
+         prim = prim->next;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashBible(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ void func_8016F198(Entity* self) {
+     const int PrimCount = 16;
+@@ -769,6 +794,7 @@
+ // it as a crash, it makes 4 floating ricStopWatches. When they are done they
+ // disappear in a spinning sparkle. This entity represents that sparkle. 4
+ // copies of this entity are made when the crash is done.
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashStopwatchDoneSparkle(Entity* self) {
+     s32 sp4C;
+     s32 selfX;
+@@ -1111,6 +1137,10 @@
+         }
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashStopwatchDoneSparkle(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // Created by blueprint #73.
+ // When Stopwatch crash ends, each of the 4 ricStopWatches shoots out a
+@@ -1118,6 +1148,7 @@
+ // attacking part of that lightning. It does not do any graphics and just has
+ // the hitbox. Not clear why this is a dedicated entity rather than having one
+ // entity that is graphics + hitbox for the lightning.
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityStopwatchCrashLightning(Entity* self) {
+     switch (self->step) {
+     case 0:
+@@ -1136,7 +1167,12 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityStopwatchCrashLightning(Entity* self) { DestroyEntity(self); }
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashStopwatch(Entity* self) {
+     // Kind of funny control flow.
+     // On odd steps, we'll create a ricStopWatch, and on evens, we wait.
+@@ -1174,6 +1210,10 @@
+         break;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashStopwatch(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ static s16 GetAguneaLightningAngle(s16* arg0, s16 arg1, s16 arg2, s16* arg3) {
+     arg1 += rand() % 256 - 0x80;
+diff --git a/src/ric/pl_anims.c b/src/ric/pl_anims.c
+--- a/src/ric/pl_anims.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_anims.c	2026-11-07 13:57:39.927899664 -0800
+@@ -1,6 +1,12 @@
+ // SPDX-License-Identifier: AGPL-3.0-or-later
+ #include "ric.h"
+ 
++#if defined(MOD_MARIA_SAT)
++// Saturn port: the Saturn Maria's animations and hitboxes under Richter's
++// names (mods/sotn-ultimate/tools/gen_mar_assets.py)
++#include "mar_anims.h"
++#else
++
+ AnimationFrame* D_8015538C[] = {ric_anim_stand, ric_anim_stand};
+ AnimationFrame ric_anim_press_up[] = {POSE(64, 38, 1), POSE_LOOP(0)};
+ AnimationFrame ric_anim_stop_run[] = {
+@@ -143,3 +149,4 @@
+     0xFE, 0x06, 0x08, 0x08, 0xFA, 0x06, 0x07, 0x11, 0x04, 0x06, 0x0A, 0x09,
+     0xFD, 0x03, 0x09, 0x14, 0x00, 0x08, 0x08, 0x08, 0xFF, 0x0A, 0x0C, 0x07,
+ };
++#endif
+diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
+--- a/src/ric/pl_blueprints.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_blueprints.c	2026-11-07 13:57:39.927899664 -0800
+@@ -12,7 +12,18 @@
+     {16, 127, 0, 0},
+     {16, 63, 63, 127},
+     {16, 63, 127, 63},
++#if defined(MOD_MARIA_SAT)
++    {16, 47, 63, 127},
++    // Saturn Maria's command specials (060C1AF4 rows 5-10)
++    {16, 63, 127, 127},
++    {16, 31, 127, 127},
++    {16, 95, 95, 95},
++    {16, 0, 0, 127},
++    {16, 127, 47, 47},
++    {16, 127, 127, 127}};
++#else
+     {16, 47, 63, 127}};
++#endif
+ 
+ static SubweaponDef subweapons_def[] = {
+ #include "gen/subweapons.h"
+@@ -395,6 +406,30 @@
+ void RicEntityStopwatchCrashLightning(Entity* self);
+ void RicEntityTeleport(Entity* self);
+ void RicEntityDummy(Entity* self);
++#if defined(MOD_MARIA_SAT)
++// Saturn Maria's attack entities (mar_attacks.h)
++void MarEntityShot(Entity* self);
++void MarEntityKick(Entity* self);
++void MarEntityDive(Entity* self);
++void MarEntityCharge1(Entity* self);
++void MarEntityCharge2(Entity* self);
++void MarEntityLaser(Entity* self);
++void MarEntitySpark(Entity* self);
++void MarEntityCharged(Entity* self);
++void MarEntityAura(Entity* self);
++void MarEntityKnuckle(Entity* self);
++void MarEntityGenbu(Entity* self);
++void MarEntityByakko(Entity* self);
++void MarEntitySeiryu(Entity* self);
++void MarEntitySuzaku(Entity* self);
++void MarEntityFlame(Entity* self);
++void MarEntityDragon(Entity* self);
++void MarEntityStar(Entity* self);
++void MarEntityAsh(Entity* self);
++void MarEntityTrail(Entity* self);
++void MarEntityBeasts(Entity* self);
++void MarEntityCountdown(Entity* self);
++#endif
+ static PfnEntityUpdate entity_functions[] = {
+     RicEntityDummy,
+     RicEntityFactory,
+@@ -463,9 +498,172 @@
+     RicEntityCrashStopwatchDoneSparkle,
+     RicEntityStopwatchCrashLightning,
+     RicEntityTeleport,
++#if defined(MOD_MARIA_SAT)
++    RicEntityDummy,
++    RicEntityDummy,   // 68
++    MarEntityShot,    // 69
++    MarEntityKick,    // 70
++    MarEntityDive,    // 71
++    RicEntityDummy,   // 72
++    MarEntityKnuckle, // 73
++    MarEntityGenbu,   // 74
++    MarEntityByakko,  // 75
++    MarEntitySeiryu,  // 76
++    MarEntitySuzaku,  // 77
++    MarEntityFlame,   // 78
++    MarEntityDragon,  // 79
++    MarEntityStar,    // 80
++    MarEntityTrail,   // 81
++    MarEntityCharge1, // 82
++    MarEntityCharge2, // 83
++    MarEntityLaser,   // 84
++    MarEntitySpark,   // 85
++    RicEntityDummy,
++    MarEntityAsh,       // 87
++    MarEntityCharged,   // 88
++    MarEntityAura,      // 89
++    MarEntityCountdown, // 90
++    MarEntityBeasts,    // 91
++    RicEntityDummy};
++#else
+     RicEntityDummy};
++#endif
+ STATIC_ASSERT(LEN(entity_functions) == NUM_ENTITIES, "entity array wrong size");
+ 
++#if defined(MOD_MARIA_SAT)
++// Saturn port: Maria's images are LZSS-packed (they don't fit raw; the
++// Saturn's MARIA.CHR is packed too). DRA's RenderEntities uploads the image a
++// player frame names straight from the sheet, so before it runs, the image
++// each player-sheet entity (PLAYER and its three afterimages) shows is
++// unpacked into that entity's buffer and its sheet entry pointed there.
++#include "mar_pal.h"
++extern u8* mar_lz[];
++extern u16 mar_lz_size[];
++extern u8* richter_sprites[];
++extern s16* spritebank0[];
++static u8 mar_buf[4][4 + MAR_SPRITE_MAXPIX];
++static s16 mar_buf_sprite[4];
++// a 4x1 transparent image: what a sheet entry shows when its buffer was
++// reused (never stale buffer bytes: their "header" could be any size, and
++// DRA uploads that size over the VRAM next to the player slots, the HUD)
++static u8 mar_blank[8] = {4, 1, 0, 0, 0, 0, 0, 0};
++
++static void MarBufRelease(s32 i) {
++    if (mar_buf_sprite[i] >= 0 &&
++        richter_sprites[mar_buf_sprite[i]] == mar_buf[i]) {
++        richter_sprites[mar_buf_sprite[i]] = mar_blank;
++    }
++    mar_buf_sprite[i] = -1;
++}
++
++static void MarUnpack(u8* dst, u8* src, s32 size) {
++    u8* end;
++    u8* p;
++    s32 flags;
++    s32 bit;
++    u32 v;
++
++    end = dst + size;
++    while (dst < end) {
++        flags = *src++;
++        for (bit = 0; bit < 8 && dst < end; bit++, flags >>= 1) {
++            if (flags & 1) {
++                *dst++ = *src++;
++            } else {
++                v = src[0] | (src[1] << 8);
++                src += 2;
++                p = dst - (v & 0xFFF) - 1;
++                for (v = (v >> 12) + 3; v; v--) {
++                    *dst++ = *p++;
++                }
++            }
++        }
++    }
++}
++
++void MarDecodeSprites(void) {
++    Entity* e;
++    s16* frame;
++    u8* src;
++    u8* buf;
++    s32 idx;
++    s32 i;
++
++    for (i = 0, e = &PLAYER; i < 4; i++, e++) {
++        if (!(e->animCurFrame & 0x7FFF) ||
++            (u16)e->animSet != ANIMSET_OVL(0x10)) {
++            continue;
++        }
++        frame = spritebank0[e->animCurFrame & 0x7FFF];
++        if (!frame || !(frame[0] & 0x8000)) {
++            continue;
++        }
++        idx = frame[0] & 0x7FFF;
++        buf = mar_buf[i];
++        if (mar_buf_sprite[i] != idx) {
++            MarBufRelease(i);
++            src = mar_lz[idx];
++            buf[0] = src[0];
++            buf[1] = src[1];
++            buf[2] = src[2];
++            buf[3] = src[3];
++            MarUnpack(buf + 4, src + 4, mar_lz_size[idx]);
++            mar_buf_sprite[i] = idx;
++        }
++        richter_sprites[idx] = buf;
++    }
++}
++
++// her attacks: Square shot, charge, kick, dive kick
++#include "../../mods/sotn-ultimate/src/maria_saturn/mar_attacks.h"
++// her command specials
++#include "../../mods/sotn-ultimate/src/maria_saturn/mar_specials.h"
++
++// her palette in PAL_RICHTER (RAM copy and VRAM), as DRA's
++// ModRicCostumeApply does for Richter's coat
++void MarInit(void) {
++    RECT rect;
++    s32 i;
++
++    for (i = 0; i < COLORS_PER_PAL; i++) {
++        g_Clut[1][(PAL_RICHTER - 0x100) * COLORS_PER_PAL + i] = mar_pal[i];
++    }
++    rect.x = (g_ClutIds[PAL_RICHTER] & 0x3F) << 4;
++    rect.y = g_ClutIds[PAL_RICHTER] >> 6;
++    rect.w = COLORS_PER_PAL;
++    rect.h = 1;
++    LoadImage(&rect, (u_long*)mar_pal);
++    // no sheet entry may point at the buffers (a previous stage's images)
++    // or at a packed image while they are reused below
++    for (i = 0; i < MAR_SPRITE_COUNT; i++) {
++        richter_sprites[i] = mar_blank;
++    }
++    for (i = 0; i < 4; i++) {
++        mar_buf_sprite[i] = -1;
++    }
++    MarFxInit();
++    MarSpInit();
++    // Saturn dagger (060C1B02 row 1; three per throw, blueprint below)
++    subweapons_def[PL_W_DAGGER].attack = 10;
++    subweapons_def[PL_W_DAGGER].heartCost = 4;
++    // her other Saturn subweapon rows that differ: axe 20 / 4 hearts (three
++    // per throw), bible 15, vibhuti 2 hearts
++    subweapons_def[PL_W_AXE].attack = 20;
++    subweapons_def[PL_W_AXE].heartCost = 4;
++    subweapons_def[PL_W_BIBLE].attack = 15;
++    subweapons_def[PL_W_VIBHUTI].heartCost = 2;
++    // how many may be out at once: six daggers / axes (two throws of
++    // three), three crosses (060C1B02 rows 1, 2, 4)
++    subweapons_def[PL_W_DAGGER].chainLimit = 6;
++    subweapons_def[PL_W_AXE].chainLimit = 6;
++    subweapons_def[PL_W_CROSS].chainLimit = 3;
++    subweapons_def[PL_W_23].attack = 45; // her front kick (row 23)
++    for (i = 0; i < 4; i++) {
++        mar_buf_sprite[i] = -1;
++    }
++}
++#endif
++
+ // Corresponding DRA function is UpdatePlayerEntities
+ extern AnimationFrame* g_RicEmptyAnimGroup[];
+ void RicUpdatePlayerEntities(void) {
+@@ -532,6 +730,10 @@
+             entity->hitboxState = 0;
+         }
+     }
++#if defined(MOD_MARIA_SAT)
++    MarVramCheck();
++    MarDecodeSprites();
++#endif
+ }
+ 
+ // Similar to the version in DRA but with some logic removed.
+@@ -561,9 +763,49 @@
+ 
+ static FactoryBlueprint blueprints[] = {
+ #include GEN_VERSION(blueprints.h)
++#if defined(MOD_MARIA_SAT)
++    // Saturn Maria (MARIA.PRG 060C1F24 table, 79-104); kind 7 = her
++    // B_KIND_7 range below
++    B_MAKE(0x45, 1, 1, 1, 1, 0, 7, 3, 0), // 79 shot
++    B_MAKE(0x46, 1, 1, 1, 1, 0, 7, 3, 0), // 80 kick
++    B_MAKE(0x47, 1, 1, 1, 1, 0, 7, 5, 0), // 81 dive kick
++    B_MAKE(0x48, 1, 1, 1, 1, 0, 7, 3, 0),
++    B_MAKE(0x49, 1, 1, 1, 1, 0, 7, 3, 0),
++    B_MAKE(0x4A, 1, 1, 1, 1, 0, 7, 3, 6),
++    B_MAKE(0x4B, 1, 1, 1, 1, 0, 7, 3, 6),
++    B_MAKE(0x4C, 1, 1, 1, 1, 0, 7, 3, 6),
++    B_MAKE(0x4D, 1, 1, 1, 1, 0, 2, 3, 6),
++    B_MAKE(0x16, 1, 1, 1, 1, 0, 7, 3, 0),
++    B_MAKE(0x4E, 1, 1, 1, 1, 0, 7, 0, 0),
++    B_MAKE(0x4F, 1, 1, 1, 1, 0, 7, 0, 0),
++    B_MAKE(0x50, 1, 1, 1, 1, 0, 7, 0, 0),
++    B_MAKE(0x51, 1, 1, 1, 1, 0, 0, 0, 0),
++    B_MAKE(0x52, 1, 1, 1, 1, 0, 7, 0, 0), // 93 charge level 1
++    B_MAKE(0x53, 1, 1, 1, 1, 0, 7, 0, 0), // 94 charge level 2
++    B_MAKE(0x54, 1, 1, 1, 1, 0, 7, 0, 0), // 95 charge level 3
++    B_MAKE(0x55, 1, 1, 1, 1, 0, 7, 0, 0), // 96 laser spark
++    B_MAKE(0x56, 1, 1, 1, 1, 0, 0, 0, 0),
++    B_MAKE(0x57, 1, 1, 1, 1, 0, 1, 0, 0),
++    B_MAKE(0x58, 1, 1, 0, 1, 0, 7, 3, 0), // 99 fully charged
++    B_MAKE(0x59, 4, 1, 0, 1, 3, 0, 1, 1), // 100 its diamonds
++    B_MAKE(0x5A, 1, 1, 1, 1, 0, 0, 1, 0),
++    B_MAKE(0x5B, 1, 1, 0, 1, 1, 6, 2, 10),
++    B_MAKE(0x5C, 3, 1, 1, 1, 5, 0, 2, 1),
++    B_MAKE(0x5C, 1, 1, 1, 1, 0, 0, 2, 1),
++#endif
+ };
+ STATIC_ASSERT(LEN(blueprints) == NUM_BLUEPRINTS, "bp array wrong size");
+ 
++#if defined(MOD_MARIA_SAT)
++// Saturn Maria's dagger (060C1F24 row 43): three, 4 frames apart
++static FactoryBlueprint mar_bp_dagger =
++    B_MAKE(E_SUBWPN_DAGGER, 3, 1, true, true, 4, B_WEAPON,
++           B_ORIGIN_FOLLOW_PLAYER_WHILE_PLAYER_IS_HIT, 8);
++// her axe (row 19): three, 4 frames apart
++static FactoryBlueprint mar_bp_axe =
++    B_MAKE(E_SUBWPN_AXE, 3, 1, true, true, 4, B_WEAPON,
++           B_ORIGIN_FOLLOW_PLAYER_WHILE_PLAYER_IS_HIT, 10);
++#endif
+ // Similar to same function in DRA
+ static u8 entity_ranges[NUM_BLUEPRINT_KIND][2] = {
+     {0x30, 0x3F}, // B_DECORATION
+@@ -573,6 +815,9 @@
+     {0x1F, 0x1F}, // B_WHIP
+     {0x30, 0x30}, // B_CUTSCENE_MARIA
+     {0x10, 0x2F}, // B_WEAPON_CHILDREN
++#if defined(MOD_MARIA_SAT)
++    {0x12, 0x2F}, // B_KIND_7: the Saturn Maria's attacks
++#endif
+ };
+ void RicEntityFactory(Entity* self) {
+     Entity* newEntity;
+@@ -584,6 +829,14 @@
+ 
+     if (self->step == 0) {
+         data = (u8*)&blueprints[self->params];
++#if defined(MOD_MARIA_SAT)
++        if (self->params == BP_SUBWPN_DAGGER) {
++            data = (u8*)&mar_bp_dagger;
++        }
++        if (self->params == BP_AXE) {
++            data = (u8*)&mar_bp_axe;
++        }
++#endif
+         self->ext.factory.newEntityId = *data++;
+         self->ext.factory.amount = *data++;
+         self->ext.factory.nPerCycle = *data & 0x3F;
+@@ -779,6 +1032,7 @@
+ }
+ 
+ // created from a blueprint, #24
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityBladeDash(Entity* self) {
+     if (PLAYER.step != PL_S_BLADEDASH) {
+         DestroyEntity(self);
+@@ -801,6 +1055,10 @@
+         }
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicEntityBladeDash(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ void func_80160F0C(Entity* self) {
+     if (PLAYER.step != PL_S_HIGHJUMP) {
+@@ -813,10 +1071,18 @@
+     if (self->step == 0) {
+         self->flags =
+             FLAG_UNK_20000 | FLAG_POS_PLAYER_LOCKED | FLAG_KEEP_ALIVE_OFFCAMERA;
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060AD048: her uppercut's fist
++        self->hitboxOffX = 6;
++        self->hitboxOffY = -26;
++        self->hitboxWidth = 8;
++        self->hitboxHeight = 12;
++#else
+         self->hitboxOffX = 0xC;
+         self->hitboxOffY = -0x1A;
+         self->hitboxWidth = 12;
+         self->hitboxHeight = 12;
++#endif
+         // High jump attack is a subweapon!
+         self->ext.subweapon.subweaponId = PL_W_HIGHJUMP;
+         RicSetSubweaponParams(self);
+@@ -1347,6 +1613,15 @@
+     {+0x40, 0, -FIX(2.5), FIX(0), 0x0048, 0x1B, 0x0119, 0, 128},
+     {0, -0x40, FIX(0), +FIX(2.5), 0x0030, 0x19, 0x011A, 0, 0},
+     {0, +0x40, FIX(0), -FIX(2.5), 0x0018, 0x19, 0x011B, 128, 0}};
++#if defined(MOD_MARIA_SAT)
++// Saturn 060C242C: same paths, but beast 0 is the tiger (Byakko) and 1 the
++// turtle (Genbu): the PS1 art of rows 0 and 1 swapped
++static Props_80161FF0 mar_beast_props[] = {
++    {-0x40, 0, +FIX(2.5), FIX(0), 0x0060, 0x1B, 0x0119, 0, 128},
++    {+0x40, 0, -FIX(2.5), FIX(0), 0x0048, 0x1B, 0x0118, 128, 0},
++    {0, -0x40, FIX(0), +FIX(2.5), 0x0030, 0x19, 0x011A, 0, 0},
++    {0, +0x40, FIX(0), -FIX(2.5), 0x0018, 0x19, 0x011B, 128, 0}};
++#endif
+ void RicEntityApplyMariaPowerAnim(Entity* self) {
+     Primitive* prim;
+     s16 posX;
+@@ -1357,7 +1632,17 @@
+     posX = self->posX.i.hi;
+     posY = self->posY.i.hi;
+     params = self->params;
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060AE3C0: a single beast comes as FACTORY(bp 88, n), n = 1-4
++    if (params & 0xFF00) {
++        params = ((params >> 8) - 1) & 3;
++    } else {
++        params &= 3;
++    }
++    props = &mar_beast_props[params];
++#else
+     props = &D_80154E5C[params];
++#endif
+     switch (self->step) {
+     case 0:
+         self->primIndex = g_api.AllocPrimitives(PRIM_GT4, 1);
+@@ -1365,7 +1650,15 @@
+             DestroyEntity(self);
+             return;
+         }
+-        g_api.PlaySfx(SFX_MARIA_ANIMALS_APPEAR);
++        // hers: Saturn 0x729, as the PS1 common SFX_NOISE_SWEEP_DOWN_A
++        g_api.PlaySfx(
++            RIC_OR_MAR(SFX_MARIA_ANIMALS_APPEAR, SFX_NOISE_SWEEP_DOWN_A));
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060AE3C0: the Four Beasts' second beast says their name
++        if (!(self->params & 0xFF00) && params == 1) {
++            g_api.PlaySfx(MAR_SFX_FOUR);
++        }
++#endif
+         self->ext.ricMariaPower.size = 0x100;
+         prim = &g_PrimBuf[self->primIndex];
+         prim->u0 = props->uBase;
+@@ -1429,6 +1722,7 @@
+         posY - (((rsin(ROT(315)) >> 4) * self->ext.ricMariaPower.size) >> 8);
+ }
+ 
++#if !defined(MOD_MARIA_SAT)
+ void func_801623E0(Entity* self) {
+     Primitive* prim;
+ 
+@@ -1477,7 +1771,12 @@
+     prim->y3 = self->posY.i.hi + self->ext.circleExpand.height;
+     prim->clut = (g_Timer & 1) + 0x13E;
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void func_801623E0(Entity* self) { DestroyEntity(self); }
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void func_80162604(Entity* self) {
+     Primitive* prim;
+ 
+@@ -1535,12 +1834,22 @@
+     prim->x3 = self->posX.i.hi + self->ext.circleExpand.width;
+     prim->y3 = self->posY.i.hi + self->ext.circleExpand.height;
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void func_80162604(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ static u16 D_80154EAC[] = {0x016E, 0x0161, 0x0160, 0x0162};
+ // 0xFFFF2AAB = -FIX(1. / 3)
+ // 0xFFFDAAAB = -FIX(5. / 3)
+ static s32 D_80154EB4[] = {FIX(5. / 3), -FIX(5. / 3), FIX(1. / 3), -0xD555};
+ static s32 D_80154EC4[] = {-FIX(2), -FIX(5. / 3), -FIX(3), -0x25555};
++#if defined(MOD_MARIA_SAT)
++// Saturn port: the prologue's power orbs (RicEntityMaria's, after Richter's
++// prologue death): never in Maria mode, dropped from MARIA.BIN for room
++void RicEntityMariaPowers(Entity* self) { DestroyEntity(self); }
++#else
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityMariaPowers(Entity* self) {
+     Primitive* prim;
+     s16 params;
+@@ -1574,7 +1883,8 @@
+         if (params == 3) {
+             self->flags |= FLAG_KEEP_ALIVE_OFFCAMERA;
+         }
+-        g_api.PlaySfx(SFX_MARIA_ANIMALS_APPEAR);
++        g_api.PlaySfx(
++            RIC_OR_MAR(SFX_MARIA_ANIMALS_APPEAR, SFX_NOISE_SWEEP_DOWN_A));
+         self->ext.et_80162870.unk82 = 12;
+         self->step++;
+         break;
+@@ -1625,6 +1935,11 @@
+     prim->x3 = self->posX.i.hi + self->ext.et_80162870.unk7C;
+     prim->y3 = self->posY.i.hi + self->ext.et_80162870.unk80;
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicEntityMariaPowers(Entity* self) { DestroyEntity(self); }
++#endif
++#endif
+ 
+ void RicEntityNotImplemented4(Entity* self) {}
+ 
+@@ -1643,6 +1958,7 @@
+     POSE(0x08, 0x11, 0), POSE(0x0C, 0x12, 0), POSE(0xB0, 0x13, 0),
+     POSE(0x0A, 0x14, 0), POSE(0x0A, 0x15, 0), POSE(0x0A, 0x16, 0),
+     POSE(0x30, 0x17, 0), POSE(0xD0, 0x18, 0), POSE_END};
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityMaria(Entity* self) {
+     switch (self->step) {
+     case 0:
+@@ -1698,6 +2014,10 @@
+         break;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicEntityMaria(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // same as DRA/func_8011BD48
+ bool func_80162E9C(Entity* entity) {
+@@ -1748,7 +2068,13 @@
+     {0, 0, 0, 0x102, 0x0100, 0x0100, 0x0100, 0x0000, 0x31, 0x200},
+     {0, 0, 0, 0x15F, 0x00C0, 0x00C0, 0x0100, 0x0010, 0x31, 0x200},
+     {8, 0, 8, 0x165, 0x0100, 0x0100, 0x0100, 0x7007, 0x51, 0x200},
++#if defined(MOD_MARIA_SAT)
++    {0, 0, 0, 0x168, 0x7100, 0x7100, 0x0200, 0x7007, 0x31, 0x200},
++    // Saturn Maria's 24 (after Genbu; Saturn values x2 like the rows above)
++    {0, 0, 0, 0x15F, 0x0200, 0x0200, 0x0100, 0x0040, 0x31, 0x200}};
++#else
+     {0, 0, 0, 0x168, 0x7100, 0x7100, 0x0200, 0x7007, 0x31, 0x200}};
++#endif
+ void RicEntityPlayerBlinkWhite(Entity* self) {
+     u8 xMargin;
+     u8 yMargin;
+@@ -2179,6 +2505,7 @@
+     {0x0000, 0x0000, 0x0100, 0x7100, 0x0100, 0x0400},
+     {0x0500, 0x0A00, 0x0100, 0x0100, 0x0100, 0x0100},
+     {0x0500, 0x0A00, 0x0100, 0x0200, 0x7100, 0x0100}};
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityShrinkingPowerUpRing(Entity* self) {
+     s16 variant;
+     s16 rMod;
+@@ -2334,6 +2661,10 @@
+         prim1 = prim1->next;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicEntityShrinkingPowerUpRing(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // Entity ID #40. Created by blueprint 47. That factory comes from
+ // RicStepHit.
+diff --git a/src/ric/pl_collision.c b/src/ric/pl_collision.c
+--- a/src/ric/pl_collision.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_collision.c	2026-11-07 13:57:39.927899664 -0800
+@@ -45,6 +45,11 @@
+     }
+     if (PLAYER.velocityY >= 0) {
+         if ((checks & CHECK_GROUND) && (g_Player.vram_flag & TOUCHING_GROUND)) {
++#if defined(MOD_MARIA_SAT)
++            // Saturn 060AAA68: her landings (mar_attacks.h)
++            MarLand();
++            return true;
++#else
+             switch (g_Player.unk46) {
+             case 0:
+             default:
+@@ -131,6 +136,7 @@
+                 g_Player.unk44 = 0;
+                 return true;
+             }
++#endif
+         } else if (checks & CHECK_GROUND_AFTER_HIT &&
+                    (g_Player.vram_flag & TOUCHING_GROUND)) {
+             RicSetCrouch(1, PLAYER.velocityX);
+@@ -173,10 +179,14 @@
+     if (g_Player.unk46) {
+         return false;
+     }
++#if !defined(MOD_MARIA_SAT)
++    // (the Saturn Maria has no item crash: 060A9CE8 is a stub; Triangle is
++    // her kick, below)
+     if (checks & CHECK_CRASH && (g_Player.padTapped & PAD_TRIANGLE) &&
+         RicDoCrash()) {
+         return true;
+     }
++#endif
+     if (checks & CHECK_SLIDE &&
+         !(PLAYER.facingLeft == 0 &&
+           g_Player.colFloor[2].effects & EFFECT_UNK_8000) &&
+@@ -192,14 +202,48 @@
+         RicSetJump();
+         return true;
+     }
++#if defined(MOD_MARIA_SAT)
++    if (checks & CHECK_DOUBLE_JUMP && (g_Player.padTapped & PAD_CROSS) &&
++        (g_Player.unk44 & 0x101) != 0x101) {
++        MarSetDoubleJump();
++        return true;
++    }
++    // Saturn 060AAA68: Square = her shot, Triangle = her kick, releasing a
++    // held Square = the charged shot (mar_attacks.h)
++    if (checks & CHECK_ATTACK) {
++        if (g_Player.padTapped & PAD_SQUARE) {
++            if (MarDoAttack(0)) {
++                return true;
++            }
++        } else if (g_Player.padTapped & PAD_TRIANGLE) {
++            MarDoKick();
++            return true;
++        } else if ((g_Player.padHeld ^ g_Player.padPressed) & g_Player.padHeld &
++                   PAD_SQUARE) {
++            if (MarDoAttack(1)) {
++                return true;
++            }
++        }
++    }
++#else
+     if (checks & CHECK_ATTACK && (g_Player.padTapped & PAD_SQUARE) &&
+         RicDoAttack()) {
+         return true;
+     }
++#endif
+     if (checks & CHECK_CROUCH && (g_Player.padPressed & PAD_DOWN)) {
+         RicSetCrouch(2, 0);
+         return true;
+     }
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060AAA68's last check: R (PS1 R1), her backdash, unless one
++    // is under way
++    if (checks & CHECK_BACKDASH && PLAYER.anim != mar_anim_backdash &&
++        (g_Player.padTapped & PAD_R1)) {
++        MarSetBackdash();
++        return true;
++    }
++#endif
+     return false;
+ }
+ 
+diff --git a/src/ric/pl_crash_cross.c b/src/ric/pl_crash_cross.c
+--- a/src/ric/pl_crash_cross.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_crash_cross.c	2026-11-07 13:57:39.927899664 -0800
+@@ -111,6 +111,7 @@
+     {0x50, 0x50, 0x18, 0x08, 0x1F}, {0x50, 0x50, 0x18, 0x08, 0x5F},
+     {0x68, 0x58, 0x10, 0x10, 0x0F}, {0x68, 0x58, 0x10, 0x10, 0x1F},
+     {0x50, 0x58, 0x18, 0x10, 0x0F}, {0x50, 0x58, 0x18, 0x10, 0x1F}};
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashCrossBeam(Entity* self) {
+     MATRIX m;
+     SVECTOR rot;
+@@ -303,3 +304,7 @@
+         gte_stsxy((long*)&prim->x3);
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashCrossBeam(Entity* self) { DestroyEntity(self); }
++#endif
+diff --git a/src/ric/pl_header.c b/src/ric/pl_header.c
+--- a/src/ric/pl_header.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_header.c	2026-11-07 13:57:39.927899664 -0800
+@@ -1,7 +1,11 @@
+ // SPDX-License-Identifier: AGPL-3.0-or-later
+ #include "ric.h"
+ 
++#if defined(MOD_MARIA_SAT)
++extern u8* richter_sprites[];
++#else
+ extern u8* richter_sprites[RIC_SPRITE_COUNT];
++#endif
+ void RicMain(void);
+ void RicInit(u16 params);
+ void RicUpdatePlayerEntities(void);
+@@ -18,6 +22,10 @@
+     richter_sprites,
+ };
+ 
+-#if !defined(VERSION_PSP)
++#if defined(MOD_MARIA_SAT)
++// Saturn port: the Saturn Maria's images
++// (mods/sotn-ultimate/tools/gen_mar_assets.py)
++#include "mar_sprites.h"
++#elif !defined(VERSION_PSP)
+ #include "gen/richter.h"
+ #endif
+diff --git a/src/ric/pl_main.c b/src/ric/pl_main.c
+--- a/src/ric/pl_main.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_main.c	2026-11-07 13:57:39.927899664 -0800
+@@ -141,6 +141,9 @@
+     *spriteptr = (SpriteParts*)spritebank2;
+     spriteptr++;
+     *spriteptr = (SpriteParts*)spritebank3;
++#if defined(MOD_MARIA_SAT)
++    MarInit();
++#endif
+     for (e = &g_Entities[E_AFTERIMAGE_1], i = 0; i < 3; i++, e++) {
+         DestroyEntity(e);
+         e->animSet = ANIMSET_OVL(0x10);
+@@ -290,6 +293,7 @@
+     }
+ }
+ 
++#if !defined(MOD_MARIA_SAT)
+ static void CheckBladeDashInput(void) {
+     s32 pressed;
+     s32 up;
+@@ -351,6 +355,10 @@
+         break;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++static void CheckBladeDashInput(void) {}
++#endif
+ 
+ static void CheckHighJumpInput(void) {
+     switch (g_RicComboButtons[1].buttonsCorrect) {
+@@ -384,7 +392,13 @@
+                 PLAYER.step == PL_S_FALL) {
+                 if (g_Player.unk72) {
+                     g_RicComboButtons[1].buttonsCorrect = 0;
++#if defined(MOD_MARIA_SAT)
++                } else if (g_Status.mp > 3) {
++                    // Saturn 060A59A8: her uppercut costs 4 MP
++                    g_Status.mp -= 4;
++#else
+                 } else {
++#endif
+                     RicSetHighJump();
+                     g_RicComboButtons[1].buttonsCorrect = 0;
+                 }
+@@ -457,7 +471,13 @@
+             break;
+         }
+         case PL_T_INVINCIBLE_SCENE:
++#if !defined(MOD_MARIA_SAT)
++            // (Maria's Four Beasts uses this timer for 2000 frames and the
++            // Saturn counts it down; the PS1 holds it for the prologue)
+             g_Player.timers[PL_T_INVINCIBLE_SCENE] = 4;
++#else
++            MarBeastsPal(1);
++#endif
+             break;
+         case PL_T_AFTERIMAGE_DISABLE:
+             DisableAfterImage(0, 0);
+@@ -483,6 +503,9 @@
+             draw->enableColorBlend = 0;
+             break;
+         case PL_T_INVINCIBLE_SCENE:
++#if defined(MOD_MARIA_SAT)
++            MarBeastsPal(0);
++#endif
+             RicSetInvincibilityFrames(1, 16);
+             break;
+         case PL_T_6:
+@@ -573,8 +596,15 @@
+         }
+     } else {
+     check_input_combo:
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060A5BE8: her high jump, then her command specials (she
++        // has no blade dash)
++        CheckHighJumpInput();
++        MarCheckSpecials();
++#else
+         CheckBladeDashInput();
+         CheckHighJumpInput();
++#endif
+     }
+     g_Player.prev_step = PLAYER.step;
+     g_Player.prev_step_s = PLAYER.step_s;
+@@ -639,6 +669,16 @@
+     case PL_S_INIT:
+         RicStepTeleport();
+         break;
++#if defined(MOD_MARIA_SAT)
++    case PL_S_MAR_SPECIAL:
++    case PL_S_MAR_SPECIAL + 1:
++    case PL_S_MAR_SPECIAL + 2:
++    case PL_S_MAR_SPECIAL + 3:
++    case PL_S_MAR_SPECIAL + 4:
++    case PL_S_MAR_SPECIAL + 5:
++        MarStepSpecial();
++        break;
++#endif
+     }
+     g_Player.unk08 = g_Player.status;
+ #if defined(FIX_UB) || defined(VERSION_PSP)
+@@ -647,6 +687,13 @@
+ #endif
+     switch (PLAYER.step) {
+     case PL_S_STAND:
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060A5BE8: her backdash (step_s 3) leaves afterimages
++        if (PLAYER.step_s == 3) {
++            newStatus = 0;
++            break;
++        }
++#endif
+         newStatus = NO_AFTERIMAGE;
+         break;
+     case PL_S_WALK:
+@@ -659,11 +706,18 @@
+         }
+         break;
+     case PL_S_FALL:
++#if defined(MOD_MARIA_SAT)
++    case PL_S_JUMP:
++        // Saturn 060A5BE8: 0x2000 only, her jumps leave afterimages
++        newStatus = PLAYER_STATUS_UNK2000;
++        break;
++#else
+         newStatus = NO_AFTERIMAGE | PLAYER_STATUS_UNK2000;
+         break;
+     case PL_S_JUMP:
+         newStatus = NO_AFTERIMAGE | PLAYER_STATUS_UNK2000;
+         break;
++#endif
+     case PL_S_HIGHJUMP:
+         RicSetInvincibilityFrames(1, 4);
+         break;
+@@ -710,7 +764,29 @@
+         newStatus = NO_AFTERIMAGE;
+         RicSetInvincibilityFrames(1, 16);
+         break;
++#if defined(MOD_MARIA_SAT)
++    case PL_S_MAR_SPECIAL: // Saturn 060A5BE8's status table
++    case PL_S_MAR_SPECIAL + 1:
++    case PL_S_MAR_SPECIAL + 2:
++    case PL_S_MAR_SPECIAL + 3:
++    case PL_S_MAR_SPECIAL + 4:
++        newStatus = PLAYER_STATUS_UNK20000000;
++        break;
++    case PL_S_MAR_SPECIAL + 5:
++        newStatus = 0;
++        break;
++#endif
+     }
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A5BE8 -> 060A5AD4: her charge (not while hit, grabbed,
++    // dead, in a crash or the stage start)
++    MarCharge(
++        PLAYER.step != PL_S_HIT && PLAYER.step != PL_S_BOSS_GRAB &&
++        PLAYER.step != PL_S_DEAD && PLAYER.step != PL_S_STAND_IN_AIR &&
++        PLAYER.step != PL_S_FLAME_WHIP && PLAYER.step != PL_S_HYDROSTORM &&
++        PLAYER.step != PL_S_THROW_DAGGERS && PLAYER.step != PL_S_SUBWPN_CRASH &&
++        PLAYER.step != PL_S_INIT);
++#endif
+     if (g_Player.timers[PL_T_ATTACK]) {
+         newStatus |= PLAYER_STATUS_UNK400;
+     }
+@@ -746,6 +822,9 @@
+         g_Player.status |= PLAYER_STATUS_INVINCIBLE;
+     }
+     g_api.UpdateAnim(D_80155964, (AnimationFrame**)D_8015538C);
++#if defined(MOD_MARIA_SAT)
++    MarChainAnim();
++#endif
+     PLAYER.hitboxState = 1;
+     PLAYER.hitParams = 0;
+     PLAYER.hitPoints = 0;
+diff --git a/src/ric/pl_setstep.c b/src/ric/pl_setstep.c
+--- a/src/ric/pl_setstep.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_setstep.c	2026-11-07 13:57:39.927899664 -0800
+@@ -15,6 +15,20 @@
+ }
+ 
+ void RicSetCrouch(s32 kind, s32 velocityX) {
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A9194: her crouch animations; unk44 reset
++    RicSetStep(PL_S_CROUCH);
++    g_Player.unk44 = 0;
++    PLAYER.velocityX = velocityX;
++    PLAYER.velocityY = 0;
++    if (kind == 1) {
++        PLAYER.step_s = 4;
++    }
++    if (kind == 2) {
++        PLAYER.step_s = 1;
++    }
++    RicSetAnimation(kind == 3 ? ric_anim_crouch_from_stand2 : ric_anim_crouch);
++#else
+     RicSetStep(PL_S_CROUCH);
+     RicSetAnimation(ric_anim_crouch);
+     PLAYER.velocityX = velocityX;
+@@ -31,6 +45,7 @@
+         PLAYER.anim = ric_anim_land_from_air_run;
+         PLAYER.step_s = 4;
+     }
++#endif
+ }
+ 
+ // Corresponding DRA function is func_8010E570 (much more complex)
+@@ -39,6 +54,14 @@
+     PLAYER.velocityY = 0;
+     g_Player.unk44 = 0;
+     RicSetStep(PL_S_STAND);
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A9210: at a ledge (IN_AIR_OR_EDGE) her balancing pose,
++    // elsewhere her idle (hands at the waist)
++    if (g_Player.vram_flag & IN_AIR_OR_EDGE) {
++        RicSetAnimation(mar_anim_stand_edge);
++        return;
++    }
++#endif
+     RicSetAnimation(ric_anim_stand);
+ }
+ 
+@@ -125,7 +148,11 @@
+             RicSetSpeedX(FIX(2.25));
+             g_Player.unk44 = 0x10;
+         } else {
++#if defined(MOD_MARIA_SAT)
++            RicSetSpeedX(FIX(1.275));
++#else
+             RicSetSpeedX(FIX(1.25));
++#endif
+             g_Player.unk44 = 0;
+         }
+     } else {
+@@ -134,6 +161,10 @@
+         g_Player.unk44 = 4;
+     }
+     RicSetStep(PL_S_JUMP);
++#if defined(MOD_MARIA_SAT)
++    PLAYER.velocityY = FIX(-4);
++    return;
++#endif
+     if (g_IsPrologueStage) {
+         PLAYER.velocityY = FIX(-4.6875);
+     } else {
+@@ -141,16 +172,34 @@
+     }
+ }
+ 
++#if defined(MOD_MARIA_SAT)
++#include "../../mods/sotn-ultimate/src/maria_saturn/pl_setstep_mod_double_jump.h"
++#endif
++
+ void RicSetHighJump(void) {
+     RicSetStep(PL_S_HIGHJUMP);
+     PLAYER.velocityX = 0;
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A9608: holding a direction makes it her diagonal uppercut
++    // (Saturn 4.78 / 1.59 px, x 4/5)
++    if (RicCheckFacing()) {
++        RicSetSpeedX(FIX(3.83));
++        RicSetAnimation(mar_anim_uppercut_diag);
++    } else {
++        RicSetSpeedX(FIX(1.27));
++        RicSetAnimation(ric_anim_high_jump);
++    }
++    PLAYER.velocityY = FIX(-7.5);
++    g_Player.high_jump_timer = 0;
++#else
+     RicSetSpeedX(FIX(1.25));
+     PLAYER.velocityY = FIX(-7.5);
+     g_Player.high_jump_timer = 0;
+     RicSetAnimation(ric_anim_high_jump);
++#endif
+     func_8015CC28();
+     RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_HIGH_JUMP, 0);
+-    g_api.PlaySfx(SFX_VO_RIC_ATTACK_C);
++    g_api.PlaySfx(RIC_OR_MAR(SFX_VO_RIC_ATTACK_C, MAR_SFX_ATK_B));
+     g_Player.timers[PL_T_12] = 4;
+     if (g_Player.unk72) {
+         PLAYER.velocityY = 0;
+@@ -221,6 +270,38 @@
+ 
+     RicCreateEntFactoryFromEntity(g_CurrentEntity, subweapon.blueprintNum, 0);
+     g_Player.timers[PL_T_10] = 4;
++#if defined(MOD_MARIA_SAT)
++    {
++        // Saturn 060A973C: the dagger (and Agunea) thrown as Richter does,
++        // every other sub-weapon with her own throw
++        AnimationFrame* anim;
++
++        if (subweaponId == PL_W_DAGGER || subweaponId == PL_W_AGUNEA) {
++            anim = g_Player.vram_flag & 0x20 ? D_80155638 : D_801555E8;
++        } else {
++            anim =
++                g_Player.vram_flag & 0x20 ? mar_anim_throw_b : mar_anim_throw;
++        }
++        switch (PLAYER.step) {
++        case PL_S_RUN:
++            PLAYER.step = PL_S_STAND;
++            RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_SKID_SMOKE, 0);
++            RicSetAnimation(anim);
++            break;
++        case PL_S_STAND:
++        case PL_S_WALK:
++        case PL_S_CROUCH:
++            PLAYER.step = PL_S_STAND;
++            RicSetAnimation(anim);
++            break;
++        case PL_S_FALL:
++        case PL_S_JUMP:
++            PLAYER.step = PL_S_JUMP;
++            RicSetAnimation(D_80155638);
++            break;
++        }
++    }
++#else
+     switch (PLAYER.step) {
+     case PL_S_RUN:
+         PLAYER.step = PL_S_STAND;
+@@ -239,6 +320,7 @@
+         RicSetAnimation(D_80155638);
+         break;
+     }
++#endif
+     g_Player.unk46 = 3;
+     PLAYER.step_s = 0x42;
+     g_Player.timers[PL_T_10] = 4;
+@@ -246,6 +328,12 @@
+ }
+ 
+ bool RicDoAttack(void) {
++#if defined(MOD_MARIA_SAT)
++    // Saturn port: Maria has no whip; Square is her shot (Saturn 060A9990,
++    // mar_attacks.h)
++    return MarDoAttack(0);
++}
++#else
+     s32 i;
+     s16 poisoned;
+     s16 sfxGrunt;
+@@ -318,6 +406,7 @@
+     }
+     return false;
+ }
++#endif
+ 
+ bool RicDoCrash(void) {
+     SubweaponDef subWpn;
+@@ -435,10 +524,16 @@
+     RicSetStep(PL_S_SLIDE);
+     RicSetAnimation(D_80155750);
+     g_CurrentEntity->velocityY = 0;
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A9D10: 6.625 Saturn, with skid dust
++    RicSetSpeedX(FIX(5.3));
++    RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_SKID_SMOKE, 0);
++#else
+     RicSetSpeedX(FIX(5.5));
++#endif
+     func_8015CC28();
+     RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_25, 0);
+-    g_api.PlaySfx(SFX_RIC_SLIDE_SKID);
++    g_api.PlaySfx(RIC_OR_MAR(SFX_RIC_SLIDE_SKID, SFX_SCRAPE_C));
+     g_Player.timers[PL_T_12] = 4;
+ }
+ 
+@@ -455,6 +550,7 @@
+     RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_31, 0);
+ }
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicSetBladeDash(void) {
+     RicSetStep(PL_S_BLADEDASH);
+     RicSetAnimation(ric_anim_blade_dash);
+@@ -464,6 +560,10 @@
+     g_Player.timers[PL_T_12] = 4;
+     RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_BLADE_DASH, 0);
+     func_8015CC28();
+-    g_api.PlaySfx(SFX_VO_RIC_ATTACK_C);
++    g_api.PlaySfx(RIC_OR_MAR(SFX_VO_RIC_ATTACK_C, MAR_SFX_KICK));
+     g_api.PlaySfx(SFX_RIC_SLIDE_SKID);
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicSetBladeDash(void) {}
++#endif
+diff --git a/src/ric/pl_steps.c b/src/ric/pl_steps.c
+--- a/src/ric/pl_steps.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_steps.c	2026-11-07 13:57:39.927899664 -0800
+@@ -47,7 +47,8 @@
+     }
+ 
+     if (!RicCheckInput(CHECK_FALL | CHECK_FACING | CHECK_JUMP | CHECK_CRASH |
+-                       CHECK_ATTACK | CHECK_CROUCH | CHECK_SLIDE)) {
++                       CHECK_ATTACK | CHECK_CROUCH | CHECK_SLIDE |
++                       RIC_OR_MAR(0, CHECK_BACKDASH))) {
+         RicDecelerateX(FIX(0.125));
+         switch (PLAYER.step_s) {
+         case 0:
+@@ -67,6 +68,53 @@
+                 RicSetStand(0);
+             }
+             break;
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060A66C8: her backdash (MarSetBackdash), slowed down by the
++        // deceleration above; a direction after pose 3 turns it into a walk
++        case 3:
++            if (PLAYER.poseTimer >= 0) {
++                if (PLAYER.pose > 3 && RicCheckFacing()) {
++                    RicSetWalk(0);
++                }
++                break;
++            }
++            if (g_Player.padPressed & PAD_UP) {
++                RicSetAnimation(ric_anim_press_up);
++                PLAYER.step_s = 1;
++                break;
++            }
++            RicSetStand(0);
++            RicSetAnimation(g_Player.vram_flag & 0x20 ? mar_anim_backdash_end_b
++                                                      : mar_anim_backdash_end);
++            break;
++        // Saturn 060A66C8: her shot (0x40), kick (0x41), subweapon (0x42);
++        // she can act again once the pose passes 6 (3 for a subweapon)
++        case 0x40:
++        case 0x41:
++        case 0x42:
++            DisableAfterImage(1, 1);
++            if (PLAYER.poseTimer >= 0) {
++                if (PLAYER.pose <= 2) {
++                    RicCheckFacing();
++                } else if (PLAYER.step_s == 0x40 && PLAYER.pose > 6) {
++                    g_Player.unk46 = 0;
++                } else if (PLAYER.step_s == 0x42 && PLAYER.pose > 3) {
++                    g_Player.unk46 = 0;
++                }
++                break;
++            }
++            g_Player.unk46 = 0;
++            facing = PLAYER.step_s;
++            RicSetStand(0);
++            if (facing == 0x40) {
++                RicSetAnimation(g_Player.vram_flag & 0x20 ? mar_anim_atk_end_b
++                                                          : mar_anim_atk_end);
++            } else if (facing == 0x41) {
++                RicSetAnimation(g_Player.vram_flag & 0x20 ? mar_anim_kick_end_b
++                                                          : mar_anim_kick_end);
++            }
++            break;
++#else
+         case 64:
+             DisableAfterImage(1, 1);
+             if (PLAYER.pose < 3) {
+@@ -109,13 +157,15 @@
+                 RicSetStand(0);
+             }
+             break;
++#endif
+         }
+     }
+ }
+ 
+ void RicStepWalk(void) {
+-    if (!RicCheckInput(CHECK_FALL | CHECK_FACING | CHECK_JUMP | CHECK_CRASH |
+-                       CHECK_ATTACK | CHECK_CROUCH)) {
++    if (!RicCheckInput(
++            CHECK_FALL | CHECK_FACING | CHECK_JUMP | CHECK_CRASH |
++            CHECK_ATTACK | CHECK_CROUCH | RIC_OR_MAR(0, CHECK_BACKDASH))) {
+         RicDecelerateX(FIX(0.125));
+         if (RicCheckFacing() == 0) {
+             RicSetStand(0);
+@@ -139,8 +189,9 @@
+ #endif
+     g_Player.timers[PL_T_8] = 8;
+     g_Player.timers[PL_T_CURSE] = 8;
+-    if (!RicCheckInput(CHECK_FALL | CHECK_FACING | CHECK_JUMP | CHECK_CRASH |
+-                       CHECK_ATTACK | CHECK_CROUCH)) {
++    if (!RicCheckInput(
++            CHECK_FALL | CHECK_FACING | CHECK_JUMP | CHECK_CRASH |
++            CHECK_ATTACK | CHECK_CROUCH | RIC_OR_MAR(0, CHECK_BACKDASH))) {
+         RicDecelerateX(FIX(0.125));
+         if (RicCheckFacing() == 0) {
+             RicSetStand(0);
+@@ -177,6 +228,92 @@
+         PLAYER.velocityY = FIX(-0.25);
+         g_Player.unk44 |= 0x20;
+     }
++#if defined(MOD_MARIA_SAT)
++    if (RicCheckInput(CHECK_GROUND | CHECK_FACING | CHECK_ATTACK |
++                      CHECK_GRAVITY_JUMP | CHECK_DOUBLE_JUMP)) {
++        return;
++    }
++    // Saturn 060A6B90
++    facing = 0;
++    switch (PLAYER.step_s) {
++    case 0:
++        RicDecelerateX(FIX(0.0625));
++        facing = RicCheckFacing();
++        if (facing) {
++            if (g_Player.unk44 & 0x10) {
++                RicSetSpeedX(FIX(2.25));
++            } else if (g_Player.unk44 & 1) {
++                RicSetSpeedX(FIX(1.25));
++            } else {
++                RicSetSpeedX(FIX(1.275));
++            }
++            g_Player.unk44 &= ~4;
++        } else {
++            g_Player.unk44 &= ~0x10;
++        }
++        if (PLAYER.velocityY > 0 && PLAYER.anim != D_80155534) {
++            RicSetAnimation(D_80155534);
++        }
++        break;
++    case 0x40: // her shot / kick in the air (mar_attacks.h)
++    case 0x41:
++        RicDecelerateX(FIX(0.0625));
++        DisableAfterImage(1, 1);
++        if (PLAYER.pose <= (PLAYER.step_s == 0x40 ? 2 : 1)) {
++            facing = RicCheckFacing();
++            if (facing) {
++                if (g_Player.unk44 & 0x10) {
++                    RicSetSpeedX(FIX(2.25));
++                } else {
++                    RicSetSpeedX(FIX(1.275));
++                }
++                g_Player.unk44 &= ~4;
++            } else {
++                g_Player.unk44 &= ~0x10;
++            }
++        } else if (((g_Player.padPressed & PAD_RIGHT) && !PLAYER.facingLeft) ||
++                   ((g_Player.padPressed & PAD_LEFT) && PLAYER.facingLeft)) {
++            RicSetSpeedX(FIX(1.275));
++            g_Player.unk44 &= ~4;
++        } else {
++            g_Player.unk44 &= ~0x10;
++        }
++        if (PLAYER.poseTimer < 0) {
++            g_Player.unk46 = 0;
++            PLAYER.step_s = 0;
++            RicSetAnimation(D_80155534);
++        }
++        break;
++    case 0x42:
++        DisableAfterImage(1, 1);
++        if (PLAYER.poseTimer < 0) {
++            g_Player.unk46 = 0;
++            PLAYER.step_s = 0;
++            RicSetAnimation(D_80155534);
++        }
++        break;
++    case 0x70: // the dive kick: a hit bounces her up
++        if (g_Player.vram_flag & TOUCHING_GROUND) {
++            // on the ground: land as her CHECK_GROUND does (060AAA68)
++            MarLand();
++            return;
++        }
++        RicDecelerateX(FIX(0.0625));
++        if (g_Player.unk44 & 0x80) {
++            RicSetJump();
++            if (!(g_Player.padPressed & PAD_CROSS)) {
++                PLAYER.velocityY = FIX(-4.75);
++            }
++            g_Player.unk44 |= 0x40;
++        }
++        break;
++    }
++    if (PLAYER.step_s == 0 && (g_Player.unk44 & 0x101) == 0x101 &&
++        (g_Player.padPressed & PAD_DOWN) && (g_Player.padTapped & PAD_CROSS)) {
++        MarSetDiveKick(facing);
++    }
++    return;
++#endif
+     if (RicCheckInput(
+             CHECK_GROUND | CHECK_FACING | CHECK_ATTACK | CHECK_GRAVITY_JUMP)) {
+         return;
+@@ -298,10 +435,17 @@
+ }
+ 
+ void RicStepFall(void) {
++#if defined(MOD_MARIA_SAT)
++    if (RicCheckInput(CHECK_GROUND | CHECK_FACING | CHECK_ATTACK |
++                      CHECK_GRAVITY_FALL | CHECK_DOUBLE_JUMP)) {
++        return;
++    }
++#else
+     if (RicCheckInput(
+             CHECK_GROUND | CHECK_FACING | CHECK_ATTACK | CHECK_GRAVITY_FALL)) {
+         return;
+     }
++#endif
+     RicDecelerateX(FIX(1. / 16));
+     switch (PLAYER.step_s) {
+     case 0:
+@@ -335,10 +479,13 @@
+         (!g_Player.unk72)) {
+         RicSetJump(1);
+         return;
+-    } else if (!g_Player.unk72 && !g_Player.unk46 &&
+-               (g_Player.padTapped & PAD_TRIANGLE) && RicDoCrash()) {
++    }
++#if !defined(MOD_MARIA_SAT) // her Triangle is the kick (CHECK_ATTACK)
++    else if (!g_Player.unk72 && !g_Player.unk46 &&
++             (g_Player.padTapped & PAD_TRIANGLE) && RicDoCrash()) {
+         return;
+     }
++#endif
+     RicDecelerateX(FIX(0.125));
+     switch (PLAYER.step_s) {
+     case 0x0:
+@@ -371,17 +518,31 @@
+                 RicSetWalk(0);
+                 return;
+             }
++#if defined(MOD_MARIA_SAT)
++            // Saturn 060A714C: her stand-up starts from its first pose. (The
++            // PS1's "pose = 2 - pose" mirrors Richter's 3-pose crouch; her
++            // crouch has 10 poses, so it went negative: a garbage frame,
++            // whose garbage size overwrote the HUD's VRAM)
++            RicSetAnimation(D_801554E0);
++            PLAYER.step_s = 2;
++            PLAYER.poseTimer = 1;
++#else
+             PLAYER.anim = D_801554E0;
+             PLAYER.step_s = 2;
+             PLAYER.pose = 2 - PLAYER.pose;
+             PLAYER.poseTimer = 1;
++#endif
+             break;
+         }
+     case 0x4:
+         if (PLAYER.poseTimer != -1) {
+             return;
+         }
++#if defined(MOD_MARIA_SAT)
++        RicSetAnimation(ric_anim_crouch_from_stand2); // Saturn: 060C2AA8
++#else
+         RicSetAnimation(ric_anim_crouch);
++#endif
+         PLAYER.step_s = 0;
+         break;
+     case 0x2:
+@@ -398,11 +559,28 @@
+         break;
+     case 0x3:
+         if (PLAYER.poseTimer < 0) {
++#if defined(MOD_MARIA_SAT)
++            RicSetAnimation(ric_anim_crouch_from_stand2); // Saturn: 060C2AA8
++#else
+             RicSetAnimation(ric_anim_crouch);
++#endif
+             PLAYER.step_s = 0;
+             return;
+         }
+         break;
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A714C: her shot / kick crouching
++    case 0x40:
++    case 0x41:
++        DisableAfterImage(1, 1);
++        if (PLAYER.poseTimer < 0) {
++            g_Player.unk46 = 0;
++            RicSetAnimation(PLAYER.step_s == 0x40 ? ric_anim_crouch_from_stand2
++                                                  : mar_anim_kick_crouch_end);
++            PLAYER.step_s = 0;
++        }
++        break;
++#else
+     case 0x40:
+         DisableAfterImage(1, 1);
+         if (PLAYER.pose < 3) {
+@@ -435,6 +613,7 @@
+             RicSetAnimation(ric_anim_crouch);
+         }
+         break;
++#endif
+     }
+ }
+ 
+@@ -525,7 +704,7 @@
+             RicCreateEntFactoryFromEntity(
+                 g_CurrentEntity, FACTORY(BP_RIC_BLINK, 0x46), 0);
+             g_Player.timers[PL_T_2] = 6;
+-            g_api.PlaySfx(SFX_VO_RIC_PAIN_C);
++            g_api.PlaySfx(RIC_OR_MAR(SFX_VO_RIC_PAIN_C, MAR_SFX_HURT_A));
+             break;
+         } else {
+             if (damageEffect & ELEMENT_ICE) {
+@@ -552,7 +731,8 @@
+                     PLAYER.anim = D_80155704;
+                     RicCreateEntFactoryFromEntity(
+                         g_CurrentEntity, BP_SKID_SMOKE, 0);
+-                    g_api.PlaySfx(SFX_VO_RIC_PAIN_C);
++                    g_api.PlaySfx(
++                        RIC_OR_MAR(SFX_VO_RIC_PAIN_C, MAR_SFX_HURT_C));
+                     break;
+                 case PL_S_JUMP:
+                 case PL_S_FALL:
+@@ -586,7 +766,8 @@
+                     func_8015CAAC(FIX(-1.25));
+                     PLAYER.step_s = 1;
+                     PLAYER.anim = ric_anim_stun;
+-                    g_api.PlaySfx(SFX_VO_RIC_PAIN_B);
++                    g_api.PlaySfx(
++                        RIC_OR_MAR(SFX_VO_RIC_PAIN_B, MAR_SFX_HURT_B));
+                     break;
+                 case PL_S_CROUCH:
+                     PLAYER.velocityY = 0;
+@@ -603,7 +784,8 @@
+                     func_8015CAAC(FIX(-1.25));
+                     PLAYER.step_s = 1;
+                     PLAYER.anim = ric_anim_stun;
+-                    g_api.PlaySfx(SFX_VO_RIC_PAIN_B);
++                    g_api.PlaySfx(
++                        RIC_OR_MAR(SFX_VO_RIC_PAIN_B, MAR_SFX_HURT_B));
+                     break;
+                 }
+                 break;
+@@ -863,7 +1045,7 @@
+             if (g_Player.grabReactionEffect == GRAB_REACTION_NORMAL) {
+                 g_Player.timers[PL_T_2] = 4;
+                 g_Player.damagePalette = PAL_FLAG(PAL_CC_RED_EFFECT_A);
+-                g_api.PlaySfx(SFX_VO_RIC_PAIN_C);
++                g_api.PlaySfx(RIC_OR_MAR(SFX_VO_RIC_PAIN_C, MAR_SFX_GRAB_B));
+             }
+             if (g_Player.grabReactionEffect == GRAB_REACTION_STONE) {
+             }
+@@ -873,7 +1055,7 @@
+             PLAYER.step_s = 2;
+             g_Player.grabState = GRAB_NONE;
+             g_Player.damageTaken = g_Player.grabDamage;
+-            g_api.PlaySfx(SFX_VO_RIC_PAIN_D);
++            g_api.PlaySfx(RIC_OR_MAR(SFX_VO_RIC_PAIN_D, MAR_SFX_GRAB_C));
+         } else if (g_Player.grabState == GRAB_NONE) {
+             PLAYER.step = PL_S_HIT;
+             PLAYER.step_s = 1;
+@@ -1075,6 +1257,7 @@
+     }
+ }
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicStepEnableFlameWhip(void) {
+     if (PLAYER.animCurFrame == 181 && PLAYER.poseTimer == 1) {
+         RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_35, 0);
+@@ -1097,7 +1280,12 @@
+         g_Player.timers[PL_T_POISON] = 0x800;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepEnableFlameWhip(void) {}
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicStepHydrostorm(void) {
+     if (PLAYER.poseTimer < 0) {
+         RicSetStand(0);
+@@ -1109,7 +1297,12 @@
+         g_Player.unk46 = 0;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepHydrostorm(void) {}
++#endif
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicStepGenericSubwpnCrash(void) {
+     if (g_Player.unk4E) {
+         RicSetStand(0);
+@@ -1121,12 +1314,17 @@
+         g_Player.unk46 = 0;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepGenericSubwpnCrash(void) {}
++#endif
+ 
+ #if defined(VERSION_PSP)
+ extern s32 throw_dagger_timer;
+ #else
+ static s32 throw_dagger_timer;
+ #endif
++#if !defined(MOD_MARIA_SAT)
+ void RicStepThrowDaggers(void) {
+     if (PLAYER.step_s == 0) {
+         throw_dagger_timer = 0x200;
+@@ -1152,6 +1350,10 @@
+         throw_dagger_timer = 0;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepThrowDaggers(void) {}
++#endif
+ 
+ // This happens when he dies in prologue and gets saved by Maria.
+ #if defined(VERSION_PSP)
+@@ -1159,6 +1361,7 @@
+ #else
+ static s32 dead_prologue_timer;
+ #endif
++#if !defined(MOD_MARIA_SAT)
+ void RicStepDeadPrologue(void) {
+     switch (PLAYER.step_s) {
+     case 0:
+@@ -1277,7 +1480,69 @@
+         break;
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepDeadPrologue(void) {}
++#endif
+ 
++#if defined(MOD_MARIA_SAT)
++// Saturn 060A8860: her slide ends in a roll (its animation group 0, or at
++// once on a wall, a slope or the screen edge, at a reduced speed, with
++// dust); no slide kick from it (only falling, and sliding again late in
++// the roll)
++void RicStepSlide(void) {
++    s32 blocked = 0;
++
++    if (!PLAYER.facingLeft && (g_Player.vram_flag & TOUCHING_R_WALL)) {
++        blocked = 1;
++    }
++    if (PLAYER.facingLeft && (g_Player.vram_flag & TOUCHING_L_WALL)) {
++        blocked = 1;
++    }
++    if (PLAYER.posX.i.hi > 249 && !PLAYER.facingLeft) {
++        blocked = 1;
++    }
++    if (PLAYER.posX.i.hi <= 6 && PLAYER.facingLeft) {
++        blocked = 1;
++    }
++    if ((!PLAYER.facingLeft &&
++         (g_Player.colFloor[2].effects & EFFECT_UNK_8000)) ||
++        (PLAYER.facingLeft &&
++         (g_Player.colFloor[3].effects & EFFECT_UNK_8000))) {
++        blocked = 1;
++    }
++    if (blocked && PLAYER.anim != mar_anim_roll) {
++        RicSetAnimation(mar_anim_roll);
++        if (PLAYER.velocityX > FIX(0.8)) {
++            PLAYER.velocityX = FIX(1.6);
++        }
++        if (PLAYER.velocityX < FIX(-0.8)) {
++            PLAYER.velocityX = FIX(-1.6);
++        }
++        RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_SKID_SMOKE, 0);
++    }
++    if (PLAYER.anim == D_80155750) {
++        if (RicCheckInput(CHECK_FALL | CHECK_CRASH)) {
++            return;
++        }
++    } else if (PLAYER.anim == mar_anim_roll && PLAYER.pose > 1) {
++        if (RicCheckInput(
++                CHECK_FALL | CHECK_FACING | CHECK_CRASH | CHECK_SLIDE)) {
++            return;
++        }
++    }
++    RicDecelerateX(FIX(0.125));
++    if (PLAYER.step_s == 0) {
++        if (PLAYER.anim == mar_anim_roll && PLAYER.pose <= 3 &&
++            !(g_GameTimer & 3)) {
++            RicCreateEntFactoryFromEntity(g_CurrentEntity, BP_SKID_SMOKE, 0);
++        }
++        if (PLAYER.poseTimer < 0) {
++            RicSetCrouch(3, PLAYER.velocityX);
++        }
++    }
++}
++#else
+ void RicStepSlide(void) {
+     s32 isTouchingGround = 0;
+ 
+@@ -1346,6 +1611,7 @@
+         break;
+     }
+ }
++#endif
+ 
+ // same as DRA/func_80115C50
+ static void func_8015BB80(void) {
+@@ -1445,7 +1711,13 @@
+ void RicStepSlideKick(void) {
+     // If we are pressing square while in contact with an enemy
+     // (as detected in g_Player.unk44), we will bounce back.
++#if defined(MOD_MARIA_SAT)
++    // Saturn 060A8C14: she bounces back off an enemy unless the kick button
++    // (Saturn C, PS1 Triangle) is held, which lets her slide through
++    if (!(g_Player.padPressed & PAD_TRIANGLE) && g_Player.unk44 & 0x80) {
++#else
+     if (g_Player.padPressed & PAD_SQUARE && g_Player.unk44 & 0x80) {
++#endif
+         PLAYER.step = PL_S_JUMP;
+         RicSetAnimation(D_8015555C);
+         RicSetSpeedX(FIX(-1.5));
+@@ -1505,6 +1777,7 @@
+     }
+ }
+ 
++#if !defined(MOD_MARIA_SAT)
+ void RicStepBladeDash(void) {
+     RicDecelerateX(0x1C00);
+ 
+@@ -1527,6 +1800,10 @@
+         }
+     }
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicStepBladeDash(void) {}
++#endif
+ 
+ void RicStepHighJump(void) {
+     bool loadAnim;
+diff --git a/src/ric/pl_subweapon_cross.c b/src/ric/pl_subweapon_cross.c
+--- a/src/ric/pl_subweapon_cross.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_subweapon_cross.c	2026-11-07 13:57:39.927899664 -0800
+@@ -11,6 +11,7 @@
+     0xD294, 0xCE73, 0xCA52, 0xC631, 0xC210, 0xBDEF, 0xB9CE, 0xB5AD,
+     0xB18C, 0xAD6B, 0xA94A, 0xA529, 0xA108, 0x9CE7, 0x98C6, 0x94A5};
+ static RECT crash_cross_img_vram = {0x0301, 0x01F8, 0x0030, 0x0001};
++#if !defined(MOD_MARIA_SAT)
+ void RicEntitySubwpnCrashCross(Entity* self) {
+     s16 psp_s4;
+     s16 psp_s3;
+@@ -121,9 +122,14 @@
+     prim->priority = self->zPriority;
+     g_Player.timers[PL_T_3] = 2;
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntitySubwpnCrashCross(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // Entity ID #21. Blueprint 22. Called in RicStepDeadPrologue.
+ // Creates the white column around Richter when he is revived in the Prologue.
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityRevivalColumn(Entity* self) {
+     s16 psp_s4;
+     s16 psp_s3;
+@@ -194,6 +200,10 @@
+     }
+     prim->priority = self->zPriority;
+ }
++#else
++// not reachable by the Saturn Maria (MARIA.BIN)
++void RicEntityRevivalColumn(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ static AnimationFrame anim_cross_boomerang[] = {
+     POSE(36, 1, 0), POSE(1, 2, 0), POSE(1, 3, 0), POSE(1, 4, 0), POSE(1, 5, 0),
+diff --git a/src/ric/pl_subweapon_holywater.c b/src/ric/pl_subweapon_holywater.c
+--- a/src/ric/pl_subweapon_holywater.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_subweapon_holywater.c	2026-11-07 13:57:39.927899664 -0800
+@@ -108,6 +108,7 @@
+ // Entity ID #11. Created by blueprint 12.
+ // This is blueprintNum for subweapon ID 16.
+ // That is the crash for subweapon 3. That's holy water!
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashHydroStorm(Entity* self) {
+     PrimLineG2* line;
+     s16 primcount;
+@@ -215,6 +216,10 @@
+     }
+     g_Player.timers[PL_T_3] = 16;
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashHydroStorm(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // Equivalent to DRA CheckHolyWaterCollision
+ s32 RicCheckHolyWaterCollision(s16 baseY, s16 baseX) {
+@@ -311,6 +316,15 @@
+         }
+         self->posX.i.hi += xMod;
+         self->posY.i.hi += -16;
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060B8B24: she tosses it up from in front of her; it falls
++        // (gravity in case 1)
++        self->posX.i.hi += self->facingLeft ? -13 : 13;
++        self->ext.holywater.angle =
++            (rand() & 0xFF) + (PLAYER.facingLeft ? 0x980 : 0xD80);
++        self->velocityX = rcos(self->ext.holywater.angle) * 22; // 28 x 4/5
++        self->velocityY = rsin(self->ext.holywater.angle) * 28;
++#else
+         self->ext.holywater.angle = (rand() & 0x7F) + 0xDC0;
+         if (PLAYER.facingLeft == 1) {
+             self->ext.holywater.angle = (rand() & 0x7F) + 0x9C0;
+@@ -318,6 +332,7 @@
+         self->velocityX = ((rcos(self->ext.holywater.angle) << 4) * 0x600) >> 8;
+         self->velocityY =
+             -((rsin(self->ext.holywater.angle) << 4) * 0x600) >> 8;
++#endif
+         self->ext.holywater.subweaponId = PL_W_HOLYWATER;
+         RicSetSubweaponParams(self);
+         self->hitboxWidth = 4;
+@@ -327,6 +342,9 @@
+         break;
+     case 1:
+         self->posY.val += self->velocityY;
++#if defined(MOD_MARIA_SAT)
++        self->velocityY += 0x2B00;
++#endif
+         colRes = RicCheckHolyWaterCollision(0, 0);
+         self->posX.val += self->velocityX;
+ 
+@@ -346,14 +364,23 @@
+             g_api.PlaySfx(SFX_RIC_HOLY_WATER_ATTACK);
+             self->animSet = 0;
+             self->hitboxState = 0;
++#if defined(MOD_MARIA_SAT)
++            // Saturn 060B8B24: 10 frames of breaking glass, then it burns
++            // on at full speed (case 2), a broad trail of flames
++            self->ext.holywater.timer = 10;
++            self->step = 2;
++#else
+             self->velocityX = self->velocityX >> 2;
+             self->ext.holywater.timer = 0x50;
+             self->step = 3;
++#endif
+         }
+         break;
+     case 2:
+         if (--self->ext.holywater.timer == 0) {
++#if !defined(MOD_MARIA_SAT) // (she keeps her speed)
+             self->velocityX = self->velocityX >> 2;
++#endif
+             self->ext.holywater.timer = 0x50;
+             self->step++;
+         }
+@@ -363,7 +390,11 @@
+             RicCreateEntFactoryFromEntity(
+                 self, FACTORY(BP_HOLYWATER_FIRE, self->ext.holywater.unk82), 0);
+             self->ext.holywater.unk82 += 1;
++#if defined(MOD_MARIA_SAT)
++            self->velocityX -= self->velocityX >> 5; // Saturn: a shift
++#else
+             self->velocityX -= (self->velocityX / 32);
++#endif
+         }
+         colRes = RicCheckHolyWaterCollision(6, 0);
+         velocity = self->velocityX;
+@@ -484,6 +515,15 @@
+             prim->priority = PLAYER.zPriority + 2;
+             prim->drawMode = DRAW_UNK_40 | DRAW_TPAGE2 | DRAW_TPAGE |
+                              DRAW_HIDE | DRAW_COLORS | DRAW_UNK02 | DRAW_TRANSP;
++#if defined(MOD_MARIA_SAT)
++            // Saturn: solid purple flames (her palette, colours as is); they
++            // turn additive again only to fade out (case 2)
++            prim->clut = MAR_FLAME_PAL;
++            prim->r0 = prim->r1 = prim->r2 = prim->r3 = 0x80;
++            prim->g0 = prim->g1 = prim->g2 = prim->g3 = 0x80;
++            prim->b0 = prim->b1 = prim->b2 = prim->b3 = 0x80;
++            prim->drawMode &= ~DRAW_TRANSP;
++#endif
+             i++;
+             prim = prim->next;
+         }
+@@ -542,6 +582,9 @@
+         i = 0;
+         while (prim) {
+             if (self->ext.holywater.timer <= variant * 2 + 0x18) {
++#if defined(MOD_MARIA_SAT)
++                prim->drawMode |= DRAW_TRANSP;
++#endif
+                 if (prim->g0 >= 10) {
+                     prim->g0 -= 5;
+                 }
+diff --git a/src/ric/pl_subweapons.c b/src/ric/pl_subweapons.c
+--- a/src/ric/pl_subweapons.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_subweapons.c	2026-11-07 13:57:39.927899664 -0800
+@@ -48,8 +48,15 @@
+         self->flags = FLAG_POS_CAMERA_LOCKED | FLAG_KEEP_ALIVE_OFFCAMERA |
+                       FLAG_HAS_PRIMS | FLAG_UNK_20000;
+         self->facingLeft = (PLAYER.facingLeft + 1) & 1;
++#if defined(MOD_MARIA_SAT)
++        // Saturn 060B668C: each of her three axes flies its own arc,
++        // -(2 + rand) px (x 4/5) and -(6 + 2 rand) up
++        RicSetSpeedX(-(FIX(1.6) + (rand() & 0xFFFF) * 4 / 5));
++        self->velocityY = FIX(-6) - (rand() & 0x1FFFF);
++#else
+         RicSetSpeedX(FIX(-2));
+         self->velocityY = FIX(-6);
++#endif
+         if (self->facingLeft) {
+             self->ext.subwpnAxe.unk7C = 0x400;
+         } else {
+@@ -224,6 +231,7 @@
+ 
+ // RIC entity #37. Comes from blueprint 41. That's subweapon 20.
+ // Subweapon 20 is crash of subweapon 2, which is the axe.
++#if !defined(MOD_MARIA_SAT)
+ void RicEntityCrashAxe(Entity* self) {
+     Primitive* primFirst;
+     Primitive* prim;
+@@ -420,6 +428,10 @@
+         prim = prim->next;
+     }
+ }
++#else
++// Maria has no item crash (Saturn 060A9CE8)
++void RicEntityCrashAxe(Entity* self) { DestroyEntity(self); }
++#endif
+ 
+ // RIC Entity #38. Blueprint 43 AND 44.
+ // Applies to subweapon 1, and its crash, subweapon 21. Very neat!
+@@ -476,7 +488,13 @@
+             self->posY.i.hi += D_80155E98[D_8017588C & 7];
+             D_8017588C++;
+         } else {
++#if defined(MOD_MARIA_SAT)
++            // Saturn Maria (060B626C): from her hand, three 3 px apart
++            self->posX.i.hi += self->facingLeft ? -26 : 26;
++            self->posY.i.hi += (self->params & 0xFF) * 3 - 3;
++#else
+             self->posY.i.hi -= 9;
++#endif
+         }
+         prim = &g_PrimBuf[self->primIndex];
+         prim->tpage = 0x1C;
+diff --git a/src/ric/pl_whip.c b/src/ric/pl_whip.c
+--- a/src/ric/pl_whip.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/pl_whip.c	2026-11-07 13:57:39.927899664 -0800
+@@ -1,6 +1,14 @@
+ // SPDX-License-Identifier: AGPL-3.0-or-later
+ #include "ric.h"
+ 
++#if defined(MOD_MARIA_SAT)
++// Saturn port: the Saturn Maria has no whip; its code is dropped from
++// MARIA.BIN for room (her attacks: mar_attacks.h)
++void RicEntityWhip(Entity* self) { DestroyEntity(self); }
++void RicEntityArmBrandishWhip(Entity* self) { DestroyEntity(self); }
++void func_80167964(Entity* self) { DestroyEntity(self); }
++#else
++
+ static Point16 D_801559AC[] = {
+     {7, -2}, {16, -2}, {5, -18}, {-14, -18}, {-23, -6}, {-24, -6}, {-25, -6}};
+ static Point16 D_801559C8[] = {
+@@ -195,7 +203,13 @@
+             self->hitboxHeight = 3;
+             self->hitboxOffX = 0;
+             self->hitboxOffY = 0;
++#if defined(MOD_SATURN)
++            // the JP v1.2 fix: the flame whip (the no-subweapon item crash,
++            // sp4A) hits as fire, 64 attack: PL_W_15, unused on the US disc
++            self->ext.whip.subweaponId = sp4A ? PL_W_15 : PL_W_WHIP;
++#else
+             self->ext.whip.subweaponId = PL_W_WHIP;
++#endif
+             RicSetSubweaponParams(self);
+         }
+         if (psp_s4 == 0) {
+@@ -550,3 +564,4 @@
+         DestroyEntity(entity);
+     }
+ }
++#endif
+diff --git a/src/ric/ric.h b/src/ric/ric.h
+--- a/src/ric/ric.h	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/ric.h	2026-11-07 13:57:39.927899664 -0800
+@@ -4,6 +4,7 @@
+ #include <sfx.h>
+ 
+ #define RIC_SPRITE_COUNT 197 // useful to sync PSX and PSP
++#include "../../mods/sotn-ultimate/src/maria_saturn/ric_mod_maria.h"
+ 
+ #define GAME_OVER 0x80000
+ 
+@@ -119,6 +120,34 @@
+     E_CRASH_STOPWATCH_LIGHTNING,     // RicEntityStopwatchCrashLightning
+     E_TELEPORT,                      // RicEntityTeleport
+     E_DUMMY_66,                      // RicEntityDummy
++#if defined(MOD_MARIA_SAT)
++    // Saturn Maria: her entity ids as on the Saturn (mar_attacks.h)
++    E_MAR_68,
++    E_MAR_SHOT, // 69 060B9404
++    E_MAR_KICK, // 70 060AD0E8
++    E_MAR_DIVE, // 71 060AD248
++    E_MAR_72,
++    E_MAR_KNUCKLE,  // 73 060BADA8 Guardian Knuckle
++    E_MAR_GENBU,    // 74 060BAFF0 Genbu (heal)
++    E_MAR_BYAKKO,   // 75 060BB4AC Byakko
++    E_MAR_SEIRYU,   // 76 060BBEF8 Seiryuu (summons the dragon)
++    E_MAR_SUZAKU,   // 77 060BC320 Suzaku (the bird familiar)
++    E_MAR_FLAME,    // 78 060BB334 Byakko's flames
++    E_MAR_DRAGON,   // 79 060BB868 Seiryuu's dragon (head + body)
++    E_MAR_STAR,     // 80 060BB724 sparkle
++    E_MAR_TRAIL,    // 81 060BCBD8 Suzaku's trail
++    E_MAR_CHARGE_1, // 82 060B9B88
++    E_MAR_CHARGE_2, // 83 060B9D88
++    E_MAR_LASER,    // 84 060B96C0
++    E_MAR_SPARK,    // 85 060B99A8
++    E_MAR_86,
++    E_MAR_87,
++    E_MAR_CHARGED,   // 88 060BD150
++    E_MAR_AURA,      // 89 060BD244
++    E_MAR_COUNTDOWN, // 90 060BCCE8 Four Beasts countdown
++    E_MAR_BEASTS,    // 91 060BCFF4 Four Beasts: her body hurts
++    E_MAR_92,
++#endif
+     NUM_ENTITIES,
+ };
+ 
+diff --git a/src/ric/ric_shared.h b/src/ric/ric_shared.h
+--- a/src/ric/ric_shared.h	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/ric_shared.h	2026-11-07 13:57:39.927899664 -0800
+@@ -11,6 +11,11 @@
+     CHECK_FALL = 4,
+     CHECK_FACING = 8,
+     CHECK_JUMP = 0x10,
++#if defined(MOD_MARIA_SAT)
++    // Saturn Maria: a jump in the air (her double jump; MariaCheckInput,
++    // Saturn 060AAA68)
++    CHECK_DOUBLE_JUMP = 0x20,
++#endif
+     CHECK_CRASH = 0x40,
+     CHECK_80 = 0x80,
+     CHECK_GRAVITY_HIT = 0x200,
+@@ -20,6 +25,11 @@
+     CHECK_GRAVITY_JUMP = 0x10000,
+     CHECK_GROUND_AFTER_HIT = 0x20000,
+     CHECK_SLIDE = 0x40000,
++#if defined(MOD_MARIA_SAT)
++    // Saturn Maria: R, her backdash (060AAA68 -> 060A9E40; standing,
++    // walking and running)
++    CHECK_BACKDASH = 0x80000,
++#endif
+ };
+ 
+ enum RicTimers {
+@@ -124,6 +134,35 @@
+     BP_SKID_SMOKE_2,
+     BP_SKID_SMOKE_3,
+     BP_TELEPORT,
++#if defined(MOD_MARIA_SAT)
++    // Saturn Maria's own blueprints (MARIA.PRG 79-104; mar_attacks.h)
++    BP_MAR_SHOT, // 79 Square: her shot (060B9404)
++    BP_MAR_KICK, // 80 Triangle: her kick hitbox (060AD0E8)
++    BP_MAR_DIVE, // 81 dive kick hitbox (060AD248)
++    BP_MAR_82,
++    BP_MAR_KNUCKLE,  // 83 the command specials (mar_specials.h)
++    BP_MAR_GENBU,    // 84
++    BP_MAR_BYAKKO,   // 85
++    BP_MAR_SEIRYU,   // 86
++    BP_MAR_SUZAKU,   // 87
++    BP_MAR_BEAST,    // 88 one guardian beast (params: 1-4)
++    BP_MAR_FLAME,    // 89
++    BP_MAR_DRAGON,   // 90 (params: segment)
++    BP_MAR_STAR,     // 91 (params: frames to wait)
++    BP_MAR_TRAIL,    // 92 (params: frame)
++    BP_MAR_CHARGE_1, // 93 charged shot level 1 (060B9B88)
++    BP_MAR_CHARGE_2, // 94 level 2 (060B9D88) and its trail
++    BP_MAR_CHARGE_3, // 95 level 3, the laser (060B96C0)
++    BP_MAR_SPARK,    // 96 the laser's sparks (060B99A8)
++    BP_MAR_97,
++    BP_MAR_ASH,       // 98 the puff a vibhuti throw leaves (060B18C8)
++    BP_MAR_CHARGED,   // 99 fully charged (060BD150)
++    BP_MAR_AURA,      // 100 its diamonds (060BD244)
++    BP_MAR_COUNTDOWN, // 101 Four Beasts countdown
++    BP_MAR_BEASTS,    // 102 Four Beasts
++    BP_MAR_103,
++    BP_MAR_104,
++#endif
+     NUM_BLUEPRINTS,
+ };
+ 
+diff --git a/src/ric/spritebanks.c b/src/ric/spritebanks.c
+--- a/src/ric/spritebanks.c	2026-10-18 05:31:07.000000000 -0700
++++ b/src/ric/spritebanks.c	2026-11-07 13:57:39.927899664 -0800
+@@ -5,7 +5,11 @@
+ #include "gen/spritebank3.h"
+ #endif
+ 
++#if defined(MOD_MARIA_SAT)
++#include "mar_spritebank0.h"
++#else
+ #include "gen/spritebank0.h"
++#endif
+ #include "gen/spritebank1.h"
+ #include "gen/spritebank2.h"
+ 

@@ -41,7 +41,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Faerie revive:** Alucard's faerie and a Life Apple revive a fallen partner on the spot.
 
 **Three characters**
-- **Alucard, Co-op Richter, Co-op Maria and Ultimate Maria,** in any pairing, chosen each session.
+- **Alucard, Co-op Richter, Co-op Maria, Ultimate Maria, Saturn Maria and Ultimate Richter,** in any pairing, chosen each session.
 - **The whole castle as any character:** Co-op Richter and Maria learn their moves from Alucard's relics, level up, wear his armor, and use his weapons in their off hand.
 - **Rebalanced** to stay close to Alucard's power, with extra jumps to reach everywhere he can.
 - **One-button shortcuts,** optional for each player: high jump and blade dash for Richter and Maria, spells on the right stick for Alucard.
@@ -60,6 +60,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
 - **Maria:** choose your *Dracula X Chronicles* `.iso` under Settings › Game files. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
+- **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` under Settings › Game files. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
 - **The window:** F11 for fullscreen, and the View menu changes the layout. On the couch, F1 picks which game plays the music.
 - **Online:** you both need the same version. If you can't connect, the lobby says why, and Help › Online troubleshooting has what to try.
 
@@ -78,7 +79,7 @@ SOTN Co-op stands on other people's work. Thank you to all of them.
 **Foundations: what the mod is built from**
 - **[sotn-decomp](https://github.com/Xeeynamo/sotn-decomp)**, by Xeeynamo and its contributors. The matching decompilation of *Symphony of the Night* is what made a mod of this depth possible: named symbols, the game's own headers, its build toolchain and asset tools. The co-op module is compiled against it. The decomp community's Discord answered our first questions: 8 MB RAM mode, hooking DRA, how enemies see the player.
 - **The Maria mod** (`mariapsp-forpsx`, in sotn-decomp's `mods/`), by its authors in the decomp community. It ports *Dracula X Chronicles*' Maria to the PS1 and is our Maria's base. It also set the precedent we follow: build from the player's own discs, and never distribute game data.
-- **[SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)** by renanbianchi: Ultimate Maria is its PSP Maria, its own glue on the same decompiled Maria, with two sub-weapon slots and the PSP's sub-weapons.
+- **[SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)** by renanbianchi: Ultimate Maria is its PSP Maria, its own glue on the same decompiled Maria, with two sub-weapon slots and the PSP's sub-weapons. Saturn Maria is its Saturn Maria, and the launcher makes her art with a port of its converter.
 - **[SwanStation](https://github.com/libretro/swanstation)**, the libretro PlayStation core, and **[DuckStation](https://github.com/stenzek/duckstation)** by Stenzek, which it's forked from. Every game in SOTN Co-op runs in it: on the couch two cores at once, online one per player. Its 8 MB RAM support and accuracy are what the module lives in.
 - **[PCSX-Redux](https://github.com/grumpycoders/pcsx-redux)** by the Grumpycoders. Its **OpenBIOS** ships in every release, so nobody needs a BIOS dump. The emulator itself is our cross-check, and its Lua scripting lets us run the module headless.
 - **[libretro.py](https://github.com/JesseTG/libretro.py)** by Jesse Talavera. It drives the core from Python, and the test harness and the launcher are built on it.

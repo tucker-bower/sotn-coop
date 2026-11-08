@@ -10,6 +10,7 @@ are rebuilt from the player's DXC files with patches of our changes only (charac
 nothing of hers is distributed.
 """
 
+import hashlib
 import json
 import struct
 import sys
@@ -18,8 +19,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
 import bps  # noqa: E402
 
-CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA = 0, 1, 2, 3   # module/link.h
-BLOBS_MAX = 0x100000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
+CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA, CHAR_ULT_RICHTER = 0, 1, 2, 3, 4, 5  # module/link.h
+BLOBS_MAX = 0x1C0000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
 CHAR_BLOB_MAGIC = 0x52414843                       # 'CHAR'
 SECTOR = 2048
 DXC_USA = "ULUS-10277"
@@ -131,3 +132,155 @@ def maria_blob(iso_path, patches, out):
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)
     return out
+
+
+# --- Saturn Maria (docs/design/character-mods.md): SOTN Ultimate's, from the player's Saturn disc
+
+SATURN_GAME = "Akumajou Dracula X: Gekka no Yasoukyoku (Japan) (2M)"  # the Redump name, Track 1
+
+
+class RawDisc(Iso):
+    """A raw CD image's track 1 (2352-byte sectors): the Saturn's (mode 1) or the PlayStation's
+    (mode 2, form 1)."""
+
+    def __init__(self, path):
+        self.f = open(path, "rb")
+        self.f.seek(16 * 2352 + 15)
+        mode = self.f.read(1)
+        self.skip = 16 if mode == b"\x01" else 24
+        pvd = self._sector(16)
+        if pvd[1:6] != b"CD001":
+            self.f.close()
+            raise DiscError("That file isn't a CD image's data track (.bin). Choose the .cue of your rip.")
+        self.root = pvd[156:156 + 34]
+
+    def _sector(self, n, count=1):
+        out = []
+        for k in range(count):
+            self.f.seek((n + k) * 2352 + self.skip)
+            out.append(self.f.read(SECTOR))
+        return b"".join(out)
+
+
+def track1(path):
+    """Track 1 of a .cue (or a .bin itself)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
+    import patcher
+    try:
+        return patcher.find_track1(path)[0]
+    except patcher.DiscError as e:
+        raise DiscError(str(e)) from e
+
+
+def saturn_files(disc, about):
+    """The Saturn files Saturn Maria is made from, checked against the disc she was made for."""
+    d = RawDisc(track1(disc))
+    try:
+        files = {name: d.read(name) for name in about["saturn_files"]}
+    finally:
+        d.close()
+    if not any(files.values()):
+        raise DiscError("That isn't the Saturn Symphony of the Night: Saturn Maria and Ultimate Richter come from "
+                        f"{SATURN_GAME}.")
+    bad = [n for n, b in files.items() if not b or hashlib.md5(b).hexdigest() != about["saturn_files"][n]]
+    if bad:
+        raise DiscError("That's the Saturn game, but not the copy Saturn Maria and Ultimate Richter were made for (a translation "
+                        f"or another version?). They need the original Japanese disc: {SATURN_GAME}, from "
+                        "redump.org.")
+    return files
+
+
+def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
+    """Builds Saturn Maria's blob from the player's Saturn disc and their co-op disc (Richter's art
+    she keeps: RIC.BIN, which the co-op disc has as retail did); returns out. Raises DiscError."""
+    import saturn_maria
+    import saturn_maria_sounds
+    patches = Path(patches)
+    about = json.loads((patches / "sat-maria.json").read_text())
+    files = saturn_files(saturn_disc, about)
+    ps1 = RawDisc(track1(coop_disc))
+    try:
+        ric = ps1.read(about["source"])
+        ps1_files = {p: ps1.read(p) for p in ("DRA.BIN", "VAB/SD_RIH.VH", "VAB/SD_RIH.VB", "VAB/SD_MAR.VH",
+                                              "VAB/SD_MAR.VB", "SD_J010.VH", "SD_J010.VB")}
+    finally:
+        ps1.close()
+    if not ric:
+        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Make it again in Settings › Game files.")
+    try:
+        ovl = bytearray(bps.apply(ric, (patches / "sat-maria.bps").read_bytes()))
+        partner = bytearray(bps.apply(ric, (patches / "sat-maria-partner.bps").read_bytes()))
+    except bps.PatchError as e:
+        raise DiscError(f"Your co-op disc's Richter isn't the one Saturn Maria was made for ({e}).") from e
+    made = saturn_maria.arrays(files.__getitem__, lambda p: ric)  # read_ps1: only BIN/RIC.BIN
+    for name, (at, size, digest) in about["arrays"].items():
+        data = made.get(name)
+        if data is None or len(data) != size or hashlib.md5(data).hexdigest() != digest:
+            raise DiscError(f"Saturn Maria's {name} didn't come out as it should. Please send us a bug report (F9).")
+        ovl[at:at + size] = data
+        p = about["partner_arrays"].get(name)  # not her HUD: player 1's only
+        if p is not None:
+            partner[p:p + size] = data
+    # her two sound banks (D183): synthesized from the Saturn's, on the PS1's banks' layout
+    sounds = saturn_maria_sounds.banks(files.__getitem__, ps1_files.__getitem__) if "sounds" in about else None
+    if sounds and [hashlib.md5(b).hexdigest() for b in sounds] != about["sounds"]:
+        raise DiscError("Saturn Maria's sounds didn't come out as they should. Please send us a bug report (F9).")
+    vh, vb, vh2, vb2 = sounds or (b"", b"", b"", b"")
+    pad = lambda b: bytes(b) + bytes(-len(b) % 4)  # noqa: E731
+    # her overlay, her bank over Richter's, her partner build, her bank over SD_MAR (module/link.h)
+    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_SAT_MARIA, len(ovl), len(vh), len(vb), len(partner),
+                       len(vh2), len(vb2))
+    blob += pad(ovl) + pad(vh) + pad(vb) + pad(partner) + pad(vh2) + pad(vb2)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(blob)  # one blob, no end mark: blobs() joins it to the others
+    return out
+
+
+def ultimate_richter_blob(saturn_disc, coop_disc, patches, out):
+    """Builds Ultimate Richter's blob (D184): RIC.BIN from the co-op disc with the Saturn's coat
+    (launcher/saturn_richter.py), up to its last change; the module copies it over the retail load.
+    Returns out. Raises DiscError."""
+    import saturn_richter
+    about = json.loads((Path(patches) / "sat-maria.json").read_text())["richter"]
+    files = saturn_files(saturn_disc, {"saturn_files": about["saturn_files"]})
+    ps1 = RawDisc(track1(coop_disc))
+    try:
+        ric, g2 = ps1.read("BIN/RIC.BIN"), ps1.read("BIN/F_GAME2.BIN")
+    finally:
+        ps1.close()
+    if not ric or not g2:
+        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Make it again in Settings › Game files.")
+    try:
+        ric2 = saturn_richter.ric2(ric, files.__getitem__, g2)[:about["size"]]
+    except (ValueError, IndexError) as e:
+        raise DiscError(f"Ultimate Richter's coat didn't come out as it should ({e}). Please send us a bug report (F9).") from e
+    if hashlib.md5(ric2).hexdigest() != about["md5"]:
+        raise DiscError("Ultimate Richter's coat didn't come out as it should. Please send us a bug report (F9).")
+    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_ULT_RICHTER, len(ric2), 0, 0, 0, 0, 0) + ric2
+    blob += bytes(-len(blob) % 4)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(blob)
+    return out
+
+
+def blobs(*parts):
+    """The blobs for a game's 8MB RAM, one after another, from their files' bytes (each one blob,
+    or maria.blob's two with its end mark), then the end mark (module/link.h CHAR_BLOB_NEXT)."""
+    out = b""
+    for p in parts:
+        if p:
+            out += p[:-4] if p[-4:] == bytes(4) and len(p) % 4 == 0 and _ends_marked(p) else p
+    out += bytes(4)
+    assert len(out) <= BLOBS_MAX, len(out)
+    return out
+
+
+def _ends_marked(p):
+    """Whether p is blobs ending with the end mark (walks the headers)."""
+    at = 0
+    while at + 32 <= len(p) and struct.unpack_from("<I", p, at)[0] == CHAR_BLOB_MAGIC:
+        sizes = struct.unpack_from("<6I", p, at + 8)
+        at += 32 + sum((n + 3) & ~3 for n in sizes)
+    return at == len(p) - 4

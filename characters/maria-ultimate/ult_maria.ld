@@ -1,6 +1,8 @@
 /* Ultimate Maria as player 1 (Makefile): Co-op Maria's layout (characters/maria-dx/maria.ld), so
    the module finds her at the same places. Data at Richter's overlay address, where DRA reads the
-   player's table (0x8013C000) and sprites (0x8013C020); code and BSS in the 8MB expansion RAM.
+   player's table (0x8013C000) and sprites (0x8013C020); code and BSS in the 8MB expansion RAM, at
+   an address of her own (0x80620000): code written over another character's at the same address
+   can go unnoticed by an emulator's recompiler (module/coop_api.h COOP_PLAYER_FAR).
    The trailer's BSS is zeroed by the module, and mar2.c clears it too (mar2_bss_start). */
 EXTERN(MARIA_override);
 SECTIONS {
@@ -16,7 +18,7 @@ SECTIONS {
         *(.rodata*)
         *(.sdata*)
     }
-    .text 0x80600000 : AT(LOADADDR(.data) + SIZEOF(.data)) {
+    .text 0x80620000 : AT(LOADADDR(.data) + SIZEOF(.data)) {
         *(.text*)
     }
     .bss (NOLOAD) : {

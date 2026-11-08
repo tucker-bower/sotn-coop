@@ -14,7 +14,12 @@ What the releases include, and under which licence (full texts in licenses/):
   https://github.com/grumpycoders/pcsx-redux (src/mips/openbios)
 - sotn-decomp, by Xeeynamo and its contributors: AGPL-3.0. https://github.com/Xeeynamo/sotn-decomp
 - SOTN Ultimate, by renanbianchi: AGPL-3.0. Ultimate Maria's glue (characters/maria-ultimate/mar2.c)
-  is its src/maria_psp/mar2.c, with our co-op changes marked. https://github.com/renanbianchi/sotn-ultimate
+  is its src/maria_psp/mar2.c, with our co-op changes marked; Saturn Maria is its src/ric changes
+  and maria_saturn headers (characters/maria-saturn), launcher/saturn_maria.py ports its
+  builder's mar_assets.ts and mar_hud.ts, and launcher/saturn_maria_sounds.py its mar_sounds.ts,
+  saturn_sfx.ts, vab.ts and dsp.ts and its tools/satxa.c VAG encoder, and launcher/saturn_richter.py
+  its ric2.ts makeRic2 (Ultimate Richter's coat).
+  https://github.com/renanbianchi/sotn-ultimate
 - Python: PSF License. The Windows build uses python.org's embeddable distribution.
 - libretro.py: MIT. pygame-ce (Windows) and pygame (Android): LGPL-2.1. Pillow: MIT-CMU.
 - Android only: python-for-android (MIT), pyjnius (MIT), SDL2, SDL2_image, SDL2_mixer and

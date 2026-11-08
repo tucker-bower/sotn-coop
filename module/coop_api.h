@@ -19,8 +19,10 @@
 #define ARC_F_ADDR 0x80540000
 // Our Richter's and Maria's code and BSS (characters/richter-ps1/ric.ld, characters/maria-dx/maria.ld): only their data is
 // in Richter's overlay slot, so familiars fit after it (design/M8b §3). Each has its own
-// address here (0x805C0000, 0x80600000): code rewritten at an address an emulator's recompiler
-// has already compiled may not be noticed (Richter then Maria hung).
+// address here (Co-op Richter 0x805C0000, Co-op Maria 0x80600000, Ultimate Maria 0x80620000,
+// Saturn Maria 0x80640000): code rewritten at an address an emulator's recompiler has already
+// compiled may not be noticed (Richter then Maria hung; so did a partner going from Co-op Maria
+// to Ultimate Maria at one address).
 #define COOP_PLAYER_FAR 0x805C0000
 #define COOP_PLAYER_FAR_END 0x80680000
 // M13 step 3: a partner who plays another character. F_GAME2.BIN (Richter's graphics: 32 strips
@@ -42,6 +44,13 @@
 #define PARTNER_RIC_ADDR 0x80740000
 #define PARTNER_MAR_ADDR 0x80780000
 #define PARTNER_PLAYER_SIZE 0x40000
+// Saturn Maria's partner build (characters/maria-saturn/sat_maria_partner.ld): bigger than the
+// others (her art is in her file), below the module, which nothing else uses.
+#define PARTNER_SAT_ADDR 0x80200000
+#define PARTNER_SAT_SIZE 0x80000
+// Ultimate Maria's: apart from Co-op Maria's (see COOP_PLAYER_FAR), after the blobs (link.h).
+#define PARTNER_ULT_ADDR 0x804C0000
+#define PARTNER_ULT_SIZE 0x40000
 #define WEAPON_SHEET_ADDR 0x80700000 // the hand weapons' tile sheets, copied out of VRAM (D106: 2 x 16KB)
 
 void CoopBoot(void);           // replaces InitializePads()

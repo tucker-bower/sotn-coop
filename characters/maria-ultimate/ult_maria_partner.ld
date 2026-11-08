@@ -1,9 +1,10 @@
 /* Ultimate Maria as the partner: ult_maria.ld's layout, all in the 8MB expansion RAM at
-   PARTNER_MAR_ADDR (module/coop_api.h), as Co-op Maria's (characters/maria-dx/maria_partner.ld).
+   PARTNER_ULT_ADDR (module/coop_api.h), apart from Co-op Maria's: a partner who switches from one to
+   the other would otherwise run new code where the recompiler kept the old (it hung).
    The trailer's sixth word is her partner init (mar2.c CoopUltMarPartnerInit). */
 EXTERN(MARIA_override);
 SECTIONS {
-    . = 0x80780000;
+    . = 0x804C0000;
     .data : {
         *(.data.MARIA_override)
         *(.data.maria_sprites)
