@@ -68,7 +68,12 @@ static const Region s_Regions[] = {
 // sprite banks a Richter or Maria init installs. Swapped with player 1's for its frames.
 #define HDR_ADDR 0x8013C000
 #define HDR_SIZE 0x388
-static u32 s_Hdr[HDR_SIZE / 4];
+// Saturn Maria's sprite table is longer (0x568 bytes, to 0x8013C588), and her code rewrites it as
+// it unpacks her images: her partner's header is that much, taken again at each swap-in
+#define HDR_SIZE_SAT 0x588
+static u32 s_Hdr[HDR_SIZE_SAT / 4];
+static u32 s_HdrWords = HDR_SIZE / 4;
+static const u32* s_LiveHdr; // her partner build's own header, which her code writes to
 #define BANKS 8 // sprite banks 0x10-0x17: Richter's 0x10-0x13, Maria's 0x10-0x16, the off-hand's 0x17
 static u32 s_Banks[BANKS];
 static u32 s_Char;    // CHAR_* of the body
@@ -269,7 +274,7 @@ static void Swap(void) {
 
     if (s_Code || s_AluHere) {
         u32* ram = (u32*)HDR_ADDR;
-        for (k = 0; k < HDR_SIZE / 4; k++) {
+        for (k = 0; k < s_HdrWords; k++) {
             t = ram[k];
             ram[k] = s_Hdr[k];
             s_Hdr[k] = t;
@@ -326,7 +331,7 @@ typedef struct {
 static bool Trailer(u32 base, u32 size, u32 words, FarTrailer* out) {
     const FarTrailer* t;
 
-    if (size < words * 4 || size > PARTNER_PLAYER_SIZE) {
+    if (size < words * 4 || size > PARTNER_SAT_SIZE) {
         return false;
     }
     t = (const FarTrailer*)(base + ((size - words * 4) & ~3));
@@ -352,11 +357,14 @@ static const FarTrailer* PartnerRic(void) {
 
 // The partner's Maria, from her blob (the launcher's, in every game where someone plays her: its
 // last part), put where it runs once.
-// Co-op Maria and Ultimate Maria have the same place: one partner at a time.
+// Co-op Maria and Ultimate Maria have the same place: one partner at a time. Saturn Maria has her
+// own (PARTNER_SAT_ADDR), and Richter's trailer: her init is her table's (5 words).
 static const FarTrailer* PartnerMar(u32 character) {
     static FarTrailer s_Trailer;
     static u32 s_Which;
     const CharBlob* b = CharacterBlob(character);
+    bool sat = character == CHAR_SAT_MARIA;
+    u32 addr = sat ? PARTNER_SAT_ADDR : PARTNER_MAR_ADDR;
     const u32* src;
     u32* dst;
     u32 n;
@@ -365,18 +373,18 @@ static const FarTrailer* PartnerMar(u32 character) {
         return &s_Trailer;
     }
     s_Trailer.magic = 0;
-    if (!b || !b->partnerSize || b->partnerSize > PARTNER_PLAYER_SIZE) {
+    if (!b || !b->partnerSize || b->partnerSize > (sat ? PARTNER_SAT_SIZE : PARTNER_PLAYER_SIZE)) {
         return NULL;
     }
     s_Which = character;
     src = (const u32*)((const u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3) +
                        ((b->vbSize + 3) & ~3));
-    dst = (u32*)PARTNER_MAR_ADDR;
+    dst = (u32*)addr;
     for (n = (b->partnerSize + 3) / 4; n--;) {
         *dst++ = *src++;
     }
     FlushCache(); // new code (D17)
-    if (!Trailer(PARTNER_MAR_ADDR, b->partnerSize, 6, &s_Trailer) || !s_Trailer.init) {
+    if (!Trailer(addr, b->partnerSize, sat ? 5 : 6, &s_Trailer) || (!sat && !s_Trailer.init)) {
         s_Trailer.magic = 0;
         return NULL;
     }
@@ -384,7 +392,10 @@ static const FarTrailer* PartnerMar(u32 character) {
 }
 
 static const FarTrailer* PartnerCode(u32 character) {
-    return character == CHAR_RICHTER ? PartnerRic() : CHAR_IS_MARIA(character) ? PartnerMar(character) : NULL;
+    // Saturn Maria isn't CHAR_IS_MARIA (her file is Richter's layout), but her partner build is a blob's
+    return character == CHAR_RICHTER                                   ? PartnerRic()
+           : CHAR_IS_MARIA(character) || character == CHAR_SAT_MARIA ? PartnerMar(character)
+                                                                      : NULL;
 }
 
 // A character's graphics file in VRAM's second bank, where the game puts its own in the first:
@@ -425,6 +436,8 @@ static void AluHeader(void) {
     const u32* arc = (const u32*)ARC_F_ADDR;
     u32 delta = ARC_F_ADDR - HDR_ADDR, k;
 
+    s_HdrWords = HDR_SIZE / 4;
+    s_LiveHdr = NULL;
     for (k = 0; k < HDR_SIZE / 4; k++) {
         s_Hdr[k] = arc[k];
     }
@@ -543,7 +556,9 @@ static void Make(void) {
         for (k = 0; k < t->bssSize / 4; k++) { // fresh statics (the trailer is in the first words)
             bss[k] = 0;
         }
-        for (k = 0; k < HDR_SIZE / 4; k++) {
+        s_HdrWords = (s_Char == CHAR_SAT_MARIA ? HDR_SIZE_SAT : HDR_SIZE) / 4;
+        s_LiveHdr = s_Char == CHAR_SAT_MARIA ? hdr : NULL;
+        for (k = 0; k < s_HdrWords; k++) {
             s_Hdr[k] = hdr[k];
         }
         for (k = 0; k < BANKS; k++) {
@@ -586,7 +601,13 @@ static s32 s_KeptExp;
 static void SwapIn(void) {
     s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
     s32 i;
+    u32 k;
 
+    if (s_Code && s_LiveHdr) { // Saturn Maria's: her table as her code last left it
+        for (k = 0; k < s_HdrWords; k++) {
+            s_Hdr[k] = s_LiveHdr[k];
+        }
+    }
     Swap();
     s_KeptExp = g_Status.exp;
     g_Status.exp = 0;

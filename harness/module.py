@@ -45,4 +45,19 @@ def maria_blob():
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
         import characters
         characters.maria_blob(iso, out, blob)
-    return blob.read_bytes()
+    return characters_blobs(blob.read_bytes())
+
+
+def characters_blobs(maria):
+    """Maria's blobs, then Saturn Maria's when the dev Saturn disc is there (LOCAL.md): what the
+    launcher gives every game (characters.blobs)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import characters
+    out = TOOLS["out"] / "maria"
+    sat, cues = out / "saturn-maria.blob", sorted((REPO / "disks/saturn-disc").glob("*.cue"))
+    coop = TOOLS["out"] / "disc" / "sotn_coop.us.cue"
+    if cues and (out / "sat-maria.json").exists() and coop.exists() and (
+            not sat.exists() or (out / "sat-maria.bps").stat().st_mtime > sat.stat().st_mtime):
+        characters.saturn_maria_blob(cues[0], coop, out, sat)
+    return characters.blobs(maria, sat.read_bytes() if sat.exists() else None)

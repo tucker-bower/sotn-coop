@@ -322,7 +322,7 @@ typedef struct {
 // The launcher writes the chosen character's overlay and sound bank into expansion RAM before
 // the game boots: a CharBlob header, then the overlay, the .VH and the .VB. Without one (or for
 // another character), Richter's retail files from the disc are used.
-#define CHAR_BLOB_ADDR 0x80400000
+#define CHAR_BLOB_ADDR 0x80300000 // after the module (coop.ld checks it ends before)
 #define CHAR_BLOB_MAGIC 0x52414843 // 'CHAR'
 typedef struct {
     u32 magic;     // CHAR_BLOB_MAGIC
@@ -339,8 +339,8 @@ typedef struct {
 #define CHAR_BLOB_NEXT(b) \
     ((const CharBlob*)((const u8*)((b) + 1) + CHAR_BLOB_ALIGN((b)->ovlSize) + CHAR_BLOB_ALIGN((b)->vhSize) + \
                        CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize)))
-#define CHAR_BLOBS_MAX 2
-#define CHAR_BLOBS_END 0x80500000 // COOPRIC_ADDR (module/coop_api.h): the blobs end before it
+#define CHAR_BLOBS_MAX 3 // Co-op Maria, Ultimate Maria, Saturn Maria
+#define CHAR_BLOBS_END 0x80500000 // COOPRIC_ADDR (module/coop_api.h): the blobs end before it (2 MB)
 extern CoopLink g_CoopLink;
 
 #endif

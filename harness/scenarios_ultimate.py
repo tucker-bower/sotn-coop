@@ -139,34 +139,23 @@ def boss_doppleganger_alucard_and_ultimate_maria(run):
     party_boss(run, CHAR_ALUCARD, CHAR_ULT_MARIA)
 
 
-def saturn_maria_blob():
-    """Saturn Maria's CharBlob from the dev build (characters/maria-saturn: Ultimate's converters
-    run on the dev machine), Richter's sounds; None if she isn't built. Phase 1 of her design."""
-    from coop_env import REPO
-    ovl = REPO / "build/coop/maria-saturn/SATMAR.BIN"
-    if not ovl.exists():
-        return None
-    o = ovl.read_bytes()
-    from link.mailbox import CHAR_SAT_MARIA
-    return struct.pack("<8I", 0x52414843, CHAR_SAT_MARIA, len(o), 0, 0, 0, 0, 0) + o + bytes(-len(o) % 4) + bytes(4)
-
-
 @scenario(start="entrance", disc=COOP_DISC)
 def saturn_maria_in_the_castle(run):
-    """Saturn Maria (SOTN Ultimate's, phase 1): an Alucard save loads as her, her overlay in
-    Richter's slot and her code in the 8MB, she walks and attacks, and loads back as Alucard."""
-    from link.mailbox import CHAR_BLOB_ADDR, CHAR_SAT_MARIA
+    """Saturn Maria (SOTN Ultimate's): an Alucard save loads as her, her overlay (made from the
+    Saturn disc, as the launcher makes it) in Richter's slot and her code in the 8MB, she walks
+    and attacks, and loads back as Alucard."""
+    from link.mailbox import CHAR_SAT_MARIA
     from coop_env import TOOLS
     e, mb = run.emu, mailbox(run)
-    blob = saturn_maria_blob()
-    run.expect(blob is not None, "her dev build is there (make -C characters/maria-saturn)")
-    e.write_bytes(CHAR_BLOB_ADDR, blob)
+    found = blobs()
+    run.expect(CHAR_SAT_MARIA in found, "her blob is made (the dev Saturn disc: LOCAL.md)", has=sorted(found))
     reload_as(run, mb, CHAR_SAT_MARIA)
     run.expect(mb.self_presence().character == CHAR_SAT_MARIA, "the game reports Saturn Maria",
                character=mb.self_presence().character)
     # her player table (g_PlOvl); the frame table after it is hers to rewrite: she unpacks her
     # LZSS images into buffers every frame and points it at them
-    run.expect(e.read_bytes(RICHTER_OVERLAY, 32) == blob[BLOB_HEAD:BLOB_HEAD + 32], "Richter's slot holds her overlay")
+    at = found[CHAR_SAT_MARIA][0]
+    run.expect(e.read_bytes(RICHTER_OVERLAY, 32) == maria_blob()[at:at + 32], "Richter's slot holds her overlay")
     s0 = e.snapshot()
     s = run.play(walker("left", attack_every=12), 300)
     e.screenshot().save(TOOLS["out"] / "saturn_maria_in_the_castle" / "walk.png")
@@ -174,3 +163,97 @@ def saturn_maria_in_the_castle(run):
                "she walks and attacks in the castle", moved=s0["world_x"] - s["world_x"], room=s["room"])
     reload_as(run, mb, CHAR_ALUCARD)
     run.expect(mb.self_presence().character == CHAR_ALUCARD, "and loads back as Alucard")
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, 4))
+def partner_body_alucard_and_saturn_maria(run):
+    """Alucard's game, a Saturn Maria partner: her partner build (PARTNER_SAT_ADDR), its sprite
+    table taken again each frame as her code unpacks her images."""
+    from scenarios_m13 import _partner_pair
+    _partner_pair(run, CHAR_ALUCARD, 4)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(4, CHAR_ALUCARD))
+def partner_body_saturn_maria_and_alucard(run):
+    """Saturn Maria's game, an Alucard partner."""
+    from scenarios_m13 import _partner_pair
+    _partner_pair(run, 4, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_MARIA, 4), full=True)
+def partner_body_maria_and_saturn_maria(run):
+    """Co-op Maria's game, a Saturn Maria partner: three blobs, two partner areas."""
+    from scenarios_m13 import _partner_pair
+    _partner_pair(run, CHAR_MARIA, 4)
+
+
+MP, MP_MAX = 0x80097BB0, 0x80097BB4  # g_Status
+ENGINE_STEP, HALT = 0x8003C9A4, 0x80097420  # g_GameEngineStep, g_unkGraphicsStruct.unk28
+ENGINE_HALT, HALT_BEASTS = 5, 4
+
+
+def facing_left(e):
+    return e.read("g_Entities", "<H", 0x14) != 0  # PLAYER.facingLeft
+
+
+def rise_of(run, inputs):
+    """How high (px) she gets above where she stood while the inputs play, then lands."""
+    e = run.emu
+    y0, best = e.snapshot()["world_y"], 0
+    for b in inputs:
+        run.step(1, b)
+        best = max(best, y0 - e.snapshot()["world_y"])
+    run.step(60)
+    return best
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def saturn_maria_moves(run):
+    """Saturn Maria plays as SOTN Ultimate built her: R1 is her backdash (a hop away from where
+    she faces), and she has a double jump of her own, with no relic (Co-op Maria's needs the Leap
+    Stone, whatever the castle's rules: these are hers)."""
+    from link.mailbox import CHAR_SAT_MARIA
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_SAT_MARIA)
+    run.step(120)  # the load's landing: she crouches a moment
+    left, x0 = facing_left(e), e.snapshot()["world_x"]
+    run.step(2, "r1")
+    run.step(40)
+    moved = e.snapshot()["world_x"] - x0
+    run.expect(abs(moved) > 12 and (moved > 0) == left, "R1: a backdash, away from where she faces",
+               moved=moved, facing_left=left)
+    single = rise_of(run, ["cross"] * 12 + [""] * 40)
+    double = rise_of(run, ["cross"] * 10 + [""] * 6 + ["cross"] * 10 + [""] * 40)
+    run.expect(double > single + 10, "a second jump in the air takes her higher", single=single, double=double)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def saturn_maria_beasts(run):
+    """Byakko (Up, Down, Down-forward, Forward, Square; 100 MP) halts the game while the beast
+    strikes, and her own code ends the halt: our DRA runs only the stage in a halt for anyone but
+    Alucard, so the module runs her there (character.c SaturnMariaHalt). Without it, the game
+    stayed frozen."""
+    from link.mailbox import CHAR_SAT_MARIA
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_SAT_MARIA)
+    run.step(120)
+    e.write(MP_MAX, 200)
+    e.write(MP, 200)
+    fwd = "left" if facing_left(e) else "right"
+    for pad in ("up", "down", f"down+{fwd}", fwd):
+        run.step(4, pad)
+    run.step(2, f"{fwd}+square")
+    halted = ended = False
+    for i in range(900):
+        run.step(1)
+        if e.read(ENGINE_STEP) == ENGINE_HALT and e.read(HALT, "<i") == HALT_BEASTS:
+            halted = True
+        elif halted and e.read(ENGINE_STEP) != ENGINE_HALT:
+            ended = True
+            break
+    run.expect(halted, "Byakko halts the game (the beast strikes)", mp=e.read(MP))
+    run.expect(ended, "and her code ends the halt", frames=i, step=e.read(ENGINE_STEP), halt=e.read(HALT, "<i"))
+    run.expect(e.read(MP) < 140, "it cost her 100 MP (she gets some back as it plays)", mp=e.read(MP))
+    s0 = e.snapshot()
+    s = run.play(walker("left", attack_every=12), 120)
+    run.expect(s["world_x"] != s0["world_x"] or s["room"] != s0["room"], "and she plays on")

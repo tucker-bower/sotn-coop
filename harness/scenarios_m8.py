@@ -8,7 +8,7 @@ from bots import walker
 from coop_env import REPO
 from emu import SYMBOLS
 from link.adapter import HarnessAdapter
-from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CHAR_ULT_MARIA, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
+from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CHAR_SAT_MARIA, CHAR_ULT_MARIA, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
                           CHAR_BLOB_ADDR, IN_PLAY, OPT_SHORTCUTS, Mailbox)
 from module import COOP_DISC, maria_blob, symbols
 from scenario import SCENARIOS, scenario
@@ -42,7 +42,7 @@ def reload_as(run, mb, character):
     """A joint save and its load with this game's character set: how Continue switches it.
     Maria's blob goes into the 8MB RAM first, as the launcher's host does."""
     e = run.emu
-    if character in (CHAR_MARIA, CHAR_ULT_MARIA):
+    if character in (CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA):
         blob = maria_blob()
         run.expect(blob is not None, "Maria's blob builds (dev DXC disc)")
         e.write_bytes(CHAR_BLOB_ADDR, blob)

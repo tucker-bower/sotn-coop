@@ -9,6 +9,10 @@ python3 "$ROOT/scripts/disk_space.py"  # stop before the disk fills (AGENTS.md)
 cd "$ROOT" && scripts/build_disc.sh 2>&1 | tail -1
 make -C characters/maria-dx >/dev/null 2>&1 && make -C characters/maria-ultimate >/dev/null 2>&1 &&
     $PY characters/maria-dx/make_patches.py .env/out/maria 2>&1 | tail -1
+# Saturn Maria, where the Saturn disc and her generated art are (LOCAL.md; characters/maria-saturn)
+if [ -d .env/src/sotn-decomp/disks/saturn ]; then
+    make -C characters/maria-saturn >/dev/null 2>&1 && $PY characters/maria-saturn/make_patches.py .env/out/maria | tail -1
+fi
 cd "$ROOT/harness"
 DISC=$($PY -c "from module import COOP_DISC; print(COOP_DISC)")
 $PY savestates.py "$DISC" 2>&1 | grep -v "^\[" | tail -1

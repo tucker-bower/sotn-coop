@@ -42,6 +42,10 @@
 #define PARTNER_RIC_ADDR 0x80740000
 #define PARTNER_MAR_ADDR 0x80780000
 #define PARTNER_PLAYER_SIZE 0x40000
+// Saturn Maria's partner build (characters/maria-saturn/sat_maria_partner.ld): bigger than the
+// others (her art is in her file), below the module, which nothing else uses.
+#define PARTNER_SAT_ADDR 0x80200000
+#define PARTNER_SAT_SIZE 0x80000
 #define WEAPON_SHEET_ADDR 0x80700000 // the hand weapons' tile sheets, copied out of VRAM (D106: 2 x 16KB)
 
 void CoopBoot(void);           // replaces InitializePads()

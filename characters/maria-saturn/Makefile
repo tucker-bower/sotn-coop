@@ -19,8 +19,12 @@ CFLAGS  += -fno-stack-protector -D_internal_version_$(VERSION) -DMOD_MARIA_SAT -
 CFLAGS  += -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -w
 SRCS    := pl_header.c $(filter-out pl_header.c ovl_load.c,$(notdir $(wildcard $(ROOT)/src/ric/*.c)))
 OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
+# The partner's: the same sources with COOP_PARTNER (coop_sat_maria.h), all in the 8MB.
+PBUILD  := $(BUILD)/partner
+POBJS   := $(patsubst %.c,$(PBUILD)/%.o,$(SRCS)) $(PBUILD)/coop_partner.o $(PBUILD)/coop_sat_partner.o
+PFLAGS  := -DCOOP_PARTNER -include $(CURDIR)/coop_sat_maria.h
 
-all: $(BUILD)/SATMAR.BIN
+all: $(BUILD)/SATMAR.BIN $(BUILD)/SATMARP.BIN
 
 # upstream's src/ric, then Ultimate's changes; its includes of "../../mods/sotn-ultimate/src/
 # maria_saturn/..." find ours
@@ -34,6 +38,18 @@ $(TREE)/.patched: ultimate-ric.patch $(wildcard maria_saturn/*.h)
 $(BUILD)/%.o: $(TREE)/.patched
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $(SRC)/$*.c -o $@
+
+$(PBUILD)/%.o: $(TREE)/.patched coop_sat_maria.h
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) $(PFLAGS) -c $(SRC)/$*.c -o $@
+
+$(PBUILD)/coop_partner.o: ../richter-ps1/coop_partner.c
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) $(PFLAGS) -c $< -o $@
+
+$(PBUILD)/coop_sat_partner.o: coop_sat_partner.c
+	@mkdir -p $(PBUILD)
+	$(CROSS)gcc $(CFLAGS) $(PFLAGS) -c $< -o $@
 
 $(BUILD)/symbols.txt: $(ROOT)/config/symbols.$(VERSION).txt
 	@mkdir -p $(BUILD)
@@ -50,5 +66,13 @@ $(BUILD)/satmar.elf: $(OBJS) $(BUILD)/symbols.txt sat_maria.ld
 $(BUILD)/SATMAR.BIN: $(BUILD)/satmar.elf
 	$(CROSS)objcopy -O binary $< $@
 	@echo "SATMAR.BIN: $$(stat -c %s $@) bytes; data $$($(CROSS)size -A $< | awk '$$1==".data"{print $$2}') of $$((0x80170000 - 0x8013C000))"
+
+$(BUILD)/satmarp.elf: $(POBJS) $(BUILD)/symbols.txt sat_maria_partner.ld
+	$(CROSS)ld -nostdlib -Map=$(BUILD)/satmarp.map --build-id=none -T sat_maria_partner.ld \
+	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -o $@ $(POBJS)
+
+$(BUILD)/SATMARP.BIN: $(BUILD)/satmarp.elf
+	$(CROSS)objcopy -O binary $< $@
+	@echo "SATMARP.BIN: $$(stat -c %s $@) bytes, $$($(CROSS)size -A $< | awk '$$1==".bss"{print $$2}') of BSS (room: 524288)"
 
 .PHONY: all

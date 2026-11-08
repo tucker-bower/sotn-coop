@@ -77,7 +77,7 @@ def scene_speed(presences, solo):
 def spell_options(spells):
     """OPT_* bits for four spell ids (or None) on the right stick: up, right, down, left."""
     return sum(((s + 1) if s is not None else 0) << (OPT_SPELL_SHIFT + 4 * k) for k, s in enumerate(spells))
-CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80400000, 0x52414843  # CharBlob (module/link.h)
+CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80300000, 0x52414843  # CharBlob (module/link.h)
 CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
