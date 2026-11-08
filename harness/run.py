@@ -2,16 +2,19 @@
 """Runs the tests: the harness scenarios (one game, two linked games) and the programs in
 commands.py (launcher checks, UI flows, the patcher).
 
-    python run.py [-j N] [--full] [--list] [-k WORD ...] [name ...]
+    python run.py [-j N] [--full] [--again] [--list] [-c CATEGORY ...] [--changed] [-k WORD ...] [name ...]
+    python run.py --history
 
-Three ways to run (AGENTS.md, Testing):
-- names, or -k WORD (every test whose name has WORD in it; -k again for more): a handful of tests
-  for a small change, e.g. `run.py -k pvp`, `run.py -k boss_rush boss_olrox`;
-- nothing: the everyday suite, before committing a major change or opening a PR (about 10 minutes);
-- --full: the everyday suite plus the full-only tests (soaks, fuzz, the boss chains, every
-  character pairing of the bosses and pictures), before a release. With -k, --full includes the
-  full-only matches too.
---list prints the chosen tests (tier, last time) without running them.
+Pick the smallest that covers the change (AGENTS.md, Testing; categories.py):
+- -c CATEGORY (again for more): every test in it, e.g. `run.py -c richter` after a change to
+  Richter's code. --changed picks the categories from the files this branch changed;
+- names, or -k WORD: the tests you're working on;
+- nothing: the PR gate (categories.EVERYDAY), before opening or updating a PR;
+- --full: everything, before a release. With -c or -k it adds their full-only tests.
+A test whose last run passed after the disc and the sources last changed is skipped: it would
+pass again (--again runs it anyway). So --full after the gate runs only the rest.
+--list prints the chosen tests (tier, categories, last time) without running them. --history
+prints each test's runs and failures from .env/out/history.jsonl, which every run adds to.
 Tests run side by side, each in its own process (-j: how many at once; default the cores less 4,
 12 on a 16-core PC; -j 1 runs them one after another in this process). The tests that time the
 host in real time (SOLO) run after the rest, side by side with each other only. Each test's output
@@ -56,6 +59,7 @@ import session_bossrush  # noqa: F401
 import session_netplay  # noqa: F401
 import session_mods  # noqa: F401
 import spec_test  # noqa: F401
+import categories
 from commands import COMMANDS, run_command
 from scenario import FULL_ONLY, SCENARIOS, run_scenario
 from session import SESSION_SCENARIOS, run_session_scenario
@@ -156,6 +160,7 @@ def run_parallel(names, jobs):
     t0 = time.time()
     run_lanes(make_lanes([n for n in names if n not in SOLO]), jobs, results, lock, t0, len(names))
     run_lanes(make_lanes(solo), jobs, results, lock, t0, len(names), " real time")
+    record(results)
     failed = [n for n in names if not results[n]["passed"]]
     print(f"\n{len(names) - len(failed)} of {len(names)} passed in {time.time() - t0:.0f} s ({jobs} at once)")
     for n in failed:
@@ -185,17 +190,112 @@ def run_lanes(lanes, jobs, results, lock, t0, total, tag=""):
         t.join()
 
 
+def changed_files():
+    """The files this branch changed from main, committed or not."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def git(*a):
+        return subprocess.run(["git", "-C", root, *a], capture_output=True, text=True).stdout.split()
+    base = (git("merge-base", "main", "HEAD") or ["main"])[0]
+    return sorted(set(git("diff", "--name-only", base)) | set(git("ls-files", "--others", "--exclude-standard")))
+
+
 def choose(args, full):
-    """The tests named, or matching a -k word, or the suite; the everyday tier unless full."""
+    """The tests named, matching a -k word, in a -c category or the categories --changed touches; or
+    the PR gate; or with --full and nothing else, everything."""
     words = [args[k + 1] for k, a in enumerate(args) if a == "-k"]
-    named = [a for k, a in enumerate(args) if not a.startswith("-") and (k == 0 or args[k - 1] != "-k")]
-    unknown = [n for n in named if n not in ALL]
+    cats = [args[k + 1] for k, a in enumerate(args) if a == "-c"]
+    named = [a for k, a in enumerate(args) if not a.startswith("-") and (k == 0 or args[k - 1] not in ("-k", "-c"))]
+    unknown = [n for n in named if n not in ALL] + [c for c in cats if c not in categories.CATEGORIES]
     if unknown:
-        sys.exit(f"no such test: {', '.join(unknown)} (run.py --list shows them)")
+        sys.exit(f"no such test or category: {', '.join(unknown)} (run.py --list shows the tests; "
+                 f"categories: {', '.join(categories.CATEGORIES)})")
+    modules = set()
+    if "--changed" in args:
+        touched, modules = categories.for_paths(changed_files())
+        for c, files in touched.items():
+            print(f"{c}: {', '.join(files[:3])}{' ...' if len(files) > 3 else ''}")
+        if modules:
+            print(f"test files: {', '.join(sorted(modules))}")
+        cats += [c for c in touched if c not in cats]
+        if not cats and not modules:
+            sys.exit("--changed: no source file this branch changed touches a category (docs only?): nothing to run")
+    if not (words or named or cats or modules):
+        return list(ALL) if full else [n for n in ALL if n in categories.EVERYDAY]
     tier = [n for n in ALL if full or n not in FULL_ONLY]
-    if not words and not named:
-        return tier
-    return named + [n for n in tier if n not in named and any(w in n for w in words)]
+    picked = [n for n in tier if any(w in n for w in words) or module_of(n) in modules or
+              set(cats) & set(categories.of(n, module_of(n)))]
+    return named + [n for n in picked if n not in named]
+
+
+SOURCES = ("module", "characters", "launcher", "link", "patcher", "harness", "patches")
+
+
+def build_time():
+    """When what the tests run last changed: the disc, or any source file (whichever is newer)."""
+    from coop_env import TOOLS
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    newest = 0.0
+    disc = TOOLS["out"] / "disc" / "sotn_coop.us.bin"
+    if disc.exists():
+        newest = disc.stat().st_mtime
+    for top in SOURCES:
+        for d, _, files in os.walk(os.path.join(root, top)):
+            if "__pycache__" in d or "/assets/" in d:
+                continue
+            for f in files:
+                if not f.endswith((".pyc", ".gif", ".png")):
+                    newest = max(newest, os.path.getmtime(os.path.join(d, f)))
+    return newest
+
+
+def passed_since_build(names):
+    """The tests whose last run passed after the build and the sources last changed: no need to run
+    them again (--again does)."""
+    from coop_env import TOOLS
+    built = build_time()
+    done = []
+    for n in names:
+        report = TOOLS["out"] / n / "report.json"
+        try:
+            if report.stat().st_mtime > built and json.loads(report.read_text())["passed"]:
+                done.append(n)
+        except (OSError, ValueError, KeyError):
+            pass
+    return done
+
+
+def record(results):
+    """Adds each result to .env/out/history.jsonl: what --history (and the gate's upkeep) reads."""
+    from coop_env import TOOLS
+    failed = sum(not r["passed"] for r in results.values())
+    when = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with open(TOOLS["out"] / "history.jsonl", "a") as f:
+        for name, r in results.items():
+            f.write(json.dumps({"test": name, "passed": r["passed"], "when": when, "failed_in_run": failed}) + "\n")
+
+
+def history():
+    """Each test's runs and failures. A failure alone (fewer than 9 in its run) is one the test
+    caught; a run where many fail is usually a broken build."""
+    from coop_env import TOOLS
+    stats = {}
+    try:
+        lines = (TOOLS["out"] / "history.jsonl").read_text().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        r = json.loads(line)
+        s = stats.setdefault(r["test"], [0, 0, ""])
+        s[0] += 1
+        if not r["passed"] and r["failed_in_run"] < 9:
+            s[1] += 1
+            s[2] = r["when"][:10]
+    print(f"{'test':55} {'tier':9} {'runs':>5} {'caught':>6}  last caught")
+    for n in sorted(ALL, key=lambda n: (-stats.get(n, [0, 0])[1], n)):
+        runs, caught, last = stats.get(n, [0, 0, ""])
+        tier = "gate" if n in categories.EVERYDAY else "full" if n in FULL_ONLY else "category"
+        print(f"{n:55} {tier:9} {runs:5} {caught:6}  {last}")
 
 
 if __name__ == "__main__":
@@ -208,14 +308,28 @@ if __name__ == "__main__":
         k = args.index("-j")
         jobs = int(args[k + 1])
         del args[k:k + 2]
+    if "--history" in args:
+        history()
+        sys.exit(0)
     names = choose(args, full)
     if "--list" in args:
         for n in names:
-            print(f"{n:55} {'full' if n in FULL_ONLY else 'everyday':9} {last_seconds(n):6.0f} s")
+            tier = "gate" if n in categories.EVERYDAY else "full" if n in FULL_ONLY else "category"
+            print(f"{n:55} {tier:9} {last_seconds(n):6.0f} s  {','.join(categories.of(n, module_of(n)))}")
         print(f"{len(names)} tests, {sum(map(last_seconds, names)) / 60:.0f} min one after another")
+        loose = [n for n in ALL if not categories.of(n, module_of(n))]
+        if loose:
+            print(f"in no category (name them so categories.py finds them): {', '.join(loose)}")
         sys.exit(0)
     if not names:
         sys.exit("no test matches")
+    if "--again" not in args:
+        done = set(passed_since_build(names))
+        if done:
+            print(f"skipping {len(done)} tests already passed on this build (--again runs them)")
+            names = [n for n in names if n not in done]
+        if not names:
+            sys.exit(0)
     # One folder for all the tests' temporary files, on the disk and gone after: many leave theirs
     # (up to 445 MB each), and they filled a RAM-backed /tmp.
     from coop_env import TOOLS
@@ -225,9 +339,10 @@ if __name__ == "__main__":
         tempfile.tempdir = None
         if jobs > 1 and len(names) > 1:
             sys.exit(1 if run_parallel(names, jobs) else 0)
-        failed = 0
+        failed, results = 0, {}
         for name in names:
-            r = run_one(name)
+            r = results[name] = run_one(name)
             failed += not r["passed"]
             print(show(r, name))
+        record(results)
         sys.exit(1 if failed else 0)

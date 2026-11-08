@@ -2,7 +2,8 @@
 the rest of the suite, which runs with no rules set; these turn a rule off, or move its slider, and
 check the game follows. The launcher's side: launcher/test_rules.py, uxdriver's rules flow."""
 
-from link.mailbox import (BUSY, CHAR_RICHTER, CUTSCENE, DEAD, IN_PLAY, OPT_NO_AIR_JUMPS, OPT_NO_GROWTH,
+from link.mailbox import (BUSY, CHAR_RICHTER, CUTSCENE, DEAD, IN_PLAY, OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS,
+                          OPT_NO_GROWTH,
                           OPT_NO_RELIC_MOVES, OPT_PARTNER_SIM, RULE_NO_BOSS_PULL, RULE_NO_FAERIE_REVIVE,
                           RULE_NO_MAP_TELEPORT, RULE_NO_OFFHAND, RULE_NO_REVIVE, RULE_NO_SCENE_PULL,
                           RULE_NO_SHARED_GOLD, RULE_NO_SHARED_LEVEL)
@@ -102,9 +103,9 @@ def rules_gold_apart(run):
     run.expect(status(b)["gold"] == g0, "B's gold doesn't change", b=status(b)["gold"], was=g0)
 
 
-def scripted_hit(run, g, taken, attack=40):
+def scripted_hit(run, g, taken, attack=40, off=0):
     """g's HP lost to one hit, through its player's own damage code, at that rule."""
-    rules(run, taken=taken)
+    rules(run, off, taken=taken)
     g.write(STATUS, status(g)["hp_max"], "<i", 0x23C)
     run.step(120)
     hp0 = status(g)["hp"]
@@ -127,13 +128,32 @@ def rules_damage_taken(run):
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_RICHTER))
 def rules_damage_taken_richter(run):
-    """...and Richter, whose code has no defense step."""
+    """...and Richter, whose defense the module takes off first (issue 160)."""
     load_characters(run)
     b = run.s.b
     base = scripted_hit(run, b, 0)
     run.expect(base > 0, "a hit hurts", lost=base)
     double = scripted_hit(run, b, 200)
     run.expect(double == base * 2, "200%: twice that", base=base, double=double)
+
+
+DEF_BUFF = 0x80139828  # g_StatBuffTimers[SBT_DEF]: 20 more defense while it runs (DRA's CalcDefense)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, CHAR_RICHTER))
+def rules_richter_defense(run):
+    """Issue 160: with "Alucard's stats" on, Richter's defense works as Alucard's does. 20 more defense (the
+    DEF buff, as from gear) takes 20 off a hit. Off, his own code's rule: all of it."""
+    load_characters(run)
+    b = run.s.b
+    base = scripted_hit(run, b, 0)
+    run.expect(base > 0, "a hit hurts", lost=base)
+    b.write(DEF_BUFF, 0x200, "<i")
+    buffed = scripted_hit(run, b, 0)
+    run.expect(buffed == max(1, base - 20), "20 more defense: 20 less lost", base=base, buffed=buffed)
+    b.write(DEF_BUFF, 0x200, "<i")
+    raw = scripted_hit(run, b, 0, off=OPT_NO_ALUCARD_STATS)
+    run.expect(raw == 40, "off: the whole hit, as in his own game", lost=raw)
 
 
 @session_scenario()
@@ -246,7 +266,7 @@ def rules_no_map_teleport(run):
 
 @session_scenario(starts=("entrance", "entrance"), characters=(CHAR_RICHTER, 0))
 def rules_no_growth(run):
-    """Richter and Maria grow off: XP doesn't level Richter up; back on, it does."""
+    """Richter and Maria level up off: XP doesn't level Richter up; back on, it does."""
     a = run.s.a
     load_characters(run)
     rules(run, OPT_NO_GROWTH)

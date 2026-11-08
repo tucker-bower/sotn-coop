@@ -8,7 +8,7 @@ the game gets (the mailbox's rule words, link/mailbox.py); with every rule at it
 them are zero, so a game with no rules set plays the same.
 """
 
-from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, RULE_BAT_CARRY, RULE_NO_BOSS_PULL,
+from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS, OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, RULE_BAT_CARRY, RULE_NO_BOSS_PULL,
                           RULE_NO_FAERIE_REVIVE, RULE_NO_FAMILIARS, RULE_NO_MAP_TELEPORT, RULE_NO_NEAR_TARGET,
                           RULE_NO_OFFHAND, RULE_NO_REVIVE, RULE_NO_SCENE_PULL, RULE_NO_SHARED_GOLD,
                           RULE_NO_SHARED_LEVEL)
@@ -36,7 +36,11 @@ TOGGLES = (
     ("map_teleport", "Teleport from the map", "Cross on the map goes to your partner", True, RULE_NO_MAP_TELEPORT),
     ("near_target", "Enemies pick the nearer player", "Off: in a shared room, enemies only aim at its first player",
      True, RULE_NO_NEAR_TARGET),
-    ("growth", "Richter and Maria grow", "They level up, and STR and INT add to their attacks", True, OPT_NO_GROWTH),
+    ("growth", "Richter and Maria level up", "XP gives them levels, with Alucard's HP, hearts and stats for each",
+     True, OPT_NO_GROWTH),
+    ("alucard_stats", "Richter and Maria use Alucard's stats",
+     "STR and INT add to their attacks, and defense, armour and resistances cut the damage they take, as for Alucard. "
+     "Off: their attacks and the damage they take are their own games'", True, OPT_NO_ALUCARD_STATS),
     ("relic_moves", "Relics teach Richter and Maria", "Off: they know every move from the start",
      True, OPT_NO_RELIC_MOVES),
     ("air_jumps", "Extra jumps", "Richter's and Maria's jumps from the Leap Stone and Gravity Boots. "
@@ -65,6 +69,8 @@ def clean(stored):
     for t in TOGGLES:
         if isinstance(stored.get(t[0]), bool):
             out[t[0]] = stored[t[0]]
+    if "alucard_stats" not in stored and stored.get("growth") is False:
+        out["alucard_stats"] = False  # a castle from before the split: growth was both
     remap = stored.get("remap_map")
     if isinstance(remap, dict):
         out["remap_map"] = {a: b for a, b in remap.items() if a in REMAP_BUTTONS and b in REMAP_BUTTONS and a != b}

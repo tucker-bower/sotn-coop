@@ -39,3 +39,4 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M8b-character-balance.md` | Their balance and ability mapping. Done. |
 | `M9-android.md` | Android. Done. |
 | `bat-carry.md` | Hanging onto Bat Alucard (#43). Proposed. |
+| `character-mods.md` | Richter and Maria from existing mods (SOTN Ultimate, ASS): proposal. |

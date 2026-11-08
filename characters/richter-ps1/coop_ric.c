@@ -27,7 +27,7 @@ s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
 
 s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
-    if (g_CoopOptions & OPT_NO_GROWTH) {
+    if (g_CoopOptions & OPT_NO_ALUCARD_STATS) {
         return attack; // the castle's rules: his attacks as in his own game
     }
     if (g_Status.D_80097BF8 & 1) {

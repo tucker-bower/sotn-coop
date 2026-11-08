@@ -65,30 +65,42 @@ The game is mostly built, so the work is now feature requests and bug fixes, and
 ## Testing
 Co-op features count as working only when a test proves it, and that usually means two real games. Run those yourself; don't wait for Tucker to do a two-player check.
 
-**Every test runs through one runner**, side by side, each in its own process. That covers one-game scenarios, two-game sessions, launcher checks, UI flows of the real app, and the patcher. Use the bootstrap's venv:
+**Every test runs through one runner**, side by side, each in its own process: one-game scenarios, two-game sessions, launcher checks, the app's UI flows and the patcher. Use the bootstrap's venv:
 ```
 PY=.env/src/sotn-decomp/.venv/bin/python
-$PY harness/run.py --list -k WORD     # what would run, without running it
-$PY harness/run.py -k pvp -k boss_rush   # every test with a word in its name
-$PY harness/run.py pvp_off            # tests by exact name
-$PY harness/run.py                    # the everyday suite
-$PY harness/run.py --full             # everyday plus the full-only tests
+$PY harness/run.py --changed --list   # the categories your changed files touch, and their tests
+$PY harness/run.py -c richter         # one category (again for more: -c richter -c rules)
+$PY harness/run.py rules_richter_defense   # the tests you're working on, by name (or -k WORD)
+$PY harness/run.py                    # the PR gate
+$PY harness/run.py --full             # everything: releases only
+$PY harness/run.py --history          # each test's runs and the failures it caught
 ```
 Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 only if all passed.
 
-**Pick the smallest tier that covers the change** (D138):
-| Tier | About | When |
+**Run the least that proves the change** (D179). Testing time is the project's biggest cost after Tucker's.
+| When | Run | About |
 |---|---|---|
-| A handful, by name or `-k` | seconds to minutes | A small change |
-| Everyday (338 tests) | 10 minutes | Before committing a major change, and before opening or updating a PR with code changes |
-| `--full` (474 tests) | 30 minutes | Only before a release, playtest betas included, together with `scripts/redux_check.sh` |
+| While working | The tests you're writing or fixing, by name | seconds |
+| A change is done | Its categories: `-c <category>` for the part you changed, or `--changed` | 1–5 minutes |
+| Opening or updating a PR with code changes | The gate: `run.py` | 5 minutes |
+| A release, playtest betas included | `--full`, then `scripts/redux_check.sh` | 30 minutes |
+
+The categories are richter, maria, alucard, combat, bosses, cutscenes, progression, traversal, rooms, network, rules, pvp, launcher, mods and inverted. `harness/categories.py` lists what each covers, and which source files touch which categories. Example: a change to Richter's defense is `-c richter`, not the gate.
+
+**Habits to break:**
+- **Never rerun a test that passed on the same build.** The runner skips them itself; `--again` is only for a test you suspect is flaky. `--full` after the gate runs only the rest.
+- **Don't run the gate or `--full` to "be safe"** after a small change. The gate is for PRs, and `--full` is for releases.
+- **Don't run a category the change can't reach.** A docs or launcher-only change runs no game tests.
+- **Before a long run, say which tier and why** in a sentence. If it's bigger than the table above says, don't run it.
+
+**The gate is earned.** `categories.EVERYDAY` holds the tests that have caught a bug alone (not in a broken build where everything fails), plus one or two quick ones per category. As of 2026-11-07, 277 of the old 343 everyday tests had never failed alone, so they moved out: they still run in their categories and in `--full`. A new test goes in its category, and joins the gate only if it covers something no gate test does. At each release, `--history` shows which gate tests haven't caught anything in a long while: move them out.
 
 **After a module change, rebuild first:** `scripts/rebuild_fixtures.sh` (about 15 minutes) rebuilds the disc, Maria's patches and every savestate, because savestates hold the module's code. Don't rebuild while tests are running.
 
-**New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. New tests go in the everyday tier unless they're a soak or one more pairing of something everyday covers (`full=True`). Keep everyday at 10 minutes or less by moving repetition to `--full`.
+**New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. Its name must put it in a category (`run.py --list` shows them). Soaks and more pairings of something already covered are `full=True`: they run only in `--full`.
 
 ## PR template
-Before Issuing a PR, run the everyday test suite. The full test suite should only be run before creating a new release. Additonally, check that all documentation is up-to-date before issuing the PR, including the md roadmap, repo root readme, and status.
+Before opening a PR with code changes, run the gate (`run.py`). Only a release runs `--full`. Additonally, check that all documentation is up-to-date before issuing the PR, including the md roadmap, repo root readme, and status.
 
 ```
 Fixes #<issue>
