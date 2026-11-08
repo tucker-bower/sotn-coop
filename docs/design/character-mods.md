@@ -1,44 +1,53 @@
-# Richter and Maria from existing mods
+# Richter and Maria from other mods
 
-**Status:** proposal, waiting on Tucker.
+**Chosen (Tucker, 2026-11-07):** keep our characters, and add other mods' builds next to them. Ours become **Co-op Richter** and **Co-op Maria**: they use Alucard's gear, learn moves from relics and level up, each under a castle rule. **SOTN Ultimate**'s become **Ultimate Maria** and **Ultimate Richter**: they play as that mod built them. Giving players the choice is best. A mod character needs only what co-op itself needs, so they cost less to keep up than ours.
 
-## Goal
-Spend less of our own time on Richter and Maria. Where another mod already has a character working, take its code instead of writing or fixing our own, and keep only what co-op itself needs.
-
-## What exists (read 2026-11-07)
-| Mod | Characters | Form | Fits co-op? |
+## What other mods have (read 2026-11-07)
+| Mod | Characters | Form | Discs it needs |
 |---|---|---|---|
-| **SOTN Ultimate** ([renanbianchi/sotn-ultimate](https://github.com/renanbianchi/sotn-ultimate), AGPL, a sotn-decomp fork at `698aab2`) | **PSP Maria** (`MARIA2.BIN`, from the same `mariapsp-forpsx` our Maria comes from, hardened for the PS1), **Saturn Maria** (`src/ric` built again with `MOD_MARIA_SAT`), **Saturn-coat Richter** (`RIC2.BIN`) | C source on the decomp, like ours | Yes, as source. It needs the Saturn and PSP discs, as M16 planned. |
-| **SOTN Editor / ASS -Final-** ([pddmergilla/sotn-editor](https://github.com/pddmergilla/sotn-editor)) | **Richter Mode overhaul**: levels, growth from collecting, relic abilities, new moves, a pause-menu guide, every boss Alucard faces | A 29 KB binary patch, no source. Only on an ASS -Final- image, and it moves `RIC.BIN` into `F_GO.BIN`'s space. | Only by running their `RIC.BIN` in place of ours, which drops our co-op hooks in it. No Maria. |
-| SOTN Editor's 28 vanilla hacks | A few Richter tweaks (no-flinch, Richter-style holy water) | Byte patches | Already layer and pass (`mods.py`). |
+| **SOTN Ultimate** ([renanbianchi/sotn-ultimate](https://github.com/renanbianchi/sotn-ultimate), AGPL, a sotn-decomp fork) | **PSP Maria** (`MARIA2.BIN`): upstream's `src/maria` plus its own glue (`mar2.c`), with her two sub-weapon slots, the PSP's Cat, Cardinal, Turtle, Dragon and Doll, PSP item drops and her PSP voice | C source on the decomp | the USA DXC (as ours) |
+| | **Saturn Maria** (`src/ric` built again with `MOD_MARIA_SAT`) | C source | the Saturn disc |
+| | **Saturn-coat Richter** (`RIC2.BIN`): retail Richter's code with the Saturn's coat sprites, and the JP flame-whip fix | C source plus generated art | the Saturn disc |
+| SOTN Editor / ASS -Final- | Richter Mode, a Richter overhaul | a binary patch with no source; it runs only on an ASS image | ASS |
 
-Ultimate's PSP Maria already does what three of our open bugs ask for. It has her two sub-weapon slots, maps them to the PSP's (Bible→Doll, Dagger→Cat, Axe→Cardinal, and so on), uses no in-place DRA patches, and clears its BSS on every load. That covers #169 and likely #170 and #164.
+**Ultimate's Maria is ours, minus co-op, plus the PSP's sub-weapons.** Its `src/maria` matches our pinned decomp's except for one bug fix: she stuck when crouching after a landing (`pl_setstep.c`, under `MOD_SATURN`). Everything else is in `mar2.c`.
 
-**What no mod saves us:** the co-op layer. That means the partner body (M13), the shared room, our menus and gear for them, relics teaching moves, off-hand weapons and familiars. No existing mod makes Richter or Maria play Alucard's castle with Alucard's gear. ASS's Richter Mode comes closest, but it's binary and only for ASS.
+**Ultimate Richter is only a new coat.** Ultimate leaves Richter's moves alone. A Richter that plays differently would have to come from ASS's Richter Mode, and that's binary-only (see Options for Richter).
 
-## Options
-| Option | What | Cost | Verdict |
-|---|---|---|---|
-| **A. Ultimate as our characters' upstream** | Vendor Ultimate's Maria and Richter sources, credited, in place of our forks. Our co-op hooks stay as a thin patch on them (`characters/*/coop_*.c`). Saturn Maria and the Saturn coat come with them, which is M16 (#48) from a source that's already PS1-native. | 2–3 usage windows: re-base our hooks, rebuild, and M12's character coverage | ✅ **Recommended.** It deletes our Maria fork's bugs and gives us M16. |
-| B. Co-op on a full SOTN Ultimate disc | Layer co-op onto the Ultimate disc, as with the randomizer | Large. It shifts `g_Status` by 0x14 from `saveName` on, so we'd build the module a second time against its headers. It moves stage sectors, and both players need all three discs. | ❌ Not now. Possible later as its own milestone. |
-| C. ASS -Final-'s Richter Mode | Run their binary `RIC.BIN` for co-op Richter on ASS discs | Our partner build and hooks live in Richter's overlay, so this would need a hook layer in binary. It only works on ASS. | ❌ Covered as a test of the mod (#181), not as our Richter. |
+## How a mod character joins co-op
+A mod character is its mod's sources, built as that mod builds them, with no `COOP_MARIA` or `COOP_RIC`. Our files sit next to them in `characters/<name>/`. The upstream change is one hunk, which turns on Ultimate's crouch fix (`MOD_SATURN`) in our build of her.
 
-**Also (Tucker, 2026-11-07):** every rebalancing change becomes an optional castle rule. Levels, Alucard's stats (#160, D178), relic moves, extra jumps, off-hand weapons and familiars already are. Under A, with all of them off, a character plays as its mod built it.
+| Co-op needs | How |
+|---|---|
+| Her own character ID | `CHAR_ULT_MARIA 3` (`module/link.h`, `characters.py`, the lobby). She loads like Co-op Maria: a blob in expansion RAM, made on the player's PC from their DXC disc and our patches (D7, M8 §4). |
+| The partner's body in the other game | Her partner build (`COOP_PARTNER` only, its own palettes, the same far trailer as Co-op Maria's) |
+| The module drawing her as a puppet, and putting her art back after a load | `CoopMarBanks` and `CoopMarHooks` at the same fixed addresses as Co-op Maria's |
+| Castle rules that make sense for any character | Damage taken and PvP apply. Levels, Alucard's stats, relic moves, extra jumps, off-hand weapons and familiars don't: those are Co-op characters' features. |
+
+Ultimate's glue counts on three things in its own DRA. Our DRA hooks must stay the same size, so:
+| Ultimate's DRA | Ours |
+|---|---|
+| `g_ModSubwpnIcons`, the HUD's sub-weapon icon table pointer | Her init copies her icons over DRA's table, as upstream's `mariapsp-forpsx` does |
+| `g_ModMar2HudIcons`, which draws both her icons | The module calls her hook, at a fixed address, on the HUD's icon sprite each frame after DRA has drawn it |
+| `MOD_STATUS_FLAGS` (`g_Status.saveName[11]`) | The same byte: co-op doesn't use it |
+
+## Options for Richter
+| Option | Verdict |
+|---|---|
+| **A. Ultimate Richter: retail moves in Co-op Richter's slot, with the Saturn coat** | ✅ Builds the same way as Ultimate Maria. It needs the Saturn disc. |
+| B. ASS Richter Mode | ❌ Not now: binary-only, ASS images only, and it moves `RIC.BIN` on the disc. |
 
 ## Risks
-- **Ultimate moves fast** (v1.3, forked 2026-10-14). We pin a commit and take its fixes when we choose, as with sotn-decomp.
-- **Ultimate's PSP Maria links at `0x8013C000`** (RIC's slot). Ours relinks characters into the 8 MB (D7), so the relink is most of the work, as M16 found.
-- **Its `g_Status` shift lives behind `MOD_SATURN`.** We build its character sources without it, and check the result against Ultimate's own build with `--same`.
-- **Licence:** AGPL to AGPL, with credit in `NOTICE`, the README and the file headers.
+- **The Saturn disc.** Ultimate Richter and Saturn Maria need it, and it isn't on the dev machine yet. Ultimate Maria comes first because she needs only the DXC disc.
+- **PSP item drops.** Her Cat, Cardinal, Turtle and Dragon drop frames come from the PSP's DRA (`gen_mar2_items.py`), which our patch of `maria.bin` doesn't cover. Until the launcher also reads that file, drops show the PS1 art, and the pickups still work.
+- **Two Marias in one session.** Each player's blob carries the character they play, and each game needs the other player's partner build. A Co-op Maria with an Ultimate Maria partner needs both builds, so the blob carries the other player's partner build when it differs.
+- **Licence:** AGPL to AGPL, credited in `NOTICE`, the README and the file headers.
 
 ## Acceptance criteria
-1. Our PSP Maria is Ultimate's `MARIA2` code plus our co-op patch. `git diff` against the pinned Ultimate commit shows only co-op hooks.
-2. #169 is fixed: two sub-weapon slots, the Bible's Doll, and the Holy Beasts (`maria_subweapons_*`).
-3. Everything M12 covers for Maria still passes: bosses with Alucard, hand weapons, relics and gates, and the partner in every pairing.
-4. Saturn Maria and the Saturn-coat Richter appear in the lobby when a Saturn disc is present (M16's criteria 1–6).
-5. With every character rule off, Maria's moves and damage match Ultimate's own build in a scripted fight (`rules_all_off_matches_ultimate_maria`).
-6. No game data in the repo or the release (`release.py`'s check).
-
-## Questions for Tucker
-1. Approve A, with Ultimate as the upstream for Richter and Maria?
-2. Should M16 (#48) now come from Ultimate rather than SymphonyRecomp's ports?
+1. Ultimate Maria is chosen in the lobby and the launcher, apart from Co-op Maria. Her blob builds from the DXC disc, with no game data in the repo (`release.py`'s check).
+2. Her glue differs from Ultimate's `mar2.c` only where the table above says (`diff` against the pinned Ultimate commit).
+3. Her two slots: Circle swaps them, both icons show on the HUD, a Bible pickup gives the Doll and a dagger the Cat (`ultimate_maria_subweapons`).
+4. She plays as Ultimate built her: no level-ups, no Alucard's-stats damage and no relic gates, whatever the castle's rules (`ultimate_maria_plays_as_ultimate`).
+5. She's the partner in a game with Alucard and in one with Co-op Maria: her body follows, attacks and gets hurt (`partner_*_ultimate_maria`, the M13 checks).
+6. She clears a boss with Alucard (`boss_*_alucard_and_ultimate_maria`).
+7. Ultimate Richter meets criteria 1, 4 and 5, given the Saturn disc.

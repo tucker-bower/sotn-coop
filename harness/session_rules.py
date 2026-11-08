@@ -2,7 +2,7 @@
 the rest of the suite, which runs with no rules set; these turn a rule off, or move its slider, and
 check the game follows. The launcher's side: launcher/test_rules.py, uxdriver's rules flow."""
 
-from link.mailbox import (BUSY, CHAR_RICHTER, CUTSCENE, DEAD, IN_PLAY, OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS,
+from link.mailbox import (BUSY, CHAR_RICHTER, CHAR_ULT_MARIA, CUTSCENE, DEAD, IN_PLAY, OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS,
                           OPT_NO_GROWTH,
                           OPT_NO_RELIC_MOVES, OPT_PARTNER_SIM, RULE_NO_BOSS_PULL, RULE_NO_FAERIE_REVIVE,
                           RULE_NO_MAP_TELEPORT, RULE_NO_OFFHAND, RULE_NO_REVIVE, RULE_NO_SCENE_PULL,
@@ -154,6 +154,24 @@ def rules_richter_defense(run):
     b.write(DEF_BUFF, 0x200, "<i")
     raw = scripted_hit(run, b, 0, off=OPT_NO_ALUCARD_STATS)
     run.expect(raw == 40, "off: the whole hit, as in his own game", lost=raw)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ULT_MARIA, CHAR_ULT_MARIA))
+def rules_ultimate_maria_plays_as_ultimate(run):
+    """Ultimate Maria plays as SOTN Ultimate built her, with every co-op character rule on (the
+    default): Alucard's defense doesn't cut her hits, and EXP doesn't level her up
+    (docs/design/character-mods.md)."""
+    load_characters(run)
+    b = run.s.b
+    base = scripted_hit(run, b, 0)
+    run.expect(base > 0, "a hit hurts", lost=base)
+    b.write(DEF_BUFF, 0x200, "<i")
+    buffed = scripted_hit(run, b, 0)
+    run.expect(buffed == base, "20 more defense changes nothing for her", base=base, buffed=buffed)
+    level = status(b)["level"]
+    b.write(STATUS, 5000, "<I", EXP)
+    run.step(60)
+    run.expect(status(b)["level"] == level, "EXP doesn't level her up", level=(level, status(b)["level"]))
 
 
 @session_scenario()

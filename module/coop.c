@@ -190,6 +190,7 @@ static bool __attribute__((used)) UpdateHook(void) {
 static void __attribute__((used)) RenderPrimitivesHook(void) {
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
 
+    CharacterBeforePrims();
     RenderPrimitives();
     PartnerAfterPrims(gt4, gt3);
 }

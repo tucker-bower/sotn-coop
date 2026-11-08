@@ -71,7 +71,7 @@ void MistStepUpdate(void) {
     s32 dir, x;
 
     if (g_GameState != Game_Play || g_GameEngineStep != Engine_Normal || g_StageId == STAGE_ST0 ||
-        CharacterLoaded() == CHAR_ALUCARD || g_Status.hp <= 0) {
+        !CHAR_COOP(CharacterLoaded()) || g_Status.hp <= 0) {
         s_State = MIST_IDLE;
         s_Timer = 0;
         return;

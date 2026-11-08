@@ -31,6 +31,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `scenarios_m8.py` | One-game tests of Richter and Maria in Alucard's castle. |
 | `scenarios_movement.py` | Checks Richter and Maria move at least as far as Alucard at each relic step. |
 | `scenarios_relics.py` | Relics, per character. |
+| `scenarios_ultimate.py` | Other mods' characters: Ultimate Maria in the castle, her sub-weapons, and as the partner. |
 | `session.py` | Runs two linked games, on the couch or online. |
 | `session_bossrush.py` | Boss rush, end to end. |
 | `session_inverted.py` | Inverted castle: travel and what partners share there. |

@@ -533,7 +533,7 @@ def run_session_scenario(name):
     run = None
     try:
         blob = None
-        if 2 in characters:  # CHAR_MARIA
+        if 2 in characters or 3 in characters:  # CHAR_MARIA, CHAR_ULT_MARIA: both in her blob
             from module import maria_blob
             blob = maria_blob()
         with Session(discs or COOP_DISC, starts, characters=characters, blob=blob) as s:

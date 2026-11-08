@@ -57,7 +57,7 @@ cp "$MOD"/link/*.py "$A/link/"
 cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
 # Maria's patches (design/M8 §4): our changes only; the launcher applies them to the player's DXC disc.
 mkdir -p "$A/patcher/maria"
-cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps} "$A/patcher/maria/"
+cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps,ult-maria.bps,ult-maria-partner.bps} "$A/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$A/config/"
 cp "$ROOT/build/coop/coop.map" "$A/build/coop/"
 cp "$DLL" "$A/bin/"

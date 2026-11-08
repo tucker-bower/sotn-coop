@@ -874,7 +874,7 @@ def _characters(pg):
               ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("until", lambda d: d.heading == "Game"),
-              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria, player 2 Richter"),
+              ("expect", lambda d: d.launcher.characters == [3, 1], "player 1 plays Ultimate Maria, player 2 Co-op Richter"),
               ("game_frames", 600), ("shot", "maria-and-richter"),
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]

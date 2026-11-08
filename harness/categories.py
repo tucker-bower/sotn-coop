@@ -51,6 +51,7 @@ CATEGORIES = {
 PATHS = {
     "characters/richter-ps1/": ("richter",),
     "characters/maria-dx/": ("maria",),
+    "characters/maria-ultimate/": ("maria",),
     "characters/": ("richter", "maria"),
     "module/character.c": ("richter", "maria"),
     "module/offhand.c": ("richter", "maria", "combat"),

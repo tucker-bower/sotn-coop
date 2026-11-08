@@ -11,6 +11,7 @@
 #include "flag_gated.h"
 #include "coop_api.h"
 #include "link.h"
+#include "character.h"
 #include "progress.h"
 #include "message.h"
 #include "boss.h"
@@ -209,7 +210,7 @@ void ProgressDamageTaken(void) {
     }
     if (g_CoopCharacter == PLAYER_ALUCARD) {
         def = g_Status.defenseEquip;
-    } else if (!RULE_OFF(OPT_NO_ALUCARD_STATS)) {
+    } else if (!RULE_OFF(OPT_NO_ALUCARD_STATS) && CHAR_COOP(CharacterLoaded())) {
         hit = TheirDefense(hit);
     }
     if (pct != 100 && hit > def) {

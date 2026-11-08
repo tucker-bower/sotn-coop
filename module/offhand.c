@@ -65,8 +65,9 @@ static u16 s_Ids[N_PAL];                    // g_ClutIds, while RenderEntities b
 static u8 s_PrevEngine; // g_GameEngineStep last frame
 
 static bool InPlay(void) {
+    // only the co-op characters' overlays run the weapons' entities (COOP_MARIA, COOP_RIC)
     return g_GameState == Game_Play && g_GameEngineStep == Engine_Normal && g_StageId != STAGE_ST0 &&
-           CharacterLoaded() != CHAR_ALUCARD;
+           CHAR_COOP(CharacterLoaded());
 }
 
 // After a load the game leaves the weapon overlays out for Richter's player code (DRA's
@@ -456,7 +457,7 @@ void CoopWeaponEntity(Entity* self) {
         s_Original[self - g_Entities].hand = hand;
         s_Original[self - g_Entities].palette = self->palette;
     }
-    if (self->entityId && CharacterLoaded() == CHAR_MARIA && hand == s_SheetHand) {
+    if (self->entityId && CHAR_IS_MARIA(CharacterLoaded()) && hand == s_SheetHand) {
         self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
     }
     if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
