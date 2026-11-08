@@ -3,10 +3,12 @@
 files into our Maria. They hold our code and our build's pointer tables, never her art, voice
 or palettes, which the patches copy from the player's disc (checked here: see `stored`).
 
-    make_patches.py <out folder>     (after `make -C characters/maria-dx`)
+    make_patches.py <out folder>     (after `make -C characters/maria-dx -C characters/maria-ultimate`)
 
 Writes maria.bps and maria-partner.bps (from PSP_GAME/USRDIR/res/ps/PSPBIN/maria.bin), maria-vh.bps and maria-vb.bps
-(from PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk) and maria.json (what the launcher checks).
+(from PSP_GAME/USRDIR/res/ps/snd_e/SE/sd_mar2.spk) and maria.json (what the launcher checks). Ultimate
+Maria's (characters/maria-ultimate) are ult-maria.bps and ult-maria-partner.bps, from the same
+maria.bin; her voice is Co-op Maria's.
 """
 
 import json
@@ -19,12 +21,14 @@ import bps  # noqa: E402
 
 ROOT = HERE.parents[1] / ".env/src/sotn-decomp"
 DXC = ROOT / "disks/pspus/PSP_GAME/USRDIR/res/ps"
-BUILD = ROOT / "build/coop/maria"
+BUILD = ROOT / "build/coop"
 SOURCES = {"maria.bin": "PSPBIN/maria.bin", "sd_mar2.spk": "snd_e/SE/sd_mar2.spk"}
-PATCHES = [("maria.bps", "maria.bin", "MARIA.BIN"),
-           ("maria-partner.bps", "maria.bin", "MARIAP.BIN"),  # her as the partner (design/M13 step 3)
-           ("maria-vh.bps", "sd_mar2.spk", "sfx/SD_RIH.VH"),
-           ("maria-vb.bps", "sd_mar2.spk", "sfx/SD_RIH.VB")]
+PATCHES = [("maria.bps", "maria.bin", "maria/MARIA.BIN"),
+           ("maria-partner.bps", "maria.bin", "maria/MARIAP.BIN"),  # her as the partner (design/M13 step 3)
+           ("maria-vh.bps", "sd_mar2.spk", "maria/sfx/SD_RIH.VH"),
+           ("maria-vb.bps", "sd_mar2.spk", "maria/sfx/SD_RIH.VB"),
+           ("ult-maria.bps", "maria.bin", "maria-ultimate/ULTMAR.BIN"),  # docs/design/character-mods.md
+           ("ult-maria-partner.bps", "maria.bin", "maria-ultimate/ULTMARP.BIN")]
 
 
 def main(out):

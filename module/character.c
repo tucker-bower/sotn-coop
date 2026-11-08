@@ -79,14 +79,21 @@ static void PlaceFar(const u8* file, u32 size) {
     FlushCache(); // new code (D17)
 }
 
-static const CharBlob* Blob(u32 character) {
+// The launcher's blobs, one after another (module/link.h CharBlob): one for each character in
+// the session that needs one, for this game's player or the partner.
+const CharBlob* CharacterBlob(u32 character) {
     const CharBlob* b = (const CharBlob*)CHAR_BLOB_ADDR;
-    if (b->magic != CHAR_BLOB_MAGIC || b->character != character || !b->ovlSize ||
-        b->ovlSize > PLAYER_OVL_MAX) {
-        return NULL;
+    s32 i;
+
+    for (i = 0; i < CHAR_BLOBS_MAX && b->magic == CHAR_BLOB_MAGIC; i++) {
+        if (b->character == character) {
+            return b->ovlSize && b->ovlSize <= PLAYER_OVL_MAX ? b : NULL;
+        }
+        b = CHAR_BLOB_NEXT(b);
     }
-    return b;
+    return NULL;
 }
+#define Blob CharacterBlob
 
 // DRA's sound bank addresses (libsnd is psxsdk/libsnd.h): Richter's bank is VAB 1 (g_LbaSdRihVh).
 extern u32 g_VabAddrs[];
@@ -178,7 +185,7 @@ u32 CharacterLoaded(void) {
 void CharacterApply(void) {
     u32 want = g_CoopLink.character;
 
-    if (want > CHAR_MARIA) {
+    if (want > CHAR_LAST) {
         want = CHAR_ALUCARD;
     }
     g_CoopCharacter = want == CHAR_ALUCARD ? PLAYER_ALUCARD : PLAYER_RICHTER;
@@ -193,7 +200,7 @@ static void Growth(void) {
     static const char* const s_News[] = {NULL, "Level up!", "Max hearts up", "Max HP up"};
     u32 r;
 
-    if (g_GameState != Game_Play || g_StageId == STAGE_ST0 || CharacterLoaded() == CHAR_ALUCARD ||
+    if (g_GameState != Game_Play || g_StageId == STAGE_ST0 || !CHAR_COOP(CharacterLoaded()) ||
         g_GameEngineStep != Engine_Normal || RULE_OFF(OPT_NO_GROWTH)) {
         return;
     }
@@ -214,7 +221,8 @@ static bool s_FamLoading;
 static void Familiar(void) {
     s32 want;
 
-    if (CharacterLoaded() == CHAR_ALUCARD || g_StageId == STAGE_ST0 || g_GameState != Game_Play ||
+    // only the co-op characters' overlays run a familiar's entities (COOP_MARIA, COOP_RIC)
+    if (!CHAR_COOP(CharacterLoaded()) || g_StageId == STAGE_ST0 || g_GameState != Game_Play ||
         g_GameEngineStep != Engine_Normal || RULE_OFF(RULE_NO_FAMILIARS)) {
         return;
     }
@@ -242,7 +250,7 @@ static void Familiar(void) {
 // HandleDamage's kind 6). Richter's and Maria's never looked: the same rule for them, down to 1
 // HP (their own code decides when they die).
 static void PoisonWater(void) {
-    if (CharacterLoaded() != CHAR_ALUCARD && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
+    if (CHAR_COOP(CharacterLoaded()) && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
         g_GameEngineStep == Engine_Normal && g_unkGraphicsStruct.D_8009744C &&
         !(g_Status.relics[RELIC_HOLY_SYMBOL] & RELIC_FLAG_ACTIVE) && g_Timer % 10 == 0 &&
         g_Status.hp > 1) {
@@ -268,7 +276,7 @@ void CharacterCurePoison(void) {
 }
 
 static void Poison(void) {
-    if (CharacterLoaded() == CHAR_ALUCARD || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
+    if (!CHAR_COOP(CharacterLoaded()) || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
         !g_Status.hp) {
         if (s_Poison) {
             CharacterCurePoison();
@@ -383,6 +391,20 @@ static void TelescopeFix(void) {
     }
 }
 
+// Ultimate Maria's HUD (characters/maria-ultimate/mar2.c CoopUltMarHud): her two sub-weapon
+// icons, drawn over the sprite DRA's Richter HUD just drew. Ultimate's own DRA calls her from the
+// HUD; ours has no room for that, so it's here, once the frame's HUD is done.
+#define ULT_MAR_HUD_HOOK ((void (**)(void))0x8013C7F8) // characters/maria-ultimate/ult_maria.ld
+void CharacterBeforePrims(void) {
+    void (*hud)(void) = *ULT_MAR_HUD_HOOK;
+
+    if (s_Loaded == CHAR_ULT_MARIA && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
+        g_CoopHudCharacter != PLAYER_ALUCARD && g_LoadFile == CdFile_None &&
+        (u32)hud >= COOP_PLAYER_FAR && (u32)hud < COOP_PLAYER_FAR_END) { // hers, not a load's
+        hud();
+    }
+}
+
 void CharacterFrame(void) {
     const CharBlob* b;
 
@@ -423,8 +445,8 @@ void CharacterFrame(void) {
         WeaponLoaded(s_PrevLoadFile == CdFile_Weapon1); // for the partner to draw it (weapons.c)
     }
     if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) &&
-        g_LoadFile != s_PrevLoadFile && s_Loaded == CHAR_MARIA && g_StageId != STAGE_ST0 &&
-        (b = Blob(CHAR_MARIA)) != NULL) {
+        g_LoadFile != s_PrevLoadFile && CHAR_IS_MARIA(s_Loaded) && g_StageId != STAGE_ST0 &&
+        (b = Blob(s_Loaded)) != NULL) {
         OffhandKeepSheet(s_PrevLoadFile == CdFile_Weapon1);
         (*(void (**)(void))MAR_GUARDIANS_HOOK)();
         OffhandPlaceSheet();

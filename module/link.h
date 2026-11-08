@@ -302,6 +302,10 @@ typedef struct {
 #define CHAR_ALUCARD 0
 #define CHAR_RICHTER 1
 #define CHAR_MARIA 2
+// Other mods' characters (docs/design/character-mods.md): they play as their mod built them, with
+// none of the co-op characters' features (levels, Alucard's stats and gear, relic moves).
+#define CHAR_ULT_MARIA 3 // SOTN Ultimate's PSP Maria (characters/maria-ultimate)
+#define CHAR_LAST CHAR_ULT_MARIA
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
 #define OPT_ALUCARD_HUD 4 // Richter and Maria: Alucard's health bar (character.c)
@@ -328,6 +332,14 @@ typedef struct {
     u32 partnerSize; // her build as the partner (design/M13 step 3: MARIAP.BIN), 0: none
     u32 pad[2];
 } CharBlob; // size = 0x20, then the overlay, the .VH, the .VB and the partner build, each 4-byte aligned
+// One blob for each character in the session that needs one (the player's, the partner's), one
+// after another; the first word after the last is not CHAR_BLOB_MAGIC.
+#define CHAR_BLOB_ALIGN(n) (((n) + 3) & ~3)
+#define CHAR_BLOB_NEXT(b) \
+    ((const CharBlob*)((const u8*)((b) + 1) + CHAR_BLOB_ALIGN((b)->ovlSize) + CHAR_BLOB_ALIGN((b)->vhSize) + \
+                       CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize)))
+#define CHAR_BLOBS_MAX 2
+#define CHAR_BLOBS_END 0x80500000 // COOPRIC_ADDR (module/coop_api.h): the blobs end before it
 extern CoopLink g_CoopLink;
 
 #endif

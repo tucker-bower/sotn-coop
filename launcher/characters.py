@@ -1,7 +1,8 @@
 """Playable characters beyond Alucard (design/M8): Maria, from the player's own Dracula X
 Chronicles (USA) disc image.
 
-    maria_blob(iso, patches, out) -> path     builds data/characters/maria.blob once
+    maria_blob(iso, patches, out) -> path     builds data/characters/maria.blob once: Co-op Maria's
+                                              blob, then Ultimate Maria's (docs/design/character-mods.md)
     blob_bytes(character) -> bytes or None    what a game's 8MB RAM gets (module/link.h CharBlob)
 
 Our Richter needs nothing here: he's on the co-op disc (COOPRIC.BIN). Maria's overlay and voice
@@ -17,7 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
 import bps  # noqa: E402
 
-CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA = 0, 1, 2   # module/link.h
+CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA = 0, 1, 2, 3   # module/link.h
+BLOBS_MAX = 0x100000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
 CHAR_BLOB_MAGIC = 0x52414843                       # 'CHAR'
 SECTOR = 2048
 DXC_USA = "ULUS-10277"
@@ -107,17 +109,24 @@ def maria_blob(iso_path, patches, out):
         iso.close()
     if not all(files.values()):
         raise DiscError("Maria's files aren't on that disc image. Is it a complete copy?")
-    parts = []
-    for name in ("maria.bps", "maria-vh.bps", "maria-vb.bps", "maria-partner.bps"):
+    def part(name):
         try:
-            parts.append(bps.apply(files[about["patches"][name]["source"]], (patches / name).read_bytes()))
+            return bps.apply(files[about["patches"][name]["source"]], (patches / name).read_bytes())
         except bps.PatchError as e:
             raise DiscError(f"That disc image doesn't match the one Maria was made for ({e}).") from e
-    ovl, vh, vb, partner = parts
-    pad = lambda b: b + bytes(-len(b) % 4)  # noqa: E731
-    # then her partner build (design/M13 step 3: module/link.h CharBlob.partnerSize)
-    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_MARIA, len(ovl), len(vh), len(vb), len(partner), 0, 0)
-    blob += pad(ovl) + pad(vh) + pad(vb) + partner
+
+    def one(character, ovl, vh, vb, partner):
+        pad = lambda b: b + bytes(-len(b) % 4)  # noqa: E731
+        # then her partner build (design/M13 step 3: module/link.h CharBlob.partnerSize)
+        head = struct.pack("<8I", CHAR_BLOB_MAGIC, character, len(ovl), len(vh), len(vb), len(partner), 0, 0)
+        return head + pad(ovl) + pad(vh) + pad(vb) + pad(partner)
+
+    vh, vb = part("maria-vh.bps"), part("maria-vb.bps")
+    blob = one(CHAR_MARIA, part("maria.bps"), vh, vb, part("maria-partner.bps"))
+    if "ult-maria.bps" in about["patches"]:  # Ultimate Maria: her own code, Co-op Maria's voice
+        blob += one(CHAR_ULT_MARIA, part("ult-maria.bps"), vh, vb, part("ult-maria-partner.bps"))
+    blob += bytes(4)  # the end of the blobs (module/link.h CHAR_BLOB_NEXT)
+    assert len(blob) <= BLOBS_MAX, len(blob)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)

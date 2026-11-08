@@ -13,7 +13,7 @@ from session_scenarios import partner_pixels
 from session_shared import into_hall, roles, stage_entities
 import savestates as route
 
-NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria"}
+NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria", 3: "Ultimate Maria"}
 STATUS = 0x80097964  # g_Status (include/game.h)
 HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC
 VCOUNT = 0x801362D4  # D_801362D4 (DRA): GsGetVcount() after the frame's drawing
@@ -190,13 +190,20 @@ def mixed_party_progression_richter_and_alucard(run):
 def mixed_party_boss(run):
     """M8 criterion 4 (bosses): Richter (A) walks into the Doppleganger's room, Maria (B) is
     pulled in, both hurt it, it dies once and the kill is recorded in both worlds."""
+    party_boss(run, CHAR_RICHTER, CHAR_MARIA)
+
+
+def party_boss(run, ca, cb):
+    """A (playing ca) walks into the Doppleganger's room, B (cb) is pulled in, both hurt it, it
+    dies once and the kill is recorded in both worlds. Starts ("no1", "entrance")."""
     from link.mailbox import BOSS
     from session_m5 import bosses, into_boss_room, toward, wait_pulled
     from session_scenarios import heal
     a, b = run.s.a, run.s.b
-    as_characters(run, CHAR_RICHTER, CHAR_MARIA)
-    run.expect(into_boss_room(run, a) is not None, "Richter is in the boss fight")
-    run.expect(wait_pulled(run, b, a, 300) is not None, "Maria was pulled in")
+    if (ca, cb) != (CHAR_ALUCARD, CHAR_ALUCARD):
+        as_characters(run, ca, cb)
+    run.expect(into_boss_room(run, a) is not None, f"{NAMES[ca]} is in the boss fight")
+    run.expect(wait_pulled(run, b, a, 300) is not None, f"{NAMES[cb]} was pulled in")
     run.step(30)
     slot = next(iter(bosses(a)))
     hit_by = set()
@@ -210,12 +217,12 @@ def mixed_party_boss(run):
             heal(a), heal(b)
         after = bosses(a).get(slot, (0, 0, 0))[1]
         if after < before:
-            hit_by.add(NAMES[(CHAR_RICHTER, CHAR_MARIA)[who]])
+            hit_by.add("AB"[who])
         if slot not in bosses(a) or after <= 0:
             break
         if len(hit_by) == 2:
             a.write(a.entity(slot), 1, "<h", 0x3E)  # both have hit it: finish it (harness shortcut)
-    run.expect(hit_by == {"Richter", "Maria"}, "both hurt the boss", hit_by=sorted(hit_by))
+    run.expect(hit_by == {"A", "B"}, f"both hurt the boss ({NAMES[ca]}, {NAMES[cb]})", hit_by=sorted(hit_by))
     for i in range(1800):
         run.step(1)
         if not (a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & BOSS:

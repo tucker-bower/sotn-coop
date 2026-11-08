@@ -73,7 +73,10 @@ PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps") 
 # Maria's patches (characters/maria-dx/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
                       if (d / "maria.json").exists()), APP / "patcher" / "maria")
-CHARACTERS = ("Alucard", "Richter", "Maria")  # index = CHAR_* (module/link.h)
+CHARACTERS = ("Alucard", "Co-op Richter", "Co-op Maria", "Ultimate Maria")  # index = CHAR_* (module/link.h)
+# Under the name in the lobby: what sets the character apart (docs/design/character-mods.md)
+CHARACTER_NOTES = ("", "Alucard's gear and relics", "Alucard's gear and relics", "From SOTN Ultimate: PSP Maria")
+MARIAS = (2, 3)  # made from the player's DXC disc (characters.py)
 # Alucard's spells for the right stick (design/M8b §3.2): SpellIds, None = nothing there.
 SPELL_CHOICES = (None, 0, 1, 2, 3, 5, 7)
 DEFAULT_SPELLS = [2, 5, 3, 0]  # up Hellfire, right Soul Steal, down Tetra Spirit, left Dark Metamorphosis
@@ -98,11 +101,13 @@ their normal HP.
 Rules: each castle has its own, set in Options › Open settings (Esc: Castle rules, on a controller or
 phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
 
-Characters: pick Alucard, Richter or Maria in the lobby (Maria needs your Dracula X Chronicles
-disc: Settings › Game files). Richter and Maria learn their moves from Alucard's relics: Leap Stone
-for the second jump, Gravity Boots for the high jump, Soul of Wolf for the slide, Form of Mist to
-pass through grates (keep walking into them), Echo of Bat for item crashes. They level up and wear
-Alucard's armor (Start: the equipment menu).
+Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
+need your Dracula X Chronicles disc: Settings › Game files). Co-op Richter and Maria learn their
+moves from Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul
+of Wolf for the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat
+for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
+Maria is the SOTN Ultimate mod's PSP Maria: all her moves from the start, two sub-weapons (Circle
+swaps them), and none of Alucard's gear or levels.
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
 (Settings › Controls picks which).
@@ -670,7 +675,7 @@ class Launcher:
             items = []
             for seat in (0, 1):
                 items.append((f"Player {seat + 1} shortcuts: {'On' if self.shortcuts(seat) else 'Off'}",
-                              "Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. "
+                              "Co-op Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. "
                               "Off: the original controls only."))
                 for d, spell in enumerate(self.spells(seat)):
                     items.append((f"Player {seat + 1} right stick {STICK[d]}: {SPELLS[spell] if spell is not None else 'Nothing'}",
@@ -691,7 +696,7 @@ class Launcher:
                 save_settings(self.settings)
 
     def playable(self, character):
-        return character != 2 or self.maria_ready()
+        return character not in MARIAS or self.maria_ready()
 
     def blob(self):
         """Maria's blob for every game when she's made: a partner who plays her is drawn from it."""
@@ -935,7 +940,7 @@ class Launcher:
                 if key == "ok":
                     if self.playable(char[i]):
                         ready[i] = True
-                    elif char[i] == 2:  # Maria: her disc isn't added yet
+                    elif char[i] in MARIAS:  # either Maria: her disc isn't added yet
                         self.game_files()
                 elif key == "back":
                     if ready[i]:
@@ -991,6 +996,9 @@ class Launcher:
             for sign, x in ((-1, r.left - 22), (1, r.right + 22)):
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
+        if playable and CHARACTER_NOTES[char]:
+            t = ui.small.render(CHARACTER_NOTES[char], True, DIM)
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 140)))
         if not playable:  # Maria without her disc
             for k, line in enumerate(("Needs your Dracula X", "Chronicles disc (PSP)", "Cross / A: add it")):
                 t = ui.small.render(line, True, DIM)
@@ -1000,10 +1008,12 @@ class Launcher:
                 line = "Shortcuts off (Triangle / Y)"
             elif char == 0:
                 line = "Spells on the right stick"
+            elif char == 3:
+                line = "Her own controls"
             else:
                 line = "L2 high jump · R2 blade dash"
             t = ui.small.render(line, True, INK if shortcuts else DIM)
-            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 146)))
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 162)))
         if ready:
             t = ui.big.render("Ready!", True, OK_GREEN)
         elif playable:

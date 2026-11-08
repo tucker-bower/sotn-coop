@@ -55,7 +55,7 @@ def load_characters(run):
     tests didn't, and every "pairing" was two Alucards.)"""
     from session_m8 import reload_game
     from session_progress import arrive
-    names = ("Alucard", "Richter", "Maria")
+    names = ("Alucard", "Richter", "Maria", "Ultimate Maria")
     p = run.s.a.mailbox("self_presence")  # both start here; a load puts a player at the save's spot
     for g, c in zip((run.s.a, run.s.b), run.s.characters):
         if c != CHAR_ALUCARD:

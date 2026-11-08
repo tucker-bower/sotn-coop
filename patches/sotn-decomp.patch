@@ -143,7 +143,7 @@ index 073dbffd2..a675746d6 100644
                          EntityAlucard();
                          func_8011A870();
 diff --git a/src/dra/5F60C.c b/src/dra/5F60C.c
-index 9500e4fdb..9aa681cc0 100644
+index 9500e4fdb..142de17dc 100644
 --- a/src/dra/5F60C.c
 +++ b/src/dra/5F60C.c
 @@ -83,7 +83,7 @@ void UpdateCapePalette(void) {
@@ -257,7 +257,7 @@ index 86bb025c9..bee9c3aa6 100644
                  g_LbaBinGame.nextCdFileType = CdFile_RichterPrg;
              } else {
 diff --git a/src/dra/dra.h b/src/dra/dra.h
-index 3799f72af..b70052ae5 100644
+index 3799f72af..f5549656b 100644
 --- a/src/dra/dra.h
 +++ b/src/dra/dra.h
 @@ -898,4 +898,13 @@ s16 func_80110394(void);
@@ -362,7 +362,7 @@ index ce01a3c3b..60118ee05 100644
      func_maria_8015F9F0(entity);
  }
 diff --git a/src/maria/pl_collision.c b/src/maria/pl_collision.c
-index 69e9bce17..4398c38aa 100644
+index 69e9bce17..24de3ae96 100644
 --- a/src/maria/pl_collision.c
 +++ b/src/maria/pl_collision.c
 @@ -128,10 +128,16 @@ bool MarCheckInput(s32 checks) {
@@ -468,6 +468,26 @@ index 40ff427dc..019aa13ca 100644
      if (g_Player.unk78) {
          // this is new to the maria overlay
          g_Player.unk7A = 0;
+diff --git a/src/maria/pl_setstep.c b/src/maria/pl_setstep.c
+index 615a23913..b17d6c9f1 100644
+--- a/src/maria/pl_setstep.c
++++ b/src/maria/pl_setstep.c
+@@ -345,6 +345,15 @@ bool MarDoCrash(void) {
+             MarSetAnimation(mar_801555C8);
+         } else if (PLAYER.step == PL_S_STAND || PLAYER.step == PL_S_WALK) {
+             MarSetAnimation(mar_80155588);
++#if defined(MOD_SATURN)
++        } else if (PLAYER.step == PL_S_CROUCH) {
++            // Saturn port fix (the PSP's bug): crouching, the looping stand
++            // animation below never ends, and MarStepCrouch's step_s 4 (a
++            // landing, e.g. from the drop kick) waits for its end: Maria
++            // stayed stuck. Crouch again instead
++            MarSetAnimation(mar_anim_crouch);
++            PLAYER.step_s = 0;
++#endif
+         } else {
+             MarSetAnimation(mar_anim_stand_relax);
+         }
 diff --git a/src/maria/pl_steps.c b/src/maria/pl_steps.c
 index 80452affd..9bf932ffc 100644
 --- a/src/maria/pl_steps.c
@@ -621,7 +641,7 @@ index 009442689..d105b0eb6 100644
      g_Player.unk72 = func_80156DE4();
  #ifndef VERSION_PSP
 diff --git a/src/ric/pl_steps.c b/src/ric/pl_steps.c
-index a17c742cb..93cf6389d 100644
+index a17c742cb..11152ed16 100644
 --- a/src/ric/pl_steps.c
 +++ b/src/ric/pl_steps.c
 @@ -181,6 +181,16 @@ void RicStepJump(void) {

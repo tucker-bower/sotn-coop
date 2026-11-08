@@ -16,6 +16,7 @@
 #include "coop_api.h"
 #include "link.h"
 #include "partner.h"
+#include "character.h"
 #include "familiar.h"
 #include "arrive.h"
 #include <sfx.h>
@@ -351,20 +352,23 @@ static const FarTrailer* PartnerRic(void) {
 
 // The partner's Maria, from her blob (the launcher's, in every game where someone plays her: its
 // last part), put where it runs once.
-static const FarTrailer* PartnerMar(void) {
+// Co-op Maria and Ultimate Maria have the same place: one partner at a time.
+static const FarTrailer* PartnerMar(u32 character) {
     static FarTrailer s_Trailer;
-    const CharBlob* b = (const CharBlob*)CHAR_BLOB_ADDR;
+    static u32 s_Which;
+    const CharBlob* b = CharacterBlob(character);
     const u32* src;
     u32* dst;
     u32 n;
 
-    if (s_Trailer.magic) {
+    if (s_Trailer.magic && s_Which == character) {
         return &s_Trailer;
     }
-    if (b->magic != CHAR_BLOB_MAGIC || b->character != CHAR_MARIA || !b->partnerSize ||
-        b->partnerSize > PARTNER_PLAYER_SIZE) {
+    s_Trailer.magic = 0;
+    if (!b || !b->partnerSize || b->partnerSize > PARTNER_PLAYER_SIZE) {
         return NULL;
     }
+    s_Which = character;
     src = (const u32*)((const u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3) +
                        ((b->vbSize + 3) & ~3));
     dst = (u32*)PARTNER_MAR_ADDR;
@@ -380,7 +384,7 @@ static const FarTrailer* PartnerMar(void) {
 }
 
 static const FarTrailer* PartnerCode(u32 character) {
-    return character == CHAR_RICHTER ? PartnerRic() : character == CHAR_MARIA ? PartnerMar() : NULL;
+    return character == CHAR_RICHTER ? PartnerRic() : CHAR_IS_MARIA(character) ? PartnerMar(character) : NULL;
 }
 
 // A character's graphics file in VRAM's second bank, where the game puts its own in the first:
