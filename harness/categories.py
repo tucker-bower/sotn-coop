@@ -95,6 +95,7 @@ EVERYDAY = {
     "in_the_castle_richter", "in_the_castle_maria", "relic_gates_richter", "relic_gates_maria",  # +
     "level_up_richter", "level_up_maria", "subweapons_richter", "subweapons_maria",  # +
     "offhand_crouching_swings_low_richter", "pause_menu_portrait_maria",  # +
+    "ultimate_maria_subweapons", "partner_body_maria_and_ultimate_maria",  # + other mods' characters (D180)
     # bosses, cutscenes
     "boss_aggro_switches", "boss_dead_stays_down", "boss_both_hit_one_death", "mixed_party_boss",
     "edges_boss_pull_mid_door", "keep_scene_alucard_and_richter", "keep_scene_richter_and_maria",

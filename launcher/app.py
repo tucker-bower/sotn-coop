@@ -940,7 +940,7 @@ class Launcher:
                 if key == "ok":
                     if self.playable(char[i]):
                         ready[i] = True
-                    elif char[i] == 2:  # Maria: her disc isn't added yet
+                    elif char[i] in MARIAS:  # either Maria: her disc isn't added yet
                         self.game_files()
                 elif key == "back":
                     if ready[i]:

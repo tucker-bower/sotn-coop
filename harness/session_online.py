@@ -85,8 +85,14 @@ def online_connect_codes(run):
         st0, st1 = s0.local.host("status"), s1.local.host("status")
         run.expect(st0["partner_hello"] is not None and st1["partner_hello"] is not None,
                    "both OnlineSessions completed HELO handshake", st0=st0["partner_hello"])
+        # real sockets: under a busy machine a packet can land a frame late, so wait for it as for
+        # the connection (a fixed frame failed alone in the 2026-11-07 gate, 12 games at once)
+        for i in range(300):
+            if s0.local.mailbox("partner_age") == 0 and s1.local.mailbox("partner_age") == 0:
+                break
+            step_pair(s0, s1, 1)
         run.expect(s0.local.mailbox("partner_age") == 0 and s1.local.mailbox("partner_age") == 0,
-                   "both OnlineSessions exchange live presence")
+                   "both OnlineSessions exchange live presence", frames=i)
 
 
 @session_scenario()
