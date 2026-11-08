@@ -412,7 +412,9 @@ static Entity* FactoryWrap(Entity* source, u32 factoryParams, s32 arg2) {
 }
 
 static void Heal(void) {
-    static s32 s_MailTimer;
+    static s32 s_MailTimer, s_PrevX;
+    s32 x;
+    bool moved;
 
     if (g_api.CreateEntFactoryFromEntity != FactoryWrap) { // MainGame fills g_api: wrap it after
         s_Factory = g_api.CreateEntFactoryFromEntity;
@@ -421,7 +423,10 @@ static void Heal(void) {
     if (s_Loaded == CHAR_ALUCARD || g_GameState != Game_Play) {
         return;
     }
-    if (g_api.CheckEquipmentItemCount(ITEM_HEALING_MAIL, EQUIP_ARMOR) && PLAYER.velocityX &&
+    x = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi; // moving: Maria's walk doesn't keep a velocity
+    moved = x != s_PrevX;
+    s_PrevX = x;
+    if (g_api.CheckEquipmentItemCount(ITEM_HEALING_MAIL, EQUIP_ARMOR) && moved &&
         (g_Player.vram_flag & TOUCHING_GROUND) && g_GameEngineStep == Engine_Normal) {
         if (++s_MailTimer >= HEALING_MAIL_FRAMES) {
             s_MailTimer = 0;

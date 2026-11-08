@@ -98,6 +98,7 @@ EVERYDAY = {
     "unpause_with_empty_hands_maria_and_alucard", "partner_casts_a_spell_this_game_never_learnt",
     "in_the_castle_richter", "in_the_castle_maria", "relic_gates_richter", "relic_gates_maria",  # +
     "level_up_richter", "level_up_maria", "subweapons_richter", "subweapons_maria",  # +
+    "boss_arena_edge_richter_and_maria", "report_hold_pauses_the_game", "familiar_faerie_potion_richter",  # #188 #192 #200
     "offhand_crouching_swings_low_richter", "pause_menu_portrait_maria",  # +
     "ultimate_maria_subweapons", "partner_body_maria_and_ultimate_maria",  # + other mods' characters (D180)
     "saturn_maria_beasts", "partner_body_alucard_and_saturn_maria",  # + Saturn Maria (D181)

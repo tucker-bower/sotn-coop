@@ -508,8 +508,8 @@ def healing_mail(run, ch):
     e.write(HP_NOW, half, "<i")
     run.step(600)
     run.expect(e.read(HP_NOW, "<i") == half, "standing: no healing", hp=e.read(HP_NOW, "<i"), was=half)
-    for i in range(4):
-        run.play(walker("left" if i % 2 else "right"), 150)
+    for i in range(8):  # short legs: the timer starts over whenever they stop, as Alucard's does
+        run.play(walker("left" if i % 2 else "right"), 75)
     run.expect(e.read(HP_NOW, "<i") >= half + 3, "walking: 1 HP every 128 frames", hp=e.read(HP_NOW, "<i"), was=half)
 
 
@@ -540,6 +540,7 @@ def blood_cloak(run, ch):
     HandleDamage does it; their hits don't go through it). A hit gives as many hearts as it took."""
     e, mb = run.emu, mailbox(run)
     reload_as(run, mb, ch)
+    got = {}
     for cloak in (False, True):
         e.write(CAPE, BLOOD_CLOAK if cloak else 0, "<I")
         run.step(120)
@@ -550,11 +551,10 @@ def blood_cloak(run, ch):
         run.step(4)
         lost, hearts = hp - e.read(HP_NOW, "<i"), e.read(HEARTS, "<i")
         run.expect(lost > 0, f"{'with' if cloak else 'without'} the cloak, the hit hurts", lost=lost)
-        if cloak:
-            run.expect(hearts == lost, "with it, hearts for the damage", hearts=hearts, lost=lost)
-        else:
-            run.expect(hearts == 0, "without it, none", hearts=hearts)
+        got[cloak] = (hearts, lost)
         run.step(120)
+    # (Maria's own code gives a few hearts for a hit too: the cloak's come on top)
+    run.expect(got[True][0] - got[False][0] == got[True][1], "with it, as many more hearts as the hit took", got=got)
 
 
 @per_character

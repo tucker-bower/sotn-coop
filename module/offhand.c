@@ -42,7 +42,7 @@ int ReduceWeapon(s32 hand);
 s32 GetStatusAilmentTimer(s32 statusAilment, s32 timer);
 #define STATUS_AILMENT_POTION 4      // src/dra/dra.h: STATUS_AILMENT_UNK04
 #define STATUS_AILMENT_HIGH_POTION 5 // STATUS_AILMENT_UNK05
-#define WARP_TO_LIBRARY 4            // D_80097C98: what the Library Card's teleport sets
+#define WARP_TO_LIBRARY 6            // D_80097C98: what the Library Card's teleport sets (4 is RTOP)
 void PlaySfx(s32 sfxId);
 void DestroyEntity(Entity* entity);
 extern Equipment g_EquipDefs[];
@@ -244,7 +244,7 @@ static void Use(s32 hand) {
         return;
     case ITEM_LIBRARY_CARD:
         // Alucard's card plays the teleport (src/dra/7E4BC.c, EntityTeleport), which ends by asking
-        // for the Library (D_80097C98 4). That entity is Alucard's: for them, the warp at once (#197).
+        // for the Library (D_80097C98 6). That entity is Alucard's: for them, the warp at once (#197).
         D_80097C98 = WARP_TO_LIBRARY;
         PlaySfx(SFX_TRANSFORM);
         ReduceWeapon(hand);
