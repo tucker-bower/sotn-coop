@@ -340,7 +340,7 @@ typedef struct {
     ((const CharBlob*)((const u8*)((b) + 1) + CHAR_BLOB_ALIGN((b)->ovlSize) + CHAR_BLOB_ALIGN((b)->vhSize) + \
                        CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize)))
 #define CHAR_BLOBS_MAX 3 // Co-op Maria, Ultimate Maria, Saturn Maria
-#define CHAR_BLOBS_END 0x80500000 // COOPRIC_ADDR (module/coop_api.h): the blobs end before it (2 MB)
+#define CHAR_BLOBS_END 0x80480000 // PARTNER_ULT_ADDR (module/coop_api.h): the blobs end before it (1.5 MB)
 extern CoopLink g_CoopLink;
 
 #endif

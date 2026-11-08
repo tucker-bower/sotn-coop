@@ -9,7 +9,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `assets/` | Icons and the bundled test castles. |
 | `bossrush.py` | Boss rush: loads the next boss when one falls. |
 | `bossstarts.py` | Builds a start outside each boss, with a typical player's progress. |
-| `characters.py` | Builds Maria from the player's own DXC disc. |
+| `characters.py` | Builds the Marias from the player's own discs: Co-op and Ultimate Maria from the DXC disc, Saturn Maria from the Saturn disc. |
 | `debugstarts.py` | Builds savestates anywhere on the route, from the player's own disc. |
 | `display.py` | The window: menus, games and their layout. |
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |
@@ -20,6 +20,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `crashwatch.py` | Notices a game that has crashed or hung. |
 | `crash_window.py` | The bug report window after a crash: its own process, and nothing is sent unless the player says so. |
 | `sdlqueue.py` | Android's sound, pushed straight to SDL (SDL_QueueAudio). |
+| `saturn_maria.py` | Makes Saturn Maria's art from the player's Saturn disc: a port of SOTN Ultimate's converter. |
 | `smoke.py` | **Vestigial.** Early end-to-end check, not in any runner; the UI flows in `uxdriver.py` replaced it. |
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |

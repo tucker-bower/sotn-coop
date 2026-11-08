@@ -77,7 +77,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | offset | type | field |
 |---|---|---|
 | 0x00 | u8 | flags: 1 in play, 2 sprite drawable, 4 paused (menu/map), 8 busy (loading, cutscene, arriving), 16 dead, 32 boss fight, 64 cutscene, 128 in a cutscene it was pulled into (follower) |
-| 0x01 | u8 | character (CHAR_*: 0 Alucard, 1 Co-op Richter, 2 Co-op Maria, 3 Ultimate Maria) |
+| 0x01 | u8 | character (CHAR_*: 0 Alucard, 1 Co-op Richter, 2 Co-op Maria, 3 Ultimate Maria, 4 Saturn Maria) |
 | 0x02 | u8 | flipX (bit 1) |
 | 0x03 | u8 | blend mode |
 | 0x04 | u16 | stage |

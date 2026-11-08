@@ -370,6 +370,7 @@ def _couch(pg, quit_at_end=True):
     A = pg.CONTROLLER_BUTTON_A
     B = pg.CONTROLLER_BUTTON_B
     L = pg.CONTROLLER_BUTTON_DPAD_LEFT
+    R = pg.CONTROLLER_BUTTON_DPAD_RIGHT
     in_game = lambda d: d.heading == "Game"
     return [
         ("screen", "Welcome"), ("shot", "welcome"),
@@ -385,18 +386,18 @@ def _couch(pg, quit_at_end=True):
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
-        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Ultimate Maria: no DXC disc yet
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Saturn Maria: no Saturn disc yet
         ("pad", 101, A),                                      # can't be ready as Maria: it opens Game files
         ("screen", "Game files"), ("shot", "game-files-from-lobby"),
         ("key", pg.K_ESCAPE), ("screen", "Press a button"),
         ("expect", lambda d: d.launcher.shortcuts(1), "shortcuts start on"),
         ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
-        ("pad", 101, L), ("pad", 101, L), ("wait", 3), ("shot", "lobby-richter"),  # past Co-op Maria: Co-op Richter
+        ("pad", 101, R), ("pad", 101, R), ("wait", 3), ("shot", "lobby-richter"),  # past Alucard: Co-op Richter
         ("pad", 101, A),                                      # both ready
         ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
         ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
-        ("until", in_game), ("expect", lambda d: d.inputs <= 16, "home to playing in 16 inputs or fewer (12, plus the detours to Game files and shortcuts, which pass both Marias)"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 16, "home to playing in 16 inputs or fewer (12, plus the detours to Game files and shortcuts, and back past Alucard)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
@@ -869,7 +870,7 @@ def _characters(pg):
               ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
               ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
               ("screen", "Press a button"),
-              ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
+              ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
               ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)

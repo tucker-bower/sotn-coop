@@ -357,14 +357,15 @@ static const FarTrailer* PartnerRic(void) {
 
 // The partner's Maria, from her blob (the launcher's, in every game where someone plays her: its
 // last part), put where it runs once.
-// Co-op Maria and Ultimate Maria have the same place: one partner at a time. Saturn Maria has her
-// own (PARTNER_SAT_ADDR), and Richter's trailer: her init is her table's (5 words).
+// Each Maria's partner build has a place of its own (module/coop_api.h): code copied over another's
+// may go unnoticed by the recompiler. Saturn Maria's has Richter's trailer: her init is her
+// table's (5 words).
 static const FarTrailer* PartnerMar(u32 character) {
     static FarTrailer s_Trailer;
     static u32 s_Which;
     const CharBlob* b = CharacterBlob(character);
     bool sat = character == CHAR_SAT_MARIA;
-    u32 addr = sat ? PARTNER_SAT_ADDR : PARTNER_MAR_ADDR;
+    u32 addr = sat ? PARTNER_SAT_ADDR : character == CHAR_ULT_MARIA ? PARTNER_ULT_ADDR : PARTNER_MAR_ADDR;
     const u32* src;
     u32* dst;
     u32 n;
@@ -373,7 +374,7 @@ static const FarTrailer* PartnerMar(u32 character) {
         return &s_Trailer;
     }
     s_Trailer.magic = 0;
-    if (!b || !b->partnerSize || b->partnerSize > (sat ? PARTNER_SAT_SIZE : PARTNER_PLAYER_SIZE)) {
+    if (!b || !b->partnerSize || b->partnerSize > (character == CHAR_MARIA ? PARTNER_PLAYER_SIZE : PARTNER_SAT_SIZE)) {
         return NULL;
     }
     s_Which = character;

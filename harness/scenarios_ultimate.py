@@ -257,3 +257,11 @@ def saturn_maria_beasts(run):
     s0 = e.snapshot()
     s = run.play(walker("left", attack_every=12), 120)
     run.expect(s["world_x"] != s0["world_x"] or s["room"] != s0["room"], "and she plays on")
+
+
+@session_scenario(starts=("no1", "entrance"), characters=(CHAR_ALUCARD, 4))
+def boss_doppleganger_alucard_and_saturn_maria(run):
+    """Alucard walks into the Doppleganger's room, Saturn Maria is pulled in, both hurt it, it
+    dies once and both worlds record the kill (session_m8.party_boss)."""
+    from session_m8 import party_boss
+    party_boss(run, CHAR_ALUCARD, 4)

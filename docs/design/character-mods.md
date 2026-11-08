@@ -51,8 +51,10 @@ Ultimate's Saturn Maria is `src/ric` built again with `MOD_MARIA_SAT` (about 1,1
 
 **Phases.**
 1. Spike, on the dev machine only: her overlay from Ultimate's generators, in Richter's slot, in co-op with Alucard. Proves the code runs on our DRA before any converter work.
-2. Her blob made by the launcher: the array manifest, the Python converters for her art, Richter's HUD, Co-op Maria's voice where hers isn't made yet. `CHAR_SAT_MARIA`, the lobby, Settings › Game files › Saturn disc.
-3. Her own sounds and Saturn HUD, from the disc.
+2. Her blob made by the launcher: the array manifest, the Python converter for her art, with Richter's HUD and Richter's sound bank for now (her ids land on his sounds). `CHAR_SAT_MARIA`, the lobby, Settings › Game files › Saturn disc.
+3. Her own voice, sounds and Saturn HUD, from the disc (`mar_sounds.ts`, `mar_hud.ts`).
+
+**Memory (chosen while building it).** Three Marias' blobs don't fit the 1 MB at `0x80400000`, and her partner build (300 KB) doesn't fit the 256 KB partner space. Nothing used `0x80200000`-`0x80280000` or the space after the module, so the blobs start at `0x80300000` (2 MB, and `coop.ld` asserts the module ends before), and her partner build runs at `0x80200000`. Her sprite table is 0x568 bytes, longer than the 0x388 the partner code swaps, and her code rewrites it as it unpacks her images. So for her the swap is longer, and it's taken from her build at every swap-in.
 
 **Acceptance criteria (Saturn Maria).**
 1. She's chosen in the lobby once the player adds their Saturn disc (Redump, Track 1 MD5 `32f03757…`). The launcher makes her blob, and each generated array matches its MD5 (`launcher/test_characters.py`).

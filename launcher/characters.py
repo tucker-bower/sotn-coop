@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
 import bps  # noqa: E402
 
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA = 0, 1, 2, 3, 4   # module/link.h
-BLOBS_MAX = 0x200000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
+BLOBS_MAX = 0x180000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
 CHAR_BLOB_MAGIC = 0x52414843                       # 'CHAR'
 SECTOR = 2048
 DXC_USA = "ULUS-10277"
