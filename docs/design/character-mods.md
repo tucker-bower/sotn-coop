@@ -31,6 +31,36 @@ Ultimate's glue counts on three things in its own DRA. Our DRA hooks must stay t
 | `g_ModMar2HudIcons`, which draws both her icons | The module calls her hook, at a fixed address, on the HUD's icon sprite each frame after DRA has drawn it |
 | `MOD_STATUS_FLAGS` (`g_Status.saveName[11]`) | The same byte: co-op doesn't use it |
 
+## Saturn Maria (Tucker, 2026-11-07: next, #185)
+Ultimate's Saturn Maria is `src/ric` built again with `MOD_MARIA_SAT` (about 1,100 changed lines, and `mods/sotn-ultimate/src/maria_saturn/*.h`). Her art, palettes and animations are arrays compiled into her overlay, which Ultimate *generates* from the Saturn disc (`MARIA.PRG`, `MAR_W.CHR`, `STAGE_01.CHR`). Nothing a patch copies from one disc file could make them. Her sounds are made the same way.
+
+| Option | What | Verdict |
+|---|---|---|
+| **A. Her overlay ships with those arrays blank; the launcher fills them** | As Ultimate's own browser builder does (its `ArraySpan`): our build records each generated array's offset, size and MD5, the patch carries zeros there, and a Python port of Ultimate's TypeScript converters (`tools/builder/src/mar_assets.ts` and what it imports, no numpy) fills them from the player's Saturn disc, checked against the MD5s. | ✅ Recommended. No game data ships; one converter per kind of art, tested against Ultimate's output. |
+| B. Run Ultimate's own builder page | The player builds a full Ultimate disc in the browser, and we take her files from it | ❌ Every player needs all three discs and a browser step. |
+| C. Bundle Node and run the TypeScript | | ❌ Big, and Android has no Node. |
+
+**What Ultimate's DRA does for her, and ours instead** (our hooks stay size-neutral):
+| Ultimate's DRA | Ours |
+|---|---|
+| Her Byakko and Seiryuu halt the game (`unk28` 4) and her code runs on (`5087C.c`) | The module runs her player update in that halt, as it runs the stage's for 0xFF (`character.c`) |
+| Her walk snaps past x 0x7F-0x80 (`62DEC.c`) | The module snaps her, as `DoorWalkGround` does |
+| Her sounds' priorities (`cd.c ModMarSfxPrio`) and her bank | Her blob's sound bank, as both Marias; her priority table set by her init |
+| Her own Saturn HUD (`5F60C.c`, `F_GAME2` art) | Phase 2: Richter's HUD first |
+| Alucard's Entrance music for her | Not done (cosmetic) |
+
+**Phases.**
+1. Spike, on the dev machine only: her overlay from Ultimate's generators, in Richter's slot, in co-op with Alucard. Proves the code runs on our DRA before any converter work.
+2. Her blob made by the launcher: the array manifest, the Python converters for her art, Richter's HUD, Co-op Maria's voice where hers isn't made yet. `CHAR_SAT_MARIA`, the lobby, Settings › Game files › Saturn disc.
+3. Her own sounds and Saturn HUD, from the disc.
+
+**Acceptance criteria (Saturn Maria).**
+1. She's chosen in the lobby once the player adds their Saturn disc (Redump, Track 1 MD5 `32f03757…`). The launcher makes her blob, and each generated array matches its MD5 (`launcher/test_characters.py`).
+2. No Saturn data in the repo or the release: her patch's generated arrays are zeros (`release.py`'s check).
+3. She plays as Ultimate built her: her attacks, specials, double jump and backdash (`saturn_maria_moves`), whatever the castle's rules.
+4. Byakko and Seiryuu end their halt (`saturn_maria_beasts`).
+5. She's the partner in Alucard's game and Alucard in hers (`partner_body_*_saturn_maria`), and she clears a boss with Alucard.
+
 ## Options for Richter
 | Option | Verdict |
 |---|---|

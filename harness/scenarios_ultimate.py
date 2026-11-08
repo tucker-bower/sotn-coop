@@ -137,3 +137,40 @@ def boss_doppleganger_alucard_and_ultimate_maria(run):
     dies once and both worlds record the kill (session_m8.party_boss)."""
     from session_m8 import party_boss
     party_boss(run, CHAR_ALUCARD, CHAR_ULT_MARIA)
+
+
+def saturn_maria_blob():
+    """Saturn Maria's CharBlob from the dev build (characters/maria-saturn: Ultimate's converters
+    run on the dev machine), Richter's sounds; None if she isn't built. Phase 1 of her design."""
+    from coop_env import REPO
+    ovl = REPO / "build/coop/maria-saturn/SATMAR.BIN"
+    if not ovl.exists():
+        return None
+    o = ovl.read_bytes()
+    from link.mailbox import CHAR_SAT_MARIA
+    return struct.pack("<8I", 0x52414843, CHAR_SAT_MARIA, len(o), 0, 0, 0, 0, 0) + o + bytes(-len(o) % 4) + bytes(4)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def saturn_maria_in_the_castle(run):
+    """Saturn Maria (SOTN Ultimate's, phase 1): an Alucard save loads as her, her overlay in
+    Richter's slot and her code in the 8MB, she walks and attacks, and loads back as Alucard."""
+    from link.mailbox import CHAR_BLOB_ADDR, CHAR_SAT_MARIA
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    blob = saturn_maria_blob()
+    run.expect(blob is not None, "her dev build is there (make -C characters/maria-saturn)")
+    e.write_bytes(CHAR_BLOB_ADDR, blob)
+    reload_as(run, mb, CHAR_SAT_MARIA)
+    run.expect(mb.self_presence().character == CHAR_SAT_MARIA, "the game reports Saturn Maria",
+               character=mb.self_presence().character)
+    # her player table (g_PlOvl); the frame table after it is hers to rewrite: she unpacks her
+    # LZSS images into buffers every frame and points it at them
+    run.expect(e.read_bytes(RICHTER_OVERLAY, 32) == blob[BLOB_HEAD:BLOB_HEAD + 32], "Richter's slot holds her overlay")
+    s0 = e.snapshot()
+    s = run.play(walker("left", attack_every=12), 300)
+    e.screenshot().save(TOOLS["out"] / "saturn_maria_in_the_castle" / "walk.png")
+    run.expect((s["world_x"] < s0["world_x"] - 50 or s["room"] != s0["room"]) and s["hp"] > 0,
+               "she walks and attacks in the castle", moved=s0["world_x"] - s["world_x"], room=s["room"])
+    reload_as(run, mb, CHAR_ALUCARD)
+    run.expect(mb.self_presence().character == CHAR_ALUCARD, "and loads back as Alucard")

@@ -305,7 +305,8 @@ typedef struct {
 // Other mods' characters (docs/design/character-mods.md): they play as their mod built them, with
 // none of the co-op characters' features (levels, Alucard's stats and gear, relic moves).
 #define CHAR_ULT_MARIA 3 // SOTN Ultimate's PSP Maria (characters/maria-ultimate)
-#define CHAR_LAST CHAR_ULT_MARIA
+#define CHAR_SAT_MARIA 4 // SOTN Ultimate's Saturn Maria, a fork of Richter's code (characters/maria-saturn)
+#define CHAR_LAST CHAR_SAT_MARIA
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
 #define OPT_ALUCARD_HUD 4 // Richter and Maria: Alucard's health bar (character.c)

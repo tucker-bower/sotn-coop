@@ -51,7 +51,7 @@ RULE_NO_BOSS_PULL, RULE_NO_SCENE_PULL, RULE_NO_NEAR_TARGET, RULE_NO_MAP_TELEPORT
 RULE_NO_OFFHAND, RULE_NO_FAMILIARS, RULE_BAT_CARRY = 0x100, 0x200, 0x400  # RULE_BAT_CARRY: on when set
 OPT_NO_GROWTH, OPT_NO_RELIC_MOVES, OPT_NO_AIR_JUMPS = 0x01000000, 0x02000000, 0x04000000  # to the player overlays too
 OPT_NO_ALUCARD_STATS = 0x08000000  # Richter and Maria: STR, INT, defense and resistances don't count (#160)
-CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA = 0, 1, 2, 3
+CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA = 0, 1, 2, 3, 4
 OPT_SHORTCUTS = 1  # options: one-button moves (design/M8b §3.2)
 OPT_PARTNER_SIM = 2  # options: M13 spike, the partner simulated by the game's player code (module/partner.c)
 OPT_ALUCARD_HUD = 4  # options: Richter and Maria use Alucard's health bar (module/character.c)

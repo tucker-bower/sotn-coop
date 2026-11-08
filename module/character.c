@@ -395,8 +395,46 @@ static void TelescopeFix(void) {
 // icons, drawn over the sprite DRA's Richter HUD just drew. Ultimate's own DRA calls her from the
 // HUD; ours has no room for that, so it's here, once the frame's HUD is done.
 #define ULT_MAR_HUD_HOOK ((void (**)(void))0x8013C7F8) // characters/maria-ultimate/ult_maria.ld
+// Saturn Maria (characters/maria-saturn) walks in steps that pass over x 0x7F-0x80, so the save
+// room's walk to the save point (src/dra/62DEC.c func_80105428, step 1) paced her back and forth
+// forever. Ultimate's DRA snaps her there; ours has no room, so it's here, after the frame's
+// update: to the centre, with the world position along, and no step for the next frame.
+#define SAVE_ROOM_ON (*(u8*)0x80137598)    // D_80137598: func_80105428 runs (src/dra/5087C.c)
+#define SAVE_ROOM_STEP (*(s32*)0x801379BC) // D_801379BC: its step; 1, the walk to the centre
+static void SaturnMariaSaveWalk(void) {
+    s16 dx = 0x80 - PLAYER.posX.i.hi;
+
+    if (s_Loaded == CHAR_SAT_MARIA && g_GameState == Game_Play && SAVE_ROOM_ON && SAVE_ROOM_STEP == 1 &&
+        (u16)(dx + 2) < 5) {
+        PLAYER.posX.i.hi += dx;
+        g_PlayerX += dx;
+        g_Player.padSim = 0;
+    }
+}
+
+// Saturn Maria's Byakko and Seiryuu halt the game (Engine_5, unk28 4) until her own code ends the
+// halt. DRA's US build runs only the stage's entities in a halt for any player but Alucard, so it
+// never ended. Ultimate's DRA runs her player code there, as in the prologue; so does this, the
+// prologue's way (src/dra/5087C.c, Engine_5 in ST0). DRA still runs the stage's entities after.
+static void SaturnMariaHalt(void) {
+    s16 x, y;
+
+    if (s_Loaded != CHAR_SAT_MARIA || g_GameState != Game_Play || g_GameEngineStep != Engine_5 ||
+        g_unkGraphicsStruct.unk28 != 4 || g_StageId == STAGE_ST0) {
+        return;
+    }
+    x = PLAYER.posX.i.hi;
+    y = PLAYER.posY.i.hi;
+    g_PlOvl.D_8013C000();
+    g_PlOvl.D_8013C008();
+    g_PlayerX -= x - PLAYER.posX.i.hi;
+    g_PlayerY -= y - PLAYER.posY.i.hi;
+}
+
 void CharacterBeforePrims(void) {
     void (*hud)(void) = *ULT_MAR_HUD_HOOK;
+
+    SaturnMariaSaveWalk();
 
     if (s_Loaded == CHAR_ULT_MARIA && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
         g_CoopHudCharacter != PLAYER_ALUCARD && g_LoadFile == CdFile_None &&
@@ -460,6 +498,7 @@ void CharacterFrame(void) {
         g_StageId != STAGE_ST0 && CharacterLoaded() != CHAR_ALUCARD) {
         g_api.o.UpdateStageEntities();
     }
+    SaturnMariaHalt();
     Familiar();
     PoisonWater();
     Poison();
