@@ -17,7 +17,7 @@ import crashwatch
 import report
 from display import BAR
 from platform_android import ANDROID
-from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
+from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_HOLD, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
@@ -555,6 +555,16 @@ class GameView:
         shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
         taken = report.snapshot(games, self.audio)
         interactive = note is None
+        held = interactive and self.online
+        if held:  # online the game runs on behind the boxes (keep_playing), held still (#192)
+            self.games[0].mailbox("set_control", self.aggro | CONTROL_HOLD)
+        try:
+            return self._report(games, shot, taken, note, interactive)
+        finally:
+            if held:
+                self.games[0].mailbox("set_control", self.aggro)
+
+    def _report(self, games, shot, taken, note, interactive):
         if interactive:
             note = self.ask_note()
         kept = zip(*(g.kept_states() for g in games))  # the same frames in each game

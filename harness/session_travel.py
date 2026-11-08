@@ -309,3 +309,29 @@ def chaos_short(run):
 @session_scenario(full=True)
 def chaos_10min(run):
     chaos(run, 10)
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def report_hold_pauses_the_game(run):
+    """Issue 192 (0.16.3, 0.17.0): online, the app ran the game on behind F9's report boxes with no
+    buttons held, so the partner's link never stalled; enemies killed the player while they typed,
+    and Game Over went on to the title. The app now holds the game (CONTROL_HOLD): it stands still,
+    its link runs on, the partner sees it paused (D158), and it carries on after."""
+    from link.mailbox import CONTROL_HOLD, PAUSED
+    from module import symbols
+    a, b = run.s.a, run.s.b
+    run.step(60)
+    beat = lambda: a.read(symbols()["g_CoopLink"], "<I", 8)
+    t0, h0 = a.read("g_GameTimer"), beat()
+    a.mailbox("set_control", CONTROL_HOLD)
+    run.step(240, p1=("right", ""))
+    run.expect(a.read("g_GameTimer") - t0 <= 1, "held: the game doesn't run", timer=(t0, a.read("g_GameTimer")))
+    run.expect(beat() - h0 >= 200, "its link does", heartbeat=(h0, beat()))
+    run.expect(a.mailbox("self_presence").flags & PAUSED, "it reads as paused")
+    run.expect(b.mailbox("partner_presence").flags & PAUSED, "...to the partner too")
+    x0 = a.snapshot()["world_x"]
+    a.mailbox("set_control", 0)
+    run.step(120, p1=("right", ""))
+    run.expect(a.read("g_GameTimer") - t0 >= 100, "let go, it runs again", timer=(t0, a.read("g_GameTimer")))
+    run.expect(not a.mailbox("self_presence").flags & PAUSED, "and isn't paused")
+    run.expect(a.snapshot()["world_x"] != x0, "the player moves", x=(x0, a.snapshot()["world_x"]))

@@ -14,6 +14,7 @@ void ArrivePresence(CoopPresence* p);   // adds roomId, ground position, paused/
 void CoopSaveRoomStore(SaveData* save, s32 block, s32 cardIcon);
 
 bool ArriveTeleportIn(void); // just came in by teleport (a revive): presence says so (M13)
+bool ArriveHeld(void); // the app's report box is up: the game holds still (#192)
 bool ArriveCardSaving(void); // this game's card is being written (frozen: no partner body then)
 
 #endif

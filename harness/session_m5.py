@@ -8,6 +8,7 @@ import struct
 
 from session import session_scenario  # first: puts `link` on the path
 
+from coop_env import TOOLS
 from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 from session_progress import arrive, status
 from session_scenarios import heal
@@ -451,3 +452,73 @@ def boss_guest_richter_swing_lands_once(run):
     close = [(x, y) for x, y in zip(drops, drops[1:]) if y[0] - x[0] < 10]
     run.expect(drops, "Richter's swings hit the boss", frames=i)
     run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)
+
+
+# --- #188: a big hit in Richter's arena (BO6) left Richter and Maria in their hit pose for good -----
+HIT_STEP = 10            # PL_S_HIT (src/ric/ric.h; Maria's and Alucard's Player_Hit are the same)
+FLUNG = (2, 15)          # its step_s for a DAMAGEKIND_5 hit: flies until a wall (Alucard's is 15)
+FLING_HIT = 5            # DAMAGEKIND_5: the possessed Richter's tackle and Blade Dash
+BO6, BO6_ARRIVE = 0x18, (0, 128, 179)  # launcher/bossstarts.py: Richter's arena
+BOSS_RICHTER_START = TOOLS["out"].parent / "fixtures" / "debug-starts" / "Boss - Richter.state"
+
+
+def arena_fling(run, g, x, facing_left):
+    """g, at x in its arena facing that way, takes a hit like the possessed Richter's tackle
+    (DAMAGEKIND_5: the fling). Returns (it was flung, frames until it was out of the hit, x then)."""
+    g.write("g_Status", 5000, "<i", 0x23C)                       # HP: the hit can't kill
+    p0 = g.entity(0)
+    g.write(p0, x, "<h", 2)
+    g.write("g_PlayerX", x + g.read("g_Tilemap", "<h", 0xA), "<i")
+    g.write(p0, int(facing_left), "<H", 0x14)
+    g.write(p0, 10, "<h", 0x3E)                                  # PLAYER.hitPoints
+    g.write(p0, FLING_HIT, "<H", 0x44)                           # PLAYER.hitParams
+    flung = None
+    for t in range(600):
+        run.step(1)
+        g.write("g_Status", 5000, "<i", 0x23C)
+        step, step_s = g.read(p0, "<H", 0x2C), g.read(p0, "<H", 0x2E)
+        if step == HIT_STEP and step_s in FLUNG:
+            flung = t
+        elif flung is not None and step != HIT_STEP:
+            return True, t, g.read(p0, "<h", 2)
+    return flung is not None, None, g.read(p0, "<h", 2)
+
+
+def arena_edges(run):
+    """Both players into Richter's arena (his scene plays first), then each is flung at both of its
+    edges and must get up again (#188)."""
+    from link.mailbox import CMD_ARRIVE
+    from session_m15 import load_characters
+    a, b = run.s.a, run.s.b
+    load_characters(run)
+    for g in (a, b):
+        g.mailbox("command", CMD_ARRIVE, BO6, *BO6_ARRIVE)
+    in_arena = lambda g: (lambda p: p.stage == BO6 and p.flags & IN_PLAY)(g.mailbox("self_presence"))
+    for _ in range(6000):  # his scene moves on while a direction is held
+        run.step(1, p1=("left", "left"))
+        if all(in_arena(g) and not g.read("g_CutsceneHasControl") for g in (a, b)):
+            break
+    run.expect(all(in_arena(g) for g in (a, b)), "both are in Richter's arena, in play",
+               a=a.snapshot(), b=b.snapshot())
+    for g, who in ((a, "A"), (b, "B")):
+        for x, facing_left in ((236, True), (20, False)):
+            flung, frames, x_after = arena_fling(run, g, x, facing_left)
+            run.expect(flung, f"{who} is flung by the hit (x {x})", x=x_after)
+            run.expect(frames is not None, f"{who} gets up after hitting the arena's edge (x {x})",
+                       x=x_after, step=g.read(g.entity(0), "<H", 0x2C), step_s=g.read(g.entity(0), "<H", 0x2E))
+            run.expect(8 <= x_after <= 0xF8, f"{who} stays inside the arena's walls", x=x_after)
+            run.step(120)
+
+
+def _arena_test(name, characters, full):
+    def test(run):
+        arena_edges(run)
+    test.__name__ = name
+    test.__doc__ = ("Issue 188 (0.17.0): the possessed Richter's tackle or Blade Dash flung a player into his "
+                    "arena's edge, which has no wall for Richter's or Maria's code, and they stayed in the hit "
+                    "pose for good. Each player, flung at both edges, gets up.")
+    session_scenario(starts=(str(BOSS_RICHTER_START),) * 2, characters=characters, full=full)(test)
+
+
+_arena_test("boss_arena_edge_richter_and_maria", (1, 2), False)
+_arena_test("boss_arena_edge_alucard_and_richter", (0, 1), True)

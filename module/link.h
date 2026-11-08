@@ -275,6 +275,7 @@ typedef struct {
 #define CONTROL_AGGRO_SHIFT 8 // bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 #define CONTROL_PARTNER_VOL_SHIFT 16 // bits 16-23: the partner's sounds, % of their volume (0 = 60)
 #define CONTROL_PVP 0x1000000 // the host's PvP setting: the partner's attacks hurt (M15, pvp.c)
+#define CONTROL_HOLD 0x2000000 // the app has a box up (F9's report): the game holds still, as paused (#192)
 
 // The castle's rules (D162, design/M-castle-rules.md): each bit turns a co-op change to the game
 // off, so all zero is the game as we built it. Bits 24 and up also go to the player overlays

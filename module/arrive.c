@@ -113,6 +113,13 @@ static bool IsPausedEngine(s32 step) {
     return step == Engine_Menu || step == Engine_Map || step == Engine_0x70;
 }
 
+// Online, the app's report boxes (F9) ran this game on with no buttons held, so the partner's link
+// never stalled: enemies killed the player while they typed, and Game Over went on to the title
+// (#192). Now the app holds it: the link runs, the game doesn't, and it counts as paused (D158).
+bool ArriveHeld(void) {
+    return (g_CoopLink.control & CONTROL_HOLD) && g_GameState == Game_Play;
+}
+
 static bool PartnerFresh(void) {
     return g_CoopLink.partnerAge <= 30 && (g_CoopLink.partner.flags & PRESENCE_IN_PLAY);
 }
@@ -781,7 +788,7 @@ void ArrivePresence(CoopPresence* p) {
         s_GroundTop = p->roomTop;
         s_GroundStage = p->stage;
     }
-    if (IsPausedEngine(g_GameEngineStep)) {
+    if (IsPausedEngine(g_GameEngineStep) || ArriveHeld()) {
         p->flags |= PRESENCE_PAUSED;
     }
     // Only a death in normal play counts: not the prologue (it plays out solo), not a load.
@@ -809,6 +816,9 @@ bool ArriveFrame(void) {
     if (s_CardSaving) {
         CardSaveStep();
         return false; // frozen while this game's card is written (D49)
+    }
+    if (ArriveHeld()) {
+        return false;
     }
     CommandUpdate();
     TeleportInput();

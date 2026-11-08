@@ -384,6 +384,44 @@ static void Poison(void) {
     }
 }
 
+// Heals that come as g_Player.healKind and healAmount (the faerie's potions, src/dra/7E4BC.c; Healing
+// Mail, src/dra/5F60C.c): only Alucard's player code takes them (src/dra/692E8.c). For Richter and
+// Maria they never came: the faerie used up potion after potion on them (#200), and Healing Mail did
+// nothing (#202). Its 1 HP every 128 frames needs the status bit only Alucard's walk sets: here,
+// while they walk.
+#define HEALING_MAIL_FRAMES 128
+#define PL_S_WALK 1 // Richter's and Maria's (src/ric/ric.h)
+
+static void Heal(void) {
+    static s32 s_MailTimer;
+
+    if (s_Loaded == CHAR_ALUCARD || g_GameState != Game_Play) {
+        return;
+    }
+    if (g_Status.equipment[ARMOR_SLOT] == ITEM_HEALING_MAIL && PLAYER.step == PL_S_WALK &&
+        g_GameEngineStep == Engine_Normal) {
+        if (++s_MailTimer >= HEALING_MAIL_FRAMES) {
+            s_MailTimer = 0;
+            if (!g_Player.healKind) {
+                g_Player.healKind = 2;
+                g_Player.healAmount = 1;
+            }
+        }
+    } else {
+        s_MailTimer = 0;
+    }
+    if (g_Player.healKind && g_Status.hp > 0) {
+        g_Status.hp += g_Player.healAmount;
+        if (g_Status.hp > g_Status.hpMax) {
+            g_Status.hp = g_Status.hpMax;
+        }
+        if (g_Player.healKind == 1) {
+            g_api.PlaySfx(SFX_HEALTH_PICKUP);
+        }
+    }
+    g_Player.healKind = 0;
+}
+
 // Alucard's health bar for Richter and Maria (issue 34). DRA draws it for g_CoopHudCharacter, from
 // tiles and palettes only Alucard's F_GAME.BIN has: they're put back from CoopBoot's copy, often
 // enough to outlast a load. Richter's and Maria's own bars use none of that area.
@@ -428,6 +466,33 @@ static void DoorWalkGround(void) {
         (g_Player.padSim & (PAD_LEFT | PAD_RIGHT)) &&
         (x < DOOR_EDGE || x >= (s32)(g_Tilemap.hSize << 8) - DOOR_EDGE)) {
         g_Player.vram_flag |= TOUCHING_GROUND;
+    }
+}
+
+// Richter's (BO6), Shaft's and Dracula's (RBO6) and the Succubus's (DRE) rooms have no side walls:
+// the screen's edges are. Alucard's collision says so (src/dra/6BF64.c CheckWallRight/Left: x 248
+// and 8 are walls there); Richter's and Maria's never fought there, so theirs don't. The possessed
+// Richter's tackle and Blade Dash (DAMAGEKIND_5) fling them until they meet a wall (RicStepHit
+// step_s 2): at the edge they met none, DRA held them at x 255, and they stayed in the hit forever
+// (#188). Alucard's walls, for them.
+#define ARENA_LEFT 8
+#define ARENA_RIGHT 0xF8
+
+static void ArenaWalls(void) {
+    s16 x = PLAYER.posX.i.hi;
+
+    if (s_Loaded == CHAR_ALUCARD || g_GameState != Game_Play ||
+        (g_StageId != STAGE_BO6 && g_StageId != STAGE_RBO6 && g_StageId != STAGE_DRE)) {
+        return;
+    }
+    if (x >= ARENA_RIGHT) {
+        PLAYER.posX.i.hi = ARENA_RIGHT;
+        g_PlayerX -= x - ARENA_RIGHT;
+        g_Player.vram_flag |= TOUCHING_R_WALL;
+    } else if (x <= ARENA_LEFT) {
+        PLAYER.posX.i.hi = ARENA_LEFT;
+        g_PlayerX += ARENA_LEFT - x;
+        g_Player.vram_flag |= TOUCHING_L_WALL;
     }
 }
 
@@ -532,6 +597,7 @@ void CharacterFrame(void) {
     // for the player overlays, with the castle's rules for them
     g_CoopOptions = g_CoopLink.options | (g_CoopLink.rulesOff & RULE_OVERLAY_MASK);
     DoorWalkGround();
+    ArenaWalls();
 
     if (g_GameState == Game_NowLoading && g_GameStep <= Play_PrepareDemo) {
         CharacterApply();
@@ -586,6 +652,7 @@ void CharacterFrame(void) {
     Familiar();
     PoisonWater();
     Poison();
+    Heal();
     Growth();
     AlucardHud();
 }

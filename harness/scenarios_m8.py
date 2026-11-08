@@ -469,6 +469,50 @@ def familiar(run, ch):
                    f"card {relic}: {NAMES[ch]} still plays")
 
 
+POTION, HEALING_MAIL, ARMOR = 0x9F, 0x11, 0x80097C0C  # ITEM_POTION, ITEM_HEALING_MAIL; g_Status.equipment[ARMOR_SLOT]
+HAND_COUNT = STATUS + 0x26  # g_Status.equipHandCount
+HP_MAX = STATUS + 0x240
+
+
+@per_character
+def familiar_faerie_potion(run, ch):
+    """Issue 200 (0.16.3): the faerie gave Richter potion after potion and none healed him: her potion
+    sets g_Player.healKind, which only Alucard's code took. At a tenth of his HP, she uses one and
+    it heals."""
+    e, mb = run.emu, mailbox(run)
+    e.write(STATUS, RELIC_ON, "<B", FAERIE_CARD)
+    reload_as(run, mb, ch)
+    run.step(300)
+    e.write(HAND_COUNT + POTION, 5, "<B")
+    hp_max = e.read(HP_MAX, "<i")
+    low = max(1, hp_max // 10)
+    e.write(HP_NOW, low, "<i")
+    healed = None
+    for t in range(2400):
+        run.step(1)
+        if e.read(HP_NOW, "<i") > low:
+            healed = t
+            break
+    run.expect(e.read(HAND_COUNT + POTION, "<B") < 5, "the faerie uses a potion", potions=e.read(HAND_COUNT + POTION, "<B"))
+    run.expect(healed is not None, "it heals", hp=e.read(HP_NOW, "<i"), low=low, hp_max=hp_max)
+
+
+@per_character
+def healing_mail(run, ch):
+    """Issue 202 (0.16.3): Healing Mail did nothing for Richter and Maria. Walking in it heals 1 HP
+    every 128 frames, as it does Alucard; standing doesn't."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(ARMOR, HEALING_MAIL, "<I")
+    half = e.read(HP_MAX, "<i") // 2
+    e.write(HP_NOW, half, "<i")
+    run.step(600)
+    run.expect(e.read(HP_NOW, "<i") == half, "standing: no healing", hp=e.read(HP_NOW, "<i"), was=half)
+    for i in range(4):
+        run.play(walker("left" if i % 2 else "right"), 150)
+    run.expect(e.read(HP_NOW, "<i") >= half + 3, "walking: 1 HP every 128 frames", hp=e.read(HP_NOW, "<i"), was=half)
+
+
 @per_character
 def poison_water(run, ch):
     """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and
