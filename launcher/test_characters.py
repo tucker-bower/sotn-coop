@@ -101,13 +101,23 @@ def test_saturn_maria(tmp):
         return []
     out = []
     blob = characters.saturn_maria_blob(cue, coop, PATCHES, tmp / "sat.blob").read_bytes()
-    magic, who, ovl, vh, vb, partner = struct.unpack_from("<6I", blob)
+    magic, who, ovl, vh, vb, partner, vh2, vb2 = struct.unpack_from("<8I", blob)
     built = DECOMP / "build/coop/maria-saturn"
-    p0 = 32 + ((ovl + 3) & ~3)
+    al = lambda n: (n + 3) & ~3  # noqa: E731
+    p0 = 32 + al(ovl) + al(vh) + al(vb)
     same = (who == characters.CHAR_SAT_MARIA and blob[32:32 + ovl] == (built / "SATMAR.BIN").read_bytes()
             and blob[p0:p0 + partner] == (built / "SATMARP.BIN").read_bytes())
     print(f"{'ok ' if same else 'BAD'} test_saturn_maria: her blob from the Saturn disc is our build "
           f"({ovl} bytes, and {partner} as the partner)")
+    out.append(same)
+    # her sound banks: the ones SOTN Ultimate makes, byte for byte (its MARIA_SD.BIN, when here)
+    ult = Path("/home/tucker/research-src/sotn-ultimate/build/us/MARIA_SD.BIN")
+    banks = (blob[32 + al(ovl):32 + al(ovl) + vh], blob[32 + al(ovl) + al(vh):32 + al(ovl) + al(vh) + vb],
+             blob[p0 + al(partner):p0 + al(partner) + vh2], blob[p0 + al(partner) + al(vh2):p0 + al(partner) + al(vh2) + vb2])
+    same = all(banks) and (not ult.exists() or [ult.read_bytes()[o:o + len(b)] for o, b in
+                                                 zip((0, 3 * 2048, 32 * 2048, 34 * 2048), banks)] == list(banks))
+    print(f"{'ok ' if same else 'BAD'} her two sound banks ({vh} + {vb}, {vh2} + {vb2} bytes)"
+          f"{', identical to SOTN Ultimate' + chr(39) + 's' if ult.exists() else ''}")
     out.append(same)
 
     def refused(disc, words):

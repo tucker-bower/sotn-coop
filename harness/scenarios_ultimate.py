@@ -18,9 +18,9 @@ def blobs():
     """{CHAR_*: (offset of its overlay in maria_blob(), its CharBlob fields)}."""
     b, out, at = maria_blob(), {}, 0
     while at + BLOB_HEAD <= len(b) and struct.unpack_from("<I", b, at)[0] == 0x52414843:
-        magic, ch, ovl, vh, vb, partner, _, _ = struct.unpack_from("<8I", b, at)
-        out[ch] = (at + BLOB_HEAD, (ovl, vh, vb, partner))
-        at += BLOB_HEAD + sum((n + 3) & ~3 for n in (ovl, vh, vb, partner))
+        magic, ch, ovl, vh, vb, partner, vh2, vb2 = struct.unpack_from("<8I", b, at)
+        out[ch] = (at + BLOB_HEAD, (ovl, vh, vb, partner, vh2, vb2))
+        at += BLOB_HEAD + sum((n + 3) & ~3 for n in (ovl, vh, vb, partner, vh2, vb2))
     return out
 
 
@@ -301,3 +301,35 @@ def saturn_maria_hud(run):
     want = [st.unpack_from("<32H", art, r * 64) for r in range(96)]
     run.expect(any(art) and e.vram_rect(544, 392, 32, 96) == want, "her art is in VRAM (544, 392)")
     e.screenshot().save(TOOLS["out"] / "saturn_maria_hud" / "hud.png")
+
+
+SFX_DATA = 0x800BF554  # g_SfxData: 7 bytes a sound from id 0x600 (vabid, prog, note, volume, mode, tone, prio)
+
+
+def sfx(e, sid):
+    return e.read_bytes(SFX_DATA + (sid - 0x600) * 7, 7)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def saturn_maria_sounds(run):
+    """Saturn Maria's own sounds (D183): her blob has her two banks, made from the Saturn disc (over
+    Richter's and the prologue Maria's), the module sends both once her load is done, and while
+    she's loaded her sounds have her priorities and Seiryuu its loop channels (character.c
+    SaturnMariaSfx). Back as Alucard: retail's."""
+    from link.mailbox import CHAR_SAT_MARIA
+    e, mb = run.emu, mailbox(run)
+    found = blobs()
+    _, (_, vh, vb, _, vh2, vb2) = found[CHAR_SAT_MARIA]
+    run.expect(vh and vb and vh2 and vb2, "her blob has both of her banks", sizes=(vh, vb, vh2, vb2))
+    retail = sfx(e, 0x6F9), sfx(e, 0x889)
+    reload_as(run, mb, CHAR_SAT_MARIA)
+    run.step(120)  # her banks go one 2 KB chunk a frame
+    run.expect((sfx(e, 0x6F9)[6], sfx(e, 0x707)[6], sfx(e, 0x889)[4]) == (90, 85, 1),
+               "her voice 90, her slide 85, Seiryuu on channels 22/23",
+               voice=sfx(e, 0x6F9)[6], slide=sfx(e, 0x707)[6], seiryu_mode=sfx(e, 0x889)[4])
+    s0 = e.snapshot()
+    s = run.play(walker("left", attack_every=12), 200)
+    run.expect(s["hp"] > 0 and (s["world_x"] != s0["world_x"] or s["room"] != s0["room"]),
+               "she plays on (her attacks play her sounds)")
+    reload_as(run, mb, CHAR_ALUCARD)
+    run.expect((sfx(e, 0x6F9), sfx(e, 0x889)) == retail, "back as Alucard: retail's priorities")

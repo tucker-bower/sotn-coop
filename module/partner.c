@@ -374,7 +374,8 @@ static const FarTrailer* PartnerMar(u32 character) {
         return &s_Trailer;
     }
     s_Trailer.magic = 0;
-    if (!b || !b->partnerSize || b->partnerSize > (character == CHAR_MARIA ? PARTNER_PLAYER_SIZE : PARTNER_SAT_SIZE)) {
+    if (!b || !b->partnerSize ||
+        b->partnerSize > (sat ? PARTNER_SAT_SIZE : character == CHAR_ULT_MARIA ? PARTNER_ULT_SIZE : PARTNER_PLAYER_SIZE)) {
         return NULL;
     }
     s_Which = character;

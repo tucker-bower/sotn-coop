@@ -49,8 +49,8 @@
 #define PARTNER_SAT_ADDR 0x80200000
 #define PARTNER_SAT_SIZE 0x80000
 // Ultimate Maria's: apart from Co-op Maria's (see COOP_PLAYER_FAR), after the blobs (link.h).
-#define PARTNER_ULT_ADDR 0x80480000
-#define PARTNER_ULT_SIZE 0x80000
+#define PARTNER_ULT_ADDR 0x804C0000
+#define PARTNER_ULT_SIZE 0x40000
 #define WEAPON_SHEET_ADDR 0x80700000 // the hand weapons' tile sheets, copied out of VRAM (D106: 2 x 16KB)
 
 void CoopBoot(void);           // replaces InitializePads()

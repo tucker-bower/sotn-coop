@@ -24,6 +24,7 @@ sys.path.insert(0, str(REPO / "patcher"))
 sys.path.insert(0, str(REPO / "launcher"))
 import bps  # noqa: E402
 import saturn_maria  # noqa: E402
+import saturn_maria_sounds  # noqa: E402
 
 ROOT = REPO / ".env/src/sotn-decomp"
 BUILD = ROOT / "build/coop/maria-saturn"
@@ -31,7 +32,8 @@ SATURN = ROOT / "disks/saturn"
 RIC = ROOT / "disks/us/BIN/RIC.BIN"
 SLOT = 0x8013C000  # her file's first byte (sat_maria.ld)
 PARTNER_SLOT = 0x80200000  # her partner build's (sat_maria_partner.ld; module/coop_api.h PARTNER_SAT_ADDR)
-SATURN_FILES = ("MARIA.PRG", "MARIA.CHR", "MAR_W.CHR", "0.BIN", "STAGE_01.CHR")
+SATURN_FILES = ("MARIA.PRG", "MARIA.CHR", "MAR_W.CHR", "0.BIN", "STAGE_01.CHR",
+                "SD/SD_MARI.CRT", "SD/SD_TEI.CRT", "SD/SD_JO10.CRT", "SD/SDE7.PCM")  # her sounds (D183)
 
 
 def md5(b):
@@ -84,7 +86,9 @@ def main(out):
         (out / name).write_bytes(patch)
     about = {"source": "BIN/RIC.BIN", "size": len(ovl), "partner_size": len(povl), "stored": sum(n for _, n in stored),
              "saturn_files": {n: md5(b) for n, b in files.items()}, "arrays": where,
-             "partner_arrays": {n: w[0] for n, w in pwhere.items()}}
+             "partner_arrays": {n: w[0] for n, w in pwhere.items()},
+             # her sound banks, made the same way on every machine: what the launcher's must be
+             "sounds": [md5(b) for b in saturn_maria_sounds.banks(files.__getitem__, lambda p: (ROOT / "disks/us" / p).read_bytes())]}
     (out / "sat-maria.json").write_text(json.dumps(about, indent=1))
     print(f"sat-maria.bps and -partner.bps: {about['stored']} of {len(ovl) + len(povl)} bytes not from the disc, "
           f"{len(where)} arrays ({sum(w[1] for w in where.values())} bytes) left for the launcher")

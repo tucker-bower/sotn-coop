@@ -12,6 +12,7 @@
 #define COOP_MODULE
 #include <game.h>
 #include <disk.h>
+#include <sfx.h>
 #include <psxsdk/libcd.h>
 #include "coop_api.h"
 #include "link.h"
@@ -106,37 +107,70 @@ void SsVabClose(s16 vabId); // main.exe (libsnd)
 // frame, as the game's own CD loader does (src/dra/cd.c).
 static const CharBlob* s_Bank; // being sent
 static u32 s_BankSent;
+static s16 s_BankVab; // PLAYER_VAB (1), then 2 (Saturn Maria's second bank, over SD_MAR)
 
-static void SoundBankStart(const CharBlob* b) {
-    u8* vh = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3);
+static const u8* BankVh(const CharBlob* b, s16 vab) {
+    return vab == PLAYER_VAB ? (const u8*)(b + 1) + CHAR_BLOB_ALIGN(b->ovlSize) : CHAR_BLOB_VH2(b);
+}
 
-    SsVabClose(PLAYER_VAB);
-    if (SsVabOpenHeadSticky(vh, PLAYER_VAB, g_VabAddrs[PLAYER_VAB]) < 0) {
+static void BankOpen(const CharBlob* b, s16 vab) {
+    SsVabClose(vab);
+    if (SsVabOpenHeadSticky((u8*)BankVh(b, vab), vab, g_VabAddrs[vab]) < 0) {
+        s_Bank = NULL;
         return;
     }
     s_Bank = b;
+    s_BankVab = vab;
     s_BankSent = 0;
 }
 
+static void SoundBankStart(const CharBlob* b) { BankOpen(b, PLAYER_VAB); }
+
 static void SoundBankStep(void) {
     const CharBlob* b = s_Bank;
-    u8* vb;
-    u32 n;
+    const u8* vb;
+    u32 n, size;
 
     if (!b || (s_BankSent && (s16)SsVabTransCompleted(SS_IMEDIATE) != 1)) {
         return;
     }
-    if (s_BankSent >= b->vbSize) {
+    size = s_BankVab == PLAYER_VAB ? b->vbSize : b->vb2Size;
+    if (s_BankSent >= size) {
         s_Bank = NULL;
+        if (s_BankVab == PLAYER_VAB && b->vh2Size && b->vb2Size) {
+            BankOpen(b, 2); // then her second bank
+        }
         return;
     }
-    vb = (u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3);
-    n = b->vbSize - s_BankSent < VAB_CHUNK ? b->vbSize - s_BankSent : VAB_CHUNK;
-    if (SsVabTransBodyPartly(vb + s_BankSent, n, PLAYER_VAB) == -1) {
+    vb = BankVh(b, s_BankVab) + CHAR_BLOB_ALIGN(s_BankVab == PLAYER_VAB ? b->vhSize : b->vh2Size);
+    n = size - s_BankSent < VAB_CHUNK ? size - s_BankSent : VAB_CHUNK;
+    if (SsVabTransBodyPartly((u8*)vb + s_BankSent, n, s_BankVab) == -1) {
         s_Bank = NULL;
         return;
     }
     s_BankSent += n;
+}
+
+// Saturn Maria's sounds take Richter's and the prologue Maria's ids (her banks, above), so their
+// priorities are hers while she's loaded: her voice 90, her effects under it, her slide 85; and
+// Seiryuu's loop plays on channels 22/23, which her dragon releases. Retail for anyone else (DRA
+// keeps the table for the session). SOTN Ultimate's DRA does this (cd_mod_files.h ModMarSfxPrio).
+static const u16 s_SatMarSfxPrio[][3] = {
+    // id, retail, Saturn Maria
+    {0x6F9, 80, 90}, {0x6FA, 80, 90}, {0x6FB, 80, 90}, {0x6FC, 80, 90}, {0x702, 81, 90},
+    {0x703, 81, 90}, {0x704, 81, 90}, {0x678, 40, 65}, {0x62D, 30, 65}, {0x62E, 32, 65},
+    {0x6FD, 80, 60}, {0x6FE, 80, 60}, {0x700, 80, 60}, {0x6F4, 80, 60}, {0x6F5, 80, 60},
+    {0x6F7, 50, 60}, {0x887, 90, 70}, {0x888, 90, 70}, {0x889, 90, 70}, {0x88A, 90, 70},
+    {0x707, 40, 85}, {0x617, 30, 85},
+};
+extern Unkstruct_800BF554 g_SfxData[];
+static void SaturnMariaSfx(bool hers) {
+    s32 i;
+
+    for (i = 0; i < LEN(s_SatMarSfxPrio); i++) {
+        g_SfxData[s_SatMarSfxPrio[i][0] - 0x600].unk6 = s_SatMarSfxPrio[i][hers ? 2 : 1];
+    }
+    g_SfxData[0x889 - 0x600].mode = hers ? SFX_MODE_CHANNELS_22_23 : SFX_MODE_CHANNELS_12_19;
 }
 
 static void CopyOverlay(const CharBlob* b) {
@@ -190,6 +224,7 @@ void CharacterApply(void) {
     }
     g_CoopCharacter = want == CHAR_ALUCARD ? PLAYER_ALUCARD : PLAYER_RICHTER;
     s_Loaded = want;
+    SaturnMariaSfx(want == CHAR_SAT_MARIA);
     PointRichterLoad();
 }
 

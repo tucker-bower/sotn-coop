@@ -4,7 +4,7 @@
    The trailer's sixth word is her partner init (mar2.c CoopUltMarPartnerInit). */
 EXTERN(MARIA_override);
 SECTIONS {
-    . = 0x80480000;
+    . = 0x804C0000;
     .data : {
         *(.data.MARIA_override)
         *(.data.maria_sprites)

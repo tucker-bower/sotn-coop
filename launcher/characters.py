@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
 import bps  # noqa: E402
 
 CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA = 0, 1, 2, 3, 4   # module/link.h
-BLOBS_MAX = 0x180000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
+BLOBS_MAX = 0x1C0000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
 CHAR_BLOB_MAGIC = 0x52414843                       # 'CHAR'
 SECTOR = 2048
 DXC_USA = "ULUS-10277"
@@ -194,12 +194,15 @@ def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
     """Builds Saturn Maria's blob from the player's Saturn disc and their co-op disc (Richter's art
     she keeps: RIC.BIN, which the co-op disc has as retail did); returns out. Raises DiscError."""
     import saturn_maria
+    import saturn_maria_sounds
     patches = Path(patches)
     about = json.loads((patches / "sat-maria.json").read_text())
     files = saturn_files(saturn_disc, about)
     ps1 = RawDisc(track1(coop_disc))
     try:
         ric = ps1.read(about["source"])
+        ps1_files = {p: ps1.read(p) for p in ("DRA.BIN", "VAB/SD_RIH.VH", "VAB/SD_RIH.VB", "VAB/SD_MAR.VH",
+                                              "VAB/SD_MAR.VB", "SD_J010.VH", "SD_J010.VB")}
     finally:
         ps1.close()
     if not ric:
@@ -218,10 +221,16 @@ def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
         p = about["partner_arrays"].get(name)  # not her HUD: player 1's only
         if p is not None:
             partner[p:p + size] = data
+    # her two sound banks (D183): synthesized from the Saturn's, on the PS1's banks' layout
+    sounds = saturn_maria_sounds.banks(files.__getitem__, ps1_files.__getitem__) if "sounds" in about else None
+    if sounds and [hashlib.md5(b).hexdigest() for b in sounds] != about["sounds"]:
+        raise DiscError("Saturn Maria's sounds didn't come out as they should. Please send us a bug report (F9).")
+    vh, vb, vh2, vb2 = sounds or (b"", b"", b"", b"")
     pad = lambda b: bytes(b) + bytes(-len(b) % 4)  # noqa: E731
-    # her overlay, no sound bank of her own yet (Richter's), then her partner build
-    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_SAT_MARIA, len(ovl), 0, 0, len(partner), 0, 0)
-    blob += pad(ovl) + pad(partner)
+    # her overlay, her bank over Richter's, her partner build, her bank over SD_MAR (module/link.h)
+    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_SAT_MARIA, len(ovl), len(vh), len(vb), len(partner),
+                       len(vh2), len(vb2))
+    blob += pad(ovl) + pad(vh) + pad(vb) + pad(partner) + pad(vh2) + pad(vb2)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)  # one blob, no end mark: blobs() joins it to the others
@@ -244,6 +253,6 @@ def _ends_marked(p):
     """Whether p is blobs ending with the end mark (walks the headers)."""
     at = 0
     while at + 32 <= len(p) and struct.unpack_from("<I", p, at)[0] == CHAR_BLOB_MAGIC:
-        sizes = struct.unpack_from("<4I", p, at + 8)
+        sizes = struct.unpack_from("<6I", p, at + 8)
         at += 32 + sum((n + 3) & ~3 for n in sizes)
     return at == len(p) - 4

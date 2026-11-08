@@ -45,16 +45,16 @@ Ultimate's Saturn Maria is `src/ric` built again with `MOD_MARIA_SAT` (about 1,1
 |---|---|
 | Her Byakko and Seiryuu halt the game (`unk28` 4) and her code runs on (`5087C.c`) | The module runs her player update in that halt, as it runs the stage's for 0xFF (`character.c`) |
 | Her walk snaps past x 0x7F-0x80 (`62DEC.c`) | The module snaps her, as `DoorWalkGround` does |
-| Her sounds' priorities (`cd.c ModMarSfxPrio`) and her bank | Her blob's sound bank, as both Marias; her priority table set by her init |
+| Her sounds' priorities (`cd.c ModMarSfxPrio`) and her two banks | Her blob carries both banks (over `SD_RIH` and `SD_MAR`: the blob's vab 2 fields), the module sends them after her load, and it sets her priorities and Seiryuu's loop channels while she's loaded (`SaturnMariaSfx`) |
 | Her own Saturn HUD (`5F60C.c`, `F_GAME2` art) | Her overlay draws it (`coop_sat_hud.c`), called by the module after DRA's HUD: it hides Richter's. Her art is an array the launcher fills, uploaded to the same VRAM. Her bars and digits use palette 0x109, since 0x103 on our disc is mostly black. |
 | Alucard's Entrance music for her | Not done (cosmetic) |
 
 **Phases.**
 1. Spike, on the dev machine only: her overlay from Ultimate's generators, in Richter's slot, in co-op with Alucard. Proves the code runs on our DRA before any converter work.
 2. Her blob made by the launcher: the array manifest, the Python converter for her art, with Richter's HUD and Richter's sound bank for now (her ids land on his sounds). `CHAR_SAT_MARIA`, the lobby, Settings › Game files › Saturn disc.
-3. Her own voice, sounds and Saturn HUD, from the disc (`mar_sounds.ts`, `mar_hud.ts`).
+3. Her own voice, sounds and Saturn HUD, from the disc (`mar_sounds.ts`, `mar_hud.ts`). Her sounds are synthesized in pure Python when the disc is added (Tucker, 2026-11-07); it takes about 3 seconds, and the banks are SOTN Ultimate's byte for byte.
 
-**Memory (chosen while building it).** Three Marias' blobs don't fit the 1 MB at `0x80400000`, and her partner build (300 KB) doesn't fit the 256 KB partner space. Nothing used `0x80200000`-`0x80280000` or the space after the module, so the blobs start at `0x80300000` (2 MB, and `coop.ld` asserts the module ends before), and her partner build runs at `0x80200000`. Her sprite table is 0x568 bytes, longer than the 0x388 the partner code swaps, and her code rewrites it as it unpacks her images. So for her the swap is longer, and it's taken from her build at every swap-in.
+**Memory (chosen while building it).** Three Marias' blobs don't fit the 1 MB at `0x80400000`, and her partner build (300 KB) doesn't fit the 256 KB partner space. Nothing used `0x80200000`-`0x80280000` or the space after the module, so the blobs start at `0x80300000` (`coop.ld` asserts the module ends before) and run to `0x804C0000` (1.75 MB: three Marias with Saturn Maria's sounds take 1.66 MB). Her partner build runs at `0x80200000`, Ultimate Maria's at `0x804C0000`, and each Maria's code has its own address, since code copied over another's can go unnoticed by the recompiler (a partner switching Marias hung). Her sprite table is 0x568 bytes, longer than the 0x388 the partner code swaps, and her code rewrites it as it unpacks her images. So for her the swap is longer, and it's taken from her build at every swap-in.
 
 **Acceptance criteria (Saturn Maria).**
 1. She's chosen in the lobby once the player adds their Saturn disc (Redump, Track 1 MD5 `32f03757…`). The launcher makes her blob, and each generated array matches its MD5 (`launcher/test_characters.py`).
