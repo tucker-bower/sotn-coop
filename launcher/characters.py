@@ -215,8 +215,9 @@ def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
         if data is None or len(data) != size or hashlib.md5(data).hexdigest() != digest:
             raise DiscError(f"Saturn Maria's {name} didn't come out as it should. Please send us a bug report (F9).")
         ovl[at:at + size] = data
-        p = about["partner_arrays"][name]
-        partner[p:p + size] = data
+        p = about["partner_arrays"].get(name)  # not her HUD: player 1's only
+        if p is not None:
+            partner[p:p + size] = data
     pad = lambda b: bytes(b) + bytes(-len(b) % 4)  # noqa: E731
     # her overlay, no sound bank of her own yet (Richter's), then her partner build
     blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_SAT_MARIA, len(ovl), 0, 0, len(partner), 0, 0)

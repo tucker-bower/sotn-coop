@@ -18,7 +18,7 @@ CFLAGS  += -msoft-float -march=r3000 -funsigned-char -fno-builtin -fcommon -fno-
 CFLAGS  += -fno-stack-protector -D_internal_version_$(VERSION) -DMOD_MARIA_SAT -Dabs=__builtin_abs -Dlabs=__builtin_labs
 CFLAGS  += -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -w
 SRCS    := pl_header.c $(filter-out pl_header.c ovl_load.c,$(notdir $(wildcard $(ROOT)/src/ric/*.c)))
-OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
+OBJS    := $(patsubst %.c,$(BUILD)/%.o,$(SRCS)) $(BUILD)/coop_sat_hud.o
 # The partner's: the same sources with COOP_PARTNER (coop_sat_maria.h), all in the 8MB.
 PBUILD  := $(BUILD)/partner
 POBJS   := $(patsubst %.c,$(PBUILD)/%.o,$(SRCS)) $(PBUILD)/coop_partner.o $(PBUILD)/coop_sat_partner.o
@@ -38,6 +38,14 @@ $(TREE)/.patched: ultimate-ric.patch $(wildcard maria_saturn/*.h)
 $(BUILD)/%.o: $(TREE)/.patched
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $(SRC)/$*.c -o $@
+
+# her Saturn HUD (player 1 only), with its art made from the dev Saturn disc
+$(BUILD)/gen/mar_hud.h: gen_headers.py ../../launcher/saturn_maria.py
+	python3 gen_headers.py $(BUILD)/gen
+
+$(BUILD)/coop_sat_hud.o: coop_sat_hud.c $(BUILD)/gen/mar_hud.h
+	@mkdir -p $(BUILD)
+	$(CROSS)gcc $(CFLAGS) -I$(BUILD)/gen -c $< -o $@
 
 $(PBUILD)/%.o: $(TREE)/.patched coop_sat_maria.h
 	@mkdir -p $(PBUILD)
@@ -62,6 +70,7 @@ $(BUILD)/symbols.txt: $(ROOT)/config/symbols.$(VERSION).txt
 $(BUILD)/satmar.elf: $(OBJS) $(BUILD)/symbols.txt sat_maria.ld
 	$(CROSS)ld -nostdlib -Map=$(BUILD)/satmar.map --build-id=none -T sat_maria.ld \
 	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -o $@ $(OBJS)
+	@$(CROSS)nm $@ | grep -q '^8013c588 D CoopSatMarHooks' || { echo "CoopSatMarHooks isn't at 0x8013C588"; exit 1; }
 
 $(BUILD)/SATMAR.BIN: $(BUILD)/satmar.elf
 	$(CROSS)objcopy -O binary $< $@

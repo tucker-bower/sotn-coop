@@ -814,7 +814,68 @@ def generate(read_saturn, read_ps1):
     H.put("mar_pal", 2, [ps1_color(c, i) for i, c in enumerate(s.palette(0))])
     H.put("mar_pal_light", 2, [ps1_color(c, i) for i, c in enumerate(s.palette(1))])
     H.put("mar_frame_light", 1, light)
+    H.put("mar_hud_vram", 2, hud_vram(prg, read_saturn("MAR_W.CHR")))  # ours: characters/maria-saturn/coop_sat_hud.c
     return H.a
+
+
+# Her Saturn HUD's art (mar_hud.ts / gen_mar_hud.py): MAR_W.CHR package 5, in VRAM (544, 392),
+# 32 x 96 halfwords (F_GAME2's empty tpage 0x18 u128-255 v136-231). Her code uploads it.
+HUD_U, HUD_V, HUD_W, HUD_H = 128, 136, 128, 96
+PLATE_DROP = {12, 13, 14, 15, 16, 44, 48, 58, 59, 60, 61, 62, 63, 77, 78, 79}
+
+
+def hud_art(prg, chr_):
+    """[(u, v, rows)] of her HUD: the holder, the plate, the digits 0-9, the bars."""
+    base, img = 0, None
+    for r in FX_ORDER:
+        o = be32(prg, FX_RES - SAT + r * 12) - SAT
+        recs = []
+        while True:
+            w, h, u = prg[o], prg[o + 1], be16(prg, o + 2)
+            o += 4
+            if w == 0 and h == 0:
+                size = u * 8
+                break
+            recs.append((w * 2, h * 2, u * 8))
+        if r == 5:
+            img = []
+            for w, h, off in recs:
+                d = chr_[base + off:base + off + (w * h) // 2]
+                px = [v for b in d for v in (b >> 4, b & 15)]
+                img.append((w, h, [px[y * w:(y + 1) * w] for y in range(h)]))
+            break
+        base += size
+    if img is None:
+        raise ValueError("mar hud: resource 5")
+
+    def keep(rows, cs):
+        return [[row[c] for c in cs] for row in rows]
+    hw, _, holder = img[5]
+    pw, _, plate = img[0]
+    art = [(128, 136, keep(holder, [c for c in range(hw) if (2 + c) % 5 != 4])),
+           (168, 136, keep(plate, [c for c in range(pw) if c not in PLATE_DROP]))]
+    for n in range(10):
+        art.append((168 + 7 * n, 160, keep(img[6 + n][2], range(7))))
+    tile = img[17][2]
+    row = [tile[0][c] for c in (3, 4, 6, 7)] + [0] + [tile[0][c] for c in (3, 4, 6)]
+    art.append((240, 136, [list(row) for _ in range(96)]))
+    if len(art[0][2][0]) != 38 or len(art[1][2][0]) != 64:
+        raise ValueError("mar hud: widths")
+    return art
+
+
+def hud_vram(prg, chr_):
+    """Her HUD as VRAM halfwords, row by row (RECT 544, 392, 32, 96)."""
+    px = {}
+    for u, v, rows in hud_art(prg, chr_):
+        for y, row in enumerate(rows):
+            for x, c in enumerate(row):
+                px[(u + x, v + y)] = c
+    out = []
+    for vy in range(HUD_V, HUD_V + HUD_H):
+        for hx in range(32, 64):
+            out.append(sum(px.get((hx * 4 + k, vy), 0) << (4 * k) for k in range(4)))
+    return out
 
 
 def array_bytes(size, values):

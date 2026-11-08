@@ -395,6 +395,9 @@ static void TelescopeFix(void) {
 // icons, drawn over the sprite DRA's Richter HUD just drew. Ultimate's own DRA calls her from the
 // HUD; ours has no room for that, so it's here, once the frame's HUD is done.
 #define ULT_MAR_HUD_HOOK ((void (**)(void))0x8013C7F8) // characters/maria-ultimate/ult_maria.ld
+// ...and Saturn Maria's own HUD, which Ultimate's DRA draws in place of Richter's
+// (characters/maria-saturn/coop_sat_hud.c): hers hides his and draws itself.
+#define SAT_MAR_HUD_HOOK ((void (**)(void))0x8013C588) // characters/maria-saturn/sat_maria.ld
 // Saturn Maria (characters/maria-saturn) walks in steps that pass over x 0x7F-0x80, so the save
 // room's walk to the save point (src/dra/62DEC.c func_80105428, step 1) paced her back and forth
 // forever. Ultimate's DRA snaps her there; ours has no room, so it's here, after the frame's
@@ -432,11 +435,11 @@ static void SaturnMariaHalt(void) {
 }
 
 void CharacterBeforePrims(void) {
-    void (*hud)(void) = *ULT_MAR_HUD_HOOK;
+    void (*hud)(void) = *(s_Loaded == CHAR_SAT_MARIA ? SAT_MAR_HUD_HOOK : ULT_MAR_HUD_HOOK);
 
     SaturnMariaSaveWalk();
 
-    if (s_Loaded == CHAR_ULT_MARIA && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
+    if ((s_Loaded == CHAR_ULT_MARIA || s_Loaded == CHAR_SAT_MARIA) && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
         g_CoopHudCharacter != PLAYER_ALUCARD && g_LoadFile == CdFile_None &&
         (u32)hud >= COOP_PLAYER_FAR && (u32)hud < COOP_PLAYER_FAR_END) { // hers, not a load's
         hud();

@@ -46,7 +46,7 @@ Ultimate's Saturn Maria is `src/ric` built again with `MOD_MARIA_SAT` (about 1,1
 | Her Byakko and Seiryuu halt the game (`unk28` 4) and her code runs on (`5087C.c`) | The module runs her player update in that halt, as it runs the stage's for 0xFF (`character.c`) |
 | Her walk snaps past x 0x7F-0x80 (`62DEC.c`) | The module snaps her, as `DoorWalkGround` does |
 | Her sounds' priorities (`cd.c ModMarSfxPrio`) and her bank | Her blob's sound bank, as both Marias; her priority table set by her init |
-| Her own Saturn HUD (`5F60C.c`, `F_GAME2` art) | Phase 2: Richter's HUD first |
+| Her own Saturn HUD (`5F60C.c`, `F_GAME2` art) | Her overlay draws it (`coop_sat_hud.c`), called by the module after DRA's HUD: it hides Richter's. Her art is an array the launcher fills, uploaded to the same VRAM. Her bars and digits use palette 0x109, since 0x103 on our disc is mostly black. |
 | Alucard's Entrance music for her | Not done (cosmetic) |
 
 **Phases.**

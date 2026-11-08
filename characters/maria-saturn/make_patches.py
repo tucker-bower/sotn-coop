@@ -49,11 +49,14 @@ def symbols(elf):
     return out
 
 
-def hollow(ovl, elf, arrays, slot=SLOT):
-    """Her file with every array zeroed, and {name: [offset, size, md5]}."""
+def hollow(ovl, elf, arrays, slot=SLOT, optional=()):
+    """Her file with every array zeroed, and {name: [offset, size, md5]}. Arrays in `optional` may
+    be missing from this build (her HUD's art: player 1's only)."""
     syms, out, where = symbols(elf), bytearray(ovl), {}
     for name, data in sorted(arrays.items()):
         found = syms.get(name)
+        if not found and name in optional:
+            continue
         if not found or len(found) != 1:
             raise SystemExit(f"{name}: {len(found or [])} symbols of that name in her build")
         addr, size = found[0]
@@ -71,7 +74,8 @@ def main(out):
     files = {n: (SATURN / n).read_bytes() for n in SATURN_FILES}
     arrays = saturn_maria.arrays(files.__getitem__, lambda p: (ROOT / "disks/us" / p).read_bytes())
     ovl, where = hollow((BUILD / "SATMAR.BIN").read_bytes(), BUILD / "satmar.elf", arrays)
-    povl, pwhere = hollow((BUILD / "SATMARP.BIN").read_bytes(), BUILD / "satmarp.elf", arrays, PARTNER_SLOT)
+    povl, pwhere = hollow((BUILD / "SATMARP.BIN").read_bytes(), BUILD / "satmarp.elf", arrays, PARTNER_SLOT,
+                          optional={"mar_hud_vram"})
     src = RIC.read_bytes()
     stored = []
     for name, target in (("sat-maria.bps", ovl), ("sat-maria-partner.bps", povl)):

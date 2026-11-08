@@ -55,10 +55,16 @@ ICON_UV = {DAGGER: (0xE0, 0xB0), AXE: (0xD0, 0xC0), BIBLE: (0x98, 0xD8)}
 
 
 def ult_symbol(name):
-    """An address in her build (nm of ultmar.elf): her statics aren't in the game's symbols."""
+    """An address in Ultimate Maria's build: her statics aren't in the game's symbols."""
+    return ult_symbol_of("ultmar.elf", name)
+
+
+def ult_symbol_of(elf, name):
+    """An address in one of the mod characters' builds (nm): ultmar.elf, satmar.elf."""
     import subprocess
     from coop_env import REPO
-    out = subprocess.run(["mipsel-linux-gnu-nm", str(REPO / "build/coop/maria-ultimate/ultmar.elf")],
+    folder = "maria-saturn" if elf.startswith("sat") else "maria-ultimate"
+    out = subprocess.run(["mipsel-linux-gnu-nm", str(REPO / "build/coop" / folder / elf)],
                          capture_output=True, text=True, check=True).stdout
     return next(int(a, 16) for a, _, n in (line.split() for line in out.splitlines() if len(line.split()) == 3)
                 if n == name)
@@ -265,3 +271,33 @@ def boss_doppleganger_alucard_and_saturn_maria(run):
     dies once and both worlds record the kill (session_m8.party_boss)."""
     from session_m8 import party_boss
     party_boss(run, CHAR_ALUCARD, 4)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def saturn_maria_hud(run):
+    """Saturn Maria's own HUD, the Saturn's (coop_sat_hud.c): Richter's is hidden, hers is drawn
+    (eight sprites, the vine holder from her art in tpage 0x18), and her art is in VRAM, made from
+    the Saturn disc."""
+    from link.mailbox import CHAR_SAT_MARIA
+    from coop_env import TOOLS
+    import struct as st
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_SAT_MARIA)
+    run.step(60)
+    ric = []
+    prim = PRIM_BUF + e.read(HUD_PRIM_INDEX1) * PRIM_SIZE
+    while prim and prim != PRIM_BUF and len(ric) < 16:
+        ric.append(st.unpack("<H", e.read_bytes(prim + 0x32, 2))[0])
+        prim = e.read(prim)
+    run.expect(ric and all(m == DRAW_HIDE for m in ric), "Richter's HUD is hidden", modes=ric)
+    j = st.unpack("<h", e.read_bytes(ult_symbol_of("satmar.elf", "g_MarHudPrim"), 2))[0]
+    holder = PRIM_BUF + j * PRIM_SIZE
+    tpage, mode = st.unpack("<H", e.read_bytes(holder + 0x1A, 2))[0], st.unpack("<H", e.read_bytes(holder + 0x32, 2))[0]
+    run.expect(j > 0 and tpage == 0x18 and mode != DRAW_HIDE, "hers is drawn: the holder from her art",
+               prim=j, tpage=hex(tpage), mode=mode)
+    at = blobs()[CHAR_SAT_MARIA][0]
+    sym = ult_symbol_of("satmar.elf", "mar_hud_vram")
+    art = maria_blob()[at + sym - RICHTER_OVERLAY:at + sym - RICHTER_OVERLAY + 32 * 96 * 2]
+    want = [st.unpack_from("<32H", art, r * 64) for r in range(96)]
+    run.expect(any(art) and e.vram_rect(544, 392, 32, 96) == want, "her art is in VRAM (544, 392)")
+    e.screenshot().save(TOOLS["out"] / "saturn_maria_hud" / "hud.png")

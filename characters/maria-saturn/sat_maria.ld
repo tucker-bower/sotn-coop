@@ -5,7 +5,7 @@ SECTIONS {
     .data : {
         *(.data.RIC_player)
         *(.data.richter_sprites)
-        
+        *(.data.CoopSatMarHooks) /* 0x8013C588: the module calls her HUD (coop_sat_hud.c) */
         *(.data*)
         *(.rodata*)
         *(.sdata*)
