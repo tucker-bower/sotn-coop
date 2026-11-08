@@ -41,7 +41,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Faerie revive:** Alucard's faerie and a Life Apple revive a fallen partner on the spot.
 
 **Three characters**
-- **Alucard, Co-op Richter, Co-op Maria, Ultimate Maria and Saturn Maria,** in any pairing, chosen each session.
+- **Alucard, Co-op Richter, Co-op Maria, Ultimate Maria, Saturn Maria and Ultimate Richter,** in any pairing, chosen each session.
 - **The whole castle as any character:** Co-op Richter and Maria learn their moves from Alucard's relics, level up, wear his armor, and use his weapons in their off hand.
 - **Rebalanced** to stay close to Alucard's power, with extra jumps to reach everywhere he can.
 - **One-button shortcuts,** optional for each player: high jump and blade dash for Richter and Maria, spells on the right stick for Alucard.
@@ -60,7 +60,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
 - **Maria:** choose your *Dracula X Chronicles* `.iso` under Settings › Game files. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
-- **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` under Settings › Game files. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts. The launcher makes her art from your own disc.
+- **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` under Settings › Game files. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
 - **The window:** F11 for fullscreen, and the View menu changes the layout. On the couch, F1 picks which game plays the music.
 - **Online:** you both need the same version. If you can't connect, the lobby says why, and Help › Online troubleshooting has what to try.
 

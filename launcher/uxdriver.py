@@ -386,7 +386,7 @@ def _couch(pg, quit_at_end=True):
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
-        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Saturn Maria: no Saturn disc yet
+        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Ultimate Richter: no Saturn disc yet
         ("pad", 101, A),                                      # can't be ready as Maria: it opens Game files
         ("screen", "Game files"), ("shot", "game-files-from-lobby"),
         ("key", pg.K_ESCAPE), ("screen", "Press a button"),
@@ -870,7 +870,7 @@ def _characters(pg):
               ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
               ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
               ("screen", "Press a button"),
-              ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
+              ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
               ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)

@@ -35,5 +35,5 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |
 | M19 | Widescreen | #51 | `M19-widescreen` |
 | M20 | Co-op on the randomizer, the first supported mod | #144 | `M20-randomizer` |
-| — | Other mods' characters next to ours: Ultimate Maria and Saturn Maria built; her own sounds and HUD, and Ultimate Richter's coat, next | #182, #185 | `character-mods` |
+| — | Other mods' characters next to ours: Ultimate Maria, Saturn Maria (her HUD and sounds too) and Ultimate Richter | Done (#182, #185) | `character-mods` |
 

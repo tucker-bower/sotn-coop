@@ -13,7 +13,8 @@ from session_scenarios import partner_pixels
 from session_shared import into_hall, roles, stage_entities
 import savestates as route
 
-NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria", 3: "Ultimate Maria", 4: "Saturn Maria"}
+NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria", 3: "Ultimate Maria", 4: "Saturn Maria",
+         5: "Ultimate Richter"}
 STATUS = 0x80097964  # g_Status (include/game.h)
 HEARTS, SUBWEAPON = 0x80097BA8, 0x80097BFC
 VCOUNT = 0x801362D4  # D_801362D4 (DRA): GsGetVcount() after the frame's drawing

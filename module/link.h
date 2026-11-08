@@ -306,7 +306,8 @@ typedef struct {
 // none of the co-op characters' features (levels, Alucard's stats and gear, relic moves).
 #define CHAR_ULT_MARIA 3 // SOTN Ultimate's PSP Maria (characters/maria-ultimate)
 #define CHAR_SAT_MARIA 4 // SOTN Ultimate's Saturn Maria, a fork of Richter's code (characters/maria-saturn)
-#define CHAR_LAST CHAR_SAT_MARIA
+#define CHAR_ULT_RICHTER 5 // SOTN Ultimate's Richter: retail Richter in the Saturn's coat (launcher/saturn_richter.py)
+#define CHAR_LAST CHAR_ULT_RICHTER
 // The player's own settings (CoopLink.options), per player in the launcher.
 #define OPT_SHORTCUTS 1 // one-button moves (design/M8b §3.2)
 #define OPT_ALUCARD_HUD 4 // Richter and Maria: Alucard's health bar (character.c)
@@ -343,7 +344,7 @@ typedef struct {
      CHAR_BLOB_ALIGN((b)->vbSize) + CHAR_BLOB_ALIGN((b)->partnerSize))
 #define CHAR_BLOB_NEXT(b) \
     ((const CharBlob*)(CHAR_BLOB_VH2(b) + CHAR_BLOB_ALIGN((b)->vh2Size) + CHAR_BLOB_ALIGN((b)->vb2Size)))
-#define CHAR_BLOBS_MAX 3 // Co-op Maria, Ultimate Maria, Saturn Maria
+#define CHAR_BLOBS_MAX 4 // Co-op Maria, Ultimate Maria, Saturn Maria, Ultimate Richter
 #define CHAR_BLOBS_END 0x804C0000 // PARTNER_ULT_ADDR (module/coop_api.h): the blobs end before it (1.75 MB)
 extern CoopLink g_CoopLink;
 

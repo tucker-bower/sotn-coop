@@ -42,7 +42,7 @@ def reload_as(run, mb, character):
     """A joint save and its load with this game's character set: how Continue switches it.
     Maria's blob goes into the 8MB RAM first, as the launcher's host does."""
     e = run.emu
-    if character in (CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA):
+    if character in (CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA, 5):  # 5: Ultimate Richter
         blob = maria_blob()
         run.expect(blob is not None, "Maria's blob builds (dev DXC disc)")
         e.write_bytes(CHAR_BLOB_ADDR, blob)

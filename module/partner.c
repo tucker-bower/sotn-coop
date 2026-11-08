@@ -393,9 +393,27 @@ static const FarTrailer* PartnerMar(u32 character) {
     return &s_Trailer;
 }
 
+// Ultimate Richter as the partner runs our Richter's partner build (his code is retail Richter's,
+// which can't run anywhere but 0x8013C000) with his coat's sprite table: his blob's, rebased to
+// where the blob is. Its two moved frames (the coat's x/y fixes) are left as Richter's.
+#define RIC_SHEET_WORDS (0x314 / 4) // richter_sprites (0x8013C020), in both files
+static void UltRichterSheet(void) {
+    const CharBlob* b = CharacterBlob(CHAR_ULT_RICHTER);
+    const u32* file;
+    u32 k;
+
+    if (!b) {
+        return;
+    }
+    file = (const u32*)(b + 1);
+    for (k = 8; k < 8 + RIC_SHEET_WORDS; k++) {
+        s_Hdr[k] = file[k] - HDR_ADDR + (u32)file;
+    }
+}
+
 static const FarTrailer* PartnerCode(u32 character) {
     // Saturn Maria isn't CHAR_IS_MARIA (her file is Richter's layout), but her partner build is a blob's
-    return character == CHAR_RICHTER                                   ? PartnerRic()
+    return character == CHAR_RICHTER || character == CHAR_ULT_RICHTER ? PartnerRic()
            : CHAR_IS_MARIA(character) || character == CHAR_SAT_MARIA ? PartnerMar(character)
                                                                       : NULL;
 }
@@ -522,6 +540,9 @@ static void Make(void) {
             AluPalettes();
         } else {
             LoadGraphics((const u8*)FGAME2_ADDR, (const u8*)FGAME2_ADDR + 0x40000); // Richter's; Maria's runs on it too
+            if (s_Char == CHAR_ULT_RICHTER && CharacterBlob(CHAR_ULT_RICHTER)) { // his coat's colours and arm
+                CharacterRicCoat((const u8*)(CharacterBlob(CHAR_ULT_RICHTER) + 1), true);
+            }
         }
         s_BankLoaded = s_Char;
         FamiliarReload(); // the strips held the partner's familiar too
@@ -562,6 +583,9 @@ static void Make(void) {
         s_LiveHdr = s_Char == CHAR_SAT_MARIA ? hdr : NULL;
         for (k = 0; k < s_HdrWords; k++) {
             s_Hdr[k] = hdr[k];
+        }
+        if (s_Char == CHAR_ULT_RICHTER) {
+            UltRichterSheet();
         }
         for (k = 0; k < BANKS; k++) {
             s_Banks[k] = banks[k];

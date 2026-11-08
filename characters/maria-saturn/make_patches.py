@@ -25,11 +25,14 @@ sys.path.insert(0, str(REPO / "launcher"))
 import bps  # noqa: E402
 import saturn_maria  # noqa: E402
 import saturn_maria_sounds  # noqa: E402
+import saturn_richter  # noqa: E402
 
 ROOT = REPO / ".env/src/sotn-decomp"
 BUILD = ROOT / "build/coop/maria-saturn"
 SATURN = ROOT / "disks/saturn"
 RIC = ROOT / "disks/us/BIN/RIC.BIN"
+RICHTER_FILES = ("RICHTER.PRG", "RICHTER.CHR", "RICHTER2.PRG", "RICHTER2.CHR", "RIC_W2.CHR")  # Ultimate Richter's (D184)
+RIC2_SIZE = 0x17860  # his blob: RIC2.BIN up to its last change from RIC.BIN (module: the rest is retail's)
 SLOT = 0x8013C000  # her file's first byte (sat_maria.ld)
 PARTNER_SLOT = 0x80200000  # her partner build's (sat_maria_partner.ld; module/coop_api.h PARTNER_SAT_ADDR)
 SATURN_FILES = ("MARIA.PRG", "MARIA.CHR", "MAR_W.CHR", "0.BIN", "STAGE_01.CHR",
@@ -89,6 +92,12 @@ def main(out):
              "partner_arrays": {n: w[0] for n, w in pwhere.items()},
              # her sound banks, made the same way on every machine: what the launcher's must be
              "sounds": [md5(b) for b in saturn_maria_sounds.banks(files.__getitem__, lambda p: (ROOT / "disks/us" / p).read_bytes())]}
+    # Ultimate Richter: no patch (his code is retail's); what the launcher must make, and from what
+    rfiles = {n: (SATURN / n).read_bytes() for n in RICHTER_FILES}
+    ric2 = saturn_richter.ric2(src, rfiles.__getitem__, (ROOT / "disks/us/BIN/F_GAME2.BIN").read_bytes())
+    assert ric2[RIC2_SIZE:] == src[RIC2_SIZE:], "RIC2 changes RIC.BIN past RIC2_SIZE"
+    about["richter"] = {"saturn_files": {n: md5(b) for n, b in rfiles.items()}, "size": RIC2_SIZE,
+                        "md5": md5(ric2[:RIC2_SIZE])}
     (out / "sat-maria.json").write_text(json.dumps(about, indent=1))
     print(f"sat-maria.bps and -partner.bps: {about['stored']} of {len(ovl) + len(povl)} bytes not from the disc, "
           f"{len(where)} arrays ({sum(w[1] for w in where.values())} bytes) left for the launcher")

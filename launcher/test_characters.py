@@ -130,6 +130,15 @@ def test_saturn_maria(tmp):
         print(f"BAD {Path(disc).name}: accepted")
         return False
     out.append(refused(coop, ["isn't the Saturn"]))
+    # Ultimate Richter (D184): RIC.BIN with the coat, as SOTN Ultimate's build_ric2.py makes it
+    ur = characters.ultimate_richter_blob(cue, coop, PATCHES, tmp / "ur.blob").read_bytes()
+    who, size = struct.unpack_from("<2I", ur, 4)
+    ult = Path("/home/tucker/research-src/sotn-ultimate/build/us/RIC2.BIN")
+    same = who == characters.CHAR_ULT_RICHTER and ur[32:32 + 8] != b"" and (
+        not ult.exists() or ur[32:32 + size] == ult.read_bytes()[:size])
+    print(f"{'ok ' if same else 'BAD'} Ultimate Richter's blob: {size} bytes of RIC.BIN in the coat"
+          f"{', identical to SOTN Ultimate' + chr(39) + 's RIC2.BIN' if ult.exists() else ''}")
+    out.append(same)
     import json
     about = json.loads((PATCHES / "sat-maria.json").read_text())
     d = characters.RawDisc(characters.track1(cue))

@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "patcher"))
 import bps  # noqa: E402
 
-CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA = 0, 1, 2, 3, 4   # module/link.h
+CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA, CHAR_ULT_MARIA, CHAR_SAT_MARIA, CHAR_ULT_RICHTER = 0, 1, 2, 3, 4, 5  # module/link.h
 BLOBS_MAX = 0x1C0000  # module/link.h: CHAR_BLOB_ADDR to CHAR_BLOBS_END
 CHAR_BLOB_MAGIC = 0x52414843                       # 'CHAR'
 SECTOR = 2048
@@ -179,13 +179,13 @@ def saturn_files(disc, about):
         files = {name: d.read(name) for name in about["saturn_files"]}
     finally:
         d.close()
-    if not files["MARIA.PRG"]:
-        raise DiscError("That isn't the Saturn Symphony of the Night: Saturn Maria comes from "
+    if not any(files.values()):
+        raise DiscError("That isn't the Saturn Symphony of the Night: Saturn Maria and Ultimate Richter come from "
                         f"{SATURN_GAME}.")
     bad = [n for n, b in files.items() if not b or hashlib.md5(b).hexdigest() != about["saturn_files"][n]]
     if bad:
-        raise DiscError("That's the Saturn game, but not the copy Saturn Maria was made for (a translation "
-                        f"or another version?). She needs the original Japanese disc: {SATURN_GAME}, from "
+        raise DiscError("That's the Saturn game, but not the copy Saturn Maria and Ultimate Richter were made for (a translation "
+                        f"or another version?). They need the original Japanese disc: {SATURN_GAME}, from "
                         "redump.org.")
     return files
 
@@ -234,6 +234,34 @@ def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)  # one blob, no end mark: blobs() joins it to the others
+    return out
+
+
+def ultimate_richter_blob(saturn_disc, coop_disc, patches, out):
+    """Builds Ultimate Richter's blob (D184): RIC.BIN from the co-op disc with the Saturn's coat
+    (launcher/saturn_richter.py), up to its last change; the module copies it over the retail load.
+    Returns out. Raises DiscError."""
+    import saturn_richter
+    about = json.loads((Path(patches) / "sat-maria.json").read_text())["richter"]
+    files = saturn_files(saturn_disc, {"saturn_files": about["saturn_files"]})
+    ps1 = RawDisc(track1(coop_disc))
+    try:
+        ric, g2 = ps1.read("BIN/RIC.BIN"), ps1.read("BIN/F_GAME2.BIN")
+    finally:
+        ps1.close()
+    if not ric or not g2:
+        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Make it again in Settings › Game files.")
+    try:
+        ric2 = saturn_richter.ric2(ric, files.__getitem__, g2)[:about["size"]]
+    except (ValueError, IndexError) as e:
+        raise DiscError(f"Ultimate Richter's coat didn't come out as it should ({e}). Please send us a bug report (F9).") from e
+    if hashlib.md5(ric2).hexdigest() != about["md5"]:
+        raise DiscError("Ultimate Richter's coat didn't come out as it should. Please send us a bug report (F9).")
+    blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_ULT_RICHTER, len(ric2), 0, 0, 0, 0, 0) + ric2
+    blob += bytes(-len(blob) % 4)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(blob)
     return out
 
 

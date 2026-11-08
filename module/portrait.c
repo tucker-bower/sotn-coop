@@ -30,6 +30,7 @@ static const Portrait s_Portraits[] = {
     [CHAR_MARIA - 1] = {0xE84, 0x1C04, "\x2D\x21\x32\x29\x21\xFF"},
     [CHAR_ULT_MARIA - 1] = {0xE84, 0x1C04, "\x2D\x21\x32\x29\x21\xFF"}, // Maria's
     [CHAR_SAT_MARIA - 1] = {0xE84, 0x1C04, "\x2D\x21\x32\x29\x21\xFF"},
+    [CHAR_ULT_RICHTER - 1] = {0x4, 0xD84, "\x32\x29\x23\x28\x34\x25\x32\xFF"}, // Richter's
 };
 
 static void Rects(RECT* pixels, RECT* palette) {

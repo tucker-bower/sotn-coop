@@ -73,15 +73,17 @@ PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps") 
 # Maria's patches (characters/maria-dx/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
                       if (d / "maria.json").exists()), APP / "patcher" / "maria")
-CHARACTERS = ("Alucard", "Co-op Richter", "Co-op Maria", "Ultimate Maria", "Saturn Maria")  # index = CHAR_* (module/link.h)
+CHARACTERS = ("Alucard", "Co-op Richter", "Co-op Maria", "Ultimate Maria", "Saturn Maria",
+              "Ultimate Richter")  # index = CHAR_* (module/link.h)
 # Under the name in the lobby: what sets the character apart (docs/design/character-mods.md)
 CHARACTER_NOTES = ("", "Alucard's gear and relics", "Alucard's gear and relics", "From SOTN Ultimate: PSP Maria",
-                   "From SOTN Ultimate: Saturn Maria")
+                   "From SOTN Ultimate: Saturn Maria", "From SOTN Ultimate: the Saturn coat")
 MARIAS = (2, 3)  # made from the player's DXC disc (characters.py)
 SATURN_MARIA = 4  # made from the player's Saturn disc (characters.py)
+ULTIMATE_RICHTER = 5  # ...and so is he
 # what a character needs that the player hasn't added, in the lobby
 NEEDS = {2: ("Needs your Dracula X", "Chronicles disc (PSP)"), 3: ("Needs your Dracula X", "Chronicles disc (PSP)"),
-         4: ("Needs your Saturn", "disc (Japan)")}
+         4: ("Needs your Saturn", "disc (Japan)"), 5: ("Needs your Saturn", "disc (Japan)")}
 # Alucard's spells for the right stick (design/M8b §3.2): SpellIds, None = nothing there.
 SPELL_CHOICES = (None, 0, 1, 2, 3, 5, 7)
 DEFAULT_SPELLS = [2, 5, 3, 0]  # up Hellfire, right Soul Steal, down Tetra Spirit, left Dark Metamorphosis
@@ -113,7 +115,8 @@ of Wolf for the slide, Form of Mist to pass through grates (keep walking into th
 for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
 Maria is the SOTN Ultimate mod's PSP Maria: all her moves from the start, two sub-weapons (Circle
 swaps them), and none of Alucard's gear or levels. Saturn Maria is SOTN Ultimate's Saturn Maria:
-her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan).
+her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan). Ultimate Richter is
+the PS1 Richter, all his moves from the start, in the Saturn's long coat (the same disc).
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
 (Settings › Controls picks which).
@@ -702,19 +705,30 @@ class Launcher:
                 save_settings(self.settings)
 
     def playable(self, character):
-        if character == SATURN_MARIA:
+        if character in (SATURN_MARIA, ULTIMATE_RICHTER):
             return self.saturn_maria_ready()
         return character not in MARIAS or self.maria_ready()
 
     def blob(self):
         """Every made character's blob, for every game: a partner who plays one is drawn from it."""
         import characters
+        saturn = self.saturn_maria_ready()
         parts = [self.maria_blob_path().read_bytes() if self.maria_ready() else None,
-                 self.saturn_maria_blob_path().read_bytes() if self.saturn_maria_ready() else None]
+                 self.saturn_maria_blob_path().read_bytes() if saturn else None,
+                 self.ultimate_richter_blob_path().read_bytes() if saturn and self.ultimate_richter_blob_path().exists() else None]
         return characters.blobs(*parts) if any(parts) else None
 
     def saturn_maria_blob_path(self):
         return paths.characters_dir() / "saturn-maria.blob"
+
+    def ultimate_richter_blob_path(self):
+        return paths.characters_dir() / "ultimate-richter.blob"
+
+    def make_saturn_characters(self, disc, coop):
+        """Saturn Maria and Ultimate Richter, both from the player's Saturn disc (raises DiscError)."""
+        import characters
+        characters.saturn_maria_blob(disc, coop, MARIA_PATCHES, self.saturn_maria_blob_path())
+        characters.ultimate_richter_blob(disc, coop, MARIA_PATCHES, self.ultimate_richter_blob_path())
 
     def saturn_maria_ready(self):
         """Saturn Maria is made (from the player's Saturn disc and co-op disc) for this version's
@@ -728,7 +742,7 @@ class Launcher:
         if disc and coop and Path(disc).exists() and Path(coop).exists():
             import characters
             try:
-                characters.saturn_maria_blob(disc, coop, MARIA_PATCHES, blob)
+                self.make_saturn_characters(disc, coop)
                 return True
             except (characters.DiscError, OSError):
                 log.exception("remaking Saturn Maria")
@@ -745,15 +759,14 @@ class Launcher:
         if not path:
             return
         try:
-            self.ui.wait_for("Adding Saturn Maria", f"From {path.name}\nThis takes a few seconds.",
-                             lambda progress: characters.saturn_maria_blob(path, self.settings["disc"], MARIA_PATCHES,
-                                                                           self.saturn_maria_blob_path()))
+            self.ui.wait_for("Adding Saturn Maria and Ultimate Richter", f"From {path.name}\nThis takes about half a minute.",
+                             lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             self.ui.message("That disc won't work", str(e))
             return
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
-        self.ui.message("Saturn Maria is ready", "Pick her in the lobby, as either player.")
+        self.ui.message("Saturn Maria and Ultimate Richter are ready", "Pick them in the lobby, as either player.")
 
     def add_dxc(self):
         """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
@@ -793,7 +806,7 @@ class Launcher:
                 (f"Randomizer:  optional, {'on' if self.randomizer() else 'off'}",
                  (self.mod_line() + "   (change)") if self.randomizer() else "Co-op on a disc you randomized on sotn.io"),
                 (f"Symphony of the Night (Saturn, Japan):  optional, "
-                 f"{'Saturn Maria added' if self.saturn_maria_ready() else 'adds Saturn Maria'}",
+                 f"{'Saturn Maria and Ultimate Richter added' if self.saturn_maria_ready() else 'adds Saturn Maria, Ultimate Richter'}",
                  (Path(self.settings["saturn_disc"]).name + "   (choose again)") if self.saturn_maria_ready()
                  and self.settings.get("saturn_disc") else "Adds the Saturn's Maria (from SOTN Ultimate). Choose your .cue")],
                 "Only the Symphony of the Night disc is needed to play.")
@@ -1069,6 +1082,8 @@ class Launcher:
                 line = "Spells on the right stick"
             elif char in (3, SATURN_MARIA):
                 line = "Her own controls"
+            elif char == ULTIMATE_RICHTER:
+                line = "His own controls"
             else:
                 line = "L2 high jump · R2 blade dash"
             t = ui.small.render(line, True, INK if shortcuts else DIM)

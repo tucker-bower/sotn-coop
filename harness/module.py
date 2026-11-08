@@ -60,4 +60,8 @@ def characters_blobs(maria):
     if cues and (out / "sat-maria.json").exists() and coop.exists() and (
             not sat.exists() or (out / "sat-maria.bps").stat().st_mtime > sat.stat().st_mtime):
         characters.saturn_maria_blob(cues[0], coop, out, sat)
-    return characters.blobs(maria, sat.read_bytes() if sat.exists() else None)
+    ric = out / "ultimate-richter.blob"
+    if cues and (out / "sat-maria.json").exists() and coop.exists() and (
+            not ric.exists() or (out / "sat-maria.json").stat().st_mtime > ric.stat().st_mtime):
+        characters.ultimate_richter_blob(cues[0], coop, out, ric)
+    return characters.blobs(maria, sat.read_bytes() if sat.exists() else None, ric.read_bytes() if ric.exists() else None)

@@ -178,6 +178,12 @@ def rules_ultimate_maria_plays_as_ultimate(run):
     plays_as_their_mod(run)
 
 
+@session_scenario(starts=("entrance", "entrance"), characters=(5, 5))
+def rules_ultimate_richter_plays_as_ultimate(run):
+    """Ultimate Richter plays as retail Richter (SOTN Ultimate's), whatever the castle's rules."""
+    plays_as_their_mod(run)
+
+
 @session_scenario(starts=("entrance", "entrance"), characters=(4, 4))
 def rules_saturn_maria_plays_as_ultimate(run):
     """Saturn Maria plays as SOTN Ultimate built her, whatever the castle's rules."""

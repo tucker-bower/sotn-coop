@@ -186,6 +186,49 @@ static void CopyOverlay(const CharBlob* b) {
     FlushCache();
 }
 
+// Ultimate Richter's coat (launcher/saturn_richter.py, D184): his blob is retail RIC.BIN's start with
+// the Saturn's coat sheet, ending ({magic, pointer} at the sheet's end) with a block of his
+// recoloured palettes and the coat-sleeved whip arm, which SOTN Ultimate's DRA uploads after his
+// load (cd_mod_files.h ModRicCostumeApply). Ours has no room; so it's here. The pointer is the
+// block's address where the file runs (0x8013C000); `file` is where it is now.
+#define RIC2_HDR_AT (0x170AC - 8)
+#define RIC2_MAGIC 0x32434952 // "RIC2"
+void CharacterRicCoat(const u8* file, bool partner) {
+    const u32* hdr = (const u32*)(file + RIC2_HDR_AT);
+    const u32* p;
+    s32 n, i;
+    u16 id;
+    RECT rect;
+
+    if (hdr[0] != RIC2_MAGIC) {
+        return;
+    }
+    p = (const u32*)(file + (hdr[1] - PLAYER_OVL_ADDR));
+    for (n = *p++; n > 0; n--) {
+        id = *p++;
+        if (!partner) { // the game's copy; a partner's palettes are only in the second bank
+            for (i = 0; i < COLORS_PER_PAL; i++) {
+                g_Clut[1][(id - 0x100) * COLORS_PER_PAL + i] = ((const u16*)p)[i];
+            }
+        }
+        rect.x = (g_ClutIds[id] & 0x3F) << 4;
+        rect.y = (g_ClutIds[id] >> 6) | (partner ? VRAM_BANK : 0);
+        rect.w = COLORS_PER_PAL;
+        rect.h = 1;
+        LoadImage(&rect, (u_long*)p);
+        p += COLORS_PER_PAL / 2;
+    }
+    for (n = *p++; n > 0; n--) {
+        rect.x = ((const u16*)p)[0];
+        rect.y = ((const u16*)p)[1] | (partner ? VRAM_BANK : 0);
+        rect.w = ((const u16*)p)[2];
+        rect.h = ((const u16*)p)[3];
+        p += 2;
+        LoadImage(&rect, (u_long*)p);
+        p += (rect.w * rect.h + 1) / 2;
+    }
+}
+
 // Our Richter's file, as CoopBoot read it into expansion RAM.
 static const FarTrailer* RicTrailer(void) {
     return Trailer((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
@@ -498,6 +541,9 @@ void CharacterFrame(void) {
     if (s_PrevLoadFile == CdFile_RichterPrg && g_LoadFile != CdFile_RichterPrg && g_StageId != STAGE_ST0) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
+            if (s_Loaded == CHAR_ULT_RICHTER) { // after F_GAME2, which his load always follows
+                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, false);
+            }
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
             PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
         }

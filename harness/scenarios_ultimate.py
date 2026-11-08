@@ -333,3 +333,102 @@ def saturn_maria_sounds(run):
                "she plays on (her attacks play her sounds)")
     reload_as(run, mb, CHAR_ALUCARD)
     run.expect((sfx(e, 0x6F9), sfx(e, 0x889)) == retail, "back as Alucard: retail's priorities")
+
+
+
+RIC_SHEET = 0x8013C020  # richter_sprites
+RIC2_HDR = 0x170AC - 8  # in his file: {magic "RIC2", the block's address}
+
+
+def coat_palettes(blob_file):
+    """[(palette id, 16 colours)] of his coat's block (launcher/saturn_richter.py)."""
+    magic, ptr = struct.unpack_from("<II", blob_file, RIC2_HDR)
+    assert magic == 0x32434952
+    o = ptr - RICHTER_OVERLAY
+    n = struct.unpack_from("<I", blob_file, o)[0]
+    o += 4
+    out = []
+    for _ in range(n):  # {palette id: u32, 16 colours}
+        out.append((struct.unpack_from("<I", blob_file, o)[0], list(struct.unpack_from("<16H", blob_file, o + 4))))
+        o += 4 + 32
+    return out
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def ultimate_richter_in_the_castle(run):
+    """Ultimate Richter (SOTN Ultimate's, D184): retail Richter's code with the Saturn's coat, made
+    from the player's discs. After his load, Richter's slot has the coat's sprite sheet, and the
+    game's palettes (RAM copy and VRAM) his coat's colours; he walks and attacks; back as
+    Alucard."""
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    found = blobs()
+    run.expect(5 in found, "his blob is made (the dev Saturn disc: LOCAL.md)", has=sorted(found))
+    at, (size, *_) = found[5]
+    coat = maria_blob()[at:at + size]
+    reload_as(run, mb, 5)
+    run.step(60)
+    run.expect(mb.self_presence().character == 5, "the game reports Ultimate Richter")
+    run.expect(e.read_bytes(RIC_SHEET, 0x314) == coat[0x20:0x20 + 0x314], "Richter's slot has the coat's sheet")
+    pals = coat_palettes(coat)
+    clut = e.addr("g_Clut")
+    got = [list(struct.unpack_from("<16H", e.read_bytes(clut + 0x2000 + (pid - 0x100) * 32, 32))) for pid, _ in pals]
+    vram = [list(e.vram_rect(((pid - 0x100) % 16) * 16, 0xF0 + (pid - 0x100) // 16, 16, 1)[0]) for pid, _ in pals]
+    run.expect(pals and vram == [q for _, q in pals], "VRAM's palettes have his coat's colours", palettes=len(pals),
+               first=[hex(v) for v in vram[0][:4]] if vram else None, want=[hex(v) for v in pals[0][1][:4]] if pals else None)
+    run.expect(pals and got == [q for _, q in pals], "the game's palettes (RAM) have his coat's colours", palettes=len(pals),
+               first=[hex(v) for v in got[0][:4]] if got else None)
+    s0 = e.snapshot()
+    s = run.play(walker("left", attack_every=12), 300)
+    e.screenshot().save(TOOLS["out"] / "ultimate_richter_in_the_castle" / "coat.png")
+    run.expect((s["world_x"] < s0["world_x"] - 50 or s["room"] != s0["room"]) and s["hp"] > 0,
+               "he walks and attacks in the castle", moved=s0["world_x"] - s["world_x"])
+    reload_as(run, mb, CHAR_ALUCARD)
+    run.expect(mb.self_presence().character == CHAR_ALUCARD, "and loads back as Alucard")
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, 5))
+def partner_body_alucard_and_ultimate_richter(run):
+    """Alucard's game, an Ultimate Richter partner: our Richter's partner build in his coat (his
+    blob's sheet and colours, in the second bank)."""
+    from scenarios_m13 import _partner_pair
+    _partner_pair(run, CHAR_ALUCARD, 5)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(5, CHAR_ALUCARD))
+def partner_body_ultimate_richter_and_alucard(run):
+    """Ultimate Richter's game, an Alucard partner."""
+    from scenarios_m13 import _partner_pair
+    _partner_pair(run, 5, CHAR_ALUCARD)
+
+
+def module_static(name):
+    """A static of the co-op module (nm of coop.elf: the map lists only the globals)."""
+    import subprocess
+    from coop_env import REPO
+    out = subprocess.run(["mipsel-linux-gnu-nm", str(REPO / "build/coop/coop.elf")], capture_output=True,
+                         text=True, check=True).stdout
+    return next(int(a, 16) for a, _, n in (line.split() for line in out.splitlines() if len(line.split()) == 3)
+                if n == name)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, 5))
+def partner_coat_ultimate_richter(run):
+    """Ultimate Richter as the partner wears his coat: the partner's sprite table in Alucard's game
+    (partner.c s_Hdr, as swapped out) is his blob's coat table, rebased to where the blob is."""
+    from link.mailbox import CHAR_BLOB_ADDR, OPT_PARTNER_SIM
+    from session_m8 import reload_game
+    from coop_env import TOOLS
+    a, b = run.s.a, run.s.b
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == 5, "B plays Ultimate Richter")
+    run.step(60)
+    a.host("set_player", options=OPT_PARTNER_SIM)
+    for p in ["right"] * 40 + [""] * 40:
+        run.step(1, ("", p))
+    at, _ = blobs()[5]
+    coat = maria_blob()[at:at + 0x20 + 0x314]
+    want = [w - RICHTER_OVERLAY + CHAR_BLOB_ADDR + at for w in struct.unpack_from("<8I", coat, 0x20)]
+    got = list(struct.unpack_from("<8I", a.read_bytes(module_static("s_Hdr") + 0x20, 32)))
+    run.expect(got == want, "A's copy of B draws from his coat's sheet", got=[hex(v) for v in got[:2]],
+               want=[hex(v) for v in want[:2]])
+    a.screenshot().save(TOOLS["out"] / "partner_coat_ultimate_richter" / "a.png")

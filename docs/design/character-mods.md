@@ -66,7 +66,7 @@ Ultimate's Saturn Maria is `src/ric` built again with `MOD_MARIA_SAT` (about 1,1
 ## Options for Richter
 | Option | Verdict |
 |---|---|
-| **A. Ultimate Richter: retail moves in Co-op Richter's slot, with the Saturn coat** | ✅ Builds the same way as Ultimate Maria. It needs the Saturn disc. |
+| **A. Ultimate Richter: retail moves in Co-op Richter's slot, with the Saturn coat** | ✅ Chosen (D184). His blob is RIC.BIN with the coat (`launcher/saturn_richter.py`), copied over the retail load, and the module uploads his palettes and arm. As the partner he runs our Richter's partner build in his coat. |
 | B. ASS Richter Mode | ❌ Not now: binary-only, ASS images only, and it moves `RIC.BIN` on the disc. |
 
 ## Risks
