@@ -513,6 +513,50 @@ def healing_mail(run, ch):
     run.expect(e.read(HP_NOW, "<i") >= half + 3, "walking: 1 HP every 128 frames", hp=e.read(HP_NOW, "<i"), was=half)
 
 
+LIBRARY_CARD, BLOOD_CLOAK, CAPE, LIB = 0xA6, 0x36, 0x80097C10, 0x02  # items; equipment[CAPE_SLOT]; the Library
+HEARTS = HP_NOW + 8  # g_Status.hearts
+
+
+@per_character
+def library_card(run, ch):
+    """Issue 197 (0.16.3, 0.17.0): Richter and Maria couldn't use the Library Card. In a hand, ○
+    takes them to the Library, and the card is used up."""
+    e, mb = run.emu, mailbox(run)
+    e.write(EQUIPMENT, LIBRARY_CARD)
+    reload_as(run, mb, ch)
+    run.step(60)
+    run.step(1, "circle")
+    for _ in range(1200):
+        run.step(1)
+        if e.read("g_StageId") == LIB and mb.self_presence().flags & IN_PLAY:
+            break
+    run.expect(e.read("g_StageId") == LIB, "they're in the Library", stage=e.read("g_StageId"))
+    run.expect(e.read(EQUIPMENT) != LIBRARY_CARD, "the card is used up", hand=e.read(EQUIPMENT))
+
+
+@per_character
+def blood_cloak(run, ch):
+    """Issue 202 (0.16.3): Blood Cloak gave Richter and Maria no hearts when hit (Alucard's
+    HandleDamage does it; their hits don't go through it). A hit gives as many hearts as it took."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    for cloak in (False, True):
+        e.write(CAPE, BLOOD_CLOAK if cloak else 0, "<I")
+        run.step(120)
+        e.write(HEARTS, 0, "<i")
+        hp = e.read(HP_NOW, "<i")
+        e.write("g_Entities", 20, "<h", 0x3E)  # PLAYER.hitPoints, as hit detection leaves them
+        e.write("g_Entities", 1, "<H", 0x44)   # PLAYER.hitParams: a plain hit
+        run.step(4)
+        lost, hearts = hp - e.read(HP_NOW, "<i"), e.read(HEARTS, "<i")
+        run.expect(lost > 0, f"{'with' if cloak else 'without'} the cloak, the hit hurts", lost=lost)
+        if cloak:
+            run.expect(hearts == lost, "with it, hearts for the damage", hearts=hearts, lost=lost)
+        else:
+            run.expect(hearts == 0, "without it, none", hearts=hearts)
+        run.step(120)
+
+
 @per_character
 def poison_water(run, ch):
     """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and

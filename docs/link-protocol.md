@@ -130,7 +130,7 @@ Hosts don't interpret events: they move them between rings.
 | 0x3434 | `rank` | host |
 | 0x3438 | `snapOutSeq`, `snapOutSize`, `snapOut` (0xF000) | game |
 | 0x12440 | `snapInSeq`, `snapInSize`, `snapIn` (0xF000) | host |
-| 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP | launcher |
+| 0x21448 | `control`: bit 0 mute music, bit 1 no boss aggro, bits 8–15 the aggro chance, bits 16–23 the partner's volume, bit 24 PvP, bit 25 hold (an app box is up: the game holds still and reads as paused) | launcher |
 | 0x225B8 | `rulesOff` (`RULE_*`, `OPT_NO_*` bits), then u16 `expPct`, `dealtPct`, `takenPct`, `enemyHpPct`, `enemyHpSoloPct`, pad: the castle's rules, all zero by default | host, every frame |
 | 0x2144C | `character`: the CHAR_* this game's player plays, from its next load (M8) | launcher |
 | 0x21450 | `options`: OPT_* bits, the player's own settings (1 one-button moves, 2 the partner's body; bits 8–23 the spell on each right-stick direction) | launcher |

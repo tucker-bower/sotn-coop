@@ -217,9 +217,13 @@ void ProgressDamageTaken(void) {
         hit = def + (hit - def) * pct / 100;
         hit = hit > def ? hit : def + 1;
     }
-    if (hit != PLAYER.hitPoints) {
-        s_Scaled = PLAYER.hitPoints = hit;
+    // Blood Cloak: hearts for the damage taken. Alucard's HandleDamage gives them (src/dra/5D5BC.c);
+    // Richter's and Maria's hits never go through it (#202).
+    if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) &&
+        g_api.CheckEquipmentItemCount(ITEM_BLOOD_CLOAK, EQUIP_CAPE)) {
+        g_api.AddHearts(hit);
     }
+    s_Scaled = PLAYER.hitPoints = hit;
 }
 
 // MainGame fills g_api from DRA's table before the main loop: wrap the two entries once
