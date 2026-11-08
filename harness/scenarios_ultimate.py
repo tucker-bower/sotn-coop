@@ -129,3 +129,11 @@ def partner_body_ultimate_maria_and_alucard(run):
     """Ultimate Maria's game, an Alucard partner."""
     from scenarios_m13 import _partner_pair
     _partner_pair(run, CHAR_ULT_MARIA, CHAR_ALUCARD)
+
+
+@session_scenario(starts=("no1", "entrance"), characters=(CHAR_ALUCARD, CHAR_ULT_MARIA))
+def boss_doppleganger_alucard_and_ultimate_maria(run):
+    """Alucard walks into the Doppleganger's room, Ultimate Maria is pulled in, both hurt it, it
+    dies once and both worlds record the kill (session_m8.party_boss)."""
+    from session_m8 import party_boss
+    party_boss(run, CHAR_ALUCARD, CHAR_ULT_MARIA)
