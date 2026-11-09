@@ -83,6 +83,7 @@ CONTROL_NO_AGGRO = 2
 CONTROL_AGGRO_SHIFT = 8  # bits 8-15: a boss's chance (of 256) to switch target, 0 = 128
 CONTROL_PARTNER_VOL_SHIFT = 16  # bits 16-23: the partner's sounds, % of their volume (0 = 60; M13)
 CONTROL_PVP = 0x1000000  # the host's PvP setting: the partner's attacks hurt (M15)
+CONTROL_HOLD = 0x2000000  # the app has a box up (F9's report): the game holds still, as paused (#192)
 SNAP_MAX = 0xF000
 CARD_OK = 6  # the save room's card state machine: 6 = saved, 7-11 = card errors
 

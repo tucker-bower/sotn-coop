@@ -297,7 +297,8 @@ static void DecideRole(void) {
 // copy of it from before is out of date. Counted as just arrived, this game is its guest.
 static void TrackMenu(void) {
     static bool paused;
-    bool now = g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70;
+    bool now = g_GameEngineStep == Engine_Menu || g_GameEngineStep == Engine_Map || g_GameEngineStep == Engine_0x70 ||
+               ArriveHeld();
 
     if (paused && !now) {
         s_RoomFrames = 0;
