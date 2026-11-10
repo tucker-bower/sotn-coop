@@ -40,3 +40,4 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M9-android.md` | Android. Done. |
 | `bat-carry.md` | Hanging onto Bat Alucard (#43). Proposed. |
 | `character-mods.md` | Other mods' Richter and Maria next to ours: SOTN Ultimate's, as Ultimate Maria and Richter. |
+| `launcher-overhaul.md` | The launcher's flow and look: the game's own menu, discs and mods, difficulty, one folder, updates (#227). Approved; being built. |
