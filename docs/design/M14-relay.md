@@ -32,7 +32,7 @@ The connector tries everything at once and keeps the first path that works. The 
 - `link/test_connect.py`: the 12 pairings punching can do connect directly; a symmetric router that allows UPnP/NAT-PMP connects directly in the 3 hard pairings. **Done.**
 - `link/test_portmap.py`: simulated UPnP and NAT-PMP routers open a port; a router without them is skipped quickly. **Done.**
 - A pair that can't connect is told what to try (UPnP, forward UDP 47811, another network), and Help ▸ Online troubleshooting says the same. **Done.**
-- The relay code still works when given `COOP_RELAYS` (`link/test_connect.py`), but nothing in a release uses it. **Done.**
+- ~~The relay code still works when given `COOP_RELAYS`.~~ Deleted on 2026-11-10 (D191): `link/relay.py` and the transport's relay mode are in git history only.
 - A real two-home test by Tucker (playtest list).
 
 ## Original acceptance criteria (superseded)

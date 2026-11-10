@@ -45,24 +45,11 @@ log = logging.getLogger(__name__)
 TIMEOUT_S = 300.0  # five minutes: the host reads the code out, the partner types it in (Tucker, 2026-10-22)
 PREDICT_PORTS = 32   # ports punched past a symmetric router's last one (issue 58)
 PREDICT_STEP_MAX = 16  # a bigger step between its two STUN answers: random ports, no prediction
-RELAY_AFTER_S = 6.0  # punching this long without a reply: both go through a relay, if one is set (M14; unused, D123)
 
 
 # What to try when the two games can't reach each other (D123: Slippi's way, no relay).
 FIXES = ("Either of you can fix it: turn on UPnP in your router's settings, or forward UDP port "
          f"{GAME_PORT} to your device, or use another network (not a phone hotspot).")
-
-
-def default_relays():
-    """Relays to fall back on (link/relay.py): COOP_RELAYS="host:port,host:port".
-    UNUSED IN RELEASES (D123): nothing sets COOP_RELAYS, so the relay step never runs. It's kept,
-    tested (link/test_connect.py), as a starting point for anyone who wants to run a relay."""
-    out = []
-    for item in os.environ.get("COOP_RELAYS", "").split(","):
-        host, _, port = item.strip().rpartition(":")
-        if host and port.isdigit():
-            out.append((host, int(port)))
-    return out
 
 
 def room_topic(code):
@@ -178,7 +165,7 @@ class Connector:
     """Run by the host every frame (tick) until the partner is found."""
 
     def __init__(self, transport, room, role, relay, hello, stun_servers=STUN_SERVERS,
-                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, relays=None, portmap=None):
+                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, portmap=None):
         """role: "host" or "join". hello: () -> the HELO payload to punch with. version: {"link":
         wire version, "app": the launcher's}, posted with the candidates, so that two different
         versions are told so at once, instead of waiting for packets that can't be understood."""
@@ -201,10 +188,6 @@ class Connector:
         self._broadcast_at = None
         self._broadcasts = []
         self._servers = list(stun_servers)
-        self.relays = list(default_relays() if relays is None else relays)  # M14: the last step (empty in releases, D123)
-        self.via = None          # the relay both use, once it comes to that
-        self._their_relay = None  # the host's choice, from its message
-        self._punch_t0 = None
         # M14 step 3: ask the router to open the game's port (UPnP, NAT-PMP), in the background;
         # portmap(port) -> (public ip, port) or None (tests: link/natsim's routers)
         self.mapped = None
@@ -234,7 +217,7 @@ class Connector:
     def status(self):
         left = None if self._t0 is None else max(0, int(self.timeout - (self.t.clock() - self._t0)))
         return {"state": self.state, "reason": self.reason, "nat": self.nat, "their_nat": self.their_nat,
-                "via": self.via, "mapped": self.mapped,
+                "mapped": self.mapped,
                 "mine": self.mine, "theirs": self.theirs, "left_s": left,
                 "relay_error": getattr(self.relay, "error", None)}
 
@@ -302,8 +285,6 @@ class Connector:
                        "nat": self.nat, "token": room_token(self.room), "ver": self.version}
                 if self.predict:
                     msg["predict"] = list(self.predict)
-                if self.role == "host" and self.relays:  # the host picks the relay both will use
-                    msg["relay"] = list(self.relays[0])
                 self.relay.publish(self.topic, msg)
                 self._published = now
             other = "join" if self.role == "host" else "host"
@@ -319,8 +300,6 @@ class Connector:
                                    f"and you have {self.version.get('app') or 'another version'}. Both of you need the "
                                    "same version: whoever has the older one, install the newer one, then try again.")
                     return self.state
-                if newest.get("relay"):
-                    self._their_relay = tuple(newest["relay"])
                 cands = [tuple(c) for c in newest.get("cands", []) if len(c) == 2]
                 pred = newest.get("predict")
                 self.their_predict = tuple(pred) if isinstance(pred, list) and len(pred) == 3 else None
@@ -329,17 +308,10 @@ class Connector:
                     log.info("connect %s: partner's addresses %s (router: %s, version %s); punching",
                              self.role, cands, self.their_nat, theirs.get("app"))
                 self.state = "punching"
-        # 3. punching, and after RELAY_AFTER_S without a reply, the relay (M14: only with COOP_RELAYS, D123)
-        if self.state == "punching" and self._punch_t0 is None:
-            self._punch_t0 = now
-        if (self.state == "punching" and self.via is None and now - self._punch_t0 > RELAY_AFTER_S
-                and (self._their_relay or (self.role == "host" and self.relays))):
-            self.via = self._their_relay or self.relays[0]
-            self.t.use_relay(self.via, room_token(self.room))
-            log.info("connect %s: no direct path after %.0f s; through the relay %s", self.role, RELAY_AFTER_S, self.via)
+        # 3. punching
         if self.state == "punching" and now - self._punched >= PUNCH_EVERY_S:
             self._punched = now
-            for c in self.theirs + ([self.via] if self.via else []) + self._predicted():
+            for c in self.theirs + self._predicted():
                 self.t.probe(c, TAG_HELLO, self.hello())
         # 4. the LAN broadcast (needs no relay)
         if self._broadcasts and (self._broadcast_at is None or now - self._broadcast_at >= BROADCAST_EVERY_S):

@@ -36,7 +36,7 @@ CATEGORIES = {
               r"music_mute|rolling_states|mixed_party|pickup_|unpause|pad_quiet|crashwatch|fairy|no_effect|"
               r"hand_over|death_fades",
               ("session_shared", "scenarios_m13")),
-    "network": ("Online play: connecting, relays, lag and loss, versions",
+    "network": ("Online play: connecting, lag and loss, versions",
                 r"online|netplay|link_|stale_link|soak", ("session_online", "session_m9", "spec_test")),
     "rules": ("The castle's rules", r"rules_|_off_by_default", ("session_rules",)),
     "pvp": ("PvP", r"pvp", ("session_m15",)),
