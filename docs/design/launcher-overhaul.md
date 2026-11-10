@@ -113,10 +113,11 @@ Online co-op opens a small pop-up over the menu: **Host** / **Join**. Join asks 
 ### 4. Castle screen
 - **Continue** is first and selected, and names what it loads: "Continue · Tucker, Clock Tower, Lv 31". It's the most recently played castle. With no castles yet it's absent and New castle is selected.
 - **New castle** → name it (or leave empty, as now) → castle settings → character select.
-- **Load castle** → a scrolling list of every castle, most recent first, each with its area, level, last played and "rules changed" when they differ from the defaults. Square / X / right-click on a castle opens its settings. Boss rush and Test castles stay at the bottom of this list.
+- **Load castle** → a scrolling list of every castle, most recent first, each with its area, level, last played and "rules changed" when they differ from the defaults. Square / X / right-click on a castle opens its settings. Test castles stay at the bottom of this list; a boss rush is a new castle's mode (castle settings).
 
 ### 5. Castle settings
-- **Difficulty** is the first row: Easy, Medium, Hard, Nightmare. Left / right changes it, and the sliders it sets move at once:
+- **Mode** is the first row on a new castle: **Story** (the game from its start) or **Boss rush** (all 22 bosses back to back, each with a typical player's progress, timed; `design/boss-rush.md`). It's chosen once: an existing castle shows its mode and can't change it. Boss rush leaves the bottom of the Load castle list (Tucker, 2026-11-10: it belongs in the castle settings); the test castles stay there.
+- **Difficulty** is the next row: Easy, Medium, Hard, Nightmare. Left / right changes it, and the sliders it sets move at once:
 
   | Difficulty | Enemy HP, with a partner | Enemy HP, alone | Damage taken | XP gain |
   |---|---|---|---|---|
@@ -294,7 +295,7 @@ Four PRs: steps 1–3, so the style is agreed on real screens before the rest is
 ## Defaults I chose (reversible)
 
 - Options and Quit are on the main menu beside the four items asked for: a controller needs a way to both.
-- Boss rush and test castles sit at the bottom of Load castle.
+- Test castles sit at the bottom of Load castle.
 - The BIOS moves from the discs list to the menu bar.
 - Three built disc images are kept; the rest are recipes, rebuilt when used.
 - A castle switches to its own disc without asking.
