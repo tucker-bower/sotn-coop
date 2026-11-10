@@ -133,6 +133,7 @@ class Driver:
             drv.subtitle = subtitle
             return orig(heading, subtitle)
         ui.frame = frame
+        ui.seen = lambda name: (drv.screen(name), setattr(drv, "subtitle", ""))  # the screens in the game's style
 
     def _hook_display(self, display):
         orig_present, orig_games = display.present, display.present_games
@@ -151,7 +152,12 @@ class Driver:
             drv.screen("Game")
             orig_games(frames, *a, **kw)
             drv._maybe_shot()
-        display.present, display.present_games = present, present_games
+        orig_pixels = display.present_pixels
+
+        def present_pixels(*a, **kw):
+            orig_pixels(*a, **kw)
+            drv._maybe_shot()
+        display.present, display.present_games, display.present_pixels = present, present_games, present_pixels
 
     def screen(self, heading):
         if heading != self.heading:
@@ -377,7 +383,9 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_RETURN),                                # Choose my disc image (picker: COOP_PICK_FILE)
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
-        ("screen", "Home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op (Solo is first)
+        ("screen", "Home"), ("shot", "home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op (Solo is first)
+        ("screen", "Couch co-op"), ("shot", "castle-menu"), ("key", pg.K_RETURN),  # New castle (no castles yet: no Continue)
+        ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
         ("screen", "Press a button"), ("shot", "lobby-empty"),
         ("pad", 0, A),                                      # player 1 joins (id 0, like the first real controller)
         ("pad", 101, A),                                      # player 2 joins
@@ -395,8 +403,6 @@ def _couch(pg, quit_at_end=True):
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
         ("pad", 101, R), ("pad", 101, R), ("wait", 3), ("shot", "lobby-richter"),  # past Alucard: Co-op Richter
         ("pad", 101, A),                                      # both ready
-        ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
-        ("screen", "Name your castle"), ("pad", 0, A),        # A, empty: named at the game's name entry
         ("until", in_game), ("expect", lambda d: d.inputs <= 16, "home to playing in 16 inputs or fewer (12, plus the detours to Game files and shortcuts, and back past Alucard)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
@@ -441,7 +447,7 @@ def _solo(pg):
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
-        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (the test castles are listed: D136)
+        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle (no castles yet: no Continue)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", in_game), ("expect", lambda d: d.inputs <= 5, "home to playing solo in 5 inputs (4, plus New castle now the test castles ship: D136)"),
@@ -459,9 +465,10 @@ def _solo(pg):
         ("game_frames", 3000), ("shot", "solo-game-later"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("shot", "castle-list"),
-        ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "it lists the castle played (the list is New castle and it)"),
-        ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
+        ("screen", "Solo"), ("shot", "castle-menu"),  # Continue is first now
+        ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "the castle played is the one Continue loads"),
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("screen", "Load castle"), ("shot", "castle-list"),
+        ("key", pg.K_ESCAPE), ("screen", "Solo"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
 
 
@@ -481,7 +488,8 @@ def _test_castles(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
+        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after Continue, New castle)
+        ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
         ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
@@ -511,7 +519,8 @@ def _boss_rush(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # Boss rush: last
+        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (no castles yet: after New castle)
+        ("screen", "Load castle"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # Boss rush: last
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),
         ("until", lambda d: at_first(d) or d.waited > 20000),
@@ -552,7 +561,7 @@ def _startup(pg):
         ("screen", "Welcome"), ("key", pg.K_RETURN),
         ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
+        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle (D136)
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
         ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
@@ -722,9 +731,10 @@ def _online_host(pg, code_file):
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
-            *(([("screen", "Host: which castle?"), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Boss rush (D137)
+            *(([("screen", "Online co-op: host"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle
+                 ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Boss rush: last (D137)
               if RUSH else
-              [("screen", "Host: which castle?"), ("key", pg.K_RETURN),       # New castle (D136)
+              [("screen", "Online co-op: host"), ("key", pg.K_RETURN),       # New castle (D136)
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
             ("call", lambda d: d.launcher.settings.__setitem__("show_ping", True)),  # Settings > Show ping
@@ -854,8 +864,7 @@ def _characters(pg):
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
     steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
-             ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-             ("screen", "Settings"), *[("key", pg.K_DOWN)] * 9, ("key", pg.K_RETURN),
+             ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),  # Discs & mods
              ("screen", "Game files"), ("shot", "game-files-first"),
              ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
     for path, words, name in wrong:
@@ -867,13 +876,13 @@ def _characters(pg):
               ("screen", "Maria is ready"), ("shot", "maria-ready"), ("key", pg.K_RETURN),
               ("screen", "Game files"), ("shot", "game-files-done"),
               ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
-              ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE), ("screen", "Home"),
+              ("key", pg.K_ESCAPE), ("screen", "Home"),
               ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
+              ("screen", "Couch co-op"), ("key", pg.K_RETURN),  # New castle (D136)
+              ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("screen", "Press a button"),
               ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
-              ("screen", "Couch co-op: which castle?"), ("key", pg.K_RETURN),  # New castle (D136)
-              ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("until", lambda d: d.heading == "Game"),
               ("expect", lambda d: d.launcher.characters == [3, 1], "player 1 plays Ultimate Maria, player 2 Co-op Richter"),
               ("game_frames", 600), ("shot", "maria-and-richter"),
@@ -994,8 +1003,7 @@ def _randomizer(pg):
         want = layer.collectibles(Path(r["cue"]).with_name(Path(r["cue"]).stem + " (Track 1).bin").read_bytes())
         return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(n)] == want
 
-    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),
-                ("screen", "Settings"), *[("key", pg.K_DOWN)] * 9, ("key", pg.K_RETURN), ("screen", "Game files")]
+    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Game files")]  # Discs & mods
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         *to_files, ("shot", "game-files"),
@@ -1009,9 +1017,9 @@ def _randomizer(pg):
         ("expect", lambda d: "sotn-coop-ux" in d.subtitle and "casual" in d.subtitle, "it names the seed and preset"),
         ("key", pg.K_RETURN), ("screen", "Randomizer"), ("key", pg.K_ESCAPE), ("screen", "Game files"),
         ("expect", lambda d: d.launcher.randomizer() and "Randomizer" in d.launcher.disc().name, "the games play the randomized disc"),
-        ("key", pg.K_ESCAPE), ("screen", "Settings"), ("key", pg.K_ESCAPE),
+        ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN),  # Solo
-        ("screen", "Solo: which castle?"), ("key", pg.K_RETURN),  # New castle
+        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"), ("game_frames", 600), ("shot", "randomized-game"),

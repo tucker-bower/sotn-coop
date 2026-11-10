@@ -3,6 +3,9 @@
 Everything goes through SDL's GPU renderer, so a maximized or fullscreen window costs nothing
 to fill:
 - menus are drawn on a fixed-size canvas (CANVAS) and scaled to fit the window, letterboxed;
+- the menus in the game's own style (launcher/ui, design/launcher-overhaul.md) are drawn on a
+  small canvas of the game's pixels (PIXELS) and shown at a whole multiple of it, so the game's
+  font and art stay crisp at any window size;
 - each game is drawn at its true 4:3 shape (a PlayStation picture is 4:3 whatever its pixel
   width), never stretched (D76). It's first enlarged by whole pixels, then smoothed only the
   last fraction ("sharp bilinear"), so pixels stay crisp and even at any window size (the
@@ -32,6 +35,7 @@ def _on_a_monitor(pos):
 
 
 CANVAS = (1032, 532)
+PIXELS = (480, 270)    # the menus in the game's own style: drawn in the game's pixels, shown at a whole multiple
 BAR = 26               # the status bar under the games (window pixels)
 GAP = 8
 LAYOUTS = ("auto", "side", "stacked", "p1", "p2", "windows")
@@ -149,6 +153,9 @@ class Display:
         self.renderer = Renderer(self.window, accelerated=-1, vsync=False)
         self.canvas = pygame.Surface(CANVAS, pygame.SRCALPHA)
         self._canvas_tex = None
+        self.pixels = pygame.Surface(PIXELS)
+        self._pixels_tex = None
+        self._pixels_whole = True
         self.games = []
         self.second = None   # (Window, Renderer, GameTexture) for the "windows" layout
         self._bar_tex = None
@@ -228,6 +235,28 @@ class Display:
         self._render()
         self.renderer.present()
 
+    def pixels_rect(self):
+        """Where the pixel canvas goes: the biggest whole multiple that fits, centred. A window
+        smaller than twice the canvas gets it scaled to fit instead (small text beats cut-off text)."""
+        w, h = self.window.size
+        k = min(w // PIXELS[0], h // PIXELS[1])
+        if k < 2:
+            return fit((0, 0, w, h), PIXELS[0] / PIXELS[1])
+        return pygame.Rect((w - PIXELS[0] * k) // 2, (h - PIXELS[1] * k) // 2, PIXELS[0] * k, PIXELS[1] * k)
+
+    def to_pixels(self, pos):
+        """A window position (the mouse) on the pixel canvas, or None outside it."""
+        r = self.pixels_rect()
+        if not r.collidepoint(pos) or r.w == 0:
+            return None
+        return ((pos[0] - r.x) * PIXELS[0] // r.w, (pos[1] - r.y) * PIXELS[1] // r.h)
+
+    def present_pixels(self, edge=(0, 0, 0)):
+        """Shows the pixel canvas (a menu in the game's style). edge: the colour around it."""
+        self._last = ("pixels", edge)
+        self._render()
+        self.renderer.present()
+
     def _render(self):
         r = self.renderer
         kind, arg = self._last
@@ -237,6 +266,17 @@ class Display:
             self._draw_games()
             self._draw_bar(*arg)
             self._draw_corner()
+            return
+        if kind == "pixels":
+            r.draw_color = (*arg, 255)
+            r.clear()
+            rect = self.pixels_rect()
+            whole = rect.w % PIXELS[0] == 0
+            if self._pixels_tex is None or self._pixels_whole != whole:  # smoothed only when it can't be a whole multiple
+                self._pixels_tex = texture(r, PIXELS, not whole, streaming=True)
+                self._pixels_whole = whole
+            self._pixels_tex.update(self.pixels)
+            self._pixels_tex.draw(dstrect=rect)
             return
         r.draw_color = (12, 8, 14, 255)
         r.clear()
@@ -322,4 +362,4 @@ class Display:
             self._render()
             return self.renderer.to_surface()
         except Exception:  # noqa: BLE001
-            return self.canvas.copy()
+            return (self.pixels if self._last[0] == "pixels" else self.canvas).copy()
