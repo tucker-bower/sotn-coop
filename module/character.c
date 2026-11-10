@@ -327,9 +327,9 @@ static void Familiar(void) {
 // Poison water (design/M8b §2): the stage marks it (g_unkGraphicsStruct.D_8009744C), and
 // Alucard's code takes 1 HP every 10 frames unless Holy Symbol is on (src/dra/692E8.c,
 // HandleDamage's kind 6). Richter's and Maria's never looked: the same rule for them, down to 1
-// HP (their own code decides when they die).
+// HP (their own code decides when they die). Part of "Use Alucard's stats", as poison is.
 static void PoisonWater(void) {
-    if (CHAR_COOP(CharacterLoaded()) && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
+    if (CHAR_COOP(CharacterLoaded()) && !RULE_OFF(OPT_NO_ALUCARD_STATS) && g_StageId != STAGE_ST0 && g_GameState == Game_Play &&
         g_GameEngineStep == Engine_Normal && g_unkGraphicsStruct.D_8009744C &&
         !(g_Status.relics[RELIC_HOLY_SYMBOL] & RELIC_FLAG_ACTIVE) && g_Timer % 10 == 0 &&
         g_Status.hp > 1) {
@@ -427,7 +427,7 @@ static void Heal(void) {
     x = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi; // moving: Maria's walk doesn't keep a velocity
     moved = x != s_PrevX;
     s_PrevX = x;
-    if (g_api.CheckEquipmentItemCount(ITEM_HEALING_MAIL, EQUIP_ARMOR) && moved &&
+    if (!RULE_OFF(RULE_NO_GEAR_EFFECTS) && g_api.CheckEquipmentItemCount(ITEM_HEALING_MAIL, EQUIP_ARMOR) && moved &&
         (g_Player.vram_flag & TOUCHING_GROUND) && g_GameEngineStep == Engine_Normal) {
         if (++s_MailTimer >= HEALING_MAIL_FRAMES) {
             s_MailTimer = 0;
