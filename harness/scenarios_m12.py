@@ -496,3 +496,123 @@ def shaft_orb_unseen_richter(run):
         else:
             run.expect(PAL_HIDDEN_FLAGGED in orbs, "without them: the orb is out, unseeable", palettes=sorted(map(hex, orbs)))
             run.expect(kept_out > 900, "...and it isn't drawn for Richter", hidden=kept_out)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def maria_run_into_a_step(run):
+    """Issue 172: in the Marble Gallery's dolls corridor (NO0 room 0), Maria's run (L1: 8 px a frame)
+    into the step at x 422 sank her through the floor, and she fell out of the room (to y 680).
+    Now she stays on the floor (y 424), and her walk and run still go their ways."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_MARIA)
+    mb.command(CMD_ARRIVE, 0, 0, 416, 424)
+    wait(run, lambda: mb.self_presence().stage == 0 and mb.self_presence().flags & IN_PLAY
+         and not mb.self_presence().flags & BUSY, 1200, "she arrives in the dolls corridor")
+    run.step(60)
+    start = e.save_state()
+    for what, pads in (("running", ["right"] * 12 + ["l1"] * 40), ("running twice", ["right"] * 12 + (["l1"] * 2 + [""] * 20) * 3)):
+        e.load_state(start)
+        ys, xs = [], []
+        for pad in pads + [""] * 60:
+            run.step(1, pad)
+            s_ = e.snapshot()
+            xs.append(s_["world_x"])
+            ys.append(s_["world_y"])
+        run.expect(max(ys) <= 430, f"{what} into the step, she stays on the floor", lowest=max(ys))
+        run.expect(min(xs) < 425, f"{what}, she gets to the step", leftmost=min(xs))
+
+
+
+POT_ROAST = 0x43
+LEFT_SHEET_COPY = 0x80704000  # module/offhand.c SHEET(1): the left hand's sheet, kept in the 8MB
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def richter_left_hand_keeps_his_graphics(run):
+    """Issue 195 (and 161): any item in Richter's left hand garbled his whip: DRA loads the left
+    hand's graphics at 0x240,0x180, where his whip's links and effects are. His stay his with food,
+    a shield or a sword there; with the sword, ○ swings it from its own sheet, now in the right hand's
+    area (which he doesn't use)."""
+    import struct
+    from link.mailbox import CHAR_RICHTER
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    reload_as(run, mb, CHAR_RICHTER)
+    run.step(120)
+    his = block(vram(e), 0x240, 0x180, 0x40, 0x80)
+    rich = e.save_state()
+    for item, what in ((POT_ROAST, "a Pot Roast"), (LEATHER_SHIELD, "a shield")):  # as the menu equips them
+        e.load_state(rich)
+        e.write(EQUIPMENT + 4, item)
+        run.step(2, "start")
+        run.step(60)
+        run.step(2, "start")
+        run.step(120)
+        run.expect(block(vram(e), 0x240, 0x180, 0x40, 0x80) == his, f"{what} in his left hand: his graphics are his")
+    for item, what in ((SHORT_SWORD, "a short sword"),):  # as a load equips it
+        e.load_state(start)
+        e.write(EQUIPMENT + 4, item)
+        reload_as(run, mb, CHAR_RICHTER)
+        run.step(120)
+        run.expect(block(vram(e), 0x240, 0x180, 0x40, 0x80) == his, f"{what} in his left hand: his graphics are his")
+    sheet = e.read_bytes(LEFT_SHEET_COPY, 0x40 * 0x80 * 2)
+    run.expect(block(vram(e), 0x240, 0x100, 0x40, 0x80) == sheet, "the sword's sheet is in the right hand's area")
+    drawn = set()
+    run.step(1, "circle")
+    for _ in range(40):
+        run.step(1)
+        raw = e.read_bytes("g_Entities", 0xBC * 64)
+        drawn |= {struct.unpack_from("<H", raw, s * 0xBC + 0x5A)[0] for s in range(4, 64)
+                  if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0] >= 0xF0}
+    run.expect(drawn == {0x64}, "○ swings it, drawn from there (tpage 0x64)", unk5a=sorted(map(hex, drawn)))
+
+
+NP3, NP3_ROOM = 0x07, 120  # the castle entrance, second visit: Bloody Zombies (report 20261107-222730)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def stage_palettes_maria(run):
+    """Issues 206, 164: with Richter or Maria playing, enemies drawn with palettes 0x2D0-0x2FF (the
+    Bloody Zombie: 0x2D6) were invisible or in a weapon's colours: the off-hand weapons borrowed
+    those entries for the whole drawing pass. Now only for the weapons' own: the zombie draws, in
+    the stage's colours for it."""
+    import struct
+    from scenarios_m8 import HP_NOW
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_MARIA)
+    mb.command(CMD_ARRIVE, NP3, NP3_ROOM, 142, 136)
+    wait(run, lambda: mb.self_presence().stage == NP3 and mb.self_presence().flags & IN_PLAY
+         and not mb.self_presence().flags & BUSY, 1200, "she arrives where the zombies are")
+    run.step(90)  # the room fades in
+    found = []
+    for k in range(1200):
+        run.step(1)
+        e.write(HP_NOW, 80, "<i")
+        raw = e.read_bytes("g_Entities", 0xBC * 256)
+        for s in range(64, 256):
+            o = s * 0xBC
+            pal = struct.unpack_from("<H", raw, o + 0x16)[0]
+            x, y = struct.unpack_from("<h", raw, o + 2)[0], struct.unpack_from("<h", raw, o + 6)[0]
+            if (struct.unpack_from("<H", raw, o + 0x26)[0] and struct.unpack_from("<H", raw, o + 0x56)[0] and
+                    0x2D0 <= (pal & 0x3FF) < 0x300 and 24 < x < 232 and 24 < y < 216):
+                found.append((s, x, y, pal))
+        if found:
+            break
+    run.expect(found, "an enemy with a palette in 0x2D0-0x2FF comes on screen", seen=found[:1])
+    if not found:
+        return
+    s, x, y, pal = found[0]
+    box = (x - 32, y - 48, x + 32, y + 32)
+    # its palettes' colours (5 bits a channel), as the stage loaded them: its own and the next few,
+    # which its sprite's parts add (the zombie's body is 0x2D8)
+    v = vram(e)
+    colors = set()
+    for q in range(pal & 0x3FF, (pal & 0x3FF) + 8):
+        clut = e.read("g_ClutIds", "<H", 2 * q)
+        o = 2 * (((clut >> 6) & 0x1FF) * VRAM_W + (clut & 0x3F) * 16)
+        colors |= {(c & 31, (c >> 5) & 31, (c >> 10) & 31) for c in struct.unpack_from("<16H", v, o)[1:] if c & 0x7FFF}
+    run.step(1)
+    shot = e.screenshot().convert("RGB").crop(box)
+    drawn = sum(1 for r, g, b in shot.getdata() if (r >> 3, g >> 3, b >> 3) in colors)
+    run.expect(drawn > 50, f"it's drawn (palette {pal:#x})", pixels=drawn, colors=len(colors))
+

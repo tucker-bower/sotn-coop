@@ -880,3 +880,6 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
   - **Poison water** goes under "Use Alucard's stats", with poison.
   - **Blade Dash, the slide, the slide kick and the high jump** (#190) were outside D166's tuning and kept INT scaling on top: Blade Dash did 4.3 times the whip. Under "Use Alucard's stats" they now do the whip's damage times their own attack over the whip's (32), his game's ratios (Blade Dash 2.5 times). Off, both are his own game's.
 - Left as they are: fixes rather than balance (arena walls, one attack at a time, the Library Card's warp). Maria's guardians and Richter's subweapons keep "INT adds" (D166 didn't tune them; no report yet).
+
+**D190: Maria's run is capped at 6.5 px a frame** (agent-default, 2026-11-09, #172)
+- At its 8 px start her run went through a step's wall and out of the room. The cap touches its first four frames (8, 7.6, 7.3, 6.9 become 6.5) and shortens the dash by about 4 px of ~85. Considered: a sub-stepped collision for her run (her own code's collision, bigger change), or starting at 7 (keeps 1 px of margin, loses about 20 px of dash).

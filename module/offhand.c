@@ -15,8 +15,8 @@
 // Palettes: a weapon's 24 palettes load over 0x110-0x13F, where Richter's and Maria's own are
 // (Alucard has his elsewhere), and those two leave none of theirs empty. So the module puts theirs
 // back each time weapon palettes load, and keeps the weapons' in VRAM's second bank. A weapon's
-// entities use palette numbers of their own (OFFHAND_PALS), which only while RenderEntities runs
-// lead there. The game still adds each frame's palette to the entity's, as in Alucard's hands.
+// entities use palette numbers of their own (OFFHAND_PALS), which lead there only in the weapons'
+// own drawing pass (OffhandRenderEnd); in the game's pass they're the stage's. The game still adds each frame's palette to the entity's, as in Alucard's hands.
 #define COOP_MODULE
 #include <game.h>
 #include <disk.h>
@@ -35,6 +35,7 @@ void func_80118894(Entity* self);
 Entity* CreateEntFactoryFromEntity(Entity* source, u32 factoryParams, s16 arg2);
 void EntityFactory(Entity* self);
 void PlayAnimation(s8* frameProps, AnimationFrame** frames);
+void RenderEntities(void);
 extern PfnEntityUpdate g_DraEntityTbl[]; // DRA's player entities (src/dra/7879C.c)
 extern s8 D_800B0130[];              // Alucard's animation frame properties (src/dra/692E8.c)
 extern AnimationFrame* D_800B01B8[]; // ...and his animations
@@ -149,28 +150,71 @@ static void KeepOwn(void) {
 static void OwlsMoved(void);
 static void OwlsBack(void);
 
+// The weapons' entities draw in a pass of their own, with the palette table's last 48 entries
+// leading to the second bank. In the game's pass those entries are the stage's own: some stages'
+// enemies use them (the Bloody Zombie, 0x2D6), and they came out invisible or in a weapon's
+// colours (issues 206, 164).
+static u8 s_Weapon[STAGE_ENTITY_START]; // slots with a weapon's palette this frame, out of the game's pass
+static u16 s_WeaponFrame[STAGE_ENTITY_START];
+
+static bool OffhandPalette(const Entity* e) {
+    return !(e->palette & PAL_UNK_FLAG) && e->palette >= OFFHAND_PALS && e->palette < OFFHAND_PALS + N_PAL;
+}
+
 void OffhandRenderStart(void) {
-    s32 k;
+    s32 i;
 
     if (CharacterLoaded() == CHAR_ALUCARD) {
         return;
     }
     OwlsMoved();
-    for (k = 0; k < N_PAL; k++) {
-        s_Ids[k] = g_ClutIds[OFFHAND_PALS + k];
-        g_ClutIds[OFFHAND_PALS + k] = CLUT_BANK | ((BANK_PAL_Y + k / 16) << 6) | (k % 16);
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        s_Weapon[i] = g_Entities[i].entityId && g_Entities[i].animCurFrame && OffhandPalette(&g_Entities[i]);
+        if (s_Weapon[i]) {
+            s_WeaponFrame[i] = g_Entities[i].animCurFrame;
+            g_Entities[i].animCurFrame = 0;
+        }
     }
 }
 
 void OffhandRenderEnd(void) {
-    s32 k;
+    static u16 s_All[TOTAL_ENTITY_COUNT];
+    s32 i, k, n = 0;
 
     if (CharacterLoaded() == CHAR_ALUCARD) {
         return;
     }
     OwlsBack();
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        n += s_Weapon[i];
+    }
+    if (!n) {
+        return;
+    }
+    for (i = 0; i < TOTAL_ENTITY_COUNT; i++) {
+        s_All[i] = g_Entities[i].animCurFrame;
+        g_Entities[i].animCurFrame = 0;
+    }
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        if (s_Weapon[i]) {
+            g_Entities[i].animCurFrame = s_WeaponFrame[i];
+        }
+    }
+    for (k = 0; k < N_PAL; k++) {
+        s_Ids[k] = g_ClutIds[OFFHAND_PALS + k];
+        g_ClutIds[OFFHAND_PALS + k] = CLUT_BANK | ((BANK_PAL_Y + k / 16) << 6) | (k % 16);
+    }
+    RenderEntities();
     for (k = 0; k < N_PAL; k++) {
         g_ClutIds[OFFHAND_PALS + k] = s_Ids[k];
+    }
+    for (i = 0; i < TOTAL_ENTITY_COUNT; i++) {
+        g_Entities[i].animCurFrame = s_All[i];
+    }
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        if (s_Weapon[i]) {
+            g_Entities[i].animCurFrame = s_WeaponFrame[i];
+        }
     }
 }
 
@@ -373,6 +417,7 @@ void OffhandPlaceSheet(void) { s_PlaceIn = SHEET_DELAY; }
 static void PlaceSheet(void) {
     RECT r;
     s32 hand;
+    bool maria = CHAR_IS_MARIA(CharacterLoaded());
 
     for (hand = 0; hand < 2 && !(IsWeapon(Category(hand)) && Loaded(hand)); hand++) {
     }
@@ -381,15 +426,53 @@ static void PlaceSheet(void) {
         return;
     }
     r.x = 0x240;
-    r.y = SHEET_Y(1);
+    r.y = SHEET_Y(maria);
     r.w = OWL_W;
     r.h = SHEET_H;
-    DrawSync(0);
-    MoveImage(&r, OWL_X, OWL_Y); // her owl, just put back by her guardians' upload
-    DrawSync(0);
+    if (maria) {
+        DrawSync(0);
+        MoveImage(&r, OWL_X, OWL_Y); // her owl, just put back by her guardians' upload
+        DrawSync(0);
+    }
     r.w = SHEET_W;
     LoadImage(&r, SHEET(hand));
     s_SheetHand = hand;
+}
+
+// --- Richter: his graphics in the left hand's sheet area (issue 195) --------------------------
+// His whip's links and several of his effects draw from 0x240,0x180 (tpage 0x66/0x67, his
+// F_GAME2), where DRA loads the left hand's item: any item there (food, a shield) garbled them.
+// They're kept as his load leaves them and put back after each left-hand load; the ○ hand's sheet
+// goes to the right hand's area (0x240,0x100), which he doesn't use (PlaceSheet).
+#define RIC_LEFT_SAVE 0x80708000 // 16 KB of the 8MB, after the weapon sheets (WEAPON_SHEET_ADDR)
+static bool s_RicKept;
+
+void OffhandRicKeep(void) {
+    RECT r;
+
+    r.x = 0x240;
+    r.y = SHEET_Y(1);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    DrawSync(0);
+    StoreImage(&r, (u_long*)RIC_LEFT_SAVE);
+    DrawSync(0);
+    s_RicKept = true;
+}
+
+void OffhandRicRestore(void) {
+    RECT r;
+
+    if (!s_RicKept) {
+        return;
+    }
+    r.x = 0x240;
+    r.y = SHEET_Y(1);
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    DrawSync(0);
+    LoadImage(&r, (u_long*)RIC_LEFT_SAVE);
+    DrawSync(0);
 }
 
 // While RenderEntities runs, her owls (her attack) are drawn from their copy (OffhandRenderStart).
@@ -510,6 +593,8 @@ void CoopWeaponEntity(Entity* self) {
     }
     if (self->entityId && CHAR_IS_MARIA(CharacterLoaded()) && hand == s_SheetHand) {
         self->unk5A = 0x66; // the left hand's tpage: where her copy of the sheet is
+    } else if (self->entityId && !CHAR_IS_MARIA(CharacterLoaded()) && hand == 1 && s_SheetHand == 1) {
+        self->unk5A = 0x64; // Richter: the right hand's tpage, where the left hand's sheet went
     }
     if (self->entityId && !(self->palette & PAL_UNK_FLAG) && self->palette >= PAL_WEAPONS &&
         self->palette < PAL_WEAPONS + N_PAL) {

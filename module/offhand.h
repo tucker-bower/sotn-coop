@@ -10,6 +10,8 @@ bool OffhandLoading(void); // a weapon is being loaded (the CD is the module's)
 
 void OffhandKeepSheet(s32 hand); // Maria: a hand weapon's sheet just loaded: keep a copy (D106)
 void OffhandPlaceSheet(void);      // ...and put the ○ hand's copy beside her guardians
+void OffhandRicKeep(void);    // Richter: his graphics at 0x240,0x180, as his load leaves them (#195)...
+void OffhandRicRestore(void); // ...back after a left-hand item's load over them
 // A weapon entity's bank (0x10-0x13), palette and hand as its overlay set them (weapons.c)
 bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand);
 
