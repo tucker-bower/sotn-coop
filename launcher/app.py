@@ -976,6 +976,7 @@ class Launcher:
             save_settings(self.settings)
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
+        self.prepare_art()  # with the disc there, the menus can be the game's own
 
     def install_test_castles(self):
         """The test castles, from the debug starts' joint saves (made with them: debugstarts.py)."""
@@ -2024,7 +2025,6 @@ def main():
     try:
         app = Launcher()
         app.wizard()
-        app.prepare_art()
         app.home()
     except SystemExit:
         pass
