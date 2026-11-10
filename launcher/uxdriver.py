@@ -104,7 +104,10 @@ class Driver:
             drv._hook_display(this.display)
             drv._hook_ui(this.ui)
         launcher_cls.__init__ = init
-        launcher_cls.rules_at_start = lambda _self, *_: None  # flows go straight to the game
+        self.real_settings = False  # a flow that goes through a new castle's settings sets this
+        orig_settings = launcher_cls.new_castle_settings
+        # the other flows go straight to the game
+        launcher_cls.new_castle_settings = lambda this, *a: orig_settings(this, *a) if drv.real_settings else "start"
         import gameview
         orig_overlay = gameview.GameView.overlay
 
@@ -418,7 +421,12 @@ def _couch(pg, quit_at_end=True):
         ("expect", lambda d: d.launcher.settings.get("layout") == "side", "the pause menu changes the layout (View, from a controller)"),
         ("call", lambda d: d.launcher.action("layout:auto")),
         ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Castle rules
-        ("screen", "Castle rules"), ("shot", "castle-rules"), ("key", pg.K_RIGHT), ("wait", 3),
+        ("screen", "Castle settings"), ("shot", "castle-settings"),
+        ("expect", lambda d: __import__("rules").difficulty(d.view.rules) == "Medium", "a new castle is on Medium"),
+        ("key", pg.K_RIGHT), ("wait", 3),  # Difficulty: Medium -> Hard
+        ("expect", lambda d: (d.view.rules["enemy_hp_pct"], d.view.rules["taken_pct"], d.view.rules["exp_pct"]) == (300, 150, 50),
+         "Hard, chosen in a game, sets enemy HP, damage taken and XP at once, in the game"),
+        ("key", pg.K_LEFT), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-settings-custom"),  # back to Medium; XP gain is the fourth slider
         ("expect", lambda d: d.view.rules["exp_pct"] == 125 and d.view.playthrough.info["rules"]["exp_pct"] == 125,
          "a slider moved in a game goes to the game and into the castle"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"),
@@ -519,8 +527,12 @@ def _boss_rush(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (no castles yet: after New castle)
-        ("screen", "Load castle"), ("key", pg.K_UP), ("shot", "castle-list"), ("key", pg.K_RETURN),  # Boss rush: last
+        ("call", lambda d: setattr(d, "real_settings", True)),
+        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
+        ("screen", "Name your castle"), ("pad", 0, A),
+        ("screen", "Castle settings"), ("shot", "new-castle-settings"),  # Start, Mode, Difficulty...
+        ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("wait", 3), ("shot", "mode-boss-rush"),  # Mode: Story -> Boss rush
+        ("key", pg.K_UP), ("key", pg.K_RETURN),  # Start
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),
         ("until", lambda d: at_first(d) or d.waited > 20000),
@@ -679,11 +691,11 @@ def _menus(pg):
     def saved_rules(d):
         from archive import Castle
         return Castle(d.castle.dir).info.get("rules") or {}
-    steps += [("menu", "rules"), ("screen", "Castle rules"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
+    steps += [("menu", "rules"), ("screen", "Castle settings"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
               ("call", a_castle), ("menu", "rules"), ("screen", "which castle"), ("key", pg.K_RETURN),
-              ("screen", "Castle rules"), ("shot", "rules"), ("key", pg.K_RIGHT), ("wait", 3),
+              ("screen", "Castle settings"), ("shot", "rules"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3),  # XP gain
               ("expect", lambda d: saved_rules(d).get("exp_pct") == 125, "Options > Open settings: a slider saves to the castle"),
-              *[("key", pg.K_DOWN)] * 6, ("key", pg.K_RETURN), ("wait", 3),
+              *[("key", pg.K_DOWN)] * 2, ("key", pg.K_RETURN), ("wait", 3),  # past Boss aggro, to One shared level
               ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
               ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
     steps += [("menu", "quit")]
@@ -731,8 +743,9 @@ def _online_host(pg, code_file):
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
-            *(([("screen", "Online co-op: host"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle
-                 ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Boss rush: last (D137)
+            *(([("call", lambda d: setattr(d, "real_settings", True)),
+                 ("screen", "Online co-op: host"), ("key", pg.K_RETURN), ("screen", "Name your castle"), ("key", pg.K_RETURN),
+                 ("screen", "Castle settings"), ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Mode: Boss rush (D137), Start
               if RUSH else
               [("screen", "Online co-op: host"), ("key", pg.K_RETURN),       # New castle (D136)
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),

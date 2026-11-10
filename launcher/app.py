@@ -105,8 +105,9 @@ in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, 
 Whoever joins you online keeps a copy of your castle, to play solo or host later.
 Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
 their normal HP.
-Rules: each castle has its own, set in Options › Open settings (Esc: Castle rules, on a controller or
-phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
+Castle settings: each castle has its own, set when you start it and in Options › Open settings (Esc: Castle
+rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
+everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
 
 Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
 need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
@@ -1305,14 +1306,11 @@ class Launcher:
                 continue
             sel = 0
             while True:
-                extras = ([("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []) + \
-                         ([("rush", "Boss rush", "All 22 bosses back to back, each with a typical player's progress, timed")] if rush else [])
+                extras = [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []
                 castles = Castle.all()
                 got = castle_list(self.menus, "Load castle", castles, extras, sel)
                 if got is None:
                     break
-                if got == "rush":
-                    return self.new_boss_rush(), False
                 if got == "tests":
                     picked = self.pick_test_castle()
                     if picked:
@@ -1345,14 +1343,14 @@ class Launcher:
         import bossrush
         return (bossrush.BUNDLE / "index.json").exists()
 
-    def new_boss_rush(self):
+    def new_boss_rush(self, name=None):
         """A boss rush (docs/design/boss-rush.md): a castle whose save is the first boss's test
         castle; the run (which boss, the time) is kept in it, so Continue goes on from there."""
         import bossrush
         from archive import Castle
         from link.jointsave import write_session
         save, start = bossrush.first_save()
-        c = Castle.new(name="Boss rush")
+        c = Castle.new(name=name or "Boss rush")
         write_session(c.joint_save, [save])
         c.info.update(start=list(start), rush={"index": 0, "frames": 0, "splits": []}, where="Boss rush")
         c.save_info()
@@ -1362,11 +1360,30 @@ class Launcher:
         """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
         SOTN's own name entry, at its first save (design/M11). Returns (castle, True), or None."""
         from archive import Castle
-        name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
-                             footer="Type a name  ·  Enter: start  ·  Esc: back", limit=24)
-        if name is None:
-            return None
-        return Castle.new(name=name or None), True
+        import rules as castle_rules
+        while True:
+            name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
+                                 footer="Type a name  ·  Enter: next  ·  Esc: back", limit=24)
+            if name is None:
+                return None
+            # its settings, before it exists (design/launcher-overhaul.md): the mode is chosen once
+            rules = castle_rules.for_castle(None, self.settings)
+            mode = {"mode": "story"} if self.boss_rush_available() else None
+            if self.new_castle_settings(name or "New castle", rules, mode) is None:
+                continue  # back: to its name
+            if mode and mode["mode"] == "rush":
+                castle, fresh = self.new_boss_rush(name or None), False
+            else:
+                castle, fresh = Castle.new(name=name or None), True
+            castle.set_rules(castle_rules.clean(rules))
+            return castle, fresh
+
+    def new_castle_settings(self, name, rules, mode):
+        """A new castle's settings screen: "start", or None (back). rules and mode are changed in place."""
+        if not self.menus:  # the older screen has no back from here, and no modes
+            self.rules_menu(name, rules, rules.update, start=True)
+            return "start"
+        return self.rules_menu(name, rules, rules.update, start=True, mode=mode)
 
     def couch(self, act="couch"):
         from archive import Castle
@@ -1391,7 +1408,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             with self.online_session(None, castle, rank=0) as s:
                 s.solo = True
@@ -1400,12 +1416,6 @@ class Launcher:
                 self.run_view(s, castle)
         finally:
             castle.tidy()
-
-    def rules_at_start(self, castle, fresh):
-        """A new castle starts on its rules (D161): the castle's, so they stay with it (D162)."""
-        import rules as castle_rules
-        if fresh:
-            self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules, start=True)
 
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
@@ -1524,7 +1534,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             with self.session((None, None), castle) as s:
                 s.joint.on_write = castle.saved
@@ -1659,7 +1668,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             self._host_online(castle, fresh)
         finally:
@@ -1836,7 +1844,7 @@ class Launcher:
         while True:
             castles = Castle.all()
             if not castles:
-                self.ui.message("Castle rules", "Each castle has its own rules: start one first.")
+                self.ui.message("Castle settings", "Each castle has its own settings: start one first.")
                 return
             k = self.ui.menu("Castle rules: which castle?", [(c.name, c.summary()) for c in castles],
                              "Each castle has its own rules. Online, the host's go for both players.")
@@ -1845,10 +1853,14 @@ class Launcher:
             castle = castles[k]
             self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules)
 
-    def rules_menu(self, name, rules, apply, read_only=False, start=False):
+    def rules_menu(self, name, rules, apply, read_only=False, start=False, mode=None):
         """The rules, one per row: sliders move with left / right (or a click on the bar), toggles
         with OK. Each change goes through apply(rules) at once."""
         import rules as castle_rules
+        if self.menus:  # in the game's style (ui/screens/castle_settings.py)
+            from ui.screens.castle_settings import castle_settings
+            shown = castle_rules.clean(rules)
+            return castle_settings(self.menus, name, shown, apply, read_only, start, mode)
         ui, sel = self.ui, 0
         rules = castle_rules.clean(rules)
         sliders = {s[0]: s for s in castle_rules.SLIDERS}

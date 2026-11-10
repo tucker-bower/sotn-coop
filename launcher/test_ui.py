@@ -173,6 +173,44 @@ def main():
         m, ui, _ = menus([[], [("mouse", 100, 34 + 8 + 16 * 2 + 4, True)]])
         check(castle_list(m, "Load castle", castles, extras) == ("castle", castles[2]), "the mouse: a click on the third row plays it")
 
+        # a castle's settings
+        import rules as castle_rules
+        from ui.screens.castle_settings import castle_settings
+
+        def settings(frames, **kw):
+            m, ui, _ = menus(frames)
+            r, applied = castle_rules.clean({}), []
+            got = castle_settings(m, "Tucker", r, applied.append, **kw)
+            return got, r, applied, ui
+
+        got, r, applied, ui = settings([["right"], ["back"]])
+        check(got is None and castle_rules.difficulty(r) == "Hard" and (r["enemy_hp_pct"], r["taken_pct"], r["exp_pct"]) == (300, 150, 50)
+              and applied[-1] == r and ui.names == ["Castle settings"], "Difficulty is the first row: right is Hard, and its sliders move at once")
+        got, r, _, _ = settings([["left"], ["left"], ["left"], ["back"]])
+        check(castle_rules.difficulty(r) == "Easy", "left stops at Easy")
+        got, r, _, _ = settings([["down"], ["right"], ["back"]])
+        check(r["enemy_hp_pct"] == 225 and castle_rules.difficulty(r) == "Custom",
+              "down skips the group's heading to the first slider; moving it by hand makes the difficulty Custom")
+        got, r, _, _ = settings([["down"]] * 6 + [["ok"], ["back"]])
+        check(r["shared_level"] is False, "OK on a rule switches it (past the Sharing heading)")
+        got, r, applied, _ = settings([["down"]] * 6 + [["ok"], ["up"], ["up"], ["ok"], ["back"]])  # up from the first row: the last, the defaults
+        check(got is None and r["shared_level"] is False, "up moves back through the list")
+        got, r, applied, _ = settings([["right"], ["up"], ["ok"], ["back"]])
+        check(r == castle_rules.clean({}) and applied[-1] == r, "Back to the defaults (the last row) restores every setting")
+        got, r, applied, _ = settings([["right"], ["down"], ["right"], ["ok"], ["back"]], read_only=True)
+        check(r == castle_rules.clean({}) and applied == [], "the host's settings, shown to a joiner: nothing changes")
+        mode = {"mode": "story"}
+        got, r, _, _ = settings([["ok"]], start=True, mode=mode)
+        check(got == "start" and mode["mode"] == "story", "a new castle: Start is first, and it's a Story castle unless changed")
+        got, r, _, _ = settings([["down"], ["right"], ["up"], ["ok"]], start=True, mode=mode)
+        check(got == "start" and mode["mode"] == "rush", "Mode is the next row: left or right makes it a Boss rush")
+        got, r, _, _ = settings([["down"], ["down"], ["right"], ["back"]], start=True, mode={"mode": "story"})
+        check(got is None and castle_rules.difficulty(r) == "Hard", "then Difficulty; back returns to the castle's name")
+        got, r, _, _ = settings([["down"], ["right"], ["back"]], start=True)
+        check(castle_rules.difficulty(r) == "Hard", "with no boss rush to offer, there's no Mode row")
+        got, r, _, _ = settings([["down"]] * 7 + [[], [("mouse", 420, 34 + 6 + 16 * 6 + 4, True)], ["back"]])  # scrolled by two
+        check(r["shared_level"] is False and r["shared_gold"] is True, "the mouse: a click on a rule's row switches it")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 

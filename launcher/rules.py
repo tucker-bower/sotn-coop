@@ -16,7 +16,6 @@ from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS, OPT_NO_GROWTH,
 # (id, label, hint, default, min, max, step): a slider, in %
 SLIDERS = (
     ("exp_pct", "XP gain", "XP from each kill. With a shared level, it's then split between you", 100, 25, 400, 25),
-    ("dealt_pct", "Damage dealt", "The damage your attacks do to enemies", 100, 25, 400, 25),
     ("taken_pct", "Damage taken", "The damage enemies do to you, after your defense", 100, 25, 400, 25),
     ("enemy_hp_pct", "Enemy HP, with a partner", "All enemies' and bosses' HP when a partner is connected: 100% is the game's own", 200, 50, 400, 25),
     ("enemy_hp_solo_pct", "Enemy HP, alone", "All enemies' and bosses' HP with no partner: 100% is the game's own", 100, 50, 400, 25),
@@ -58,6 +57,43 @@ REMAP_BUTTONS = ("cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2"
 BUTTON_NAMES = {"cross": "Cross", "circle": "Circle", "square": "Square", "triangle": "Triangle",
                 "l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2"}
 DEFAULTS = {**{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
+# Difficulty (design/launcher-overhaul.md, Tucker 2026-11-10): what each sets, at once. It isn't
+# stored: a castle's difficulty is whichever of these its four values match, else "Custom". Enemies
+# alone have half the HP they have with a partner, so Medium alone is the original game. There is
+# no "damage dealt": more enemy HP does the same without the player's numbers going down.
+DIFFICULTIES = (
+    ("Easy", {"enemy_hp_pct": 100, "enemy_hp_solo_pct": 50, "taken_pct": 50, "exp_pct": 150}),
+    ("Medium", {"enemy_hp_pct": 200, "enemy_hp_solo_pct": 100, "taken_pct": 100, "exp_pct": 100}),
+    ("Hard", {"enemy_hp_pct": 300, "enemy_hp_solo_pct": 150, "taken_pct": 150, "exp_pct": 50}),
+    ("Nightmare", {"enemy_hp_pct": 400, "enemy_hp_solo_pct": 200, "taken_pct": 200, "exp_pct": 50}),
+)
+CUSTOM = "Custom"
+# The settings screen's groups, in order: (heading, the rules under it)
+GROUPS = (
+    ("Balance", ("enemy_hp_pct", "enemy_hp_solo_pct", "taken_pct", "exp_pct", "aggro")),
+    ("Sharing", ("shared_level", "shared_gold")),
+    ("Falling and reviving", ("revive", "faerie_revive")),
+    ("Staying together", ("boss_pull", "scene_pull", "map_teleport", "near_target")),
+    ("Richter and Maria", ("growth", "alucard_stats", "relic_moves", "air_jumps", "offhand", "familiars", "gear_effects")),
+    ("Extras", ("bat_carry", "pvp", "remap")),
+)
+
+
+def difficulty(rules):
+    """ "Easy", "Medium", "Hard", "Nightmare", or "Custom" when the four values match none of them."""
+    return next((name for name, sets in DIFFICULTIES if all(rules.get(k) == v for k, v in sets.items())), CUSTOM)
+
+
+def set_difficulty(rules, name):
+    """Sets what that difficulty sets (an unknown name: nothing)."""
+    rules.update(dict(DIFFICULTIES).get(name, {}))
+
+
+def next_difficulty(rules, step):
+    """The difficulty one step up or down from the castle's; from Custom, Medium."""
+    names = [n for n, _ in DIFFICULTIES]
+    now = difficulty(rules)
+    return "Medium" if now == CUSTOM else names[max(0, min(len(names) - 1, names.index(now) + step))]
 
 
 def clean(stored):
@@ -110,7 +146,8 @@ def encode(rules):
 
     def pct(key):
         return 0 if rules[key] == DEFAULTS[key] else rules[key]
-    return (off, pct("exp_pct"), pct("dealt_pct"), pct("taken_pct"), pct("enemy_hp_pct"), pct("enemy_hp_solo_pct"))
+    # (the game also takes a "damage dealt" percentage: no rule sets it any more, so it's the default)
+    return (off, pct("exp_pct"), 0, pct("taken_pct"), pct("enemy_hp_pct"), pct("enemy_hp_solo_pct"))
 
 
 def remapped(pad, rules):
