@@ -18,7 +18,6 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates. Keeps only the tested presets' discs (540 MB each); `--test` checks every preset one disc at a time. |
 | `module.py` | Reads the co-op module's symbols and state from RAM. |
 | `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |
-| `power_curve.py` | **Vestigial.** One-off balance measurement across the boss starts; nothing runs it. |
 | `redux_check.lua` | Checks the module in PCSX-Redux, run by `scripts/redux_check.sh`. |
 | `replay.py` | **Manual.** Replays a player's F9 report. |
 | `requirements.txt` | Python packages for the harness. |
@@ -52,7 +51,6 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_m8.py` | Mixed-character teams. |
 | `session_mods.py` | Co-op on the randomizer: a smoke test and a randomized find per built preset. |
 | `session_m9.py` | Android's way of running a game, online with a PC. |
-| `session_net.py` | **Vestigial.** Measures a session over simulated bad networks; left out of `run.py`. |
 | `session_online.py` | Online PC co-op: connect codes and version checks. |
 | `session_progress.py` | Shared progression. |
 | `session_saverooms.py` | Joint saves in the game's save rooms. |
@@ -60,7 +58,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_shared.py` | Shared rooms and enemies. |
 | `session_travel.py` | Teleport, respawn, pause rules and joint saves. |
 | `spec_test.py` | A partner written from `docs/link-protocol.md` alone, against a real game. |
-| `vram_survey.py` | **Vestigial.** One-off survey of which VRAM the stages use. |
+| `vram_survey.py` | Reads VRAM out of savestates: which blocks the stages use, and whether a window is free. The Maria graphics tests use it. |
 
 ## Running things
 Headless, frame-stepped SOTN on the SwanStation libretro core, at about 25× real time. Two linked games (`session.py`) run as two processes at about 30× each. Setup is in `../DEVELOPER_GUIDE.md`.

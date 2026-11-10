@@ -51,6 +51,68 @@ __asm__(".section .coop-table, \"ax\"\n"
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};
 
+// The mailbox's layout is a contract with the host, which reads and writes it by offset
+// (link/mailbox.py), and with every savestate and F9 report. A field added or resized in link.h
+// stops the build here until its offsets, mailbox.py and COOP_LINK_VERSION say the same
+// (link/test_layout.py checks mailbox.py against these comments).
+#define AT(field, offset) _Static_assert(__builtin_offsetof(CoopLink, field) == (offset), #field " moved")
+AT(magic, 0x00);
+AT(version, 0x04);
+AT(heartbeat, 0x08);
+AT(self, 0x0C);
+AT(partner, 0x38);
+AT(partnerAge, 0x64);
+AT(out, 0x68);
+AT(in, 0x870);
+AT(dropped, 0x1078);
+AT(cmd, 0x107C);
+AT(cmdDone, 0x108C);
+AT(saveSeq, 0x1090);
+AT(saveOut, 0x1094);
+AT(saveIn, 0x2260);
+AT(saveBlock, 0x342C);
+AT(cardResult, 0x3430);
+AT(rank, 0x3434);
+AT(snapOutSeq, 0x3438);
+AT(snapOutSize, 0x343C);
+AT(snapOut, 0x3440);
+AT(snapInSeq, 0x12440);
+AT(snapInSize, 0x12444);
+AT(snapIn, 0x12448);
+AT(control, 0x21448);
+AT(character, 0x2144C);
+AT(options, 0x21450);
+AT(padExtra, 0x21454);
+AT(selfSpriteCount, 0x21458);
+AT(selfSprites, 0x2145C);
+AT(partnerSpriteCount, 0x2163C);
+AT(partnerSprites, 0x21640);
+AT(selfPrimCount, 0x21820);
+AT(selfPrims, 0x21824);
+AT(partnerPrimCount, 0x21E24);
+AT(partnerPrims, 0x21E28);
+AT(selfPad, 0x22428);
+AT(partnerPad, 0x2242C);
+AT(selfHitCount, 0x22430);
+AT(selfHits, 0x22434);
+AT(partnerHitCount, 0x224F4);
+AT(partnerHits, 0x224F8);
+AT(rulesOff, 0x225B8);
+AT(expPct, 0x225BC);
+AT(dealtPct, 0x225BE);
+AT(takenPct, 0x225C0);
+AT(enemyHpPct, 0x225C2);
+AT(enemyHpSoloPct, 0x225C4);
+AT(rulesPad, 0x225C6);
+#undef AT
+_Static_assert(sizeof(CoopLink) == 0x225C8, "CoopLink changed size");
+_Static_assert(sizeof(CoopPresence) == 0x2C && sizeof(CoopEvent) == 8 && sizeof(CoopRing) == 0x808 &&
+                   sizeof(CoopCommand) == 0x10 && sizeof(CoopSprite) == 0x14 && sizeof(CoopHit) == 0xC,
+               "a mailbox record changed size");
+_Static_assert(sizeof(CoopWeapon) == 0x7320 && sizeof(CoopFamiliar) == 0x10420 && sizeof(CoopStatus) == 0x84 &&
+                   sizeof(CharBlob) == 0x20,
+               "a blob the host writes changed size");
+
 static void CapturePresence(CoopPresence* p) {
     Entity* pl = &PLAYER;
     u8 plDrawFlip;

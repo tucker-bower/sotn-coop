@@ -30,7 +30,6 @@ import os
 import platform
 import re
 import ssl
-import sys
 import time
 import urllib.error
 import urllib.request

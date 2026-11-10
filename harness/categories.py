@@ -36,7 +36,7 @@ CATEGORIES = {
               r"music_mute|rolling_states|mixed_party|pickup_|unpause|pad_quiet|crashwatch|fairy|no_effect|"
               r"hand_over|death_fades",
               ("session_shared", "scenarios_m13")),
-    "network": ("Online play: connecting, relays, lag and loss, versions",
+    "network": ("Online play: connecting, lag and loss, versions",
                 r"online|netplay|link_|stale_link|soak", ("session_online", "session_m9", "spec_test")),
     "rules": ("The castle's rules", r"rules_|_off_by_default", ("session_rules",)),
     "pvp": ("PvP", r"pvp", ("session_m15",)),
@@ -77,7 +77,8 @@ PATHS = {
     "module/shared.c": ("rooms", "bosses"),
     "module/pvp.c": ("pvp",),
     "module/message.c": ("launcher",),
-    "module/": ("rooms", "progression", "traversal"),  # coop.c, boot.c, link.h and the rest: the core
+    "module/link.h": ("rooms", "progression", "traversal", "network"),  # the mailbox: link_layout checks the host's copy
+    "module/": ("rooms", "progression", "traversal"),  # coop.c, boot.c and the rest: the core
     "patches/sotn-decomp": ("rooms", "progression", "traversal", "richter", "maria"),
     "patches/swanstation": ("network", "launcher"),
     "link/": ("network",),
@@ -133,6 +134,7 @@ EVERYDAY = {
     "edges_in_and_out_among_enemies_online",
     "online_connect_codes", "online_version_mismatch", "online_partner_leaves", "online_mtu_and_loss",  # +
     "online_in_process", "online_randomizer_seed_mismatch", "link_connect", "link_portmap",  # +
+    "link_malformed", "link_layout",  # a packet that stopped the host's frame (2026-11-10); the mailbox's two copies
     # rules, pvp
     "rules_no_air_jumps", "rules_no_growth", "rules_no_offhand", "rules_damage_taken_richter", "pvp_familiar",
     "rules_reach_the_game", "rules_host_tells_joiner", "rules_richter_defense", "rules_damage_taken",  # +
@@ -142,6 +144,7 @@ EVERYDAY = {
     "patcher_round_trip",
     "launcher_android_disc", "launcher_audio", "launcher_castles", "launcher_crash_window",  # +
     "launcher_report", "launcher_rules", "launcher_settings", "launcher_ship_lists", "ui_menus",  # +
+    "launcher_link_errors",  # + the link failing never stops the game (D191)
     "patcher_layer", "rando_start_room_lycanthrope_spr26te",  # +
 }
 

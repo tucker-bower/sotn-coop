@@ -1,6 +1,6 @@
 """Messages between the two hosts: UDP datagrams, on localhost or across the internet.
 
-Wire protocol version 9 (docs/link-protocol.md). Every datagram carries the sender's frame, so
+The wire protocol (docs/link-protocol.md, WIRE_VERSION below). Every datagram carries the sender's frame, so
 the receiver can play the partner's state back at an even pace (link/playout.py).
 Presence is state, not a stream of events, so a lost or late datagram only costs freshness. It
 also carries the snapshot ack and the timestamps the round-trip time is measured with, so no
@@ -17,9 +17,8 @@ import struct
 import time
 import zlib
 import collections
+import os
 from collections import OrderedDict
-
-from . import relay  # M14: packets through a relay are sealed (link/relay.py)
 
 WIRE_VERSION = 13
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
@@ -45,6 +44,9 @@ _CTRL_HDR = struct.Struct("<IBBH")
 MAX_SNAP_CHUNK = 1150  # keeps total UDP payload <= 1176 bytes (well below a 1200-byte path MTU)
 MAX_CTRL_CHUNK = 1000
 SNAP_HISTORY = 64      # snapshots kept as delta bases, both ends (about a second)
+MAX_SNAP_RAW = 0xF000  # a snapshot unpacked, at most: link.h's SNAP_MAX
+MAX_CTRL_RAW = 1 << 20  # a control message unpacked, at most (a familiar's copy is 67 KB, a save 5 KB)
+MAX_EARLY = 4096       # records or chunks kept from ahead of a gap, at most: past it they're resent
 FRAME_S = 1 / 60
 
 
@@ -55,6 +57,17 @@ def _xor(data, base):
     n = len(data)
     b = base[:n].ljust(n, b"\0")
     return (int.from_bytes(data, "little") ^ int.from_bytes(b, "little")).to_bytes(n, "little")
+
+
+def inflate(data, limit):
+    """zlib's decompress, for bytes from the network: None when they aren't zlib's, or when they'd
+    unpack to more than `limit` bytes (a few hundred bytes can ask for gigabytes)."""
+    d = zlib.decompressobj()
+    try:
+        out = d.decompress(data, limit + 1)
+    except zlib.error:
+        return None
+    return out if len(out) <= limit and d.eof else None
 
 
 class RttEstimator:
@@ -92,8 +105,6 @@ class UdpTransport:
         self.host = host
         self.peer = None
         self.peer_confirmed = False  # a valid HELO came from self.peer (link/host.py)
-        self.relay = None  # (ip, port) of the relay the partner is reached through (M14), or None
-        self.relay_room = self.relay_token = None
         if peer_port is not None:
             self.connect(peer_port)
         self.sock = sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -153,13 +164,6 @@ class UdpTransport:
         self.loss_drops = 0
         self._rng = random.Random(1)
 
-    def use_relay(self, addr, token):
-        """M14: from now on the partner is reached through this relay (link/relay.py), with the
-        room's token for the relay's room id and the packets' key."""
-        self.relay = (str(addr[0]), int(addr[1]))
-        self.relay_token = token
-        self.relay_room = relay.room_id(token)
-
     def accept_peer(self, addr):
         """A valid HELO came from addr: that's the partner (or the partner's new address, when
         its router changed the mapping)."""
@@ -176,7 +180,6 @@ class UdpTransport:
 
     def stun_request(self, server):
         """Asks a STUN server (ip, port) for our public address, from this very socket."""
-        import os
         from .rendezvous import MAGIC_COOKIE
         tx = os.urandom(12)
         self._stun_tx[tx] = tuple(server)
@@ -239,9 +242,12 @@ class UdpTransport:
             "snap_undecodable": self.snap_undecodable,
         }
 
-    def snapshot_stats(self):
-        """The last snapshots sent: (frames back to the delta base, or 0 for none; raw; sent)."""
-        return list(self.snap_stats)
+    def reset_partner(self):
+        """The partner's host started again (link/host.py): what was learnt from the old one goes.
+        Snapshot ids, delta bases, its clock and its presences' frames all start over."""
+        self._snap_done, self._snap_parts, self._got_snaps = 0, {}, OrderedDict()
+        self._snap_acked, self._sent_snaps = 0, OrderedDict()
+        self._pres_frames, self._heard_ms, self._heard_at = [], 0, None
 
     def quality(self):
         """The connection as the player feels it: round trip (ms) and loss (%)."""
@@ -273,8 +279,6 @@ class UdpTransport:
         self.packets_sent += 1
         if self.sim:
             pkt = self.sim.stamp(pkt)
-        if self.relay is not None and self.peer == self.relay:  # through the relay: sealed (link/relay.py)
-            pkt = relay.MAGIC + self.relay_room + relay.seal(self.relay_token, pkt)
         sock = self.sock6 if ":" in str(self.peer[0]) else self.sock
         if sock is None:  # an IPv6 address, and no IPv6 here
             return
@@ -312,12 +316,6 @@ class UdpTransport:
         Snapshot chunks come out as one TAG_SNAP once complete and decoded."""
         out = []
         for data, addr in self._datagrams():
-            if self.relay is not None and (str(addr[0]), int(addr[1])) == self.relay:
-                if data[:len(relay.MAGIC)] != relay.MAGIC or data[len(relay.MAGIC):relay.HEADER] != self.relay_room:
-                    continue
-                data = relay.open_(self.relay_token, data[relay.HEADER:])
-                if data is None:  # not sealed with this room's key: not the partner's
-                    continue
             if self._stun_tx and len(data) >= 20 and data[:2] == b"\x01\x01":  # a STUN answer
                 self._stun_reply(data)
                 continue
@@ -335,6 +333,8 @@ class UdpTransport:
                 if snap is not None:
                     out.append((TAG_SNAP, seq, snap[0], snap[1], addr))
             elif tag == TAG_PRESENCE:
+                if len(body) < PRESENCE_SIZE:  # cut short: not a presence
+                    continue
                 pad = b"\0\0"
                 if len(body) >= PRESENCE_SIZE + _PRES_TAIL.size:
                     self._presence_tail(frame, body[PRESENCE_SIZE:PRESENCE_SIZE + _PRES_TAIL.size])
@@ -387,17 +387,15 @@ class UdpTransport:
         comp = b"".join(bucket["parts"][i] for i in range(bucket["cnt"]))
         for old in [k for k in self._snap_parts if k <= snap_id]:
             del self._snap_parts[old]
-        try:
-            if base:
-                if base not in self._got_snaps:  # we never decoded its base: wait for another
-                    self.snap_undecodable += 1
-                    return None
-                raw = _xor(zlib.decompress(comp), self._got_snaps[base])
-            else:
-                raw = zlib.decompress(comp)
-        except zlib.error:
+        if base and base not in self._got_snaps:  # we never decoded its base: wait for another
             self.snap_undecodable += 1
             return None
+        raw = inflate(comp, MAX_SNAP_RAW)
+        if raw is None:
+            self.snap_undecodable += 1
+            return None
+        if base:
+            raw = _xor(raw, self._got_snaps[base])
         self._snap_done = snap_id
         self._got_snaps[snap_id] = raw
         while len(self._got_snaps) > SNAP_HISTORY:
@@ -463,6 +461,8 @@ class ReliableChannel:
         """Handles this frame's EVTS/ACK datagrams; returns newly delivered records, in order."""
         out = []
         for tag, _, _, payload, _ in datagrams:
+            if len(payload) < 4:  # cut short
+                continue
             if tag == TAG_ACK:
                 acked = struct.unpack_from("<I", payload)[0]
                 self.unacked = [(s, r) for s, r in self.unacked if s > acked]
@@ -471,7 +471,7 @@ class ReliableChannel:
                 body = payload[4:]
                 for i in range(len(body) // self.size):
                     seq = first + i
-                    if seq > self.delivered:
+                    if self.delivered < seq <= self.delivered + MAX_EARLY:
                         self.early[seq] = body[i * self.size:(i + 1) * self.size]
                 self._ack_due = True
         while self.delivered + 1 in self.early:
@@ -523,7 +523,7 @@ class ReliableMessages:
             elif tag == TAG_CTRL and len(payload) >= _CTRL_HDR.size:
                 seq, last, _, n = _CTRL_HDR.unpack_from(payload)
                 chunk = payload[_CTRL_HDR.size:_CTRL_HDR.size + n]
-                if seq > self.delivered:
+                if self.delivered < seq <= self.delivered + MAX_EARLY:
                     self.early[seq] = (last, chunk)
                 self._ack_due = True
         while self.delivered + 1 in self.early:
@@ -531,10 +531,9 @@ class ReliableMessages:
             last, chunk = self.early.pop(self.delivered)
             self._rx_buf.extend(chunk)
             if last:
-                try:
-                    out.append(zlib.decompress(bytes(self._rx_buf)))
-                except zlib.error:
-                    pass
+                blob = inflate(bytes(self._rx_buf), MAX_CTRL_RAW)
+                if blob is not None:
+                    out.append(blob)
                 self._rx_buf.clear()
         if self._ack_due:
             self.t.send(TAG_CACK, struct.pack("<I", self.delivered))

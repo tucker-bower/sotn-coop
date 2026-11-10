@@ -16,7 +16,6 @@ Setup, build, generator and release tools.
 | `gen_collectibles.py` | Generates `module/collectibles.c`: what each placed collectible gives. |
 | `gen_flag_gated.py` | Generates `module/flag_gated.c` and `docs/flag-gated-entities.md`. |
 | `gen_overlay_table.py` | Generates `module/overlay_table.c`. |
-| `install_launcher.sh` | **Vestigial.** Installed developer presets on Windows; the real installer replaced it. |
 | `make_debug_starts.py` | Makes the harness's debug, boss and scene starts. |
 | `mingw-w64.cmake` | CMake toolchain for the Windows SwanStation build. |
 | `rebuild_fixtures.sh` | Rebuilds the disc, Maria and every savestate after a module change. |

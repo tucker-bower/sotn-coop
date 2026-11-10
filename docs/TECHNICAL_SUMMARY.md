@@ -31,13 +31,14 @@ Every player's game runs in **SwanStation**, the libretro core forked from DuckS
 - **Emulator calls go through one thin adapter** (`link/adapter.py`): RAM read and write, a per-frame callback, and pad input. Porting to another emulator means rewriting the adapter, not the link.
 
 ## The mailbox and the link
-- **The mailbox** is `g_CoopLink`, a struct at a fixed address in the 8 MB area (its address is in the module's linker map). It holds each player's **presence** (stage, room, position, animation, flags), event rings in both directions, room snapshots, commands and save slots. The game never touches the network, and the host never touches game state outside the mailbox.
+- **The mailbox** is `g_CoopLink`, a struct at a fixed address in the 8 MB area (its address is in the module's linker map). It holds each player's **presence** (stage, room, position, animation, flags), event rings in both directions, room snapshots, commands and save slots. The game never touches the network, and the host never touches game state outside the mailbox. The layout is written twice, in `module/link.h` and `link/mailbox.py`: the module's build asserts every offset (`module/coop.c`), and `link/test_layout.py` checks the Python against the header.
 - **The host** (`link/host.py`) runs once per frame while the emulator is paused: it reads the mailbox, sends datagrams, receives the partner's, and writes them in.
 - **The wire protocol** is documented well enough to write another host without reading our Python: [`link-protocol.md`](link-protocol.md). `harness/spec_test.py` checks the document against a real game, playing the partner over a raw UDP socket using only what the document says. In outline:
   - `PRES`: presence, every frame, best effort.
   - `EVTS` / `ACK`: game events (a relic found, a flag set, an item picked up, a boss hit), sent reliably and in order.
   - `SNPC`: a shared-room snapshot, compressed against the last one the partner acknowledged and split into chunks under 1200 bytes, since many routers drop fragmented UDP (D74, D77).
   - `HELO`: the handshake (versions, the co-op disc's CRC, the room token, clock samples for the round trip).
+  - Nothing from the network is trusted: a malformed or oversized datagram is dropped, never an error in the host's frame (`link/test_malformed.py`).
 
 ### What's shared, and how
 - **Progression is merged as events, not by diffing state.** A diff can't tell "the partner found a second potion" from "I used one". Castle flags (`g_CastleFlags`) and the explored map are merged as a union, since they're set-only and so converge in any order. Finds (relics, items, max-HP/MP/heart ups) are add-on-find events, so each player gets their own copy (D37). A placed item or vessel travels as the castle flag it sets, and the other game gives its player what that pickup holds (`module/collectibles.c`), so a reconnect catches a player up on finds they made and didn't save (D172). An item an enemy drops is one item, for whoever takes it (D171). Gold is pooled (D38). Level, XP, hearts and loadout stay each player's own.
