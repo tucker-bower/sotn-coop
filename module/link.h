@@ -107,6 +107,7 @@ typedef struct {
 // seq changes and writes the partner's at FAMILIAR_PARTNER_ADDR.
 #define FAMILIAR_SELF_ADDR 0x807C0000
 #define FAMILIAR_PARTNER_ADDR 0x807E0000
+// (0x807D8000: Co-op Maria's HUD set, 8 KB, kept while a familiar loads over it: character.c)
 #define FAMILIAR_MAGIC 0x4C4D4146 // 'FAML'
 #define FAMILIAR_OVL_SIZE 0xA000   // as at 0x80170000
 #define FAMILIAR_SHEET_SIZE 0x6000 // (0x2C0, 0x100) 0x40 x 0x80 VRAM words, then (0x2C0, 0x180) 0x20 x 0x80

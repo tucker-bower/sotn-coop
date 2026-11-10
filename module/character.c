@@ -17,6 +17,7 @@
 #include "coop_api.h"
 #include "link.h"
 #include "character.h"
+#include "familiar.h"
 #include "weapons.h"
 #include "message.h"
 #include "offhand.h"
@@ -605,6 +606,20 @@ static void SaturnMariaHalt(void) {
     g_PlayerY -= y - PLAYER.posY.i.hi;
 }
 
+// Co-op Maria's HUD set (0x2C0,0x100, 32x128 words), kept while a familiar's graphics load over it.
+#define MAR_HUD_SAVE 0x807D8000 // free 8MB RAM between the familiar copies (link.h)
+static void MarHud(bool keep) {
+    RECT r;
+
+    r.x = 0x2C0;
+    r.y = 0x100;
+    r.w = 0x20;
+    r.h = 0x80;
+    DrawSync(0);
+    keep ? StoreImage(&r, (u_long*)MAR_HUD_SAVE) : LoadImage(&r, (u_long*)MAR_HUD_SAVE);
+    DrawSync(0);
+}
+
 void CharacterBeforePrims(void) {
     void (*hud)(void) = *(s_Loaded == CHAR_SAT_MARIA ? SAT_MAR_HUD_HOOK : ULT_MAR_HUD_HOOK);
 
@@ -666,6 +681,20 @@ void CharacterFrame(void) {
         OffhandKeepSheet(s_PrevLoadFile == CdFile_Weapon1);
         (*(void (**)(void))MAR_GUARDIANS_HOOK)();
         OffhandPlaceSheet();
+    }
+    // A familiar's graphics load over Co-op Maria's HUD set, turtle and cat (issue 208): hers
+    // kept as it starts, the familiar's moved to VRAM's second bank as it ends (familiar.c), and
+    // hers put back.
+    if (g_LoadFile == CdFile_ServantChr && s_PrevLoadFile != CdFile_ServantChr && CharacterLoaded() == CHAR_MARIA) {
+        MarHud(true);
+    }
+    if (s_PrevLoadFile == CdFile_ServantChr && g_LoadFile != CdFile_ServantChr && g_StageId != STAGE_ST0) {
+        FamiliarToBank();
+        if (CharacterLoaded() == CHAR_MARIA && Blob(s_Loaded) != NULL) {
+            MarHud(false);
+            (*(void (**)(void))MAR_GUARDIANS_HOOK)();
+            OffhandPlaceSheet();
+        }
     }
     s_PrevLoadFile = g_LoadFile;
     // Killing Richter (BO6) freezes the game (Engine_5, unk28 0xFF) until his death scene, a stage

@@ -92,7 +92,7 @@ def partner_sim_measurements(run):
 # --- the partner's body in a two-game session ------------------------------------------------
 from session import session_scenario  # noqa: E402
 from session_progress import status  # noqa: E402
-from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER  # noqa: E402
+from link.mailbox import CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER  # noqa: E402
 
 
 @session_scenario(starts=("entrance", "entrance"))
@@ -389,6 +389,18 @@ def partner_familiar(run):
     """M13 step 4 (criterion 3): the partner's familiar shows and follows them. B switches each
     card on in turn (its game loads the familiar); A, running B's body, draws B's familiar from
     B's copy (overlay, sheet, palettes: module/familiar.c) in its second bank, beside the body."""
+    partner_familiar_of(run, 0x100)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(CHAR_ALUCARD, CHAR_MARIA), full=True)
+def partner_familiar_of_maria(run):
+    """Issue 208: in Co-op Maria's game her familiar's graphics live in the second bank (page
+    0x100,0x100), and her copy for the partner is taken as they load: A draws B's familiar from them."""
+    partner_familiar_of(run, 0x100 + 512, 0x100)
+
+
+def partner_familiar_of(run, sheet_y, sheet_x=0x2C0):
+    """sheet_x, sheet_y: where B's game keeps its familiar's graphics (y 512 and up: the second bank)."""
     from link.mailbox import OPT_PARTNER_SIM
     from session_m8 import reload_game
     a, b = run.s.a, run.s.b
@@ -407,7 +419,7 @@ def partner_familiar(run):
         a.screenshot().save(shots / f"m13_partner_familiar_{name}.png")
         ok = drawn > 0  # sprites, or primitives (the sword)
         run.expect(ok, f"A draws B's {name}", drawn=drawn, servant=b.read("g_ServantLoaded"))
-        sheet = b"".join(struct.pack("<64H", *r) for r in b.vram_rect(0x2C0, 0x100, 64, 128))
+        sheet = b"".join(struct.pack("<64H", *r) for r in b.vram_rect(sheet_x, sheet_y, 64, 128))
         mine = b"".join(struct.pack("<64H", *r) for r in a.vram_rect(0x2C0, 0x100 + 512, 64, 128))
         run.expect(sheet == mine, f"with B's {name} graphics, in A's second bank")
 
