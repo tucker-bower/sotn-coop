@@ -9,7 +9,7 @@ from coop_env import REPO
 from emu import SYMBOLS
 from link.adapter import HarnessAdapter
 from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CHAR_SAT_MARIA, CHAR_ULT_MARIA, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
-                          CHAR_BLOB_ADDR, IN_PLAY, OPT_SHORTCUTS, Mailbox)
+                          CHAR_BLOB_ADDR, IN_PLAY, OPT_SHORTCUTS, RULE_NO_GEAR_EFFECTS, Mailbox)
 from module import COOP_DISC, maria_blob, symbols
 from scenario import SCENARIOS, scenario
 import savestates as route
@@ -511,6 +511,11 @@ def healing_mail(run, ch):
     for i in range(8):  # short legs: the timer starts over whenever they stop, as Alucard's does
         run.play(walker("left" if i % 2 else "right"), 75)
     run.expect(e.read(HP_NOW, "<i") >= half + 3, "walking: 1 HP every 128 frames", hp=e.read(HP_NOW, "<i"), was=half)
+    mb.set_rules(off=RULE_NO_GEAR_EFFECTS)  # the castle's rule off: no healing
+    e.write(HP_NOW, half, "<i")
+    for i in range(8):
+        run.play(walker("left" if i % 2 else "right"), 75)
+    run.expect(e.read(HP_NOW, "<i") == half, "with gear effects off, walking doesn't heal", hp=e.read(HP_NOW, "<i"))
 
 
 LIBRARY_CARD, BLOOD_CLOAK, CAPE, LIB = 0xA6, 0x36, 0x80097C10, 0x02  # items; equipment[CAPE_SLOT]; the Library
@@ -555,25 +560,36 @@ def blood_cloak(run, ch):
         run.step(120)
     # (Maria's own code gives a few hearts for a hit too: the cloak's come on top)
     run.expect(got[True][0] - got[False][0] == got[True][1], "with it, as many more hearts as the hit took", got=got)
+    mb.set_rules(off=RULE_NO_GEAR_EFFECTS)  # the castle's rule off: the cloak gives nothing
+    e.write(HEARTS, 0, "<i")
+    e.write("g_Entities", 20, "<h", 0x3E)
+    e.write("g_Entities", 1, "<H", 0x44)
+    run.step(4)
+    run.expect(e.read(HEARTS, "<i") == got[False][0], "with gear effects off, no more hearts than without it",
+               hearts=e.read(HEARTS, "<i"), without=got[False][0])
 
 
 @per_character
 def poison_water(run, ch):
     """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and
-    not with it."""
+    not with it, nor with the castle's "Use Alucard's stats" off (their own games)."""
+    from link.mailbox import OPT_NO_ALUCARD_STATS
     e, mb = run.emu, mailbox(run)
     reload_as(run, mb, ch)
     start = e.save_state()
-    for symbol in (False, True):
+    for symbol in (False, True, "rule off"):
         e.load_state(start)
-        if symbol:
+        mb.set_rules(off=OPT_NO_ALUCARD_STATS if symbol == "rule off" else 0)
+        if symbol is True:
             e.write(STATUS, RELIC_ON, "<B", HOLY_SYMBOL)
         hp = e.read(HP_NOW, "<i")
         for _ in range(180):
             e.write(POISON_WATER, 8, "<i")
             run.step(1)
         lost = hp - e.read(HP_NOW, "<i")
-        if symbol:
+        if symbol == "rule off":
+            run.expect(lost == 0, "with Alucard's stats off, poison water doesn't hurt", lost=lost)
+        elif symbol:
             run.expect(lost == 0, "with Holy Symbol, poison water doesn't hurt", lost=lost)
         else:
             run.expect(lost > 0, "without it, poison water hurts", lost=lost)
@@ -797,3 +813,53 @@ def telescope(run, ch):
     step = e.read(e.entity(scope), "<H", 0x2C)
     run.expect(step >= 2, f"{NAMES.get(ch, 'Alucard')} looks through it", step=step, status=hex(standing),
                dx=e.read(e.entity(0), "<h", 2) - e.read(e.entity(scope), "<h", 2))
+
+
+STR_TOTAL = 0x80097BD8  # g_Status.statsTotal[STAT_STR]
+
+
+def richter_attacks(run, e, pad, frames=40):
+    """The biggest attack value among his attack entities (slots 1-63) while doing this."""
+    import struct
+    best = 0
+    run.step(2, pad)
+    for _ in range(frames):
+        run.step(1)
+        raw = e.read_bytes("g_Entities", 0xBC * 64)
+        for s in range(1, 64):
+            if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0]:
+                best = max(best, struct.unpack_from("<h", raw, s * 0xBC + 0x40)[0])
+    return best
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def richter_blade_dash_damage(run):
+    """Issue 190: under "Use Alucard's stats" his whip does Alucard's damage a second (D166), but
+    Blade Dash kept its own attack and gained INT on top: 4 times the whip. Now his body's attacks
+    keep his own game's ratio to the whip (Blade Dash 80 to 32), growing with STR as it does. With
+    the rule off, both are his own game's."""
+    from link.mailbox import OPT_NO_ALUCARD_STATS
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_RICHTER)
+    mb.set_options(OPT_SHORTCUTS)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(60)
+    e.write(STATUS, RELIC_ON, "<B", SKILL_OF_WOLF)
+    start = e.save_state()
+    for off, what in ((0, "Alucard's stats"), (OPT_NO_ALUCARD_STATS, "his own game's")):
+        e.load_state(start)
+        mb.set_rules(off=off)
+        run.step(2)
+        strength = e.read(STR_TOTAL, "<i")
+        whip = richter_attacks(run, e, "square")
+        run.step(30)
+        dash = richter_attacks(run, e, "r2")
+        if off:
+            run.expect((whip, dash) == (32, 80), f"{what}: the whip 32, Blade Dash 80", whip=whip, dash=dash)
+        else:
+            want = 32 * 20 // 100 + strength
+            run.expect(whip == want, f"{what}: the whip is 20% of 32 plus STR", whip=whip, str=strength)
+            run.expect(dash == want * 80 // 32, f"{what}: Blade Dash is 80/32 of that", dash=dash, want=want * 80 // 32)
+

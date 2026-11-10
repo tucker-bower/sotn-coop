@@ -219,7 +219,7 @@ void ProgressDamageTaken(void) {
     }
     // Blood Cloak: hearts for the damage taken. Alucard's HandleDamage gives them (src/dra/5D5BC.c);
     // Richter's and Maria's hits never go through it (#202).
-    if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) &&
+    if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) && !RULE_OFF(RULE_NO_GEAR_EFFECTS) &&
         g_api.CheckEquipmentItemCount(ITEM_BLOOD_CLOAK, EQUIP_CAPE)) {
         g_api.AddHearts(hit);
     }

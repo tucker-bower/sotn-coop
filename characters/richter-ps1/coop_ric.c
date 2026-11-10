@@ -22,6 +22,18 @@ s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 #define SUBWPN_HOLY_WATER 3  // and its flames (11) and crash, Hydro Storm (16)
 #define SUBWPN_HOLY_FLAMES 11
 #define SUBWPN_HYDRO_STORM 16
+// His body's attacks (issue 190): Blade Dash (it uses the Bible crash beam's entry: told apart by
+// its entity), the slide, the slide kick and the high jump. They do the whip's damage times their
+// own attack over the whip's, his own game's ratios (Blade Dash and the high jump 2.5 times the
+// whip), so they grow with STR as it does, not INT.
+#define SUBWPN_BIBLE_BEAM 17
+#define SUBWPN_SLIDE 18
+#define SUBWPN_HIGH_JUMP 22
+#define SUBWPN_SLIDE_KICK 23
+#define BODY_ATTACK(e, id) \
+    ((id) == SUBWPN_SLIDE || (id) == SUBWPN_HIGH_JUMP || (id) == SUBWPN_SLIDE_KICK || \
+     ((id) == SUBWPN_BIBLE_BEAM && (e)->entityId == E_BLADE_DASH))
+#define WHIP_ATTACK 32 // the whip's own attack (gen/subweapons.h)
 
 // RicSetSubweaponParams's attack, for every attack Richter makes (the whip is a "subweapon").
 int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
@@ -42,6 +54,9 @@ s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
         if (COOP_CAN(RELIC_FORCE_OF_ECHO)) {
             attack = attack * ECHO_WHIP_PCT / 100;
         }
+    } else if (BODY_ATTACK(entity, id)) {
+        attack = (WHIP_ATTACK * WHIP_BASE_PCT / 100 + g_Status.statsTotal[STAT_STR] * WHIP_STR_PCT / 100) * attack /
+                 WHIP_ATTACK;
     } else if (attack) {
         attack += attack * g_Status.statsTotal[STAT_INT] / SUBWPN_INT_DIV;
     }

@@ -23,7 +23,7 @@ Tucker, 2026-11-01: every feature that changes vanilla game logic is a toggleabl
 | Boss aggro | 0–100% | 50% |
 | One shared level, one purse, revive at your partner, partner's faerie revives | toggle | on |
 | Bosses bring your partner, scenes bring your partner, teleport from the map, enemies pick the nearer player | toggle | on |
-| Richter and Maria level up, use Alucard's stats (STR, INT, defense, resistances: #160), relics teach them, extra jumps, off-hand weapons, their familiars | toggle | on |
+| Richter and Maria level up, use Alucard's stats (their attacks at Alucard's damage a second, STR, INT, defense, resistances, poison and poison water: #160, #190), relics teach them, extra jumps, off-hand weapons, their familiars, their gear effects (Healing Mail, Blood Cloak) | toggle | on |
 | PvP, button remap (both players, face and shoulder buttons) | toggle | off |
 
 **Not toggles:** castle flags, pausing, scene votes, the map, items and relics, shared rooms, the partner's body, joint saves, and the shared death of Richter and Dracula. These are what co-op is: turning one off leaves two games that disagree about the castle. Controls (shortcuts, spells) stay per player, because they're about a player's hands, not the castle.

@@ -292,6 +292,7 @@ typedef struct {
 #define RULE_NO_OFFHAND 0x100       // Richter and Maria: Circle doesn't use the off-hand item
 #define RULE_NO_FAMILIARS 0x200     // Richter and Maria: no familiars
 #define RULE_BAT_CARRY 0x400        // on, unlike the others: a partner can hang onto the bat (carry.c)
+#define RULE_NO_GEAR_EFFECTS 0x800  // Richter and Maria: Healing Mail, Blood Cloak do nothing for them (character.c, progress.c)
 #define RULE_OVERLAY_MASK 0xFF000000
 #define OPT_NO_GROWTH 0x01000000      // Richter and Maria: no levels
 #define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: every move from the start (#168)
