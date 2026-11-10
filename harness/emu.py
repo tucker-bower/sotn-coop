@@ -189,11 +189,6 @@ class Emu:
                 for key in ("swanstation_CDROM_ReadSpeedup", "swanstation_CDROM_SeekSpeedup"):
                     self._options.set_variable(key.encode(), b"1")
 
-    def run_inputs(self, inputs):
-        """inputs: iterable of (p1, p2) per frame."""
-        for p1, p2 in inputs:
-            self.step(1, p1, p2)
-
     # --- state
     def save_state(self):
         buf = bytearray(self._session.core.serialize_size())

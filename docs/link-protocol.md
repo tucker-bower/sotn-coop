@@ -45,7 +45,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | `SPRT` | the sender's own attack sprites: N × 20-byte `CoopSprite` (below), N ≤ 24 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerSprites` (M12). |
 | `PRIM` | `zlib` of N × 0x30-byte primitives (the sender's attack primitives, below), N ≤ 32 | As `SPRT`. The receiver writes them, decompressed, to `partnerPrims` (M12). |
 | `HITS` | the sender's player's attack hitboxes: N × 12-byte `CoopHit` (below), N ≤ 16 | Every frame while there are any, then one empty one. Best effort; keep the newest. The receiver writes them to `partnerHits` (M15). |
-| `HELO` | UTF-8 JSON: `{"link": 12, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "rules": <the castle's rules as a JSON object (launcher/rules.py), online, from the hosting side only>, "mod": <the randomizer seed the disc was made from, in words, or absent/null for the plain co-op disc>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. Partners whose `mod` differ are refused, with both seeds named. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
+| `HELO` | UTF-8 JSON: `{"link": 13, "patch": <the co-op disc's CRC32 as an integer, or null>, "sid": <8 hex digits, random per host run>, "room": <16 hex digits, online only>, "clock": [clockMs, echoMs, holdMs], "rules": <the castle's rules as a JSON object (launcher/rules.py), online, from the hosting side only>, "mod": <the randomizer seed the disc was made from, in words, or absent/null for the plain co-op disc>}` | Once a second, from the first frame (also while the game boots, and four times a second in the lobby). `clock` measures the round trip as the presence tail does. Partners whose `mod` differ are refused, with both seeds named. `room` is `sha256("sotn-coop-token:" + room code without dashes)[:16]`: a host that has one ignores HELOs without it, and its own (same `sid`). |
 
 **Reliable events:** exactly once, in order.
 - **Numbering:** each host numbers its events 1, 2, 3, …
@@ -60,7 +60,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 
 **Playback (recommended online, `link/playout.py`):** the partner's presences and snapshots arrive bunched up. Hold them and hand the game one sender frame per frame:
 - `offset = arrival time - frame / 60`. Its minimum over the last 3 s is the fastest path; restart that minimum when every offset of the last 0.3 s is more than 2 frames above it.
-- Play sender frame `(now - minimum - delay) * 60`, where `delay` covers the 95th percentile of `offset - minimum` (at least a frame while presences go missing; at most 250 ms; falling back by at most 20 ms per second).
+- Play sender frame `(now - minimum - delay) * 60`, where `delay` covers the 80th percentile of `offset - minimum` (at least a frame while presences go missing; at most 100 ms; falling back by at most 100 ms per second).
 - Between two presences less than 6 frames apart in the same room, interpolate x, y and the camera.
 
 **Retransmission:** reliable channels (`EVTS`, `CTRL`) resend what's unacked after `srtt + max(4 × rttvar, 1 frame) + 2 frames` (between 50 ms and 1 s; 250 ms before any round trip is measured).
@@ -68,6 +68,12 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 **Restarts:** when the partner's `sid` changes, it started again: reset everything numbered (reliable channels both ways, snapshot ids and bases, playback).
 
 **Handshake:** if the partner's `link` differs, or both `patch` values are set and differ, the host refuses the partner.
+
+**What a host never trusts:** a `HELO` is taken from any address (that's how a partner is found), and on one PC so is everything else, so nothing a datagram holds may stop a host's frame or fill its memory (`link/test_malformed.py`):
+- A datagram too short for its tag is dropped. A `HELO` that isn't a JSON object, or whose `sid`, `room` or `mod` isn't a string (or null), or whose `link` isn't an integer, is dropped: it's not from a host.
+- Nothing is decompressed past what it may hold: a snapshot 0xF000 bytes, `PRIM` 32 primitives, a `CTRL` message 1 MB, a weapon's or familiar's copy its struct's size. More than that is dropped, as undecodable.
+- A reliable record or chunk numbered more than 4096 ahead of the last one delivered isn't kept: its sender resends it.
+- Counts and sizes written to the mailbox are never more than the bytes written with them.
 - It relays nothing more (the games play on alone), keeps sending `HELO`, and reports why ("Your partner's co-op version is different…").
 - A later matching `HELO` lifts the refusal.
 

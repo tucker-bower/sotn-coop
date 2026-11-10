@@ -8,11 +8,11 @@ import os
 import struct
 import time
 
-from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, Presence
+from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_SIZE, WEAPON_SIZE, Presence
 from .portraits import PORTRAIT_ADDR
 from .playout import Playout
 from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
-                        WIRE_VERSION, ReliableChannel, ReliableMessages)
+                        WIRE_VERSION, ReliableChannel, ReliableMessages, inflate)
 
 HELLO_EVERY = 60  # frames
 STATUS_EVERY = 10  # frames: the most often this player's status is sent (M13)
@@ -41,7 +41,6 @@ class Host:
         self._inbox = []       # partner events the game's in ring had no room for yet
         self._latest_seq = 0
         self.sent = self.received = 0
-        self.events_sent = self.events_received = 0
         # The last minute of link traffic, for bug reports (F9): (time, way, what)
         self.log = collections.deque(maxlen=20000)
         # The handshake (docs/link-protocol.md): a partner with another link version or another
@@ -61,6 +60,7 @@ class Host:
         self._familiar_sent = None  # the familiar copy last sent (module/familiar.c)
         self._status_sent, self._status_at = None, -STATUS_EVERY  # M13: this player's status, for the partner's body
         self._frames = 0
+        self._sent_was = 0  # the transport's bytes sent, a second ago (the log's KB/s)
         self.character, self.options = 0, 0  # this game's player (design/M8): CHAR_*, OPT_*
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
         self.portraits = None
@@ -167,10 +167,7 @@ class Host:
         self.ctrl = ReliableMessages(self.transport)
         self._inbox = []
         self._latest_seq = self._snap_seq = 0
-        t = self.transport
-        t._snap_done, t._snap_parts, t._got_snaps = 0, {}, type(t._got_snaps)()
-        t._snap_acked, t._sent_snaps = 0, type(t._sent_snaps)()
-        t._pres_frames, t._heard_ms, t._heard_at = [], 0, None
+        self.transport.reset_partner()
         if self.playout:
             self.playout.reset()
 
@@ -222,10 +219,11 @@ class Host:
 
     def _take_familiar(self, msg):
         try:
-            blob = zlib.decompress(base64.b64decode(msg["data"]))
-        except (KeyError, TypeError, ValueError, zlib.error):
+            blob = inflate(base64.b64decode(msg["data"]), FAMILIAR_SIZE)
+        except (KeyError, TypeError, ValueError):
             return
-        self.mailbox.write_partner_familiar(blob)
+        if blob is not None:
+            self.mailbox.write_partner_familiar(blob)
 
     def _send_status(self):
         """This player's status (stats, level, equipment: M13's partner body, module/partner.c)
@@ -239,10 +237,11 @@ class Host:
 
     def _take_weapon(self, msg):
         try:
-            hand, blob = int(msg["hand"]) & 1, zlib.decompress(base64.b64decode(msg["data"]))
-        except (KeyError, TypeError, ValueError, zlib.error):
+            hand, blob = int(msg["hand"]) & 1, inflate(base64.b64decode(msg["data"]), WEAPON_SIZE)
+        except (KeyError, TypeError, ValueError):
             return
-        self.mailbox.write_partner_weapon(hand, blob)
+        if blob is not None:
+            self.mailbox.write_partner_weapon(hand, blob)
 
     def goodbye(self):
         """Tells the partner this game is leaving, so it can say so at once instead of waiting
@@ -272,6 +271,13 @@ class Host:
             theirs = json.loads(payload)
         except ValueError:
             return
+        # Anyone on the network can send a HELO (it's how a partner is found), so nothing in it is
+        # trusted: not an object, or a field of the wrong kind, and it's dropped (link/test_malformed.py)
+        if not isinstance(theirs, dict) or not all(
+                isinstance(theirs.get(k), kind) for k, kind in
+                (("sid", (str, type(None))), ("room", (str, type(None))), ("mod", (str, type(None))),
+                 ("link", (int, type(None))), ("patch", (int, str, type(None))))):
+            return
         if self.hello.get("room") and theirs.get("room") != self.hello["room"]:
             # Someone in another room: not our partner. No room at all is a partner who typed our
             # ip:port (the fallback when room codes can't connect: design/M7b, M9), so only a host
@@ -285,7 +291,7 @@ class Host:
                 and addr is not None and tuple(addr) != tuple(self.transport.peer)):
             return  # joined by ip:port: another room's LAN broadcast (link/connect.py) isn't our partner
         clock = theirs.pop("clock", None)
-        if isinstance(clock, list) and len(clock) == 3:
+        if isinstance(clock, list) and len(clock) == 3 and all(type(c) is int and c >= 0 for c in clock):
             self.transport.clock_heard(*clock)
         if addr is not None and self.transport.learn_peer:
             self.transport.accept_peer(addr)
@@ -319,12 +325,16 @@ class Host:
         self._frames += 1
         if self.connector:
             self.connector.tick()
+        self._handshake_only()
+        return self.status()
+
+    def _handshake_only(self):
+        """Hears HELO and BYE and drops the rest: before the game runs, and while the partner is refused."""
         for tag, _, _, payload, addr in self.transport.receive():
             if tag == TAG_HELLO:
                 self._check_hello(payload, addr)
             elif tag == TAG_BYE:
                 self._check_bye(payload)
-        return self.status()
 
     def after_frame(self):
         self.transport.frame += 1
@@ -339,22 +349,13 @@ class Host:
             self._note("net", f"rtt {q['rtt_ms']} ms (var {q['rtt_var_ms']}), loss {q['loss_pct']}%, "
                               f"held back {self.playout.stats()['delay_ms'] if self.playout else 0} ms, "
                               f"late {self.playout.late if self.playout else 0}, "
-                              f"sent {(sent - getattr(self, '_sent_was', sent)) // 1024} KB/s")
+                              f"sent {(sent - self._sent_was) // 1024} KB/s")
             self._sent_was = sent
         self._frames += 1
-        if not self.mailbox.ready():  # the game is booting: only the handshake (and the ping)
-            for tag, _, _, payload, addr in self.transport.receive():
-                if tag == TAG_HELLO:
-                    self._check_hello(payload, addr)
-                elif tag == TAG_BYE:
-                    self._check_bye(payload)
-            return
-        if self.mismatch:  # refused: still say hello (the partner may update), relay nothing
-            for tag, _, _, payload, addr in self.transport.receive():
-                if tag == TAG_HELLO:
-                    self._check_hello(payload, addr)
-                elif tag == TAG_BYE:
-                    self._check_bye(payload)
+        # The game is booting: only the handshake (and the ping). The partner is refused: still
+        # say hello (it may update), relay nothing.
+        if not self.mailbox.ready() or self.mismatch:
+            self._handshake_only()
             return
         self.mailbox.set_rank(self.rank)
         self.mailbox.set_character(self.character)
@@ -386,7 +387,6 @@ class Host:
         self.sent += 1
         mine = self.mailbox.take_events()
         self.events.queue(mine)
-        self.events_sent += len(mine)
         for ev in mine:
             self._note("out", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
 
@@ -435,17 +435,15 @@ class Host:
         if hits_in is not None:
             self.mailbox.write_partner_hits(hits_in)
         if prims_in is not None:
-            try:
-                self.mailbox.write_partner_prims(zlib.decompress(prims_in))
-            except zlib.error:
-                pass
+            prims = inflate(prims_in, N_PRIMS * PRIM_SIZE)
+            if prims is not None:
+                self.mailbox.write_partner_prims(prims)
         if snap is not None:
             self.mailbox.put_snapshot(snap)
             self._note("in", f"snapshot ({len(snap)} bytes)")
         theirs = self.events.tick(reliable)
         for ev in theirs:
             self._note("in", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
-        self.events_received += len(theirs)
         self._inbox += theirs
         if self._inbox:
             n = self.mailbox.give_events(self._inbox)
@@ -454,6 +452,8 @@ class Host:
             for raw_msg in self.ctrl.tick(ctrl_dgrams):
                 try:
                     msg = json.loads(raw_msg)
+                    if not isinstance(msg, dict):
+                        continue
                     self._note("in", f"ctrl {msg.get('op')}")
                     if msg.get("op") == "weapon":
                         self._take_weapon(msg)

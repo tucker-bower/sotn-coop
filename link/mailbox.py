@@ -78,6 +78,8 @@ def scene_speed(presences, solo):
 def spell_options(spells):
     """OPT_* bits for four spell ids (or None) on the right stick: up, right, down, left."""
     return sum(((s + 1) if s is not None else 0) << (OPT_SPELL_SHIFT + 4 * k) for k, s in enumerate(spells))
+
+
 CHAR_BLOB_ADDR, CHAR_BLOB_MAGIC = 0x80300000, 0x52414843  # CharBlob (module/link.h)
 CONTROL_MUTE_MUSIC = 1
 CONTROL_NO_AGGRO = 2
@@ -256,6 +258,8 @@ class Mailbox:
     def take_events(self):
         """Everything the game wrote to its out ring since last time, as raw 8-byte events."""
         head, tail = self._ring(OUT_RING)
+        if (head - tail) & 0xFFFFFFFF > RING_SIZE:  # never the game's doing: the ring holds RING_SIZE
+            tail = (head - RING_SIZE) & 0xFFFFFFFF
         out = []
         while tail != head:
             slot = self.address + OUT_RING + 8 + (tail % RING_SIZE) * EVENT_SIZE
@@ -348,6 +352,7 @@ class Mailbox:
 
     def put_snapshot(self, data):
         seq, _ = struct.unpack("<II", self.adapter.read_bytes(self.address + SNAP_IN_SEQ, 8))
-        self.adapter.write_bytes(self.address + SNAP_IN, data[:SNAP_MAX])
+        data = data[:SNAP_MAX]  # the size the game reads is never more than what was written
+        self.adapter.write_bytes(self.address + SNAP_IN, data)
         self.adapter.write_bytes(self.address + SNAP_IN_SEQ, struct.pack("<II", seq + 1, len(data)))
 

@@ -100,7 +100,7 @@ typedef struct {
     /* 0x00 */ u32 magic; // STATUS_MAGIC once written
     /* 0x04 */ u8 a[STATUS_A_SIZE];
     /* 0x50 */ u8 b[STATUS_B_SIZE];
-} CoopStatus; // size = 0x80
+} CoopStatus; // size = 0x84
 
 // M13 step 4: a player's familiar, for the partner to draw it (familiar.c): each game copies its
 // familiar's overlay, tile sheet and palettes here when it loads; the host sends the copy when its

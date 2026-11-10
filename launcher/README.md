@@ -15,7 +15,6 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
-| `play.py` | **Vestigial.** Developer presets, started only by `scripts/install_launcher.sh`'s shortcuts. |
 | `report.py` | F9: writes the bug report zip and emails it. |
 | `crashwatch.py` | Notices a game that has crashed or hung. |
 | `crash_window.py` | The bug report window after a crash: its own process, and nothing is sent unless the player says so. |
@@ -23,7 +22,6 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `saturn_maria.py` | Makes Saturn Maria's art from the player's Saturn disc: a port of SOTN Ultimate's converter. |
 | `saturn_richter.py` | Makes Ultimate Richter's coat from the player's Saturn disc and RIC.BIN: a port of SOTN Ultimate's converter. |
 | `saturn_maria_sounds.py` | Makes Saturn Maria's two sound banks from the Saturn disc: a Saturn synth and the PS1 sample encoder, ported from SOTN Ultimate. |
-| `smoke.py` | **Vestigial.** Early end-to-end check, not in any runner; the UI flows in `uxdriver.py` replaced it. |
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
 | `test_characters.py` | Checks Maria's build from a DXC disc. |

@@ -6,7 +6,7 @@ ROOT      ?= $(shell if [ -f ../.env/src/sotn-decomp/sotn.sh ]; then echo ../.en
 BUILD     := $(ROOT)/build/coop
 CONFIG    := $(ROOT)/config
 CROSS     := mipsel-linux-gnu-
-CC_FLAGS  := -std=c11 -c -G0 -O2 -g -funsigned-char -fno-builtin -fno-tree-loop-distribute-patterns -Werror -Wall -Wno-unused-function
+CC_FLAGS  := -std=c11 -c -G0 -O2 -g -funsigned-char -fno-builtin -fno-tree-loop-distribute-patterns -Werror -Wall
 CC_FLAGS  += -march=mips1 -mabi=32 -EL -mfp32 -fno-pic -mno-shared -mno-abicalls -fno-stack-protector -nostdlib
 CPP_FLAGS := -isystem $(ROOT)/include -isystem $(ROOT)/include/psxsdk -undef
 CPP_FLAGS += -D_internal_version_$(VERSION) -Dmips -D__OPTIMIZE__ -D__mips__ -D__mips -Dpsx -D__psx__ -D__psx

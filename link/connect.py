@@ -30,6 +30,7 @@ import ssl
 import threading
 import time
 import urllib.request
+from pathlib import Path
 
 from .transport import TAG_HELLO
 
@@ -152,7 +153,6 @@ class FileRelay:
         self.folder = str(folder)
 
     def _path(self, topic):
-        from pathlib import Path
         p = Path(self.folder)
         p.mkdir(parents=True, exist_ok=True)
         return p / f"{topic}.jsonl"
@@ -170,7 +170,6 @@ class FileRelay:
 
 def default_relay():
     """ntfy.sh; or a folder, when COOP_RELAY_DIR says so (tests: two launchers on one PC)."""
-    import os
     folder = os.environ.get("COOP_RELAY_DIR")
     return FileRelay(folder) if folder else NtfyRelay()
 
@@ -196,13 +195,11 @@ class Connector:
         self.nat = None
         self.predict = self.their_predict = None  # (public ip, last port, step): a symmetric router's next ports
         self._t0 = None
-        self._stun = []
         self._stun_sent = None
         self._published = None
         self._punched = 0.0
         self._broadcast_at = None
         self._broadcasts = []
-        self._resolve = resolve
         self._servers = list(stun_servers)
         self.relays = list(default_relays() if relays is None else relays)  # M14: the last step (empty in releases, D123)
         self.via = None          # the relay both use, once it comes to that

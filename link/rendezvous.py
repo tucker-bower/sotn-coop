@@ -8,7 +8,6 @@ Three ways to connect, all using the same Join box:
 3. Direct IP and port (e.g. 192.168.1.42:54321 or :54321 for localhost).
 """
 
-import os
 import random
 import re
 import socket
