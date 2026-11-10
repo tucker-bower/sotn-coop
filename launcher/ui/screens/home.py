@@ -29,10 +29,11 @@ def home(m, items, about, version, sel=0, note=""):
     """items: [(key, label, hint)]. about(key) -> {"lines": [...], "castle": Castle or None,
     "portrait": a picture's name or None}. Returns an item's key, a link's ("link", url), or None
     (back: nothing to go back to, so it only moves to Quit)."""
-    t, s, hover = m.theme, m.s, None
-    if m.sound:
-        m.sound.music(True)
+    t, s, hover, frames = m.theme, m.s, None, 0
     while True:
+        if m.sound and frames % 30 == 0:  # (again now and then: the first time, it's still being decoded)
+            m.sound.music(True)
+        frames += 1
         for a in m.poll():
             if a in ("up", "down"):
                 sel = move(sel, a, len(items))

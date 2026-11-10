@@ -109,7 +109,7 @@ Rules: each castle has its own, set in Options › Open settings (Esc: Castle ru
 phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
 
 Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
-need your Dracula X Chronicles disc: Settings › Game files). Co-op Richter and Maria learn their
+need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
 moves from Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul
 of Wolf for the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat
 for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
@@ -119,7 +119,7 @@ her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan). 
 the PS1 Richter, all his moves from the start, in the Saturn's long coat (the same disc).
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
-(Settings › Controls picks which).
+(Options › Controls picks which).
 
 Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
 
@@ -1517,7 +1517,7 @@ class Launcher:
         return self.ui.confirm("This castle is on another disc",
                                f"{castle.name} was made on {('randomizer ' + theirs) if theirs else 'the original game'}, "
                                f"and you're set to {('randomizer ' + mine) if mine else 'the original game'}\n"
-                               "(Settings › Game files › Randomizer). Its items and rooms won't match. Play it anyway?",
+                               "(Discs & mods › Randomizer). Its items and rooms won't match. Play it anyway?",
                                yes="Play anyway", no="Back")
 
     def play(self, castle, fresh=False):

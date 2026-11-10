@@ -488,7 +488,7 @@ def _test_castles(pg):
     return [
         ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after Continue, New castle)
+        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after New castle: none played here yet)
         ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
         ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
@@ -666,7 +666,7 @@ def _menus(pg):
     steps += [("expect", lambda d: d.launcher.settings.get("layout") == "auto" and not d.launcher.settings.get("netsim"),
                "View and Developer menu items change the settings")]
     for action, screen in (("savestates", "Savestates"), ("debug_starts", "Debug starts"), ("controllers", "Press a button"),
-                           ("new", "Press a button"), ("continue", "Press a button")):
+                           ("new", "Name your castle"), ("continue", "Name your castle")):  # the castle first (no castles yet: Continue starts one)
         steps += [("menu", action), ("screen", screen), ("shot", action), ("key", pg.K_ESCAPE),
                   ("screen", "Home")] if screen != "Debug starts" else [
                   ("menu", action), ("until", lambda d: d.heading in ("Debug starts", "Making the debug starts")),
