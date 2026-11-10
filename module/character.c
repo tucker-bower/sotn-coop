@@ -275,6 +275,8 @@ void CharacterApply(void) {
 // Richter and Maria grow like Alucard (design/M8b §4). Alucard's own code checks his EXP every
 // frame (src/dra/692E8.c) and shows LEVEL UP with one of his entities; theirs never did. The
 // same check here, with the module's text box for the news.
+void make_all(void); // DRA (src/dra/menu.c): the stat totals, attack and defense from base and gear
+
 static void Growth(void) {
     static const char* const s_News[] = {NULL, "Level up!", "Max hearts up", "Max HP up"};
     u32 r;
@@ -284,6 +286,12 @@ static void Growth(void) {
         return;
     }
     r = CheckAndDoLevelUp();
+    if (r) {
+        // Alucard's totals (STR, CON, INT, LCK with his gear) are worked out again by code his
+        // level-up runs; theirs stayed as they were until the menu, so a level did nothing for
+        // their attacks and the status page didn't change (issue 171).
+        make_all();
+    }
     if (r && r < LEN(s_News)) {
         CoopMessage(s_News[r]);
     }
@@ -639,6 +647,33 @@ void CharacterRenderEnd(void) {
         s_HiddenCount--;
         g_Entities[s_Hidden[s_HiddenCount]].animCurFrame = s_HiddenFrame[s_HiddenCount];
     }
+}
+
+// The HP a hit took, over the player, as Alucard's HandleDamage shows it (CreateHPNumMove,
+// src/dra/7879C.c): Richter's and Maria's code shows none (issue 171). Their entity loops run
+// DRA's number entity for the id COOP_ENT_NUMBER (characters/richter-ps1/coop_ric.h).
+#define COOP_ENT_NUMBER 0xCF
+#define DRA_ENT_NUMBER 19 // E_UNK_19: EntityNumberMovesToHpMeter (src/dra/dra.h)
+extern PfnEntityUpdate g_DraEntityTbl[];
+extern PfnEntityUpdate g_CoopNumberEntity; // the module's fixed table (coop.c)
+
+void CharacterDamageNumber(s32 hit) {
+    Entity* e;
+    s32 i;
+
+    g_CoopNumberEntity = g_DraEntityTbl[DRA_ENT_NUMBER];
+    for (i = 0x38; i < 0x40 && g_Entities[i].entityId; i++) {
+    }
+    if (i == 0x40) {
+        return;
+    }
+    e = &g_Entities[i];
+    __builtin_memset(e, 0, sizeof(Entity));
+    e->entityId = COOP_ENT_NUMBER;
+    e->posX.val = PLAYER.posX.val;
+    e->posY.val = PLAYER.posY.val;
+    e->ext.hpNumMove.number = hit;
+    e->ext.hpNumMove.type = 0;
 }
 
 // Co-op Maria's HUD set (0x2C0,0x100, 32x128 words), kept while a familiar's graphics load over it.

@@ -15,6 +15,7 @@ void CharacterRenderEnd(void);   // ...back after it
 // VRAM, or into VRAM's second bank for a partner who wears it
 void CharacterRicCoat(const u8* file, bool partner);
 void CharacterCurePoison(void); // Richter's and Maria's (character.c)
+void CharacterDamageNumber(s32 hit); // Richter's and Maria's: a hit's number over them, as Alucard's (#171)
 // Co-op Richter and Maria: levels, Alucard's stats, relic moves, off-hand weapons, familiars and
 // the rest are theirs. Other mods' characters play as their mod built them.
 #define CHAR_COOP(c) ((c) == CHAR_RICHTER || (c) == CHAR_MARIA)

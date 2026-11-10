@@ -13,3 +13,4 @@ g_CoopOptions = 0x8028003C;
 g_CoopWeaponEntity = 0x80280040;
 CoopRenderPrimitives = 0x80280044;
 g_CoopHudCharacter = 0x8028004C;
+g_CoopNumberEntity = 0x80280050;

@@ -148,6 +148,52 @@ def level_up(run, ch):
                level=(level, e.read(LEVEL)), hp_max=(hp, e.read(HP_MAX)))
 
 
+STATS_BASE, STATS_TOTAL = 0x80097BB8, 0x80097BD8  # g_Status.statsBase[4], statsTotal[4]: STR, CON, INT, LCK
+
+
+@per_character
+def level_up_stats(run, ch):
+    """Issue 171: Maria's status page didn't change when she levelled up. Her stats grow with her
+    level, and so do the totals the status page shows."""
+    import struct
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    base, total = (struct.unpack("<4i", e.read_bytes(a, 16)) for a in (STATS_BASE, STATS_TOTAL))
+    e.write(EXP, 5000)
+    run.step(30)
+    base2, total2 = (struct.unpack("<4i", e.read_bytes(a, 16)) for a in (STATS_BASE, STATS_TOTAL))
+    run.expect(all(b2 >= b for b, b2 in zip(base, base2)) and base2 != base, "her stats grow", was=base, now=base2)
+    run.expect(all(t2 - t == b2 - b for t, t2, b, b2 in zip(total, total2, base, base2)),
+               "and the totals (the status page's) by as much", was=total, now=total2)
+
+
+@per_character
+def hit_shows_its_number(run, ch):
+    """Issue 171: a hit on Richter or Maria showed no number, as it does over Alucard. The HP it took
+    rises from them (DRA's number entity, run by their own entity loop)."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    run.step(60)
+    hp = e.read(HP_NOW, "<i")
+    e.write("g_Entities", 12, "<h", 0x3E)  # PLAYER.hitPoints, as hit detection leaves them
+    e.write("g_Entities", 1, "<H", 0x44)   # PLAYER.hitParams: a plain hit
+    seen = []
+    for k in range(20):
+        run.step(1)
+        if k == 8:  # evidence: the number over them
+            from coop_env import TOOLS
+            (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
+            x, y = e.read("g_Entities", "<h", 2), e.read("g_Entities", "<h", 6)
+            e.screenshot().crop((x - 48, y - 64, x + 48, y + 24)).resize((384, 352)).save(TOOLS["out"] / run.name / "number.png")
+        for slot in range(0x38, 0x40):
+            if e.read(e.entity(slot), "<H", 0x26) == 0xCF:
+                seen.append((slot, e.read(e.entity(slot), "<H", 0x2C), e.read(e.entity(slot), "<h", 0x80)))
+    lost = hp - e.read(HP_NOW, "<i")
+    run.expect(lost > 0, "the hit hurts", lost=lost)
+    run.expect(seen and max(st for _, st, _ in seen) > 0, "its number comes out, and runs", seen=seen[:3])
+    run.expect(seen and seen[0][2] == lost, "showing the HP it took", number=seen[0][2] if seen else None, lost=lost)
+
+
 @per_character
 def mist_step(run, ch):
     """M8b criterion 2: Richter and Maria pass the bars before the Lesser Demon with Form of Mist,
