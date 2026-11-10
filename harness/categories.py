@@ -102,6 +102,7 @@ EVERYDAY = {
     "maria_owl_with_a_weapon_in_hand", "maria_scene_richter_on_the_throne", "familiar_graphics_maria",  # #203 #209 #208
     "shaft_orb_unseen_richter", "richter_blade_dash_damage",  # #189 #190
     "richter_left_hand_keeps_his_graphics", "stage_palettes_maria", "maria_run_into_a_step",  # #195 #206 #172
+    "level_up_stats_maria", "hit_shows_its_number_maria",  # #171
     "offhand_crouching_swings_low_richter", "pause_menu_portrait_maria",  # +
     "ultimate_maria_subweapons", "partner_body_maria_and_ultimate_maria",  # + other mods' characters (D180)
     "saturn_maria_beasts", "partner_body_alucard_and_saturn_maria",  # + Saturn Maria (D181)

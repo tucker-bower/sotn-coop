@@ -18,6 +18,10 @@ extern unsigned int g_CoopOptions; // included before game.h: no u32 yet
 #define COOP_CAN(relic) ((g_CoopOptions & OPT_NO_RELIC_MOVES) || (g_Status.relics[relic] & RELIC_FLAG_ACTIVE))
 struct Entity;
 int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
+// The number of HP a hit took, over the player as Alucard's (#171): the module makes the entity with
+// this id, and the player's entity loop runs DRA's code for it (g_CoopNumberEntity, coop_player.ld).
+#define COOP_ENT_NUMBER 0xCF
+extern void (*g_CoopNumberEntity)(struct Entity*);
 #define COOP_SHORTCUT(pad) ((g_CoopOptions & OPT_SHORTCUTS) && (g_Player.padTapped & (pad)))
 
 // Extra jumps (D122): each of the Leap Stone and the Gravity Boots gives one jump in the air, so

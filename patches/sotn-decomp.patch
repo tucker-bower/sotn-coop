@@ -306,7 +306,7 @@ index 027137b..89fb5df 100644
          } else {
  #ifdef VERSION_PSP
 diff --git a/src/maria/pl_blueprints.c b/src/maria/pl_blueprints.c
-index ce01a3c..60118ee 100644
+index ce01a3c..275a9a3 100644
 --- a/src/maria/pl_blueprints.c
 +++ b/src/maria/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -329,7 +329,7 @@ index ce01a3c..60118ee 100644
      entity->attack = g_api.CalcDealDamageMaria(entity->attack);
      func_maria_8015F9F0(entity);
  }
-@@ -285,7 +292,20 @@ void MarUpdatePlayerEntities(void) {
+@@ -285,7 +292,24 @@ void MarUpdatePlayerEntities(void) {
      for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
          if (entity->entityId != 0) {
              if (entity->step == 0) {
@@ -346,12 +346,16 @@ index ce01a3c..60118ee 100644
 +                if (entity->entityId >= 0xE0) {
 +                    entity->pfnUpdate = g_CoopWeaponEntity;
 +                } else
++                // A hit's number (co-op, #171): DRA's, as Alucard's HandleDamage makes it.
++                if (entity->entityId == COOP_ENT_NUMBER) {
++                    entity->pfnUpdate = g_CoopNumberEntity;
++                } else
 +#endif
 +                    entity->pfnUpdate = entity_functions[entity->entityId];
              }
              if (!isPrologueTimeStopped || (entity->flags & FLAG_UNK_10000)) {
                  entity->pfnUpdate(entity);
-@@ -1283,6 +1303,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
+@@ -1283,6 +1307,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
      entity->stunFrames = stunFrames;
      entity->hitEffect = hitEffect;
      entity->entityRoomIndex = entityRoomIndex;
@@ -534,7 +538,7 @@ index 80452af..4156ec7 100644
          isTouchingGround = 1;
      }
 diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
-index 4fd8301..e6a00e7 100644
+index 4fd8301..31ed46a 100644
 --- a/src/ric/pl_blueprints.c
 +++ b/src/ric/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -557,7 +561,7 @@ index 4fd8301..e6a00e7 100644
      entity->attack = g_api.func_800FD664(entity->attack);
      func_8015F9F0(entity);
  }
-@@ -481,7 +488,20 @@ void RicUpdatePlayerEntities(void) {
+@@ -481,7 +488,24 @@ void RicUpdatePlayerEntities(void) {
      for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
          if (entity->entityId != 0) {
              if (entity->step == 0) {
@@ -573,6 +577,10 @@ index 4fd8301..e6a00e7 100644
 +                // (0xE0-0xFF) run through the module, which feeds them Alucard's swing.
 +                if (entity->entityId >= 0xE0) {
 +                    entity->pfnUpdate = g_CoopWeaponEntity;
++                } else
++                // A hit's number (co-op, #171): DRA's, as Alucard's HandleDamage makes it.
++                if (entity->entityId == COOP_ENT_NUMBER) {
++                    entity->pfnUpdate = g_CoopNumberEntity;
 +                } else
 +#endif
 +                    entity->pfnUpdate = entity_functions[entity->entityId];

@@ -224,6 +224,9 @@ void ProgressDamageTaken(void) {
         g_api.AddHearts(hit);
     }
     s_Scaled = PLAYER.hitPoints = hit;
+    if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) && hit > 0) {
+        CharacterDamageNumber(hit);
+    }
 }
 
 // MainGame fills g_api from DRA's table before the main loop: wrap the two entries once
