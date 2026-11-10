@@ -12,6 +12,8 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `characters.py` | Builds the Marias from the player's own discs: Co-op and Ultimate Maria from the DXC disc, Saturn Maria from the Saturn disc. |
 | `debugstarts.py` | Builds savestates anywhere on the route, from the player's own disc. |
 | `display.py` | The window: menus, games and their layout. |
+| `ui/` | The menus in the game's own style: the theme, the menu toolkit and one file per screen. |
+| `test_ui.py` | Checks the menus' font, lists and screens with a controller, the keyboard and the mouse, on made-up art. |
 | `gameart.py` | Reads the game's own art for the menus from the player's disc: font, logo, portraits, save icons. |
 | `gamesound.py` | Decodes the title music and menu sounds from the player's disc. |
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |

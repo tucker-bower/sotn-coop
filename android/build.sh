@@ -28,6 +28,7 @@ mkdir -p "$STAGE"/{harness,launcher,link,patcher/maria,config,build/coop,bios,bi
 cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$STAGE/harness/"
 cp "$MOD"/launcher/*.py "$STAGE/launcher/"
 cp -r "$MOD/launcher/assets" "$STAGE/launcher/"
+cp -r "$MOD/launcher/ui" "$STAGE/launcher/" && find "$STAGE/launcher/ui" -name __pycache__ -prune -exec rm -rf {} +   # the menus in the game's style
 cp "$MOD"/link/*.py "$STAGE/link/"
 cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$STAGE/patcher/"
 # the same as the installer's (scripts/build_release.sh): 0.13 to 0.16.0 left out maria-partner.bps

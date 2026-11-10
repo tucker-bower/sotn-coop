@@ -112,9 +112,9 @@ def move(sel, action, count):
 
 
 def scroll(first, sel, fits, count):
-    """The first row shown, so that sel is."""
+    """The first row shown, so that sel is (and no empty rows after the last)."""
     if sel < first:
-        return sel
-    if sel >= first + fits:
-        return sel - fits + 1
+        first = sel
+    elif sel >= first + fits:
+        first = sel - fits + 1
     return max(0, min(first, count - fits))

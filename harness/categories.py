@@ -145,6 +145,7 @@ EVERYDAY = {
     "launcher_android_disc", "launcher_audio", "launcher_castles", "launcher_crash_window",  # +
     "launcher_report", "launcher_rules", "launcher_settings", "launcher_ship_lists", "ui_menus",  # +
     "launcher_link_errors",  # + the link failing never stops the game (D191)
+    "launcher_ui", "launcher_gameart", "launcher_gamesound",  # + the menus in the game's style, and its art and sound from the disc (D192)
     "patcher_layer", "rando_start_room_lycanthrope_spr26te",  # +
 }
 

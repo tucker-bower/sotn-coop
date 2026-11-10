@@ -58,6 +58,17 @@ def main():
               (f": missing {sorted(missing)}" if missing else ""))
         if missing:
             failures.append(script)
+    for script in ("scripts/build_release.sh", "android/build.sh"):
+        text = (ROOT / script).read_text()
+        ok = '/launcher/ui"' in text  # the screens are a folder: launcher/*.py alone leaves them out
+        print(("ok   " if ok else "FAIL ") + f"{script} ships launcher/ui, the menus in the game's style")
+        if not ok:
+            failures.append(script)
+    art = [str(p.relative_to(ROOT)) for p in (ROOT / "launcher").rglob("*") if p.suffix.lower() in (".png", ".wav", ".ogg")
+           and "__pycache__" not in p.parts and p.name not in ("icon.png",)]
+    print(("ok   " if not art else "FAIL ") + f"no art or sound is in the launcher's folder: the game's is made on the player's machine {art or ''}")
+    if art:
+        failures.append("art")
     if len(read) < 5:
         print(f"FAIL found only {sorted(read)} in launcher/characters.py")
         failures.append("characters.py")
