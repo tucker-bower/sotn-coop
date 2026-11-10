@@ -606,6 +606,41 @@ static void SaturnMariaHalt(void) {
     g_PlayerY -= y - PLAYER.posY.i.hi;
 }
 
+// Shaft's orb, in the Castle Keep fight with Richter, without the Holy Glasses: it can't be hit
+// (the bad ending's way), and it's drawn with PAL_PLAYER_HIDDEN to be unseen (src/boss/bo6/
+// us_3E79C.c). That palette is blank only for Alucard: Richter and Maria saw an orb they couldn't
+// hit (issue 189). It isn't drawn for them either.
+#define PAL_HIDDEN_FLAGGED 0x810D // PAL_FLAG(PAL_PLAYER_HIDDEN)
+#define HIDDEN_MAX 4
+static s16 s_Hidden[HIDDEN_MAX];
+static u16 s_HiddenFrame[HIDDEN_MAX];
+static s32 s_HiddenCount;
+u32 g_CoopOrbsHidden; // frames an entity was kept from being drawn this way (tests read it: coop.map)
+
+void CharacterRenderStart(void) {
+    s32 i;
+
+    s_HiddenCount = 0;
+    if (g_StageId != STAGE_BO6 || CharacterLoaded() == CHAR_ALUCARD) {
+        return;
+    }
+    for (i = STAGE_ENTITY_START; i < TOTAL_ENTITY_COUNT && s_HiddenCount < HIDDEN_MAX; i++) {
+        if (g_Entities[i].entityId && g_Entities[i].palette == PAL_HIDDEN_FLAGGED && g_Entities[i].animCurFrame) {
+            s_Hidden[s_HiddenCount] = i;
+            s_HiddenFrame[s_HiddenCount++] = g_Entities[i].animCurFrame;
+            g_Entities[i].animCurFrame = 0;
+        }
+    }
+    g_CoopOrbsHidden += s_HiddenCount != 0;
+}
+
+void CharacterRenderEnd(void) {
+    while (s_HiddenCount) {
+        s_HiddenCount--;
+        g_Entities[s_Hidden[s_HiddenCount]].animCurFrame = s_HiddenFrame[s_HiddenCount];
+    }
+}
+
 // Co-op Maria's HUD set (0x2C0,0x100, 32x128 words), kept while a familiar's graphics load over it.
 #define MAR_HUD_SAVE 0x807D8000 // free 8MB RAM between the familiar copies (link.h)
 static void MarHud(bool keep) {

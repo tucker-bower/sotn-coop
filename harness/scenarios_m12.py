@@ -456,3 +456,43 @@ def familiar_graphics_maria(run):
                 out = TOOLS["out"] / run.name
                 e.screenshot().crop((x - 32, y - 32, x + 32, y + 32)).resize((256, 256)).save(
                     out / f"{name}_{where.split()[-1]}.png")
+
+
+BO6_STAGE = 0x18  # include/game.h STAGE_BO6: the Castle Keep's Richter fight
+HEAD, HOLY_GLASSES = 0x80097C08, 0x22  # g_Status.equipment[2]; the Holy Glasses (us_3E79C.c's check)
+PAL_HIDDEN_FLAGGED, PAL_ORB_SEEN = 0x810D, 0x8252
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def shaft_orb_unseen_richter(run):
+    """Issue 189: without the Holy Glasses, Shaft's orb can't be hit (the bad ending's way), and the
+    game draws it with a palette that's blank for Alucard: Richter saw it. Now it isn't drawn for
+    him; with the glasses on it's drawn, and can be hit, as for Alucard."""
+    import struct
+    from module import symbols
+    from scenarios_m8 import HP_NOW
+    e, mb = run.emu, mailbox(run)
+    hidden = symbols()["g_CoopOrbsHidden"]
+    start = e.save_state()
+    for glasses in (0, HOLY_GLASSES):
+        e.load_state(start)
+        e.write(HEAD, glasses)
+        reload_as(run, mb, CHAR_RICHTER)
+        mb.command(CMD_ARRIVE, BO6_STAGE, 0, 128, 179)
+        wait(run, lambda: mb.self_presence().stage == BO6_STAGE and mb.self_presence().flags & IN_PLAY,
+             1500, "he arrives in Richter's arena")
+        before = e.read(hidden)
+        orbs = set()
+        for _ in range(3000):  # the orb comes out after the fight's opening (about 1800 frames)
+            run.step(1)
+            raw = e.read_bytes("g_Entities", 0xBC * 256)
+            orbs |= {struct.unpack_from("<H", raw, s * 0xBC + 0x16)[0] for s in range(64, 256)
+                     if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0]} & {PAL_HIDDEN_FLAGGED, PAL_ORB_SEEN}
+            e.write(HP_NOW, 80, "<i")
+        kept_out = e.read(hidden) - before
+        if glasses:
+            run.expect(PAL_ORB_SEEN in orbs and not kept_out, "with the glasses: the orb is out, and drawn",
+                       palettes=sorted(map(hex, orbs)), hidden=kept_out)
+        else:
+            run.expect(PAL_HIDDEN_FLAGGED in orbs, "without them: the orb is out, unseeable", palettes=sorted(map(hex, orbs)))
+            run.expect(kept_out > 900, "...and it isn't drawn for Richter", hidden=kept_out)
