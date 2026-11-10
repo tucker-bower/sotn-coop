@@ -8,6 +8,7 @@
 #include "link.h"
 #include "partner.h"
 #include "familiar.h"
+#include "character.h"
 
 void RenderEntities(void);   // DRA
 void RenderPrimitives(void); // DRA
@@ -27,10 +28,10 @@ static const CoopFamiliar* Partner(void) { return (const CoopFamiliar*)FAMILIAR_
 static s32 s_Have = -1; // g_ServantLoaded when this game's copy was made
 static s16 s_CopyIn;
 
-static void Sheet(u16* dst, bool store) {
+static void SheetAt(u16* dst, bool store, s16 x) {
     RECT r;
 
-    r.x = SHEET_X;
+    r.x = x;
     r.y = SHEET_Y | (store ? 0 : VRAM_BANK);
     r.w = 0x40;
     r.h = 0x80;
@@ -41,6 +42,124 @@ static void Sheet(u16* dst, bool store) {
     DrawSync(0);
     store ? StoreImage(&r, (u_long*)(dst + 0x40 * 0x80)) : LoadImage(&r, (u_long*)(dst + 0x40 * 0x80));
     DrawSync(0);
+}
+
+static void Sheet(u16* dst, bool store) { SheetAt(dst, store, SHEET_X); }
+
+// Co-op Maria keeps her HUD set (0x2C0,0x100), turtle (0x2E0,0x100) and cat (0x2C0,0x180) in the
+// familiar's texture page, and her init puts the HUD set back at every stage: her familiar came out
+// garbled, or her guardians did (issue 208). The first bank has no other free page, so in her game
+// the familiar's graphics go to page 0x100,0x100 of the second bank (nothing uses it there: the
+// partner's graphics are at 0x200 and up, its sprite slots in page 0,0x100) and are drawn from there.
+#define OWN_X 0x100
+#define FAM_PAGE 0x1B // (0x2C0, 0x100): texture page numbers, as a tpage's low 5 bits
+#define OWN_PAGE 0x14 // (0x100, 0x100)
+#define OWN_SHIFT ((OWN_PAGE - FAM_PAGE) * 4) // to an entity's unk5A (its parts' tpage << 2)
+#define IS_FAMILIAR(e) ((e)->entityId >= 0xD0 && (e)->entityId < 0xE0)
+static bool s_InBank; // this game's familiar draws from the second bank
+
+void FamiliarToBank(void) {
+    s_InBank = CharacterLoaded() == CHAR_MARIA;
+    if (s_InBank) {
+        Sheet(Self()->sheet, true);
+        SheetAt(Self()->sheet, false, OWN_X);
+    }
+}
+
+static u8 s_Own[STAGE_ENTITY_START]; // the familiar's slots this frame, out of the game's pass
+static u16 s_OwnFrames[STAGE_ENTITY_START];
+
+void FamiliarHideOwn(void) {
+    s32 i;
+
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        s_Own[i] = s_InBank && CharacterLoaded() == CHAR_MARIA && IS_FAMILIAR(&g_Entities[i]) &&
+                   g_Entities[i].animSet && g_Entities[i].animCurFrame;
+        if (s_Own[i]) {
+            s_OwnFrames[i] = g_Entities[i].animCurFrame;
+            g_Entities[i].animCurFrame = 0;
+        }
+    }
+}
+
+void FamiliarDrawOwn(void) {
+    static u16 s_All[256];
+    u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
+    s32 i, n = 0;
+
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        n += s_Own[i];
+    }
+    if (!n) {
+        return;
+    }
+    for (i = 0; i < 256; i++) {
+        s_All[i] = g_Entities[i].animCurFrame;
+        g_Entities[i].animCurFrame = 0;
+    }
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        if (s_Own[i]) {
+            g_Entities[i].animCurFrame = s_OwnFrames[i];
+            g_Entities[i].unk5A += OWN_SHIFT;
+        }
+    }
+    RenderEntities();
+    for (; gt4 < g_GpuUsage.gt4; gt4++) {
+        if ((g_CurrentBuffer->polyGT4[gt4].tpage & 0x1F) == OWN_PAGE) {
+            g_CurrentBuffer->polyGT4[gt4].tpage |= TPAGE_BANK;
+        }
+    }
+    for (; gt3 < g_GpuUsage.gt3; gt3++) {
+        if ((g_CurrentBuffer->polyGT3[gt3].tpage & 0x1F) == OWN_PAGE) {
+            g_CurrentBuffer->polyGT3[gt3].tpage |= TPAGE_BANK;
+        }
+    }
+    for (i = 0; i < 256; i++) {
+        g_Entities[i].animCurFrame = s_All[i];
+    }
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        if (s_Own[i]) {
+            g_Entities[i].animCurFrame = s_OwnFrames[i];
+            g_Entities[i].unk5A -= OWN_SHIFT;
+        }
+    }
+}
+
+// Its primitives (the sword familiar is only primitives): each of its entities' chain, from
+// FamiliarOwnPrims to FamiliarOwnPrimsBack (after the partner's copy of them was taken).
+#define OWN_PRIMS 64
+static s16 s_OwnPrims[OWN_PRIMS];
+static s32 s_OwnPrimCount;
+
+void FamiliarOwnPrims(void) {
+    Primitive* p;
+    s32 i;
+
+    s_OwnPrimCount = 0;
+    if (!s_InBank || CharacterLoaded() != CHAR_MARIA) {
+        return;
+    }
+    for (i = 0; i < STAGE_ENTITY_START; i++) {
+        if (!IS_FAMILIAR(&g_Entities[i]) || !(g_Entities[i].flags & FLAG_HAS_PRIMS)) {
+            continue;
+        }
+        for (p = &g_PrimBuf[g_Entities[i].primIndex]; p && s_OwnPrimCount < OWN_PRIMS; p = p->next) {
+            if ((p->type == PRIM_GT4 || p->type == PRIM_GT3) && (p->tpage & 0x1F) == FAM_PAGE &&
+                !(p->tpage & TPAGE_BANK)) {
+                p->tpage = (p->tpage & ~0x1F) | OWN_PAGE | TPAGE_BANK;
+                s_OwnPrims[s_OwnPrimCount++] = p - g_PrimBuf;
+            }
+        }
+    }
+}
+
+void FamiliarOwnPrimsBack(void) {
+    Primitive* p;
+
+    while (s_OwnPrimCount) {
+        p = &g_PrimBuf[s_OwnPrims[--s_OwnPrimCount]];
+        p->tpage = (p->tpage & ~(0x1F | TPAGE_BANK)) | FAM_PAGE;
+    }
 }
 
 // This game's: once per frame. A copy a little after a familiar loads (or none, when it goes).
@@ -60,7 +179,9 @@ void FamiliarUpdate(void) {
     f->servant = s_Have;
     if (s_Have) {
         __builtin_memcpy(f->ovl, (const void*)FAMILIAR_PRG, FAMILIAR_OVL_SIZE);
-        Sheet(f->sheet, true);
+        if (!s_InBank) { // in Co-op Maria's game it was taken as it loaded (FamiliarToBank)
+            Sheet(f->sheet, true);
+        }
         __builtin_memcpy(f->clut, (u16*)g_Clut + PAL_FIRST * COLORS_PER_PAL, FAMILIAR_CLUT_SIZE);
         f->bank = ((u32*)g_api.o.spriteBanks)[FAM_BANK];
     }

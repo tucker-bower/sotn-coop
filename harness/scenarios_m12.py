@@ -401,3 +401,58 @@ def maria_scene_richter_on_the_throne(run):
     extra = sorted(maria - alucard)
     run.expect(not extra, "her game writes no VRAM Alucard's doesn't in the scene",
                extra=[(hex(x * 64), hex(y * 32)) for x, y in extra])
+
+
+BAT_CARD, FAERIE_CARD, SWORD_CARD = 18, 0x14, 0x16
+FAM_HOME, FAM_BANK_COPY = (0x2C0, 0x100), (0x100, 0x100 + 512)  # module/familiar.c: page 0x100,0x100 of the second bank
+MAR_HUD = (0x2C0, 0x100)  # her HUD set (src/maria/ovl_load.c), in the familiar's page with the turtle and cat
+NO0, LEFT_OF_MARIA = 0x00, (80, 728, 135)  # session_m5: the Marble Gallery, another stage
+
+
+def familiar_sheet(e, x, y):
+    """A familiar's graphics, as src/dra/cd.c loads them: 0x40 x 0x80 words, then 0x20 x 0x80 below."""
+    return e.vram_rect(x, y, 0x40, 0x80) + e.vram_rect(x, y + 0x80, 0x20, 0x80)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def familiar_graphics_maria(run):
+    """Issue 208: Maria's Bat came out garbled after changing areas: a familiar's graphics share a
+    texture page with her HUD set, turtle and cat, and her init puts the HUD set back at each stage.
+    Hers stay hers, the familiar's are in VRAM's second bank (as Alucard's game loads them), and
+    both stay so across a stage change. The Bat (the report's), the Faerie (which fills the page) and
+    the Sword (drawn with primitives)."""
+    from scenarios_m8 import STATUS, RELIC_ON
+    from coop_env import TOOLS
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    reload_as(run, mb, CHAR_MARIA)
+    run.step(120)
+    mine = {n: e.vram_rect(x, y, 0x20, 0x80) for n, (x, y) in
+            {"HUD set": MAR_HUD, "turtle": GUARDIANS["turtle"], "cat": GUARDIANS["cat"]}.items()}
+    for card, name in ((BAT_CARD, "Bat"), (FAERIE_CARD, "Faerie"), (SWORD_CARD, "Sword")):
+        e.load_state(start)
+        e.write(STATUS, RELIC_ON, "<B", card)
+        reload_as(run, mb, CHAR_ALUCARD)
+        run.step(300)
+        theirs = familiar_sheet(e, *FAM_HOME)  # as Alucard's game has it
+        e.load_state(start)
+        e.write(STATUS, RELIC_ON, "<B", card)
+        reload_as(run, mb, CHAR_MARIA)
+        for where in ("after a load", "after changing areas"):
+            if where != "after a load":
+                mb.command(CMD_ARRIVE, NO0, *LEFT_OF_MARIA)
+                wait(run, lambda: mb.self_presence().stage == NO0 and mb.self_presence().flags & IN_PLAY
+                     and not mb.self_presence().flags & BUSY, 1200, "she arrives in the Marble Gallery")
+            run.step(300)
+            changed = [n for n, (x, y) in {"HUD set": MAR_HUD, "turtle": GUARDIANS["turtle"],
+                                            "cat": GUARDIANS["cat"]}.items() if e.vram_rect(x, y, 0x20, 0x80) != mine[n]]
+            run.expect(not changed, f"{name}, {where}: her HUD set, turtle and cat are hers", changed=changed)
+            run.expect(familiar_sheet(e, *FAM_BANK_COPY) == theirs,
+                       f"{name}, {where}: its graphics are in the second bank, as Alucard's game has them")
+            fam = [s for s in range(4, 64) if 0xD0 <= e.read(e.entity(s), "<H", 0x26) < 0xE0]
+            run.expect(fam, f"{name}, {where}: it's out")
+            if fam:  # evidence: the familiar on screen, 4x
+                x, y = e.read(e.entity(fam[0]), "<h", 2), e.read(e.entity(fam[0]), "<h", 6)
+                out = TOOLS["out"] / run.name
+                e.screenshot().crop((x - 32, y - 32, x + 32, y + 32)).resize((256, 256)).save(
+                    out / f"{name}_{where.split()[-1]}.png")
