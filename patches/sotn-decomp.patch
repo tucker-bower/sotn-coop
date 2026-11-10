@@ -1,5 +1,5 @@
 diff --git a/mods/mariapsp-forpsx/maria.c b/mods/mariapsp-forpsx/maria.c
-index 850b8cd58..b5c93e31a 100644
+index 850b8cd..b5c93e3 100644
 --- a/mods/mariapsp-forpsx/maria.c
 +++ b/mods/mariapsp-forpsx/maria.c
 @@ -286,13 +286,12 @@ static inline void ConvertSubweaponRicToMaria() {
@@ -19,7 +19,7 @@ index 850b8cd58..b5c93e31a 100644
          g_Status.subWeapon = equipped_subweapon;
          if (g_Status.hearts < g_Status.heartsMax) {
 diff --git a/src/dra/42398.c b/src/dra/42398.c
-index 3e7101345..b4d54e5cd 100644
+index 3e71013..b4d54e5 100644
 --- a/src/dra/42398.c
 +++ b/src/dra/42398.c
 @@ -2,6 +2,9 @@
@@ -77,7 +77,7 @@ index 3e7101345..b4d54e5cd 100644
  #if defined(VERSION_HD)
          PrintGpuInfo();
 diff --git a/src/dra/4A538.c b/src/dra/4A538.c
-index 4b041d73c..2ec738876 100644
+index 4b041d7..2ec7388 100644
 --- a/src/dra/4A538.c
 +++ b/src/dra/4A538.c
 @@ -283,7 +283,7 @@ s32 func_800EAD0C(void) { // the return type is needed for matching
@@ -90,7 +90,7 @@ index 4b041d73c..2ec738876 100644
      }
  }
 diff --git a/src/dra/5087C.c b/src/dra/5087C.c
-index 073dbffd2..a675746d6 100644
+index 073dbff..a675746 100644
 --- a/src/dra/5087C.c
 +++ b/src/dra/5087C.c
 @@ -4,6 +4,9 @@
@@ -143,7 +143,7 @@ index 073dbffd2..a675746d6 100644
                          EntityAlucard();
                          func_8011A870();
 diff --git a/src/dra/5F60C.c b/src/dra/5F60C.c
-index 9500e4fdb..142de17dc 100644
+index 9500e4f..142de17 100644
 --- a/src/dra/5F60C.c
 +++ b/src/dra/5F60C.c
 @@ -83,7 +83,7 @@ void UpdateCapePalette(void) {
@@ -174,7 +174,7 @@ index 9500e4fdb..142de17dc 100644
          return;
      }
 diff --git a/src/dra/62DEC.c b/src/dra/62DEC.c
-index 3bed4600e..24896f205 100644
+index 3bed460..24896f2 100644
 --- a/src/dra/62DEC.c
 +++ b/src/dra/62DEC.c
 @@ -1,6 +1,9 @@
@@ -200,7 +200,7 @@ index 3bed4600e..24896f205 100644
          func_psp_090DFC68();
          if (MemcardWriteFile(D_80097924, 0, saveFile, g_Pix, 1, i, 1) != 0) {
 diff --git a/src/dra/6BF64.c b/src/dra/6BF64.c
-index 0f5a310a1..f88aba65c 100644
+index 0f5a310..f88aba6 100644
 --- a/src/dra/6BF64.c
 +++ b/src/dra/6BF64.c
 @@ -48,7 +48,7 @@ Point16 g_SensorsWall[NUM_VERTICAL_SENSORS * 2] = {
@@ -231,7 +231,7 @@ index 0f5a310a1..f88aba65c 100644
                  }
  #endif
 diff --git a/src/dra/7879C.c b/src/dra/7879C.c
-index bedfbdebf..155da293b 100644
+index bedfbde..155da29 100644
 --- a/src/dra/7879C.c
 +++ b/src/dra/7879C.c
 @@ -1785,7 +1785,7 @@ void func_8011A9D8(void) {
@@ -244,7 +244,7 @@ index bedfbdebf..155da293b 100644
              entity->pfnUpdate(entity);
          }
 diff --git a/src/dra/cd.c b/src/dra/cd.c
-index 86bb025c9..bee9c3aa6 100644
+index 86bb025..bee9c3a 100644
 --- a/src/dra/cd.c
 +++ b/src/dra/cd.c
 @@ -675,7 +675,7 @@ void UpdateCd(void) {
@@ -257,7 +257,7 @@ index 86bb025c9..bee9c3aa6 100644
                  g_LbaBinGame.nextCdFileType = CdFile_RichterPrg;
              } else {
 diff --git a/src/dra/dra.h b/src/dra/dra.h
-index 3799f72af..f5549656b 100644
+index 3799f72..f554965 100644
 --- a/src/dra/dra.h
 +++ b/src/dra/dra.h
 @@ -898,4 +898,13 @@ s16 func_80110394(void);
@@ -275,7 +275,7 @@ index 3799f72af..f5549656b 100644
 +
  #endif
 diff --git a/src/dra/game_handlers.c b/src/dra/game_handlers.c
-index 027137b05..89fb5df33 100644
+index 027137b..89fb5df 100644
 --- a/src/dra/game_handlers.c
 +++ b/src/dra/game_handlers.c
 @@ -1460,7 +1460,7 @@ void HandleNowLoading(void) {
@@ -306,7 +306,7 @@ index 027137b05..89fb5df33 100644
          } else {
  #ifdef VERSION_PSP
 diff --git a/src/maria/pl_blueprints.c b/src/maria/pl_blueprints.c
-index ce01a3c3b..60118ee05 100644
+index ce01a3c..60118ee 100644
 --- a/src/maria/pl_blueprints.c
 +++ b/src/maria/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -362,7 +362,7 @@ index ce01a3c3b..60118ee05 100644
      func_maria_8015F9F0(entity);
  }
 diff --git a/src/maria/pl_collision.c b/src/maria/pl_collision.c
-index 69e9bce17..24de3ae96 100644
+index 69e9bce..24de3ae 100644
 --- a/src/maria/pl_collision.c
 +++ b/src/maria/pl_collision.c
 @@ -128,10 +128,16 @@ bool MarCheckInput(s32 checks) {
@@ -411,7 +411,7 @@ index 69e9bce17..24de3ae96 100644
          return 1;
      }
 diff --git a/src/maria/pl_main.c b/src/maria/pl_main.c
-index 40ff427dc..019aa13ca 100644
+index 40ff427..019aa13 100644
 --- a/src/maria/pl_main.c
 +++ b/src/maria/pl_main.c
 @@ -350,6 +350,19 @@ static void CheckBladeDashInput(void) {
@@ -469,7 +469,7 @@ index 40ff427dc..019aa13ca 100644
          // this is new to the maria overlay
          g_Player.unk7A = 0;
 diff --git a/src/maria/pl_setstep.c b/src/maria/pl_setstep.c
-index 615a23913..b17d6c9f1 100644
+index 615a239..b17d6c9 100644
 --- a/src/maria/pl_setstep.c
 +++ b/src/maria/pl_setstep.c
 @@ -345,6 +345,15 @@ bool MarDoCrash(void) {
@@ -489,7 +489,7 @@ index 615a23913..b17d6c9f1 100644
              MarSetAnimation(mar_anim_stand_relax);
          }
 diff --git a/src/maria/pl_steps.c b/src/maria/pl_steps.c
-index 80452affd..9bf932ffc 100644
+index 80452af..4156ec7 100644
 --- a/src/maria/pl_steps.c
 +++ b/src/maria/pl_steps.c
 @@ -232,6 +232,9 @@ void MarStepJump(void) {
@@ -515,8 +515,26 @@ index 80452affd..9bf932ffc 100644
          return;
      }
      MarDecelerateX(FIX(0.125));
+@@ -1067,6 +1074,17 @@ void MarStepRun(void) {
+     halt = 0;
+     isTouchingGround = 0;
+     MarDecelerateX(FIX(0.375));
++#ifdef COOP_MARIA
++    // Issue 172: her run starts at 8 px a frame, and at 8 she went far enough into a step's wall in
++    // one frame for the game's collision not to push her back out: she sank through the floor and
++    // fell out of the room (the Marble Gallery's dolls corridor). 6.5 holds; the dash loses ~4 px.
++    if (PLAYER.velocityX > FIX(6.5)) {
++        PLAYER.velocityX = FIX(6.5);
++    }
++    if (PLAYER.velocityX < FIX(-6.5)) {
++        PLAYER.velocityX = FIX(-6.5);
++    }
++#endif
+     if (PLAYER.facingLeft == 0 && g_Player.vram_flag & TOUCHING_R_WALL) {
+         isTouchingGround = 1;
+     }
 diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
-index 4fd830174..e6a00e731 100644
+index 4fd8301..e6a00e7 100644
 --- a/src/ric/pl_blueprints.c
 +++ b/src/ric/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -562,7 +580,7 @@ index 4fd830174..e6a00e731 100644
              if (!isPrologueTimeStopped || (entity->flags & FLAG_UNK_10000)) {
                  entity->pfnUpdate(entity);
 diff --git a/src/ric/pl_collision.c b/src/ric/pl_collision.c
-index 17a7d39df..b97288d17 100644
+index 17a7d39..b97288d 100644
 --- a/src/ric/pl_collision.c
 +++ b/src/ric/pl_collision.c
 @@ -174,10 +174,16 @@ bool RicCheckInput(s32 checks) {
@@ -583,7 +601,7 @@ index 17a7d39df..b97288d17 100644
            g_Player.colFloor[2].effects & EFFECT_UNK_8000) &&
          !(PLAYER.facingLeft &&
 diff --git a/src/ric/pl_main.c b/src/ric/pl_main.c
-index 009442689..d105b0eb6 100644
+index 0094426..d105b0e 100644
 --- a/src/ric/pl_main.c
 +++ b/src/ric/pl_main.c
 @@ -308,6 +308,19 @@ static void CheckBladeDashInput(void) {
@@ -641,7 +659,7 @@ index 009442689..d105b0eb6 100644
      g_Player.unk72 = func_80156DE4();
  #ifndef VERSION_PSP
 diff --git a/src/ric/pl_steps.c b/src/ric/pl_steps.c
-index a17c742cb..11152ed16 100644
+index a17c742..11152ed 100644
 --- a/src/ric/pl_steps.c
 +++ b/src/ric/pl_steps.c
 @@ -181,6 +181,16 @@ void RicStepJump(void) {
@@ -733,7 +751,7 @@ index a17c742cb..11152ed16 100644
              RicSetSlideKick();
              return;
 diff --git a/tools/builds/gen.py b/tools/builds/gen.py
-index 1857c555e..9661b9de0 100644
+index 1857c55..9661b9d 100644
 --- a/tools/builds/gen.py
 +++ b/tools/builds/gen.py
 @@ -623,6 +623,11 @@ def add_splat_config(nw: ninja_syntax.Writer, ver: str, file_name: str):
@@ -758,7 +776,7 @@ index 1857c555e..9661b9de0 100644
          rule="psx-ld",
          outputs=[output_elf],
 diff --git a/tools/sotn-assets/build.go b/tools/sotn-assets/build.go
-index d3a5a3df4..6af6ce2c2 100644
+index d3a5a3d..6af6ce2 100644
 --- a/tools/sotn-assets/build.go
 +++ b/tools/sotn-assets/build.go
 @@ -55,7 +55,7 @@ func buildVersions(versions []string) error {

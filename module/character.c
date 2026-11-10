@@ -691,6 +691,9 @@ void CharacterFrame(void) {
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
             PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
         }
+        if (s_Loaded == CHAR_RICHTER || s_Loaded == CHAR_ULT_RICHTER) {
+            OffhandRicKeep(); // F_GAME2 (and his coat) are in: before any hand's item loads
+        }
     }
     // ...and its sound bank, once the chain that loads Richter's (SD_RIH, then SD_MAR) is done.
     if (g_LoadFile == CdFile_SdRihVh) {
@@ -730,6 +733,15 @@ void CharacterFrame(void) {
             (*(void (**)(void))MAR_GUARDIANS_HOOK)();
             OffhandPlaceSheet();
         }
+    }
+    // ...and Richter's graphics under the left hand's (issue 195)
+    if ((s_PrevLoadFile == CdFile_Weapon0 || s_PrevLoadFile == CdFile_Weapon1) && g_LoadFile != s_PrevLoadFile &&
+        (s_Loaded == CHAR_RICHTER || s_Loaded == CHAR_ULT_RICHTER) && g_StageId != STAGE_ST0) {
+        OffhandKeepSheet(s_PrevLoadFile == CdFile_Weapon1);
+        if (s_PrevLoadFile == CdFile_Weapon1) {
+            OffhandRicRestore();
+        }
+        OffhandPlaceSheet();
     }
     s_PrevLoadFile = g_LoadFile;
     // Killing Richter (BO6) freezes the game (Engine_5, unk28 0xFF) until his death scene, a stage
