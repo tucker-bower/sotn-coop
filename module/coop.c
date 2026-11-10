@@ -217,9 +217,11 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     }
     PLAYER.animCurFrame = MAR_SAFE_FRAME(CharacterLoaded(), &PLAYER);
     OffhandRenderStart();
+    CharacterRenderStart();
     FamiliarHideOwn();
     RenderEntities();
     FamiliarDrawOwn();
+    CharacterRenderEnd();
     OffhandRenderEnd();
     PLAYER.animCurFrame = frame; // (the partner's frame swaps PLAYER out and back)
     PartnerFrame(); // M13: the partner's own update and drawing, after player 1's

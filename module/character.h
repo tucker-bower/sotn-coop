@@ -9,6 +9,8 @@ void CharacterApply(void);   // right before a load picks the player's files
 u32 CharacterLoaded(void);   // CHAR_* of this game's player
 const CharBlob* CharacterBlob(u32 character); // the launcher's blob for that character, or NULL
 void CharacterBeforePrims(void); // the frame's primitives are about to be drawn
+void CharacterRenderStart(void); // around RenderEntities: what this player's character mustn't see...
+void CharacterRenderEnd(void);   // ...back after it
 // Ultimate Richter's coat (a RIC2 file: his palettes and arm art), into the game's palettes and
 // VRAM, or into VRAM's second bank for a partner who wears it
 void CharacterRicCoat(const u8* file, bool partner);
