@@ -871,13 +871,13 @@ class GameView:
             if self.frame % ROLLING_EVERY == 0:
                 for g in self.games:
                     g.keep_state(self.frame)
-            for k in range(self.scene_speed - 1):  # a scene both players asked to skip: no sound or picture
-                for g in self.games:
-                    g.frame_start(0)
-                for g in self.games:
-                    g.frame_end()
-                self.frame += 1
             try:
+                for k in range(self.scene_speed - 1):  # a scene both players asked to skip: no sound or picture
+                    for g in self.games:
+                        g.frame_start(0)
+                    for g in self.games:
+                        g.frame_end()
+                    self.frame += 1
                 for g, pad in zip(self.games, pads):  # both games run their frame at the same time
                     g.frame_start(pad)
                 replies = [g.frame_end() for g in self.games]

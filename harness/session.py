@@ -97,7 +97,7 @@ class _Worker:
         elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
             emu.step(1, args)
             if self.linked:
-                host.after_frame()
+                self.link_frame()
             picture = emu.raw_frame()
             if picture and self.shm is not None:  # the pixels go through shared memory
                 w, h, fmt, pitch, data = picture
@@ -112,6 +112,20 @@ class _Worker:
         else:
             raise ValueError(f"unknown command {cmd}")
         return None
+
+    LINK_ERRORS_LOGGED = 5
+
+    def link_frame(self):
+        """The host's frame, in real-time play: whatever goes wrong in the link, the game runs on
+        (the partner stalls, at worst), and the first few failures go to the worker's log, for F9
+        reports. Tests step with "step", which raises."""
+        try:
+            self.host.after_frame()
+        except Exception:  # noqa: BLE001 - a player's session is worth more than the link's frame
+            self.link_errors = getattr(self, "link_errors", 0) + 1
+            if self.link_errors <= self.LINK_ERRORS_LOGGED:
+                import logging
+                logging.getLogger("link").exception("the host's frame failed (%d so far)", self.link_errors)
 
     def close(self):
         if self.linked:

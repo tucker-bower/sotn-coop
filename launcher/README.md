@@ -25,6 +25,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
 | `test_characters.py` | Checks Maria's build from a DXC disc. |
+| `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |
 | `test_crash_window.py` | Checks what counts as stopped, and that closing the crash window sends nothing. |
