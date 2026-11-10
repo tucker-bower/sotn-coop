@@ -213,6 +213,7 @@ static void __attribute__((used)) RenderEntitiesHook(void) {
     if (MistStepHidden()) {
         PLAYER.animCurFrame = 0; // not drawn this frame
     }
+    PLAYER.animCurFrame = MAR_SAFE_FRAME(CharacterLoaded(), &PLAYER);
     OffhandRenderStart();
     RenderEntities();
     OffhandRenderEnd();

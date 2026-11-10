@@ -6,7 +6,7 @@ from bots import walker
 import hashlib
 
 from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
-                          IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST)
+                          DEAD, IN_PLAY, PAUSED, ROLE_AUTHORITY, ROLE_GUEST)
 from module import COOP_DISC
 from session_progress import arrive
 from session_scenarios import partner_pixels
@@ -285,12 +285,26 @@ def mixed_soak(run, ca, cb, minutes):
     a.host_ms(), b.host_ms()  # from here
     frames = int(minutes * 3600)
     ia, ib = list(random_inputs(41, frames)), list(random_inputs(42, frames))
-    shared = slow = played = 0
+    slow = played = 0
+    together = shared = 0  # samples (every 60 frames) when the room is shareable, and of those, shared
     ms, vcount = [], []
 
+    def shareable(pa, pb):
+        """As module/shared.c's PartnerShareable decides: same room, both in play and free, cameras
+        within a screen (CAMERA_NEAR)."""
+        free = all(p.flags & IN_PLAY and not p.flags & (BUSY | DEAD | PAUSED) for p in (pa, pb))
+        return (free and (pa.stage, pa.room_id) == (pb.stage, pb.room_id)
+                and abs(pa.scroll_x - pb.scroll_x) < 256 and abs(pa.scroll_y - pb.scroll_y) < 256)
+
     def sample(i, sa, sb):
+        nonlocal together, shared
         if i % 10 == 0:
             vcount.extend(g.read(VCOUNT) for g in (a, b))
+        if i % 60 == 0:
+            pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+            if shareable(pa, pb):
+                together += 1
+                shared += (pa.role, pb.role) in ((ROLE_AUTHORITY, ROLE_GUEST), (ROLE_GUEST, ROLE_AUTHORITY))
     for t in range(0, frames, 600):
         t0 = [g.read("g_Timer") for g in (a, b)]
         run.step(600, p1=lambda i, sa, sb, t=t: (ia[t + i][0], ib[t + i][0]), each=sample)
@@ -298,19 +312,25 @@ def mixed_soak(run, ca, cb, minutes):
             if g.snapshot()["game_state"] == 2:
                 played += 600
                 slow += max(0, 600 - (g.read("g_Timer") - before))
-        shared += roles(run) in ((ROLE_AUTHORITY, ROLE_GUEST), (ROLE_GUEST, ROLE_AUTHORITY))
         ms += a.host_ms() + b.host_ms()
         heal(a), heal(b)
+        # Issue 184: both stay in the hall, whatever the random input does, so the two soaks being
+        # compared measure the same room: A back to it if it left, B back beside A
         p = a.mailbox("self_presence")
-        if not roles(run)[0]:
+        if (p.stage, p.room_id) != (STAGE_NO3, HALL_ROOM_ID):
+            a.mailbox("command", CMD_ARRIVE, STAGE_NO3, HALL_ROOM_ID, 1300, 200)
+            b.mailbox("command", CMD_ARRIVE, STAGE_NO3, HALL_ROOM_ID, 1324, 200)
+        elif not roles(run)[0]:
             b.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x, p.ground_y)
     ms.sort()
     vcount.sort()
     p99 = ms[int(len(ms) * 0.99)] if ms else 0
-    numbers = {"dropped": slow, "of": played, "host_p99_ms": round(p99, 3), "shared": shared,
+    numbers = {"dropped": slow, "of": played, "host_p99_ms": round(p99, 3), "shared": shared, "together": together,
                "scanlines_p50": vcount[len(vcount) // 2], "scanlines_p99": vcount[int(len(vcount) * 0.99)]}
     run.expect(a.snapshot()["game_state"] == 2 and b.snapshot()["game_state"] == 2, "both still in play")
-    run.expect(shared >= frames // 600 // 2, "shared most of the time", shared=shared, checks=frames // 600)
+    samples = frames // 60
+    run.expect(together >= samples // 3, "close together in the hall a third of the time or more", together=together, of=samples)
+    run.expect(shared >= together * 9 // 10, "sharing the room whenever close (90%)", shared=shared, together=together)
     run.expect(p99 < 1.0, "host p99 under 1 ms per frame", **numbers)
     assert_converged(run)
     return numbers

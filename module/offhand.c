@@ -146,12 +146,16 @@ static void KeepOwn(void) {
 }
 
 // While RenderEntities runs, a weapon's palette numbers lead to the second bank.
+static void OwlsMoved(void);
+static void OwlsBack(void);
+
 void OffhandRenderStart(void) {
     s32 k;
 
     if (CharacterLoaded() == CHAR_ALUCARD) {
         return;
     }
+    OwlsMoved();
     for (k = 0; k < N_PAL; k++) {
         s_Ids[k] = g_ClutIds[OFFHAND_PALS + k];
         g_ClutIds[OFFHAND_PALS + k] = CLUT_BANK | ((BANK_PAL_Y + k / 16) << 6) | (k % 16);
@@ -164,6 +168,7 @@ void OffhandRenderEnd(void) {
     if (CharacterLoaded() == CHAR_ALUCARD) {
         return;
     }
+    OwlsBack();
     for (k = 0; k < N_PAL; k++) {
         g_ClutIds[OFFHAND_PALS + k] = s_Ids[k];
     }
@@ -331,13 +336,20 @@ static void AluAnimate(void) {
 // --- Maria: the weapon's tile sheet beside her guardians (D106, design/M12b) -------------------
 // DRA loads a hand weapon's sheet at 0x240,0x100 (right hand) or 0x240,0x180 (left), over her
 // guardians (D104), whose graphics are then put back. Before that, the sheet is copied to the
-// 8MB, and the one ○ will swing goes back at 0x240,0x180: that area holds her owl and doll, which
-// she can't select in our port (maria.c's ConvertSubweaponRicToMaria maps no subweapon to them).
+// 8MB, and the one ○ will swing goes back at 0x240,0x180, over her owl and doll. She can't select
+// the doll in our port, but the owl is her attack (□): its graphics move to 0x1C0,0x180, a spot no
+// stage uses (vram_survey.window_free), and her owls are drawn from there (issue 203).
 #define SHEET_W 0x40 // 16-bit words: 256 4bpp pixels
 #define SHEET_H 0x80
 #define SHEET_Y(hand) ((hand) ? 0x180 : 0x100)
 #define SHEET(hand) ((u_long*)(WEAPON_SHEET_ADDR + (hand) * SHEET_W * SHEET_H * 2))
 static s8 s_SheetHand = -1; // the hand whose sheet is at 0x240,0x180 in Maria's game
+#define OWL_X 0x1C0 // her owl's copy: the left half of texture page 0x17's lower half
+#define OWL_Y 0x180
+#define OWL_W 0x20
+#define ANIMSET_WPN_OWL 0x8011 // ANIMSET_OVL(17) (src/maria/maria.h)
+#define OWL_TP 0x66        // her owl's unk5A (src/maria/pl_blueprints.c): 0x240,0x180
+#define OWL_TP_MOVED 0x5E  // ...for 0x1C0,0x180 (pl_subweapons.c's calc_tpage)
 
 void OffhandKeepSheet(s32 hand) {
     RECT r;
@@ -370,10 +382,40 @@ static void PlaceSheet(void) {
     }
     r.x = 0x240;
     r.y = SHEET_Y(1);
-    r.w = SHEET_W;
+    r.w = OWL_W;
     r.h = SHEET_H;
+    DrawSync(0);
+    MoveImage(&r, OWL_X, OWL_Y); // her owl, just put back by her guardians' upload
+    DrawSync(0);
+    r.w = SHEET_W;
     LoadImage(&r, SHEET(hand));
     s_SheetHand = hand;
+}
+
+// While RenderEntities runs, her owls (her attack) are drawn from their copy (OffhandRenderStart).
+static s16 s_OwlSlots[STAGE_ENTITY_START];
+static s32 s_OwlCount;
+
+static void OwlsMoved(void) {
+    s32 i;
+
+    s_OwlCount = 0;
+    if (s_SheetHand < 0 || !CHAR_IS_MARIA(CharacterLoaded())) {
+        return;
+    }
+    for (i = 1; i < STAGE_ENTITY_START; i++) {
+        if (g_Entities[i].entityId && (u16)g_Entities[i].animSet == ANIMSET_WPN_OWL &&
+            g_Entities[i].unk5A == OWL_TP) {
+            g_Entities[i].unk5A = OWL_TP_MOVED;
+            s_OwlSlots[s_OwlCount++] = i;
+        }
+    }
+}
+
+static void OwlsBack(void) {
+    while (s_OwlCount) {
+        g_Entities[s_OwlSlots[--s_OwlCount]].unk5A = OWL_TP;
+    }
 }
 
 // Each weapon entity's bank, palette and hand before they're changed below: the partner draws
