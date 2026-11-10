@@ -44,11 +44,14 @@ def main():
     inputs = json.loads(z.read("inputs.json"))
     start = args.start if args.start is not None else (frames[0] if frames else None)
     tmp = Path(tempfile.mkdtemp(prefix="coop-replay-"))
+    # An online report holds one game: its own states, and its own pad per frame ([frame, pad]).
+    solo = not any(n.endswith("B.state") for n in names) or any(len(i) == 2 for i in inputs)
+    inputs = [(i[0], i[1], i[2] if len(i) > 2 else 0) for i in inputs]
     if start is None:
-        files = ("now/A.state", "now/B.state")
+        files = ("now/A.state",) if solo else ("now/A.state", "now/B.state")
         todo = []
     else:
-        files = (f"before/{start}_A.state", f"before/{start}_B.state")
+        files = (f"before/{start}_A.state",) if solo else (f"before/{start}_A.state", f"before/{start}_B.state")
         last = max((f for f, _, _ in inputs), default=start)
         todo = [(pa, pb) for f, pa, pb in inputs if start <= f <= last]
     starts = []
@@ -57,6 +60,16 @@ def main():
         starts.append(str(tmp / Path(f).name))
     out = args.report.with_name(args.report.stem + "-replay")
     out.mkdir(exist_ok=True)
+    if solo:
+        from emu import Emu
+        with Emu(args.disc) as e:
+            e.load_state_file(starts[0])
+            for k, (pa, _) in enumerate(todo):
+                e.step(1, pa)
+                if k % 10 == 0:
+                    e.screenshot(out / f"{k:05d}.png")
+        print(f"replayed {len(todo)} frames of one game from {start}: {out}")
+        return
     with Session(args.disc, starts=tuple(starts)) as s:
         for k, pads in enumerate(todo):
             s.step(1, p1=pads)

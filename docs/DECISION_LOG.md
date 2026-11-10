@@ -865,3 +865,7 @@ Online, the report's boxes ran the game on with no buttons held, so the partner'
 
 **D186: Richter's and Maria's gear effects, done by the module** (agent-default, 2026-11-08, #197, #200, #202)
 Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the Library Card need, and theirs doesn't. The module now does it for them, with Alucard's amounts. Healing Mail heals while they walk or run on the ground (only his walk sets the bit his check reads). The Library Card warps at once, without Alucard's teleport effect, which is his entity. Fury Plate and the other special gear are still open (#202).
+
+**D187: A pose Maria doesn't have is drawn as her stand; her owl moves out of the weapon sheet's way** (agent-default, 2026-11-09, #203, #209)
+- Scenes set the player's frame from Alucard's numbering (the Colosseum's Richter scene: 0xBF). Richter's table has those numbers (a wrong pose); Maria's has 123 frames, and reading past its end garbled the arena. While entities are drawn, any frame of hers past 123 becomes her stand (68), in her game and in the partner's. Considered: her own pose per scene (she has no art for most, and we make none), or hiding her (she'd vanish mid-scene).
+- Her owl (her □ attack) shared 0x240,0x180 with the off-hand weapon's sheet (D106), on the belief it was unused. It's copied to 0x1C0,0x180, free in every library state (`vram_survey.window_free`), and her owls draw from there while a weapon's sheet is in. Considered: moving the sheet (no other free 64-word-wide spot in the first bank).

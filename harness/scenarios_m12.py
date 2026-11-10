@@ -1,6 +1,6 @@
 """M12 single-game tests (design/M12-coverage.md): playtest 2026-10-25 note 4, Maria's guardians."""
 
-from link.mailbox import CHAR_MARIA
+from link.mailbox import CHAR_ALUCARD, CHAR_MARIA
 from module import COOP_DISC
 from scenario import scenario
 from scenarios_m8 import EQUIPMENT, LEATHER_SHIELD, NAMES, mailbox, reload_as
@@ -10,8 +10,8 @@ SHORT_SWORD = 19
 # Maria's guardians in VRAM (src/maria/ovl_load.c, the PS1 layout): x, y in 16-bit words, 32x128
 # each. A hand weapon's graphics load at x 0x240-0x27F, y 0x100-0x17F (right hand) and 0x180-0x1FF
 # (left hand: src/dra/cd.c), over four of them.
-# The owl and doll (0x240/0x260, 0x180) can't be selected in our port (no subweapon maps to them),
-# and their area holds her off-hand weapon's sheet (D106): the four she uses are checked.
+# The doll (0x260, 0x180) can't be selected in our port, and with the owl's spot it holds her
+# off-hand weapon's sheet (D106); the owl, her attack, moves out of its way (maria_owl_*).
 GUARDIANS = {"cardinal": (0x260, 0x100), "dragon": (0x240, 0x100), "turtle": (0x2E0, 0x100),
              "cat": (0x2C0, 0x180)}
 
@@ -291,3 +291,113 @@ def prologue_crawl_skips_on_start(run):
             break
         run.step(1)
     run.expect(e.read("g_StageId") == 0x41, "and the castle's entrance comes next", frames=i)
+
+
+
+JEWEL_KNUCKLES = 97
+ANIMSET_WPN_OWL = 0x8011  # ANIMSET_OVL(17): the owl her attack throws (src/maria/maria.h)
+OWL_HOME, OWL_COPY = (0x240, 0x180), (0x1C0, 0x180)  # module/offhand.c
+
+
+def owl_shot(run, e):
+    """Attacks (□) and returns her owl a few frames into its flight, alone (the pixels it draws,
+    against the same frame without it), 48 px around it; or None."""
+    import struct
+    from PIL import Image, ImageChops
+    run.step(2, "square")
+    for f in range(30):
+        run.step(1)
+        raw = e.read_bytes("g_Entities", 0xBC * 64)
+        for s in range(1, 64):
+            o = s * 0xBC
+            if f < 6 or not struct.unpack_from("<H", raw, o + 0x26)[0] or \
+                    struct.unpack_from("<H", raw, o + 0x54)[0] != ANIMSET_WPN_OWL:
+                continue
+            x, y = struct.unpack_from("<h", raw, o + 2)[0], struct.unpack_from("<h", raw, o + 6)[0]
+            box = (x - 24, y - 24, x + 24, y + 24)
+            s0 = e.save_state()
+            run.step(1)
+            with_owl = e.screenshot().convert("RGB").crop(box)
+            e.load_state(s0)
+            e.write("g_Entities", 0, "<H", o + 0x54)
+            run.step(1)
+            without = e.screenshot().convert("RGB").crop(box)
+            mask = ImageChops.difference(with_owl, without).convert("L").point(lambda v: 255 if v else 0)
+            return Image.composite(with_owl, Image.new("RGB", with_owl.size), mask)
+    return None
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def maria_owl_with_a_weapon_in_hand(run):
+    """Issue 203: with a weapon in a hand, Maria's attack (her owl) was garbage: the weapon's sheet
+    goes over the owl's graphics (D106). The owl moves to a free spot and is drawn from there: it
+    looks the same with Jewel Knuckles (the report's) or a sword in hand as with none."""
+    from PIL import ImageChops
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    shots = {}
+    for item, what in ((0, "empty hands"), (JEWEL_KNUCKLES, "Jewel Knuckles"), (SHORT_SWORD, "a short sword")):
+        e.load_state(start)
+        e.write(EQUIPMENT, item)
+        reload_as(run, mb, CHAR_MARIA)
+        run.step(60)
+        if not item:
+            owl = block(vram(e), *OWL_HOME)
+        else:
+            run.expect(block(vram(e), *OWL_COPY) == owl, f"{what}: her owl's graphics are at their copy")
+        shots[item] = owl_shot(run, e)
+        run.expect(shots[item] is not None, f"{what}: her attack throws an owl")
+    for item, what in ((JEWEL_KNUCKLES, "Jewel Knuckles"), (SHORT_SWORD, "a short sword")):
+        diff = ImageChops.difference(shots[0], shots[item]).getbbox()
+        run.expect(diff is None, f"{what} in hand: her owl looks as it does empty-handed", diff=diff)
+
+
+MAR_FRAMES = 124  # module/character.h
+BO2, ARENA = 0x1C, 0  # the Colosseum's arena (Minotaur and Werewolf), Richter on its throne
+
+
+def throne_scene(run, e, mb, character):
+    """Sends the player into the Colosseum's arena and walks in until Richter's scene ends. Returns
+    (frames of the scene, frames she had a pose she lacks, VRAM blocks written during the scene)."""
+    from vram_survey import used_blocks
+    from coop_env import TOOLS
+    e.load_state_file(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Boss - Minotaur and Werewolf.state")
+    reload_as(run, mb, character)
+    mb.command(CMD_ARRIVE, BO2, ARENA, 24, 160)
+    arrived = lambda: ((mb.self_presence().room_left, mb.self_presence().room_top) == (19, 22)
+                       and mb.self_presence().flags & IN_PLAY)
+    wait(run, arrived, 900, "she arrives in the arena")
+    scene = alien = 0
+    first = None
+    for _ in range(3000):  # she walks in; the scene takes her from there
+        cut = e.read("g_CutsceneHasControl")
+        if scene and not cut:
+            break
+        scene += bool(cut)
+        if e.read("g_Entities", "<H", 0x56) & 0x7FFF >= MAR_FRAMES:
+            alien += 1
+            if first is None:
+                first = vram(e)
+        run.step(1, "right")
+    last = vram(e)
+    changed = set()
+    if first is not None:
+        changed = used_blocks(bytes(a ^ b for a, b in zip(first, last)))
+    return scene, alien, changed
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def maria_scene_richter_on_the_throne(run):
+    """Issue 209: in the Colosseum, the scene with Richter on the throne gives the player one of
+    Alucard's poses (frame 0xBF). Maria has 123 frames: hers read past her table's end, she wasn't
+    drawn, and the arena's floor and windows turned to garbage. Now she's drawn standing, and her
+    game writes no VRAM in the scene that Alucard's doesn't."""
+    e = run.emu
+    mb = mailbox(run)
+    _, _, alucard = throne_scene(run, e, mb, CHAR_ALUCARD)
+    scene, alien, maria = throne_scene(run, e, mb, CHAR_MARIA)
+    run.expect(scene, "Richter's scene plays", frames=scene)
+    run.expect(alien, "the scene gives her a pose she doesn't have", frames=alien)
+    extra = sorted(maria - alucard)
+    run.expect(not extra, "her game writes no VRAM Alucard's doesn't in the scene",
+               extra=[(hex(x * 64), hex(y * 32)) for x, y in extra])

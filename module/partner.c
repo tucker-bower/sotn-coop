@@ -1091,6 +1091,8 @@ static void Draw(void) {
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
     s32 i;
 
+    frames[0] = PLAYER.animCurFrame;
+    PLAYER.animCurFrame = MAR_SAFE_FRAME(s_Char, &PLAYER);
     for (i = 1; i < 256; i++) {
         frames[i] = g_Entities[i].animCurFrame;
         if (i >= 64 || HiddenWeapon(&g_Entities[i])) {
@@ -1098,7 +1100,7 @@ static void Draw(void) {
         }
     }
     RenderEntities();
-    for (i = 1; i < 256; i++) {
+    for (i = 0; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
     if (!s_OtherChar && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
