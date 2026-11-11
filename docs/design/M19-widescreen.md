@@ -12,6 +12,9 @@ A wider view of the castle, not a stretch (D76), optional: 16:9, and 21:9 or 32:
 | 21:9 | 448 | 896 × 240 |
 | 32:9 | 688 | 1376 × 240: more than one bank's 1024 columns |
 
+## Not doing
+Zoom of any kind (fitting the view to each room, a camera that zooms in and out): it would rescale the pixel art. Tucker, 2026-11-11 (D201).
+
 ## What the spike showed
 - **The VRAM blocker is gone.** Our core (`patches/swanstation.patch`) takes a display width through a new GPU command (GP1 0x2F). While it's set, drawing, fills and the display in VRAM's top band go to the second bank, so the two wider framebuffers sit there and no stage texture moves. The game's GPU library is untouched: the module only widens the stage's two framebuffer rectangles each frame (`module/widescreen.c`).
 - **The tilemap is two numbers:** `RenderTilemap`'s 17-column loops (foreground and background) are patched to the width.
