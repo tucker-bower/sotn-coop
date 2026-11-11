@@ -13,6 +13,7 @@ The hacks are SOTN Editor's code, under its GPL-3.0 licence: licenses/ has it, t
 
 import json
 import subprocess
+import zlib
 import sys
 import tempfile
 from pathlib import Path
@@ -54,7 +55,8 @@ def editor(files, ids):
 
 
 def runs(before, after):
-    """[[offset, hex]] of the bytes that differ: only the new ones."""
+    """[[offset, hex, crc32 of what they replace]] of the bytes that differ: only the new ones (and
+    a checksum of the old, so a disc another mod changed there is refused, as the editor does)."""
     out, k = [], 0
     while k < len(after):
         if k < len(before) and before[k] == after[k]:
@@ -63,7 +65,7 @@ def runs(before, after):
         start = k
         while k < len(after) and (k >= len(before) or before[k] != after[k]):
             k += 1
-        out.append([start, after[start:k].hex()])
+        out.append([start, after[start:k].hex(), zlib.crc32(before[start:k])])
     return out
 
 
@@ -74,7 +76,7 @@ def compose(files, pick, single, groups):
     def write(rs_by_file):
         for path, rs in rs_by_file.items():
             data = bytearray(out.get(path, files[path]))
-            for offset, hexed in rs:
+            for offset, hexed, _ in rs:
                 data[offset:offset + len(hexed) // 2] = bytes.fromhex(hexed)
             out[path] = bytes(data)
     for h in pick:
@@ -95,7 +97,7 @@ def interacting(files, ids, single):
         mine = bytearray(files[path])
         writers = {}
         for h in ids:
-            for offset, hexed in single[h]["files"].get(path, []):
+            for offset, hexed, _ in single[h]["files"].get(path, []):
                 mine[offset:offset + len(hexed) // 2] = bytes.fromhex(hexed)
                 for k in range(offset - 64, offset + len(hexed) // 2 + 64):
                     writers.setdefault(k, set()).add(h)

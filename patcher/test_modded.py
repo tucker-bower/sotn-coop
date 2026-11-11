@@ -106,7 +106,7 @@ def main():
         found = 0
         runs = [r for h in table["hacks"] for rs in h["files"].values() for r in rs] + \
                [r for g in table.get("groups", []) for f in g["subsets"].values() for rs in f.values() for r in rs]
-        for _, hexed in runs:
+        for _, hexed, *_ in runs:
             data = bytes.fromhex(hexed)
             found += sum(1 for k in range(0, len(data) - 63, 16) if len(set(data[k:k + 64])) > 4 and data[k:k + 64] in chunks)
         check(not found, f"the shipped hacks hold nothing of the retail disc's data ({len(runs)} runs checked)")
@@ -114,6 +114,16 @@ def main():
         changed = sorted(owner)
         check(changed and set(owner.values()) == {"Fast warp"} and zlib.crc32(got) != zlib.crc32(real),
               f"Fast warp on the real disc: {len(changed)} sectors change, all its own")
+        place = modded.patcher.find_file(got, "ST/WRP/WRP.BIN")
+        other = bytearray(real)
+        at = place[0] * S + 24 + 30832  # a byte Fast Warp changes, changed first by another mod
+        other[at] ^= 0xFF
+        try:
+            modded.mod_image(bytes(other), [{"name": "Fast warp", "hacks": ["fast-warp"]}])
+            check(False, "a hack on a disc another mod changed where it patches is refused")
+        except DiscError as e:
+            check("Fast Warp" in str(e) and "original game" in str(e), f"a hack on a disc another mod changed where it patches is refused: {e}")
+        del other
         del real, got
     else:
         print("     (no retail disc here: the real checks are skipped)")

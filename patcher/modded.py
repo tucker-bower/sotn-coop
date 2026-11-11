@@ -76,10 +76,13 @@ def apply_hacks(image, ids, table=None, keep=False):
         if not place:
             raise DiscError(f"{what}: {path} isn't on this disc.")
         lba, size = place
-        for offset, data in runs:
+        for offset, data, *was in runs:
             data = bytes.fromhex(data)
             if offset + len(data) > size:
                 raise DiscError(f"{what} doesn't fit this disc's {path}.")
+            if was and zlib.crc32(_read(image, lba, offset, len(data))) != was[0]:
+                raise DiscError(f"{what} is made for the original game, and another mod on this disc changes what it "
+                                f"patches ({path}). Leave one of them out.")
             k = 0
             while k < len(data):  # across sectors: 2048 data bytes in each
                 sector, at = lba + (offset + k) // 2048, (offset + k) % 2048
@@ -94,6 +97,16 @@ def apply_hacks(image, ids, table=None, keep=False):
         sectors.seal(s)
         image[i * SECTOR:(i + 1) * SECTOR] = s
     return touched if keep else set(touched)
+
+
+def _read(image, lba, offset, n):
+    """n bytes of a file that starts at sector lba, from offset (2048 data bytes in each sector)."""
+    out = bytearray()
+    while len(out) < n:
+        sector, at = lba + (offset + len(out)) // 2048, (offset + len(out)) % 2048
+        k = min(n - len(out), 2048 - at)
+        out += image[sector * SECTOR + DATA + at:sector * SECTOR + DATA + at + k]
+    return bytes(out)
 
 
 def _ppf_writes(image, patch):

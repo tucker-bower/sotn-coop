@@ -623,6 +623,7 @@ class Launcher:
                              lambda progress: library.build(self.settings, g, retail, coop, self.coop_patch_crc(), progress))
             except (patcher.DiscError, OSError) as e:
                 log.warning("game disc %s: %s", did, e)
+                self.disc_error = str(e)
                 save_settings(self.settings)
                 if not quiet:
                     self.ui.message("That game disc can't be made", str(e))
@@ -867,17 +868,13 @@ class Launcher:
                     continue
                 same = next((g for g in library.discs(self.settings) if library.describe(g) == library.describe({"mods": mods})), None)
                 g = same or library.add(self.settings, mods)
+                self.disc_error = ""
                 if self.use_disc(g["id"], quiet=True):
                     return
-                if not same:
-                    library.remove(self.settings, g["id"])
+                if not same:  # (its mods' files stay: the player may leave one out and make it again)
+                    library.remove(self.settings, g["id"], keep_files=True)
                 save_settings(self.settings)
-                try:  # why, in the builder's own words
-                    library.build(self.settings, {"id": "check", "mods": mods}, retail, self.settings["disc"], None)
-                except (patcher.DiscError, OSError) as e:
-                    state["said"] = str(e)
-                finally:
-                    library._drop_image({"id": "check"})
+                state["said"] = self.disc_error or "That game disc can't be made."
 
     # --- characters (design/M8)
 

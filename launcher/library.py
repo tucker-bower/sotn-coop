@@ -116,12 +116,12 @@ def add(settings, mods, disc_name=None):
     return disc
 
 
-def remove(settings, did):
+def remove(settings, did, keep_files=False):
     disc = get(settings, did)
     if not disc:
         return
     _drop_image(disc)
-    for m in disc.get("mods", []):
+    for m in [] if keep_files else disc.get("mods", []):
         if m.get("file") and not any(m.get("file") == o.get("file") for d in discs(settings) if d["id"] != did for o in d.get("mods", [])):
             (folder() / "mods" / m["file"]).unlink(missing_ok=True)
     settings["game_discs"] = [d for d in discs(settings) if d["id"] != did]
@@ -274,8 +274,15 @@ def recipe(disc):
             if not p.exists():
                 raise patcher.DiscError(f"{m.get('name', 'A patch')} is gone: make this game disc again.")
             out.append({"name": m.get("name") or "A patch", "ppf": p.read_bytes()})
-        elif m["kind"] == "hacks" and m["ids"]:
-            out.append({"name": ", ".join(labels.get(h, h) for h in m["ids"]), "hacks": list(m["ids"])})
+        elif m["kind"] == "hacks" and m["ids"]:  # one mod a hack (a group's chosen ones together): a clash names it
+            import modded
+            grouped = [set(g["ids"]) & set(m["ids"]) for g in modded._table().get("groups", [])]
+            for h in m["ids"]:
+                if not any(h in g for g in grouped):
+                    out.append({"name": labels.get(h, h), "hacks": [h]})
+            for g in grouped:
+                if g:
+                    out.append({"name": ", ".join(labels.get(h, h) for h in sorted(g)), "hacks": sorted(g)})
     return out
 
 
