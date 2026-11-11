@@ -12,10 +12,12 @@ HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
 BAR_X, BAR_W = 300, 100
 
 
-def options(m, rows, change, sel=0):
+def options(m, rows, change, sel=0, title="Options", note="Also in the menus at the top of the window", footer=None):
     """rows() -> [{"kind": "head" | "choice" | "slider" | "switch" | "action", "key", "label", "hint",
     "value", ("low", "high", "step" for a slider)}]. change(key, step) applies a choice, slider or
-    switch (step -1 / +1, or 0 for OK). Returns (an action's key, the row it was on), or None (back)."""
+    switch (step -1 / +1, or 0 for OK). Returns (an action's key, the row it was on), ("drop", a
+    file dropped on the window), ("more", key) (Square / X / S on a row), or None (back). The same
+    screen lists other things than options: title and note say what."""
     t, s, first = m.theme, m.s, 0
     table = rows()
 
@@ -29,10 +31,16 @@ def options(m, rows, change, sel=0):
     if table[sel]["kind"] == "head":
         sel = step_sel(sel, 1)
     while True:
-        for a in m.poll():
+        for a in m.poll(raw=True):
+            if isinstance(a, tuple) and a[0] == "event":
+                if a[1].type == pygame.DROPFILE:
+                    return "drop", a[1].file
+                continue
             if a == "back":
                 return None
             row = table[sel]
+            if a == "rules" and row["kind"] == "action":
+                return "more", row["key"]
             if a in ("up", "down"):
                 sel = step_sel(sel, -1 if a == "up" else 1)
             elif a in ("left", "right") and row["kind"] in ("choice", "slider", "switch"):
@@ -60,10 +68,10 @@ def options(m, rows, change, sel=0):
         first = scroll(first, sel, fits, len(table))
         if first and table[first - 1]["kind"] == "head" and sel - first < fits - 1:
             first -= 1
-        m.begin("Options")
+        m.begin(title, table[sel].get("hint", ""))
         m.window(HEAD)
-        t.text(s, "Options", HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text_right(s, "Also in the menus at the top of the window", HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        t.text(s, title, HEAD[0] + 8, HEAD[1] + 7, GOLD)
+        t.text_right(s, note[:56 - len(title) - 2], HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
         m.window(LIST)
         x, y0, w = LIST[0] + 4, LIST[1] + 6, LIST[2] - 8
         right = LIST[0] + LIST[2] - 12
@@ -89,7 +97,7 @@ def options(m, rows, change, sel=0):
                 t.text_right(s, f"{row['value']}%", right, y + 3, INK)
                 m.hit(("bar", k), bar.inflate(8, 10))
             elif kind == "action" and row.get("value"):
-                t.text_right(s, str(row["value"]), right, y + 3, GREEN)
+                t.text_right(s, str(row["value"])[:(right - x - 22) // 8 - len(row["label"])], right, y + 3, row.get("colour", GREEN))
             m.hit(k, (x, y, (BAR_X - x - 8) if kind == "slider" else w, ROW))
         if first:
             t.text(s, "{^}", LIST[0] + LIST[2] - 14, LIST[1] + 2)
@@ -98,5 +106,5 @@ def options(m, rows, change, sel=0):
         m.window(HINT)
         for k, line in enumerate(wrap(table[sel].get("hint", ""), 56)[:3]):
             t.text(s, line, HINT[0] + 8, HINT[1] + 6 + k * 10, DIM)
-        m.footer("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back")
+        m.footer(*(footer or ("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back")))
         m.show()

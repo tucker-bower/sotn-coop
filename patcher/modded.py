@@ -32,43 +32,63 @@ SECTOR, DATA = sectors.SECTOR, 24
 HACKS = Path(__file__).resolve().parent / "mods" / "hacks.json"
 
 
-def hacks():
-    """The tested hacks: {id: {"label", "summary", "files": {path: [[offset, hex], ...]}}}, or {}."""
+def _table():
     try:
-        return {h["id"]: h for h in json.loads(HACKS.read_text())["hacks"]}
-    except (OSError, ValueError, KeyError):
-        return {}
+        return json.loads(HACKS.read_text())
+    except (OSError, ValueError):
+        return {"hacks": [], "groups": []}
+
+
+def hacks():
+    """The tested hacks: {id: {"label", "summary", "files": {path: [[offset, hex], ...]}}}, or {}.
+    A hack in a group (hacks that write shared code differently together) has its bytes there."""
+    return {h["id"]: h for h in _table().get("hacks", [])}
+
+
+def hack_writes(ids, table=None):
+    """{path: [[offset, hex], ...]} the chosen hacks write: each one's own, and for each group,
+    the patch for exactly the ones chosen from it."""
+    table = table or _table()
+    known = {h["id"]: h for h in table.get("hacks", [])}
+    out = {}
+    for hid in ids:
+        if hid not in known:
+            raise DiscError(f"There's no hack called {hid} in this version.")
+        for path, runs in known[hid]["files"].items():
+            out.setdefault(path, []).extend(runs)
+    for g in table.get("groups", []):
+        chosen = sorted(set(ids) & set(g["ids"]))
+        if chosen:
+            for path, runs in g["subsets"]["+".join(chosen)].items():
+                out.setdefault(path, []).extend(runs)
+    return out
 
 
 def apply_hacks(image, ids, table=None, keep=False):
     """Writes the hacks' bytes into a raw image (a bytearray) in place, resealing each sector it
     touches. Returns {sector: what it was} (keep) or the sectors' numbers. Raises DiscError for a
     hack or a file that isn't there."""
-    table = table or hacks()
+    labels = {h["id"]: h["label"] for h in (table or _table()).get("hacks", [])}
+    what = ", ".join(labels.get(i, i) for i in ids)
     touched = {}
-    places = {}
-    for hid in ids:
-        if hid not in table:
-            raise DiscError(f"There's no hack called {hid} in this version.")
-        for path, runs in table[hid]["files"].items():
-            if path not in places:
-                places[path] = patcher.find_file(image, path)
-            if not places[path]:
-                raise DiscError(f"{table[hid]['label']} changes {path}, which isn't on this disc.")
-            lba, size = places[path]
-            for offset, data in runs:
-                data = bytes.fromhex(data)
-                if offset + len(data) > size:
-                    raise DiscError(f"{table[hid]['label']} doesn't fit this disc's {path}.")
-                k = 0
-                while k < len(data):  # across sectors: 2048 data bytes in each
-                    sector, at = lba + (offset + k) // 2048, (offset + k) % 2048
-                    n = min(len(data) - k, 2048 - at)
-                    start = sector * SECTOR + DATA + at
-                    if sector not in touched:
-                        touched[sector] = bytes(image[sector * SECTOR:(sector + 1) * SECTOR]) if keep else None
-                    image[start:start + n] = data[k:k + n]
-                    k += n
+    for path, runs in hack_writes(ids, table).items():
+        place = patcher.find_file(image, path)
+        if not place:
+            raise DiscError(f"{what}: {path} isn't on this disc.")
+        lba, size = place
+        for offset, data in runs:
+            data = bytes.fromhex(data)
+            if offset + len(data) > size:
+                raise DiscError(f"{what} doesn't fit this disc's {path}.")
+            k = 0
+            while k < len(data):  # across sectors: 2048 data bytes in each
+                sector, at = lba + (offset + k) // 2048, (offset + k) % 2048
+                n = min(len(data) - k, 2048 - at)
+                start = sector * SECTOR + DATA + at
+                if sector not in touched:
+                    touched[sector] = bytes(image[sector * SECTOR:(sector + 1) * SECTOR]) if keep else None
+                image[start:start + n] = data[k:k + n]
+                k += n
     for i in touched:
         s = image[i * SECTOR:(i + 1) * SECTOR]
         sectors.seal(s)
