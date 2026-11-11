@@ -501,9 +501,7 @@ def _test_castles(pg):
     return [
         *first_run(pg),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after New castle: none played here yet)
-        ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
-        ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
+        ("screen", "Solo"), ("shot", "castle-menu"), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Test castles: before Back
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),

@@ -1889,8 +1889,7 @@ class Launcher:
             rush = self.boss_rush_available()
             if not castles and not tests and not rush:  # nothing to pick from: a new one
                 return self.new_castle()
-            choice = castle_menu(self.menus, heading, castles[0] if castles else None, bool(castles or tests or rush),
-                                 note=("New castles are on randomizer " + self.mod_line()) if self.mod_line() else "")
+            choice = castle_menu(self.menus, heading, castles[0] if castles else None, bool(castles), has_tests=bool(tests))
             if choice is None:
                 return None
             if choice == "continue":
@@ -1900,9 +1899,14 @@ class Launcher:
                 if picked:
                     return picked
                 continue
+            if choice == "tests":
+                picked = self.pick_test_castle()
+                if picked:
+                    return picked
+                continue
             sel = 0
             while True:
-                extras = [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []
+                extras = []
                 castles = Castle.all()
                 got = castle_list(self.menus, "Load castle", castles, extras, sel)
                 if got is None:

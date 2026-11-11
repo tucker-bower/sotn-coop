@@ -157,6 +157,8 @@ def main():
         check(castle_menu(m, "Solo", None, False) == "new", "with none, New castle is, and there's no Continue or Load castle")
         m, ui, _ = menus([["down"], ["down"], ["ok"]])
         check(castle_menu(m, "Couch co-op", last, True) == "load" and ui.names == ["Couch co-op"], "then New castle, then Load castle")
+        m, ui, _ = menus([["up"], ["up"], ["ok"]])
+        check(castle_menu(m, "Solo", last, True, has_tests=True) == "tests", "Test castles is a button of its own, before Back")
         m, ui, _ = menus([["back"]])
         check(castle_menu(m, "Solo", last, True) is None, "back leaves it")
 
