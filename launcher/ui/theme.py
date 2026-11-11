@@ -63,6 +63,27 @@ def shorten(text, columns):
     return text if len(glyphs(text)) <= columns else text[:max(0, columns - 2)].rstrip() + ".."
 
 
+def plain_font():
+    """A stand-in for the game's font, from a system one: the same 8x8 places, the letters only."""
+    sheet = pygame.Surface((128, 128), pygame.SRCALPHA)
+    pygame.font.init()
+    names = "consolas,dejavusansmono,liberationmono,couriernew,monospace"
+    size = 12
+    font = pygame.font.SysFont(names, size)
+    while size > 6 and font.get_height() > GLYPH + 1:  # the whole letter in its cell, tails too
+        size -= 1
+        font = pygame.font.SysFont(names, size)
+    letters = {code - 0x20: chr(code) for code in range(0x20, 0x7F)}
+    letters.update({224: "<", 226: "^", 228: ">", 230: "v", 232: "O", 233: "X", 234: "#", 235: "A"})  # the symbols, as letters
+    for place, letter in letters.items():
+        glyph = font.render(letter, False, (255, 255, 255))
+        cell = pygame.Rect(place % 16 * GLYPH, place // 16 * GLYPH, GLYPH, GLYPH)
+        sheet.set_clip(cell)
+        sheet.blit(glyph, (cell.x + (GLYPH - glyph.get_width()) // 2, cell.y + min(0, GLYPH - glyph.get_height())))
+    sheet.set_clip(None)
+    return sheet
+
+
 class Theme:
     def __init__(self, folder):
         self.pictures = {}
@@ -72,6 +93,8 @@ class Theme:
             except (pygame.error, OSError, FileNotFoundError):
                 pass
         self.ok = all(n in self.pictures for n in NEEDS)
+        if "font" not in self.pictures:  # before the player's disc is attached: plain letters, same size
+            self.pictures["font"] = plain_font()
         self._tinted = {}
 
     def _font(self, colour):
@@ -95,6 +118,13 @@ class Theme:
 
     def text_centre(self, surface, text, centre, y, colour=INK):
         self.text(surface, text, centre - width(text) // 2, y, colour)
+
+    def text_big(self, surface, text, centre, y, colour=INK, scale=2):
+        """One line at a whole multiple of the font's size (a room code), centred on centre."""
+        line = pygame.Surface((width(text), GLYPH), pygame.SRCALPHA)
+        self.text(line, text, 0, 0, colour)
+        line = pygame.transform.scale(line, (line.get_width() * scale, GLYPH * scale))
+        surface.blit(line, (centre - line.get_width() // 2, y))
 
     def window(self, surface, rect):
         """A window as the pause menu draws one."""

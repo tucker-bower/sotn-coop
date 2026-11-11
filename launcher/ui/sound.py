@@ -72,6 +72,19 @@ class MenuSound:
             log.exception("menu music")
             self.playing = False
 
+    def refresh(self):
+        """After Options' Menu music or Menu volume changed: the music follows, from where it is."""
+        if not self.settings.get("menu_music", True):
+            self.music(False)
+            return
+        if self.playing:
+            try:
+                pygame.mixer.music.set_volume(self.volume() * 0.8)
+            except pygame.error:
+                pass
+        else:
+            self.music(True)
+
     def pause(self, paused):
         """The window lost the keyboard, or has it back."""
         if not self.playing:

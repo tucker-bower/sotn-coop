@@ -10,7 +10,7 @@ This co-op mod utilizes custom SwanStation launcher running *two instances* of P
 AI wrote all of this code. However, this is not just low effort slop that will be abandon. A lot of human time, effort, and love has gone into designing, architecting, and playtesting this work. I plan to finish this mod and support it into the future. All of the code is public amd open for anyone to use, and all the prior works that made this possible are credited below.
 
 ## Getting started
-You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional. To play the [randomizer](https://sotn.io) in co-op, randomize your own disc there and choose it in Settings › Game files › Randomizer: both players need the same seed and preset.
+You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional. To play the [randomizer](https://sotn.io) in co-op, randomize your own disc there and choose it in Discs & mods › Randomizer: both players need the same seed and preset.
 
 1. Download from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest):
    - **Windows 10 or 11:** [SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)
@@ -59,8 +59,8 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Pause separately:** unless you're in the same room.
 - **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
-- **Maria:** choose your *Dracula X Chronicles* `.iso` under Settings › Game files. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
-- **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` under Settings › Game files. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
+- **Maria:** drop your *Dracula X Chronicles* `.iso` on the launcher, or choose it in Discs & mods. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
+- **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` on the launcher, or choose it in Discs & mods. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
 - **The window:** F11 for fullscreen, and the View menu changes the layout. On the couch, F1 picks which game plays the music.
 - **Online:** you both need the same version. If you can't connect, the lobby says why, and Help › Online troubleshooting has what to try.
 

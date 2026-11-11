@@ -206,7 +206,7 @@ def saturn_maria_blob(saturn_disc, coop_disc, patches, out):
     finally:
         ps1.close()
     if not ric:
-        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Make it again in Settings › Game files.")
+        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Attach your PlayStation disc again in Discs & mods.")
     try:
         ovl = bytearray(bps.apply(ric, (patches / "sat-maria.bps").read_bytes()))
         partner = bytearray(bps.apply(ric, (patches / "sat-maria-partner.bps").read_bytes()))
@@ -250,7 +250,7 @@ def ultimate_richter_blob(saturn_disc, coop_disc, patches, out):
     finally:
         ps1.close()
     if not ric or not g2:
-        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Make it again in Settings › Game files.")
+        raise DiscError("Your co-op disc has no Richter (BIN/RIC.BIN). Attach your PlayStation disc again in Discs & mods.")
     try:
         ric2 = saturn_richter.ric2(ric, files.__getitem__, g2)[:about["size"]]
     except (ValueError, IndexError) as e:

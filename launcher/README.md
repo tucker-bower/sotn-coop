@@ -11,6 +11,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `bossstarts.py` | Builds a start outside each boss, with a typical player's progress. |
 | `characters.py` | Builds the Marias from the player's own discs: Co-op and Ultimate Maria from the DXC disc, Saturn Maria from the Saturn disc. |
 | `debugstarts.py` | Builds savestates anywhere on the route, from the player's own disc. |
+| `discs.py` | Which disc a file is (PlayStation, PSP or Saturn), by what's in it. |
 | `display.py` | The window: menus, games and their layout. |
 | `ui/` | The menus in the game's own style: the theme, the menu toolkit and one file per screen. |
 | `test_ui.py` | Checks the menus' font, lists and screens with a controller, the keyboard and the mouse, on made-up art. |
@@ -34,6 +35,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |
+| `test_discs.py` | Checks which disc a file is, on made-up files and a dev checkout's discs. |
 | `test_crash_window.py` | Checks what counts as stopped, and that closing the crash window sends nothing. |
 | `rules.py` | A castle's rules: every rule, its default, and what the game gets. |
 | `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |

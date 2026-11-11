@@ -105,8 +105,9 @@ in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, 
 Whoever joins you online keeps a copy of your castle, to play solo or host later.
 Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
 their normal HP.
-Rules: each castle has its own, set in Options › Open settings (Esc: Castle rules, on a controller or
-phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
+Castle settings: each castle has its own, set when you start it and in Options › Open settings (Esc: Castle
+rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
+everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
 
 Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
 need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
@@ -228,7 +229,7 @@ class UI:
     def flip(self, over_games=False):
         self.display.present(over_games)
 
-    def seen(self, name):
+    def seen(self, name, about=""):
         """A screen in the game's style is being drawn (ui/widgets.py). Tests hook this."""
 
     def frame(self, heading, subtitle=""):
@@ -932,9 +933,112 @@ class Launcher:
                 self.settings["randomizer"] = dict(r, on=False, cue=None)
             save_settings(self.settings)
 
+    # --- your discs (ui/screens/discs.py)
+
+    def plain_menus(self):
+        """The menus in the game's style, or before the player's disc is there (no art yet) the
+        same layout in plain letters."""
+        if self.menus:
+            return self.menus
+        from ui.sound import MenuSound
+        from ui.theme import Theme
+        from ui.widgets import Menus
+        self._plain = Menus(self.ui, Theme(paths.art_dir()), None)
+        return self._plain
+
+    def disc_status(self):
+        def name(key):
+            p = self.settings.get(key)
+            return Path(p).name if p else None
+        return {"ps1": name("disc_source") if self.settings.get("disc") else None,
+                "psp": name("dxc_iso") if self.maria_ready() else None,
+                "saturn": name("saturn_disc") if self.saturn_maria_ready() else None}
+
+    def attach_disc(self, slot, path):
+        """The discs screen's attach: (slot it went to or None, what to say, went well?)."""
+        import characters
+        import discs
+        import patcher
+        titles = {"ps1": "Your Symphony of the Night disc image (.cue)",
+                  "psp": "Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                  "saturn": "Your Akumajou Dracula X: Gekka no Yasoukyoku disc (Sega Saturn, Japan): its .cue"}
+        types = {"ps1": [("Disc image", "*.cue *.bin"), ("All", "*.*")], "psp": [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")],
+                 "saturn": [("Saturn disc", "*.cue *.CUE *.bin *.BIN"), ("All", "*.*")]}
+        if path is None:
+            try:
+                path = pick_file(titles[slot], types[slot], self.ui, android_disc="folder" if slot == "ps1" else None)
+            except patcher.DiscError as e:
+                return slot, str(e), False
+            except OSError as e:  # copying it into the app (Android): most likely a full phone
+                log.exception("copying a disc")
+                return slot, f"Couldn't copy your disc: {e.strerror or e}. The app needs about 2 GB free.", False
+            if not path:
+                return None, "", True
+        path = Path(path)
+        found = discs.kind(path)
+        if slot is None and found is None:
+            return None, f"{path.name} isn't a disc image this can use. Drop a .cue, .bin or .iso.", False
+        names = {"ps1": "PlayStation", "psp": "Dracula X Chronicles (PSP)", "saturn": "Saturn"}
+        moved = f"That's your {names[found]} disc. " if slot and found and found != slot else ""
+        slot = found or slot
+        if slot == "ps1" and self.disc() and str(path) == self.settings.get("disc_source"):
+            return "ps1", moved + "It's already attached.", True
+        if slot == "ps1":
+            try:
+                cue = self.ui_wait("Making the co-op disc", f"From {path.name}. This takes a few seconds.",
+                                   lambda progress: patcher.apply(path, PATCH, progress=progress))
+            except (patcher.DiscError, patcher.bps.PatchError) as e:
+                return "ps1", str(e), False
+            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.coop_patch_crc())
+            save_settings(self.settings)
+            self.prepare_art()
+            if self.menus and getattr(self, "_plain", None):  # the screen on show: the game's style from now on
+                self._plain.theme, self._plain.sound = self.menus.theme, self.menus.sound
+            return "ps1", moved + "Symphony of the Night is attached: co-op is ready.", True
+        if slot == "psp":
+            try:
+                self.ui_wait("Adding Maria", f"From {path.name}. This takes a few seconds.",
+                             lambda progress: characters.maria_blob(path, MARIA_PATCHES, self.maria_blob_path()))
+            except characters.DiscError as e:
+                return "psp", moved + str(e), False
+            self.settings["dxc_iso"] = str(path)
+            save_settings(self.settings)
+            return "psp", moved + "Co-op Maria and Ultimate Maria are unlocked.", True
+        if not self.settings.get("disc"):
+            return "saturn", "Attach the PlayStation disc first: the Saturn characters are made from both.", False
+        try:
+            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}. About half a minute.",
+                         lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
+        except characters.DiscError as e:
+            return "saturn", moved + str(e), False
+        self.settings["saturn_disc"] = str(path)
+        save_settings(self.settings)
+        return "saturn", moved + "Saturn Maria and Ultimate Richter are unlocked.", True
+
+    def ui_wait(self, heading, text, task):
+        """A long job with the old progress screen (the vial): its own screen until part 2 has one."""
+        return self.ui.wait_for(heading, text, task)
+
+    def discs_screen(self, first_run=False):
+        """Your discs. First run: until the PlayStation disc is attached (Quit: leaves the app)."""
+        from ui.screens.discs import discs
+        while True:
+            # the randomizer and the BIOS: here until the game discs and the Options screen take them (design steps 7, 8)
+            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, more=("Randomizer", "BIOS"))
+            if got == "quit":
+                raise SystemExit
+            if got == "Randomizer":
+                self.randomizer_menu()
+            elif got == "BIOS":
+                self.choose_bios()
+            elif got == "back" or (got == "continue" and self.disc()):
+                return
+
     def wizard(self):
         ui = self.ui
         self.update_disc()
+        if not self.disc() and not os.environ.get("COOP_OLD_WIZARD"):
+            self.discs_screen(first_run=True)
         while not self.disc():
             if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
                 choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
@@ -1049,6 +1153,10 @@ class Launcher:
                 if dev != "kb" and dev not in names:
                     self.pads.refresh()
                     names[dev] = self.pads.name(dev)
+                if self.sound and key in ("ok", "back", "left", "right"):
+                    self.sound.play({"ok": "confirm", "back": "back"}.get(key, "move"))
+                if self.menus:
+                    self.menus.device = "keys" if dev == "kb" else "pad"
                 mine = [i for i, d in enumerate(joined) if d == dev]
                 # A new device joins the first free slot. So does the keyboard again, once its
                 # first player is ready (two people, one keyboard: KEYS has two layouts).
@@ -1064,7 +1172,7 @@ class Launcher:
                     if self.playable(char[i]):
                         ready[i] = True
                     elif char[i] in NEEDS:  # a Maria whose disc isn't added yet
-                        self.game_files()
+                        self.discs_screen() if self.menus else self.game_files()
                 elif key == "back":
                     if ready[i]:
                         ready[i] = False
@@ -1080,6 +1188,9 @@ class Launcher:
                 self.characters[:slots] = char
                 self.settings["characters"] = list(self.characters)
                 return list(joined)
+            if self.menus:
+                self.draw_lobby(slots, joined, ready, char, names, partner, online, subtitle)
+                continue
             ui.frame("Press a button on your controller to join", subtitle)
             n = slots + (1 if online else 0)
             w = 300
@@ -1095,6 +1206,44 @@ class Launcher:
                       if joined.count(None) < slots else "No controller? Press Enter to play with the keyboard.   Esc: back")
             ui.flip()
             pygame.time.wait(16)
+
+    def controls_line(self, char, shortcuts):
+        """A character's controls, in a line for the lobby."""
+        if not shortcuts:
+            return "Shortcuts off ({t} / S)"
+        if char == 0:
+            return "Spells on the right stick"
+        if char in (3, SATURN_MARIA):
+            return "Her own controls"
+        if char == ULTIMATE_RICHTER:
+            return "His own controls"
+        return "L2 high jump, R2 dash"
+
+    def draw_lobby(self, slots, joined, ready, char, names, partner, online, subtitle):
+        """A frame of the lobby, in the game's style (ui/screens/lobby.py)."""
+        from ui.screens.lobby import draw_lobby
+        needs = {2: "Attach your Dracula X Chronicles disc (PSP) to unlock her.", 3: "Attach your Dracula X Chronicles disc (PSP) to unlock her.",
+                 4: "Attach your Saturn disc (Japan) to unlock her.", 5: "Attach your Saturn disc (Japan) to unlock him."}
+        cards = []
+        for k in range(slots):
+            dev = joined[k]
+            cards.append({"title": "You" if online else f"Player {k + 1}", "joined": dev is not None,
+                          "device": "Keyboard" if dev == "kb" else names.get(dev, "Controller"), "ready": ready[k],
+                          "character": char[k], "name": CHARACTERS[char[k]], "playable": self.playable(char[k]),
+                          "note": CHARACTER_NOTES[char[k]], "needs": needs.get(char[k], ""),
+                          "controls": self.controls_line(char[k], self.shortcuts(k)), "shortcuts": self.shortcuts(k)})
+        card_partner = None
+        if online:
+            text, connected = partner
+            lines = text.split("\n")
+            code = None
+            if not connected and len(lines) > 1 and lines[0] in ("Room code", "Room"):
+                code, lines = lines[1], lines[2:]
+            card_partner = (lines, connected, code)
+        anyone = joined.count(None) < slots
+        footer = (("{<}{>} character   {t} shortcuts   {x} ready   {o} leave", "Left / right: character   S: shortcuts   Enter: ready   Esc: leave")
+                  if anyone else ("Any button: join   {o} back", "Enter: play with the keyboard   Esc: back"))
+        draw_lobby(self.menus, "Who's playing?", subtitle, cards, card_partner, footer)
 
     def _card(self, box, title, dev, ready, char, names, shortcuts=True):
         s, ui = self.screen, self.ui
@@ -1242,7 +1391,7 @@ class Launcher:
         elif act == "settings":
             self.settings_menu()
         elif act == "discs":
-            self.game_files()
+            self.discs_screen() if self.menus else self.game_files()
         elif act == "savestates":
             self.savestates()
         elif act == "debug_starts":
@@ -1305,14 +1454,11 @@ class Launcher:
                 continue
             sel = 0
             while True:
-                extras = ([("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []) + \
-                         ([("rush", "Boss rush", "All 22 bosses back to back, each with a typical player's progress, timed")] if rush else [])
+                extras = [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []
                 castles = Castle.all()
                 got = castle_list(self.menus, "Load castle", castles, extras, sel)
                 if got is None:
                     break
-                if got == "rush":
-                    return self.new_boss_rush(), False
                 if got == "tests":
                     picked = self.pick_test_castle()
                     if picked:
@@ -1345,14 +1491,14 @@ class Launcher:
         import bossrush
         return (bossrush.BUNDLE / "index.json").exists()
 
-    def new_boss_rush(self):
+    def new_boss_rush(self, name=None):
         """A boss rush (docs/design/boss-rush.md): a castle whose save is the first boss's test
         castle; the run (which boss, the time) is kept in it, so Continue goes on from there."""
         import bossrush
         from archive import Castle
         from link.jointsave import write_session
         save, start = bossrush.first_save()
-        c = Castle.new(name="Boss rush")
+        c = Castle.new(name=name or "Boss rush")
         write_session(c.joint_save, [save])
         c.info.update(start=list(start), rush={"index": 0, "frames": 0, "splits": []}, where="Boss rush")
         c.save_info()
@@ -1362,11 +1508,30 @@ class Launcher:
         """A new castle, named here (Tucker, 2026-10-28). Left empty, it takes the name typed at
         SOTN's own name entry, at its first save (design/M11). Returns (castle, True), or None."""
         from archive import Castle
-        name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
-                             footer="Type a name  ·  Enter: start  ·  Esc: back", limit=24)
-        if name is None:
-            return None
-        return Castle.new(name=name or None), True
+        import rules as castle_rules
+        while True:
+            name = self.ask_text("Name your castle", "Or leave it empty: it takes the name you type when the game starts.",
+                                 footer="Type a name  ·  Enter: next  ·  Esc: back", limit=24)
+            if name is None:
+                return None
+            # its settings, before it exists (design/launcher-overhaul.md): the mode is chosen once
+            rules = castle_rules.for_castle(None, self.settings)
+            mode = {"mode": "story"} if self.boss_rush_available() else None
+            if self.new_castle_settings(name or "New castle", rules, mode) is None:
+                continue  # back: to its name
+            if mode and mode["mode"] == "rush":
+                castle, fresh = self.new_boss_rush(name or None), False
+            else:
+                castle, fresh = Castle.new(name=name or None), True
+            castle.set_rules(castle_rules.clean(rules))
+            return castle, fresh
+
+    def new_castle_settings(self, name, rules, mode):
+        """A new castle's settings screen: "start", or None (back). rules and mode are changed in place."""
+        if not self.menus:  # the older screen has no back from here, and no modes
+            self.rules_menu(name, rules, rules.update, start=True)
+            return "start"
+        return self.rules_menu(name, rules, rules.update, start=True, mode=mode)
 
     def couch(self, act="couch"):
         from archive import Castle
@@ -1378,7 +1543,7 @@ class Launcher:
         else:
             picked = self.pick_castle("Couch co-op", "Player 1 is slot 1 of the castle, player 2 slot 2.")
         # the castle first, then who plays (design/launcher-overhaul.md)
-        if picked and self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is not None:
+        if picked and self.lobby(subtitle="Player 1: left screen. 2: right.") is not None:
             self.play(*picked)
 
     def solo(self):
@@ -1391,7 +1556,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             with self.online_session(None, castle, rank=0) as s:
                 s.solo = True
@@ -1400,12 +1564,6 @@ class Launcher:
                 self.run_view(s, castle)
         finally:
             castle.tidy()
-
-    def rules_at_start(self, castle, fresh):
-        """A new castle starts on its rules (D161): the castle's, so they stay with it (D162)."""
-        import rules as castle_rules
-        if fresh:
-            self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules, start=True)
 
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
@@ -1524,7 +1682,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             with self.session((None, None), castle) as s:
                 s.joint.on_write = castle.saved
@@ -1659,7 +1816,6 @@ class Launcher:
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
-        self.rules_at_start(castle, fresh)
         try:
             self._host_online(castle, fresh)
         finally:
@@ -1681,7 +1837,7 @@ class Launcher:
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them.{pvp_line}"),
-                              f"Give your partner the room code {room}: it's on your clipboard.") is None:
+                              f"Hosting room {room}") is None:
                     return
             except ConnectFailed as e:
                 self.ui.message("Couldn't reach your partner", str(e))
@@ -1715,7 +1871,7 @@ class Launcher:
                     s.connect(target)
                     waiting = f"{target[0]}:{target[1]}\nconnecting…"
                 try:
-                    if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner's game.") is None:
+                    if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner") is None:
                         continue
                 except ConnectFailed as e:
                     self.ui.message("Couldn't reach your partner", str(e))
@@ -1836,7 +1992,7 @@ class Launcher:
         while True:
             castles = Castle.all()
             if not castles:
-                self.ui.message("Castle rules", "Each castle has its own rules: start one first.")
+                self.ui.message("Castle settings", "Each castle has its own settings: start one first.")
                 return
             k = self.ui.menu("Castle rules: which castle?", [(c.name, c.summary()) for c in castles],
                              "Each castle has its own rules. Online, the host's go for both players.")
@@ -1845,10 +2001,14 @@ class Launcher:
             castle = castles[k]
             self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules)
 
-    def rules_menu(self, name, rules, apply, read_only=False, start=False):
+    def rules_menu(self, name, rules, apply, read_only=False, start=False, mode=None):
         """The rules, one per row: sliders move with left / right (or a click on the bar), toggles
         with OK. Each change goes through apply(rules) at once."""
         import rules as castle_rules
+        if self.menus:  # in the game's style (ui/screens/castle_settings.py)
+            from ui.screens.castle_settings import castle_settings
+            shown = castle_rules.clean(rules)
+            return castle_settings(self.menus, name, shown, apply, read_only, start, mode)
         ui, sel = self.ui, 0
         rules = castle_rules.clean(rules)
         sliders = {s[0]: s for s in castle_rules.SLIDERS}
@@ -1943,7 +2103,100 @@ class Launcher:
             ui.flip()
             pygame.time.wait(16)
 
+    # --- Options (ui/screens/options.py): the menu bar's items and the app's settings, for a controller too
+
+    NETSIMS = (None, "transatlantic", "wifi", "cellular")
+    NETSIM_NAMES = {None: "Off", "transatlantic": "Across an ocean", "wifi": "Bad Wi-Fi", "cellular": "Phone hotspot"}
+
+    def option_rows(self):
+        st = self.settings
+
+        def switch(key, label, hint, default=False):
+            return {"kind": "switch", "key": key, "label": label, "hint": hint, "value": bool(st.get(key, default))}
+
+        def action(key, label, hint, value=""):
+            return {"kind": "action", "key": key, "label": label, "hint": hint, "value": value}
+        head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
+        rows = [head("View"),
+                {"kind": "choice", "key": "layout", "label": "Layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
+                 "hint": "Couch: how the two games share the window. Also View in the menu bar."},
+                switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
+                head("Sound"),
+                {"kind": "choice", "key": "music", "label": "Music", "value": {"auto": "Automatic", "left": "Left game", "right": "Right game"}[st.get("music", "auto")],
+                 "hint": "Couch: which game plays the music. Automatic: the left one while it's in play."},
+                {"kind": "slider", "key": "partner_vol", "label": "Partner's sounds", "value": st.get("partner_vol", 60), "low": 0, "high": 100, "step": 10,
+                 "hint": "How loud your partner's attacks and steps are, in your game."},
+                switch("menu_music", "Menu music", "The title screen's music, in these menus.", True),
+                {"kind": "slider", "key": "menu_volume", "label": "Menu volume", "value": st.get("menu_volume", 70), "low": 0, "high": 100, "step": 10,
+                 "hint": "The menus' music and sounds."},
+                head("While you play"),
+                switch("partner_hp", "Partner's health bar", "Under your own health, while you play together.", True),
+                switch("partner_tint", "Tint the partner", "Tells two players of the same character apart.", True),
+                switch("spell_triggers", "Spells on triggers", "Alucard: hold R2 with Square, Circle, Cross or Triangle for Dark Metamorphosis, "
+                       "Summon Spirit, Hellfire, Tetra Spirit; L2 with Square or Circle for Soul Steal, Sword Brothers."),
+                switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
+                switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
+                head("Controls"),
+                action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
+                action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
+                action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                head("Help"),
+                action("help_play", "How to play", "Playing together, castles, characters."),
+                action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
+                action("about", "About SOTN Co-op", "The version, and where your saves are.", VERSION),
+                action("data_folder", "Open the data folder", str(paths.data_dir())),
+                head("Developer"),
+                action("savestates", "Savestates", "Go back to a moment in a castle."),
+                action("debug_starts", "Debug starts", "Start anywhere on the route, for testing and bug reports."),
+                {"kind": "choice", "key": "netsim", "label": "Simulate a network", "value": self.NETSIM_NAMES.get(st.get("netsim"), "Off"),
+                 "hint": "Online: plays as if over a worse connection. For testing."},
+                action("open_log", "Open the log", "The launcher's log, for bug reports.")]
+        return rows
+
+    def change_option(self, key, step):
+        st = self.settings
+        if key == "layout":
+            order = list(LAYOUT_NAMES)
+            st["layout"] = order[(order.index(st.get("layout", "auto")) + (step or 1)) % len(order)]
+        elif key == "music":
+            order = ["auto", "left", "right"]
+            st["music"] = order[(order.index(st.get("music", "auto")) + (step or 1)) % 3]
+        elif key == "netsim":
+            order = list(self.NETSIMS)
+            now = st.get("netsim") if st.get("netsim") in order else None
+            st["netsim"] = order[(order.index(now) + (step or 1)) % len(order)]
+        elif key in ("partner_vol", "menu_volume"):
+            st[key] = max(0, min(100, st.get(key, 60 if key == "partner_vol" else 70) + step * 10))
+        elif key == "_fullscreen":
+            if (step == 0) or (step > 0) != self.display.fullscreen:
+                self.display.toggle_fullscreen()
+        else:  # a switch
+            defaults = {"partner_hp": True, "partner_tint": True, "menu_music": True}
+            now = bool(st.get(key, defaults.get(key, False)))
+            st[key] = (not now) if step == 0 else step > 0
+        if key in ("menu_music", "menu_volume") and self.sound:
+            self.sound.refresh()
+        save_settings(st)
+        self.menubar.update(st)
+
+    def options_screen(self):
+        from ui.screens.options import options
+        sel = 0
+        while True:
+            got = options(self.menus, self.option_rows, self.change_option, sel)
+            if got is None:
+                return
+            key, sel = got
+            if key == "controls":
+                self.controls_menu()
+            elif key in ("controllers", "savestates", "debug_starts"):
+                self.go(key)
+            else:
+                self.action(key)  # help pages, About, the data folder, the log
+
     def settings_menu(self):
+        if self.menus:
+            return self.options_screen()
         ui = self.ui
         sel = 0
         while True:

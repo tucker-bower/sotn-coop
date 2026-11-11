@@ -57,11 +57,12 @@ class Inputs:
     def __init__(self, frames):
         self.display, self._rects, self.frames, self.names = Display(), [], list(frames), []
 
-    def seen(self, name):
+    def seen(self, name, about=""):
+        self.about = about
         if not self.names or self.names[-1] != name:
             self.names.append(name)
 
-    def events(self, pixel=False):
+    def events(self, raw=False, pixel=False):
         if not self.frames:
             raise AssertionError("the screen is still waiting after the last scripted input")
         out = []
@@ -172,6 +173,107 @@ def main():
         check(castle_list(m, "Load castle", castles, extras) is None, "the boss rush has no settings; back leaves the list")
         m, ui, _ = menus([[], [("mouse", 100, 34 + 8 + 16 * 2 + 4, True)]])
         check(castle_list(m, "Load castle", castles, extras) == ("castle", castles[2]), "the mouse: a click on the third row plays it")
+
+        # a castle's settings
+        import rules as castle_rules
+        from ui.screens.castle_settings import castle_settings
+
+        def settings(frames, **kw):
+            m, ui, _ = menus(frames)
+            r, applied = castle_rules.clean({}), []
+            got = castle_settings(m, "Tucker", r, applied.append, **kw)
+            return got, r, applied, ui
+
+        got, r, applied, ui = settings([["right"], ["back"]])
+        check(got is None and castle_rules.difficulty(r) == "Hard" and (r["enemy_hp_pct"], r["taken_pct"], r["exp_pct"]) == (300, 150, 50)
+              and applied[-1] == r and ui.names == ["Castle settings"], "Difficulty is the first row: right is Hard, and its sliders move at once")
+        got, r, _, _ = settings([["left"], ["left"], ["left"], ["back"]])
+        check(castle_rules.difficulty(r) == "Easy", "left stops at Easy")
+        got, r, _, _ = settings([["down"], ["right"], ["back"]])
+        check(r["enemy_hp_pct"] == 225 and castle_rules.difficulty(r) == "Custom",
+              "down skips the group's heading to the first slider; moving it by hand makes the difficulty Custom")
+        got, r, _, _ = settings([["down"]] * 6 + [["ok"], ["back"]])
+        check(r["shared_level"] is False, "OK on a rule switches it (past the Sharing heading)")
+        got, r, applied, _ = settings([["down"]] * 6 + [["ok"], ["up"], ["up"], ["ok"], ["back"]])  # up from the first row: the last, the defaults
+        check(got is None and r["shared_level"] is False, "up moves back through the list")
+        got, r, applied, _ = settings([["right"], ["up"], ["ok"], ["back"]])
+        check(r == castle_rules.clean({}) and applied[-1] == r, "Back to the defaults (the last row) restores every setting")
+        got, r, applied, _ = settings([["right"], ["down"], ["right"], ["ok"], ["back"]], read_only=True)
+        check(r == castle_rules.clean({}) and applied == [], "the host's settings, shown to a joiner: nothing changes")
+        mode = {"mode": "story"}
+        got, r, _, _ = settings([["ok"]], start=True, mode=mode)
+        check(got == "start" and mode["mode"] == "story", "a new castle: Start is first, and it's a Story castle unless changed")
+        got, r, _, _ = settings([["down"], ["right"], ["up"], ["ok"]], start=True, mode=mode)
+        check(got == "start" and mode["mode"] == "rush", "Mode is the next row: left or right makes it a Boss rush")
+        got, r, _, _ = settings([["down"], ["down"], ["right"], ["back"]], start=True, mode={"mode": "story"})
+        check(got is None and castle_rules.difficulty(r) == "Hard", "then Difficulty; back returns to the castle's name")
+        got, r, _, _ = settings([["down"], ["right"], ["back"]], start=True)
+        check(castle_rules.difficulty(r) == "Hard", "with no boss rush to offer, there's no Mode row")
+        got, r, _, _ = settings([["down"]] * 7 + [[], [("mouse", 420, 34 + 6 + 16 * 6 + 4, True)], ["back"]])  # scrolled by two
+        check(r["shared_level"] is False and r["shared_gold"] is True, "the mouse: a click on a rule's row switches it")
+
+        # your discs
+        from ui.screens.discs import discs
+
+        def disc_screen(frames, first_run=False, have=None):
+            m, ui, _ = menus(frames)
+            have = dict(have or {})
+            calls = []
+
+            def attach(slot, path):
+                calls.append((slot, path))
+                where = slot or ("psp" if str(path).endswith(".iso") else "ps1")
+                have[where] = path or f"{where}.bin"
+                return where, f"{where} attached", True
+            got = discs(m, lambda: dict(have), attach, first_run, more=("Randomizer", "BIOS"))
+            return got, calls, have, ui
+
+        got, calls, _, ui = disc_screen([["down"], ["ok"], ["right"], ["ok"]], first_run=True)
+        check(got == "quit" and calls == [] and "PlayStation" in ui.about,
+              "first run: Continue does nothing without the PlayStation disc (and says why); Quit quits")
+        got, calls, _, _ = disc_screen([["back"], ["down"], ["right"], ["ok"]], first_run=True)
+        check(got == "quit", "first run: back doesn't leave")
+        got, calls, have, _ = disc_screen([["ok"], ["ok"]], first_run=True)
+        check(calls == [("ps1", None)] and got == "continue", "first run: OK on the PlayStation slot browses for it; once it's there, Continue is selected")
+        drop = pygame.event.Event(pygame.DROPFILE, file="/somewhere/dxc.iso")
+        got, calls, have, _ = disc_screen([[("event", drop)], ["back"]], have={"ps1": "sotn.cue"})
+        check(calls == [(None, "/somewhere/dxc.iso")] and have.get("psp") and got == "back",
+              "a file dropped anywhere goes to attach with no slot (it's sorted by what's in it); back leaves")
+        got, *_ = disc_screen([["down"], ["right"], ["ok"]], have={"ps1": "sotn.cue"})
+        check(got == "Randomizer", "after Back: the Randomizer, and the BIOS (until their own screens)")
+        got, calls, _, _ = disc_screen([[], [("mouse", 8 + 157 + 20, 100, True)], ["back"]], have={"ps1": "sotn.cue"})
+        check(calls == [("psp", None)], "the mouse: a click on the PSP slot browses for that disc")
+
+        # Options
+        import types
+
+        import app
+        from ui.screens.options import options
+        from winmenu import MENUS
+        fake = types.SimpleNamespace(settings={}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES)
+        rows = app.Launcher.option_rows(fake)
+        keys = {r["key"] for r in rows}
+
+        def actions(items):
+            for item in items:
+                if item is None:
+                    continue
+                if isinstance(item[1], list):
+                    yield from actions(item[1])
+                else:
+                    yield item[1]
+        elsewhere = {"new", "continue", "quit", "rules", "settings",  # the main menu and the castle list have these; this is Settings
+                     "pause", "report", "moment", "leave"}             # only in a game: the pause menu has them
+        missing = sorted({a.split(":")[0] if a.startswith(("layout:", "netsim:")) else a for a in actions(MENUS)} - keys - elsewhere
+                         - {"fullscreen"} if "_fullscreen" in keys else ["fullscreen"])
+        check(not missing, f"every item in the window's menu bar is in Options, for a controller too: missing {missing}")
+        changed = []
+        m, ui, _ = menus([["down"], ["ok"], ["right"], ["back"]])
+        check(options(m, lambda: rows, lambda k, st: changed.append((k, st))) is None and ui.names == ["Options"],
+              "Options: back leaves")
+        check(changed == [("_fullscreen", 0), ("_fullscreen", 1)], f"down skips the heading under it; OK and right change the row: {changed}")
+        m, ui, _ = menus([["up"], ["ok"]])
+        check(options(m, lambda: rows, lambda k, st: None)[0] == "open_log", "up from the first row is the last: OK on an action returns it")
 
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
