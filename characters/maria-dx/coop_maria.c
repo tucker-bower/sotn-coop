@@ -7,8 +7,6 @@
 #define GUARDIAN_INT_DIV 50 // guardians and their crashes: × (1 + INT / this)
 #define FIRE_PCT 125       // Fire of Bat: her attack burns, for this % of its damage
 #define ECHO_PCT 125       // Force of Echo: her attack's echo, this % of its damage
-#define GUARDIAN_TURTLE 3        // src/maria/gen/subweapons.h
-#define GUARDIAN_TURTLE_CRASH 16
 
 // Her frame tables, at a fixed place (maria.ld: 0x8013C1F0), for another character's game to
 // draw her from its copy (module/puppet.c).
@@ -59,14 +57,31 @@ s32 CoopMarGuardianGear(s32 attack) {
     return attack;
 }
 
+// Her attacks under "Alucard's stats" (#238, Tucker): her own (the owl) and her body's (slide
+// kick, blade dash, high jump: MarSetSubweaponParams, with their PL_W_ id) grow with STR, the body's
+// in proportion to the owl's, as Richter's body moves to his whip's; her guardians' (every attack in
+// src/maria/pl_subweapons.c, which sets g_CoopMarGuardian) with INT.
+#define OWL_ATTACK 12 // the owl's own attack (src/maria/pl_blueprints.c EntityMariaOwl)
+int g_CoopMarGuardian;
+
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
+    s32 guardian = g_CoopMarGuardian;
+
     if (g_CoopOptions & OPT_NO_ALUCARD_STATS) {
         return attack; // the castle's rules: her attacks as in her own game
     }
     if (g_Status.D_80097BF8 & 1) {
         attack /= 2; // poisoned (module/character.c)
     }
-    if (subweapon == COOP_MAR_BASIC) {
+    if (guardian) {
+        if (attack) {
+            attack += attack * g_Status.statsTotal[STAT_INT] / GUARDIAN_INT_DIV;
+        }
+        // Gas Cloud: the turtle and its crash poison (M8b §3).
+        if (guardian == COOP_MAR_TURTLE && COOP_CAN(RELIC_GAS_CLOUD)) {
+            entity->attackElement |= ELEMENT_POISON;
+        }
+    } else if (subweapon == COOP_MAR_BASIC) {
         attack = attack * BASIC_BASE_PCT / 100 + g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100;
         if (COOP_CAN(RELIC_FIRE_OF_BAT)) {
             attack = attack * FIRE_PCT / 100;
@@ -76,11 +91,8 @@ s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
             attack = attack * ECHO_PCT / 100;
         }
     } else if (attack) {
-        attack += attack * g_Status.statsTotal[STAT_INT] / GUARDIAN_INT_DIV;
-    }
-    // Gas Cloud: the turtle and its crash poison (M8b §3).
-    if ((subweapon == GUARDIAN_TURTLE || subweapon == GUARDIAN_TURTLE_CRASH) && COOP_CAN(RELIC_GAS_CLOUD)) {
-        entity->attackElement |= ELEMENT_POISON;
+        attack = (OWL_ATTACK * BASIC_BASE_PCT / 100 + g_Status.statsTotal[STAT_STR] * BASIC_STR_PCT / 100) * attack /
+                 OWL_ATTACK;
     }
     return attack;
 }

@@ -548,19 +548,35 @@ index 80452af..4156ec7 100644
          isTouchingGround = 1;
      }
 diff --git a/src/maria/pl_subweapons.c b/src/maria/pl_subweapons.c
-index 391e087..2180f7c 100644
+index 391e087..564682a 100644
 --- a/src/maria/pl_subweapons.c
 +++ b/src/maria/pl_subweapons.c
-@@ -1,5 +1,9 @@
+@@ -1,5 +1,14 @@
  // SPDX-License-Identifier: AGPL-3.0-or-later
  #include "maria.h"
 +#ifdef COOP_MARIA
-+// Every attack here is a guardian's: Brilliant Mail adds to its own value (#202, coop_maria.c)
-+#define MarSetWeaponParams(e, attack, ...) MarSetWeaponParams(e, CoopMarGuardianGear(attack), __VA_ARGS__)
++// Every attack here is a guardian's (coop_maria.c): it scales with INT (#238), Brilliant Mail adds to
++// its own value (#202), and the turtle's at the end of the file say they're the turtle's (Gas Cloud).
++extern int g_CoopMarGuardian;
++#define COOP_GUARDIAN_HERE COOP_MAR_GUARDIAN
++#define MarSetWeaponParams(e, attack, ...)                                                   \
++    (g_CoopMarGuardian = COOP_GUARDIAN_HERE,                                                \
++     MarSetWeaponParams(e, CoopMarGuardianGear(attack), __VA_ARGS__), g_CoopMarGuardian = 0)
 +#endif
  
  // ** How to calculate self->unk5A
  // GFX_ENTRY(Y, X, ...
+@@ -1541,6 +1550,10 @@ void EntityMariaCardinalCrashFireball(Entity* self) {
+ }
+ 
+ static AnimationFrame anim_turtle[] = {POSE(1, 1, 0), POSE_LOOP(0)};
++#ifdef COOP_MARIA
++#undef COOP_GUARDIAN_HERE
++#define COOP_GUARDIAN_HERE COOP_MAR_TURTLE
++#endif
+ void EntityMariaTurtleAttack(Entity* self) {
+     switch (self->step) {
+     case 0:
 diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
 index 4fd8301..aef4fe3 100644
 --- a/src/ric/pl_blueprints.c
