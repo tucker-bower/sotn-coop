@@ -8,7 +8,7 @@ WTFPL), run by Node.js, both downloaded the first time and kept in the data fold
 Pinned and checked: Node by the SHA-256 nodejs.org publishes for that release; the randomizer at
 the commit harness/mods.py tests (mods.SOURCES), by a hash of its files' contents (GitHub's zip
 of a commit isn't promised to be the same bytes twice); its three packages by npm, against the
-randomizer's own lockfile. A PC with Node already on it (a developer's) uses that.
+randomizer's own lockfile. On Windows it's always our Node; a developer's Linux uses its own.
 
 Android can't run Node: there, a seed comes from sotn.io as a file.
 """
@@ -58,10 +58,11 @@ def _randomizer_dir():
 
 
 def _node():
-    """The node to run: ours, or one already on this PC."""
-    ours = folder() / f"node-{NODE_VERSION}-win-x64" / "node.exe"
-    if ours.exists():
-        return ours
+    """The node to run: on Windows always ours (one another program put on the PATH could be any
+    version); elsewhere (a developer's PC) the one installed."""
+    if sys.platform == "win32":
+        ours = folder() / f"node-{NODE_VERSION}-win-x64" / "node.exe"
+        return ours if ours.exists() else None
     found = shutil.which("node")
     return Path(found) if found else None
 
@@ -69,7 +70,7 @@ def _node():
 def available():
     """Whether this PC can roll seeds at all (not on Android)."""
     from platform_android import ANDROID
-    return not ANDROID and (sys.platform in NODE or shutil.which("node") is not None)
+    return not ANDROID and (sys.platform in NODE or shutil.which("node") is not None)  # (Windows downloads ours)
 
 
 def ready():
