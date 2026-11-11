@@ -46,7 +46,8 @@ Name: desktopicon; Description: "A desktop shortcut"; GroupDescription: "Shortcu
 [Run]
 Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; Description: "Start SOTN Co-op"; Flags: postinstall nowait skipifsilent
 ; An update the launcher started (silent): the launcher starts again when it's done
-Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; Flags: nowait skipifnotsilent
+; (/NOLAUNCH=1: tests, so nothing opens on the screen)
+Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\launcher\app.py"""; WorkingDir: "{app}"; Flags: nowait skipifnotsilent; Check: Launch
 
 [UninstallDelete]
 ; What running it made inside the program folder (Python's caches). The player's data\ stays,
@@ -55,6 +56,11 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\python"
 
 [Code]
+function Launch: Boolean;
+begin
+  Result := ExpandConstant('{param:NOLAUNCH|0}') <> '1';
+end;
+
 // The folder must be one the player can write to: no admin rights are asked for.
 function NextButtonClick(CurPageID: Integer): Boolean;
 var

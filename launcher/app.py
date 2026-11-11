@@ -1314,9 +1314,8 @@ class Launcher:
         self.settings.clear()
         self.settings.update(load_settings())
         self.display.settings = self.settings
-        if ok:
-            self.copy_disc_in()
         self.ui.message("Your castles and saves" if ok else "Your castles and saves stayed where they were", said)
+        # (then the wizard copies the disc in)
 
     def copy_disc_in(self):
         """An installed launcher's PlayStation disc lives in its folder (D196): one outside it is
@@ -1341,6 +1340,7 @@ class Launcher:
     def wizard(self):
         ui = self.ui
         self.move_old_data()
+        self.copy_disc_in()  # (a player whose disc is still outside the folder: every start until it's in)
         import library
         if library.migrate(self.settings):  # the randomizer setting from before game discs
             save_settings(self.settings)
