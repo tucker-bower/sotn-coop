@@ -10,6 +10,7 @@ Turns the player's own disc into the co-op disc without shipping game data.
 | `layer.py` | Co-op on top of a modded disc: a three-way merge of retail, the mod and co-op. |
 | `modded.py` | Makes a game disc: the player's disc with any number of mods, and co-op layered on top. |
 | `mods/hacks.json` | The SOTN Editor hacks we've tested with co-op, as the bytes each writes (made by `harness/make_hack_patches.py`). |
+| `mods/rando-presets.json` | The randomizer presets that work with co-op: names and descriptions, from the randomizer's own data (WTFPL). |
 | `ppf.py` | Applies PPF patches, the format the randomizer ships seeds in. |
 | `randomizer.py` | Makes the randomized co-op disc from the player's discs, and reads a disc's seed. |
 | `patcher.py` | The disc patcher, for players and for release builds. |

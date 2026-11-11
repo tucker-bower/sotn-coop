@@ -42,6 +42,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |
 | `test_discs.py` | Checks which disc a file is, on made-up files and a dev checkout's discs. |
 | `test_crash_window.py` | Checks what counts as stopped, and that closing the crash window sends nothing. |
+| `randomizer_tool.py` | Rolls a randomized castle: the randomizer and Node.js, downloaded on first use. |
 | `rules.py` | A castle's rules: every rule, its default, and what the game gets. |
 | `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |
 | `test_screens_fit.py` | Draws every screen with long content and fails on any text cut off. |
