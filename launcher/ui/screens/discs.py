@@ -7,8 +7,8 @@ import pygame
 
 from ..theme import DIM, GOLD, GREEN, INK, RED, shorten, wrap
 
-HEAD, NOTE = (8, 6, 464, 34), (8, 196, 464, 22)
-SLOT_Y, SLOT_W, SLOT_H = 46, 150, 144
+HEAD, NOTE = (8, 6, 464, 34), (8, 182, 464, 36)
+SLOT_Y, SLOT_W, SLOT_H = 46, 150, 132
 SLOTS = (  # (key, title, system, needed?, what it's for: three lines of 17 at most)
     ("ps1", ("Symphony of", "the Night"), "PlayStation (USA)", "Required", "Co-op is made from it."),
     ("psp", ("Dracula X", "Chronicles"), "PSP (USA)", "Optional", "Unlocks Co-op and Ultimate Maria."),
@@ -86,7 +86,7 @@ def discs(m, status, attach, first_run=False, said="", more=()):
             for line in wrap(unlocks, 17)[:3]:
                 t.text(s, line, x + 8, y, DIM)
                 y += 10
-            y = SLOT_Y + 100
+            y = SLOT_Y + 96
             if have.get(key):
                 t.text(s, "Attached", x + 8, y, GREEN)
                 t.text(s, shorten(have[key], 16), x + 8, y + 12, DIM)
@@ -94,11 +94,14 @@ def discs(m, status, attach, first_run=False, said="", more=()):
                 t.text(s, "Drop it here, or", x + 8, y, INK if on else DIM)
                 t.text(s, "select to browse", x + 8, y + 10, INK if on else DIM)
             if said["slot"] == key and not said["ok"]:
-                t.text(s, "Didn't work", x + 8, y + 26, RED)
+                t.text(s, "Didn't work", x + 8, y + 24, RED)
             m.hit((0, k), box)
         m.window(NOTE)
-        t.text(s, shorten(said["text"] or "Drop your disc images anywhere on this window.", 56), NOTE[0] + 8, NOTE[1] + 7,
-               INK if said["ok"] else RED)
+        lines = wrap(said["text"] or "Drop your disc images anywhere on this window.", 56)
+        if len(lines) > 3:
+            lines = lines[:2] + [shorten(" ".join(lines[2:]), 56)]
+        for k, line in enumerate(lines):
+            t.text(s, line, NOTE[0] + 8, NOTE[1] + 6 + k * 10, INK if said["ok"] else RED)
         for k, label in enumerate(buttons):
             x = 8 + k * 100
             on = row == 1 and col == k

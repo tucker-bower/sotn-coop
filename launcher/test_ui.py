@@ -212,6 +212,38 @@ def main():
         got, r, _, _ = settings([["down"]] * 7 + [[], [("mouse", 420, 34 + 6 + 16 * 6 + 4, True)], ["back"]])  # scrolled by two
         check(r["shared_level"] is False and r["shared_gold"] is True, "the mouse: a click on a rule's row switches it")
 
+        # your discs
+        from ui.screens.discs import discs
+
+        def disc_screen(frames, first_run=False, have=None):
+            m, ui, _ = menus(frames)
+            have = dict(have or {})
+            calls = []
+
+            def attach(slot, path):
+                calls.append((slot, path))
+                where = slot or ("psp" if str(path).endswith(".iso") else "ps1")
+                have[where] = path or f"{where}.bin"
+                return where, f"{where} attached", True
+            got = discs(m, lambda: dict(have), attach, first_run, more=("Randomizer", "BIOS"))
+            return got, calls, have, ui
+
+        got, calls, _, ui = disc_screen([["down"], ["ok"], ["right"], ["ok"]], first_run=True)
+        check(got == "quit" and calls == [] and "PlayStation" in ui.about,
+              "first run: Continue does nothing without the PlayStation disc (and says why); Quit quits")
+        got, calls, _, _ = disc_screen([["back"], ["down"], ["right"], ["ok"]], first_run=True)
+        check(got == "quit", "first run: back doesn't leave")
+        got, calls, have, _ = disc_screen([["ok"], ["ok"]], first_run=True)
+        check(calls == [("ps1", None)] and got == "continue", "first run: OK on the PlayStation slot browses for it; once it's there, Continue is selected")
+        drop = pygame.event.Event(pygame.DROPFILE, file="/somewhere/dxc.iso")
+        got, calls, have, _ = disc_screen([[("event", drop)], ["back"]], have={"ps1": "sotn.cue"})
+        check(calls == [(None, "/somewhere/dxc.iso")] and have.get("psp") and got == "back",
+              "a file dropped anywhere goes to attach with no slot (it's sorted by what's in it); back leaves")
+        got, *_ = disc_screen([["down"], ["right"], ["ok"]], have={"ps1": "sotn.cue"})
+        check(got == "Randomizer", "after Back: the Randomizer, and the BIOS (until their own screens)")
+        got, calls, _, _ = disc_screen([[], [("mouse", 8 + 157 + 20, 100, True)], ["back"]], have={"ps1": "sotn.cue"})
+        check(calls == [("psp", None)], "the mouse: a click on the PSP slot browses for that disc")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 

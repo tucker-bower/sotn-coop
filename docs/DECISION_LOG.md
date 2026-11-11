@@ -906,3 +906,9 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - The **Damage dealt** slider is gone: Tucker would rather enemies have more HP than players' numbers go down. A castle that had changed it is back at 100%. The game's `dealtPct` word stays in the mailbox, always 0 (no module change; removing it is on #224's list), and `rules_damage_dealt`-style tests still drive it through the mailbox.
 - A new castle's settings come before it exists, with **Mode**: Story or Boss rush. Boss rush left the bottom of the Load castle list. Back from the settings returns to the castle's name, and nothing is made until Start.
 - The settings screen groups the rules under headings and shows a slider as a bar and a rule as the game's own ON / OFF switch (`launcher/ui/screens/castle_settings.py`).
+
+**D194: The first run is the discs screen** (agent-default, 2026-11-10; `design/launcher-overhaul.md`, #227, #213)
+- One screen holds all three discs: the PlayStation one (needed) and the PSP and Saturn ones (characters). A file dropped on the window goes to its slot by what's in it (`launcher/discs.py`), and one browsed for in the wrong slot goes to its own and says so. Re-attaching the PlayStation disc that's already there says so instead of making the co-op disc again. On first run only Continue (once the PlayStation disc is there) and Quit leave it.
+- Before the disc is attached there's no game art, so this screen draws in the same layout with a system font in the game's font's 8x8 cells (`theme.plain_font`); it changes to the game's own as soon as the disc is in.
+- The Randomizer and the BIOS are buttons on this screen until the game discs list and the Options screen take them (the design's steps 7 and 8). The old Game files screen is still there for a disc the art can't be read from.
+- Long jobs (making the co-op disc, Maria) still show the old progress screen.
