@@ -49,6 +49,7 @@ import scenarios_relics  # noqa: F401
 import scenarios_movement  # noqa: F401
 import scenarios_m13  # noqa: F401
 import scenarios_ultimate  # noqa: F401
+import scenarios_widescreen  # noqa: F401
 import session_m15  # noqa: F401
 import session_rules  # noqa: F401
 import session_carry  # noqa: F401

@@ -322,6 +322,8 @@ extern u16 g_CoopStage; // the stage that's loaded, for anything about the partn
 #define OPT_PARTNER_SIM 2 // M13 spike: the partner simulated by the game's own player code (partner.c)
 // Alucard's spell on each right-stick direction (up, right, down, left): 4 bits each from this
 // bit, SpellIds + 1 (0: none).
+#define OPT_WIDE_SHIFT 3   // options: the screen's shape, 0 4:3, 1 16:9, 2 21:9 (widescreen.c)
+#define OPT_WIDE_MASK 0x18
 #define OPT_SPELL_SHIFT 8
 // CoopLink.padExtra: what a modern pad has and a PlayStation pad doesn't.
 #define PADX_RS_UP 1

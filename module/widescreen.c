@@ -10,13 +10,14 @@
 #include <game.h>
 #include "link.h"
 
-u16 g_CoopWideWidth; // the view's width in pixels; 0: off (tests, and later the launcher)
+u16 g_CoopWideWidth; // tests: the view's width in pixels, over the player's setting; 0: the setting's
 
 #define GP1(cmd) (*(volatile u32*)0x1F801814 = (cmd))
 #define GP1_COOP_WIDE 0x2F000000
 void FlushCache(void); // main.exe
 void WideTilemap(s32 columns); // widescreen_tilemap.c
 void WidescreenStage(s32 extra); // widescreen_stage.c
+void SetStageDisplayBuffer(void); // DRA
 
 // The game's camera is left as it is: it keeps its 256-wide view of the room ("the game's view"),
 // and the wider window is centred on it, slid to stay inside the room (or centred on a room narrower
@@ -93,11 +94,15 @@ void WidescreenAfterPrims(void) {
 #define STAGE_CLIP_Y 0x14 // func_800E34DC (src/dra/42398.c): the stage view is drawn in lines 20-226
 #define STAGE_CLIP_H 0xCF
 
+// The player's screen shape (OPT_WIDE_*, link/mailbox.py WIDE_SHAPES): 4:3, 16:9, 21:9.
+static const u16 s_ShapeWidths[4] = {0, 352, 448, 0};
+
 void WidescreenFrame(void) {
-    s32 w = g_CoopWideWidth & ~0xF, i;
+    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[(g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT]) & ~0xF, i;
     DRAWENV* d0 = &g_GpuBuffers[0].draw;
     DRAWENV* d1 = &g_GpuBuffers[1].draw;
-    s32 stage = (d0->clip.w == DISP_STAGE_W || d0->clip.w == w) && d0->clip.h == STAGE_CLIP_H &&
+    static s32 s_Applied; // the width the framebuffers were last made (a change starts from it)
+    s32 stage = (d0->clip.w == DISP_STAGE_W || d0->clip.w == s_Applied) && d0->clip.h == STAGE_CLIP_H &&
                 d1->clip.y == STAGE_CLIP_Y; // not the CGI's layout, whose second buffer is lower
 
     if (w > 512) {
@@ -107,6 +112,9 @@ void WidescreenFrame(void) {
         WidescreenStage(w && !g_CoopWideStageOff ? w - DISP_STAGE_W : 0);
     }
     if (!w || !stage) {
+        if (stage && d0->clip.w != DISP_STAGE_W) { // turned off in play: the game's own framebuffers
+            SetStageDisplayBuffer();
+        }
         GP1(GP1_COOP_WIDE);
         TilemapCall(false);
         g_CoopWideSlide = 0;
@@ -124,5 +132,6 @@ void WidescreenFrame(void) {
         p->disp.x = (1 - i) * w; // shown while the other is drawn
         p->disp.w = w;
     }
+    s_Applied = w;
     GP1(GP1_COOP_WIDE | w);
 }

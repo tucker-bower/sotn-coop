@@ -28,7 +28,7 @@ A wider view of the castle, not a stretch (D76), optional: 16:9, and 21:9 or 32:
 | **Enemies at the edges** | Shared windows done: every stage's `Update` (destroy and freeze bounds) and spawner (`UpdateRoomPosition`, `InitRoomEntities`) are widened by the view's extra width at each stage load (`module/widescreen_stage.c`). `harness/widescreen_edges.py` walks each of the 37 debug starts: at 448, events in the extra width went from 86 pop-ins and 27 vanishes to 49 and 18, most of what's left in boss fights (their projectiles and particles near the edge) and a few enemies' own "on screen" checks (about 183 in 93 stage files). Those are the stage-by-stage tail | **Large: the long tail** |
 | Screen copies | Effects that read the framebuffer (room fades, Richter's and Maria's death dissolve) read the second bank in wide mode: the core's copy and read paths | Medium |
 | 32:9 | Two 688 framebuffers need more than one bank: a third bank in the core, and the partner's textures move there | Medium |
-| The app | Width setting (4:3, 16:9, 21:9, 32:9) in Your settings; the window and fullscreen fit the wider picture; Windows and Android cores rebuilt | Medium |
+| The app | Done for Linux: "Screen shape" (4:3, 16:9, 21:9) in Options and Your settings, sent as two bits of the player's options; the window fits each game's picture to its shape (`display.aspect_of`). `widescreen_shape_option` checks each shape's view, the pause menu at 4:3, and turning it off in play. Still to do: the Windows and Android cores rebuilt | Small |
 | Co-op | See question 3 | Small |
 
 ## Options

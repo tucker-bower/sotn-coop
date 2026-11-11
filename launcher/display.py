@@ -43,6 +43,14 @@ LAYOUT_NAMES = {"auto": "Automatic", "side": "Side by side", "stacked": "Stacked
                 "p2": "Player 2 only", "windows": "Player 2 in its own window"}
 
 
+WIDE_WIDTHS = (352, 448, 688)  # widescreen views (design/M19): the game's pixels, as wide as at 4:3
+
+
+def aspect_of(size):
+    """A game frame's shape on screen: 4:3, or wider for a widescreen view (link/mailbox.py)."""
+    return 4 / 3 * size[0] / 256 if size and size[0] in WIDE_WIDTHS else 4 / 3
+
+
 def fit(area, aspect=4 / 3):
     """The largest aspect-shaped rect centered in area (x, y, w, h)."""
     x, y, w, h = area
@@ -55,25 +63,27 @@ def fit(area, aspect=4 / 3):
     return pygame.Rect(x + (w - nw) // 2, y + (h - nh) // 2, nw, nh)
 
 
-def cells(layout, size, players):
-    """Where each game goes in the main window: [rect or None per game]."""
+def cells(layout, size, players, aspects=(4 / 3, 4 / 3)):
+    """Where each game goes in the main window: [rect or None per game]. aspects: each game's
+    picture's shape (aspect_of)."""
     w, h = size
     h -= BAR
+    a0, a1 = (list(aspects) + [4 / 3, 4 / 3])[:2]
     if layout == "auto":  # whichever gives each game the bigger picture
-        side = min((w - GAP) / 2 * 3 / 4, h)
-        stacked = min(w * 3 / 4, (h - GAP) / 2)
+        side = min((w - GAP) / 2 / max(a0, a1), h)
+        stacked = min(w / max(a0, a1), (h - GAP) / 2)
         layout = "side" if side >= stacked else "stacked"
     if players == 1:
-        return [fit((0, 0, w, h))]
+        return [fit((0, 0, w, h), a0)]
     if layout == "stacked":
         half = (h - GAP) // 2
-        return [fit((0, 0, w, half)), fit((0, half + GAP, w, half))]
+        return [fit((0, 0, w, half), a0), fit((0, half + GAP, w, half), a1)]
     if layout == "p1":
-        return [fit((0, 0, w, h)), None]
+        return [fit((0, 0, w, h), a0), None]
     if layout in ("p2", "windows"):
-        return [None, fit((0, 0, w, h))] if layout == "p2" else [fit((0, 0, w, h)), None]
+        return [None, fit((0, 0, w, h), a1)] if layout == "p2" else [fit((0, 0, w, h), a0), None]
     half = (w - GAP) // 2
-    return [fit((0, 0, half, h)), fit((half + GAP, 0, half, h))]
+    return [fit((0, 0, half, h), a0), fit((half + GAP, 0, half, h), a1)]
 
 
 def texture(renderer, size, linear, **kw):
@@ -308,7 +318,7 @@ class Display:
             self.second = None
 
     def _draw_games(self):
-        rects = cells(self.layout, self.window.size, len(self.games))
+        rects = cells(self.layout, self.window.size, len(self.games), [aspect_of(g.size) for g in self.games])
         for g, rect in zip(self.games, rects):
             g.draw(rect)
 
@@ -328,7 +338,7 @@ class Display:
             win, ren, tex = self.second
             ren.draw_color = (0, 0, 0, 255)
             ren.clear()
-            tex.draw(fit((0, 0, *win.size)))
+            tex.draw(fit((0, 0, *win.size), aspect_of(tex.size)))
             ren.present()
 
     def _draw_corner(self):

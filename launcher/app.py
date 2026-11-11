@@ -501,6 +501,13 @@ def pick_file(title, types, ui=None, android_disc=None):
         return None
 
 
+
+def wide_shape(settings):
+    """The screen's shape (link/mailbox.py WIDE_SHAPES): 0 is 4:3, the game as it was."""
+    from link.mailbox import WIDE_SHAPES
+    v = settings.get("wide", 0)
+    return v if isinstance(v, int) and 0 <= v < len(WIDE_SHAPES) else 0
+
 class Launcher:
     def __init__(self):
         pygame.init()
@@ -966,14 +973,18 @@ class Launcher:
     def options(self, seat):
         """The OPT_* bits for that seat's game (link/mailbox.py). The right stick's spells are the
         player's, if the castle has them on (its rules: launcher/rules.py stick_spells)."""
-        from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
+        from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, OPT_WIDE_SHIFT, spell_options
         rules = getattr(self, "current_rules", None) or {}
         spells = self.spells(seat) if rules.get("stick_spells", True) else [None] * 4
         return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(spells) |
                 (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
                 (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
                 (OPT_ALUCARD_HUD if self.settings.get("alucard_hud") else 0) |
-                (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
+                (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT) |
+                (self.wide_shape() << OPT_WIDE_SHIFT))
+
+    def wide_shape(self):
+        return wide_shape(self.settings)
 
     def refresh_players(self):
         """In a game: each player's own options again (a setting, or the castle's rules, changed)."""
@@ -988,7 +999,7 @@ class Launcher:
     def player_rows(self):
         """Your settings: what's each player's own (not the castle's), in the game's style (issue 232)."""
         from link.mailbox import SPELLS
-        rows = [r for r in self.option_rows() if r["key"] in ("partner_vol", "partner_hp", "partner_tint", "spell_triggers", "alucard_hud", "show_ping")]
+        rows = [r for r in self.option_rows() if r["key"] in ("wide", "partner_vol", "partner_hp", "partner_tint", "spell_triggers", "alucard_hud", "show_ping")]
         rows.insert(0, {"kind": "head", "key": None, "label": "While you play"})
         names = {None: "Nothing", **{k: n for k, n in enumerate(SPELLS) if n}}
         for seat in (0, 1) if not ANDROID else (0,):
@@ -2647,10 +2658,13 @@ class Launcher:
         def action(key, label, hint, value=""):
             return {"kind": "action", "key": key, "label": label, "hint": hint, "value": value}
         head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
+        from link.mailbox import WIDE_SHAPES
         rows = [head("View"),
                 {"kind": "choice", "key": "layout", "label": "Couch co-op layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
                  "hint": "How two games share the window."},
                 switch("_fullscreen", "Fullscreen", "Also F11 or Alt+Enter."),
+                {"kind": "choice", "key": "wide", "label": "Screen shape", "value": WIDE_SHAPES[wide_shape(st)],
+                 "hint": "Wider shows more of the castle. Experimental."},
                 head("Sound"),
                 {"kind": "choice", "key": "music", "label": "Music", "value": {"auto": "Automatic", "left": "Left game", "right": "Right game"}[st.get("music", "auto")],
                  "hint": "Which game's music plays, on the couch."},
@@ -2694,6 +2708,10 @@ class Launcher:
         if key == "layout":
             order = list(LAYOUT_NAMES)
             st["layout"] = order[(order.index(st.get("layout", "auto")) + (step or 1)) % len(order)]
+        elif key == "wide":
+            from link.mailbox import WIDE_SHAPES
+            st["wide"] = (self.wide_shape() + (step or 1)) % len(WIDE_SHAPES)
+            self.refresh_players()
         elif key == "music":
             order = ["auto", "left", "right"]
             st["music"] = order[(order.index(st.get("music", "auto")) + (step or 1)) % 3]
