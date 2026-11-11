@@ -60,7 +60,6 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_port}"
     installer = b"MZ the new installer" * 1000
-    good = hashlib.sha256(installer).hexdigest()
 
     def publish(tag, sums_for=installer):
         GitHub.files.clear()

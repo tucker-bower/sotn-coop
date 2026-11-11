@@ -48,7 +48,6 @@ def kind(path):
 def copy_in(path, folder, progress=None):
     """Copies a disc image (its .cue and every file it names, or a single file) into folder, and
     returns the copy's path. Already there: returned as it is."""
-    import shutil
     path, folder = Path(path), Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     try:
