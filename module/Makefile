@@ -11,7 +11,7 @@ CC_FLAGS  += -march=mips1 -mabi=32 -EL -mfp32 -fno-pic -mno-shared -mno-abicalls
 CPP_FLAGS := -isystem $(ROOT)/include -isystem $(ROOT)/include/psxsdk -undef
 CPP_FLAGS += -D_internal_version_$(VERSION) -Dmips -D__OPTIMIZE__ -D__mips__ -D__mips -Dpsx -D__psx__ -D__psx
 CPP_FLAGS += -D_PSYQ -D__EXTENSIONS__ -D_MIPSEL -DNO_LOGS -D_LANGUAGE_C -DLANGUAGE_C
-OBJS      := $(BUILD)/boot.o $(BUILD)/coop.o $(BUILD)/portrait.o $(BUILD)/arrive.o $(BUILD)/progress.o $(BUILD)/flag_gated.o $(BUILD)/collectibles.o $(BUILD)/shared.o $(BUILD)/overlay_table.o $(BUILD)/message.o $(BUILD)/boss.o $(BUILD)/vram.o $(BUILD)/solid.o $(BUILD)/character.o $(BUILD)/mist.o $(BUILD)/carry.o $(BUILD)/spells.o $(BUILD)/offhand.o $(BUILD)/sprites.o $(BUILD)/weapons.o $(BUILD)/partner.o $(BUILD)/familiar.o $(BUILD)/pvp.o
+OBJS      := $(BUILD)/boot.o $(BUILD)/coop.o $(BUILD)/portrait.o $(BUILD)/arrive.o $(BUILD)/progress.o $(BUILD)/flag_gated.o $(BUILD)/collectibles.o $(BUILD)/shared.o $(BUILD)/overlay_table.o $(BUILD)/message.o $(BUILD)/boss.o $(BUILD)/vram.o $(BUILD)/solid.o $(BUILD)/character.o $(BUILD)/mist.o $(BUILD)/carry.o $(BUILD)/spells.o $(BUILD)/offhand.o $(BUILD)/sprites.o $(BUILD)/weapons.o $(BUILD)/partner.o $(BUILD)/familiar.o $(BUILD)/pvp.o $(BUILD)/widescreen.o
 # boot.bin must fit in DRA.BIN's last CD sector (DRA.BIN is 0x119870 bytes; 564 sectors = 0x11A000)
 BOOT_MAX  := 1936
 

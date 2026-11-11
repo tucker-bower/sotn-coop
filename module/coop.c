@@ -230,6 +230,7 @@ u16 g_CoopStage;
 
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    WidescreenFrame();
     if (g_GameState != Game_Play || g_GameEngineStep == Engine_Init) {
         g_CoopStage = g_StageId;
     }
