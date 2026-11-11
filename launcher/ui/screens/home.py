@@ -25,15 +25,18 @@ def started(castle):
     return time.strftime("%b %d", time.localtime(castle.info.get("created", 0)))
 
 
-def home(m, items, about, version, sel=0, note=""):
+def home(m, items, about, version, sel=0, note="", interrupt=None):
     """items: [(key, label, hint)]. about(key) -> {"lines": [...], "castle": Castle or None,
     "portrait": a picture's name or None}. Returns an item's key, a link's ("link", url), or None
-    (back: nothing to go back to, so it only moves to Quit)."""
+    (back: nothing to go back to, so it only moves to Quit). interrupt() -> a key to return at once
+    (an update found while the menu was up), or None."""
     t, s, hover, frames = m.theme, m.s, None, 0
     while True:
         if m.sound and frames % 30 == 0:  # (again now and then: the first time, it's still being decoded)
             m.sound.music(True)
         frames += 1
+        if interrupt and interrupt():
+            return interrupt()
         for a in m.poll():
             if a in ("up", "down"):
                 sel = move(sel, a, len(items))

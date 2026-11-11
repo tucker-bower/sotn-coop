@@ -23,6 +23,15 @@ def _activity():
     return autoclass("org.kivy.android.PythonActivity").mActivity
 
 
+def open_url(url):
+    """Shows a web page in the phone's browser (ACTION_VIEW)."""
+    from jnius import autoclass
+    Intent, Uri = autoclass("android.content.Intent"), autoclass("android.net.Uri")
+    intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    _activity().startActivity(intent)
+
+
 def external_dir():
     return Path(_activity().getExternalFilesDir(None).getAbsolutePath())
 
