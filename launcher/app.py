@@ -837,7 +837,7 @@ class Launcher:
                     [(p, presets.get(p, {}).get("name", p), presets.get(p, {}).get("description", "")) for p in randomizer_tool.PRESETS]
             rows_ = [{"kind": "action", "key": k, "label": label, "hint": hint, "value": ""} for k, label, hint in items]
             got = options(self.menus, lambda: rows_, lambda *_: None, title="Randomizer preset", note="Each castle gets its own seed")
-            if got and got[0] == "action":
+            if got and got[0] not in ("drop", "more"):  # (an action's key, and its row)
                 state["preset"] = rows_[got[1]]["key"]
                 if state["preset"]:
                     state["file"] = None
