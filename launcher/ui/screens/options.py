@@ -12,12 +12,14 @@ HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
 BAR_X, BAR_W = 300, 100
 
 
-def options(m, rows, change, sel=0, title="Options", note="Also in the menus at the top of the window", footer=None):
+def options(m, rows, change, sel=0, title="Options", note="Also in the menus at the top of the window", footer=None,
+            status=None):
     """rows() -> [{"kind": "head" | "choice" | "slider" | "switch" | "action", "key", "label", "hint",
     "value", ("low", "high", "step" for a slider)}]. change(key, step) applies a choice, slider or
     switch (step -1 / +1, or 0 for OK). Returns (an action's key, the row it was on), ("drop", a
     file dropped on the window), ("more", key) (Square / X / S on a row), or None (back). The same
-    screen lists other things than options: title and note say what."""
+    screen lists other things than options: title and note say what. status() -> what just
+    happened, shown above the selected row's explanation."""
     t, s, first = m.theme, m.s, 0
     table = rows()
 
@@ -68,7 +70,8 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
         first = scroll(first, sel, fits, len(table))
         if first and table[first - 1]["kind"] == "head" and sel - first < fits - 1:
             first -= 1
-        m.begin(title, table[sel].get("hint", ""))
+        said = status() if status else ""
+        m.begin(title, said or table[sel].get("hint", ""))
         m.window(HEAD)
         t.text(s, title, HEAD[0] + 8, HEAD[1] + 7, GOLD)
         t.text_right(s, note[:56 - len(title) - 2], HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
@@ -104,7 +107,9 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
         if first + fits < len(table):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
-        for k, line in enumerate(wrap(table[sel].get("hint", ""), 56)[:3]):
-            t.text(s, line, HINT[0] + 8, HINT[1] + 6 + k * 10, DIM)
+        lines = [(line, INK) for line in wrap(said, 56)[:2]] if said else []
+        lines += [(line, DIM) for line in wrap(table[sel].get("hint", ""), 56)][:3 - len(lines)]
+        for k, (line, colour) in enumerate(lines):
+            t.text(s, line, HINT[0] + 8, HINT[1] + 6 + k * 10, colour)
         m.footer(*(footer or ("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back")))
         m.show()

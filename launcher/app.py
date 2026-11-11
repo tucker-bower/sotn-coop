@@ -792,7 +792,7 @@ class Launcher:
             import randomizer
             r = state["randomizer"]
             out = [{"kind": "action", "key": "make", "label": "Make this game disc", "value": "",
-                    "hint": state["said"] or "About a minute. Drop a randomized disc, a seed's .ppf or another patch on the window, or choose below."},
+                    "hint": "About a minute. Drop a randomized disc, a seed's .ppf or another patch on the window, or choose below."},
                    {"kind": "head", "key": None, "label": "Randomizer (sotn.io)"},
                    {"kind": "action", "key": "randomizer", "label": "Seed", "value": randomizer.describe(r["info"]) if r else "None",
                     "hint": "Randomize your own disc on sotn.io and choose the .cue it made, or the seed's .ppf. "
@@ -829,7 +829,8 @@ class Launcher:
             take(dropped)
         sel = 0
         while True:
-            got = options(self.menus, rows, change, sel, title="New game disc", note="Your partner needs the same mods")
+            got = options(self.menus, rows, change, sel, title="New game disc", note="Your partner needs the same mods",
+                          status=lambda: state["said"])
             if got is None:
                 return
             kind, key = got
