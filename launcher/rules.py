@@ -49,6 +49,8 @@ TOGGLES = (
     ("familiars", "Richter's and Maria's familiars", "Their familiar cards work, as Alucard's do", True, RULE_NO_FAMILIARS),
     ("gear_effects", "Richter's and Maria's gear effects", "Healing Mail heals them as they walk, and the Blood Cloak "
      "gives hearts for damage, as for Alucard", True, RULE_NO_GEAR_EFFECTS),
+    ("stick_spells", "Alucard's spells on the right stick", "Alucard casts the spells he knows with the right stick, "
+     "and the MP. Each player picks which in Your settings", True, 0),
     ("bat_carry", "Hang onto the bat", "Up beside Alucard's bat hangs on, and it flies slower. Cross drops off", False, 0),
     ("pvp", "PvP", "Your attacks hurt each other", False, 0),
     ("remap", "Button remap", "Both players' buttons follow the map below", False, 0),
@@ -74,6 +76,7 @@ GROUPS = (
     ("Sharing", ("shared_level", "shared_gold")),
     ("Falling and reviving", ("revive", "faerie_revive")),
     ("Staying together", ("boss_pull", "scene_pull", "map_teleport", "near_target")),
+    ("Alucard", ("stick_spells",)),
     ("Richter and Maria", ("growth", "alucard_stats", "relic_moves", "air_jumps", "offhand", "familiars", "gear_effects")),
     ("Extras", ("bat_carry", "pvp", "remap")),
 )

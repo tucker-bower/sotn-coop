@@ -120,6 +120,13 @@ def main():
         rows = app.Launcher.option_rows(types.SimpleNamespace(settings={"netsim": "transatlantic"}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES,
                                                               bios=lambda: Path("C:/a/very/long/path/to/someones-own-console-bios-scph5501.bin")))
         screen("options", lambda m: options(m, lambda: rows, lambda *a: None), frames=[()] + [("down",)] * len(rows) + [("back",)])
+        fake = types.SimpleNamespace(settings={"spells": [[2, 5, 3, 0], [None, 7, 1, 2]]}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES,
+                                     bios=lambda: Path("C:/x/bios.bin"), shortcuts=lambda seat: seat == 0)
+        fake.spells = lambda seat: fake.settings["spells"][seat]
+        fake.option_rows = lambda: app.Launcher.option_rows(fake)
+        prow = app.Launcher.player_rows(fake)
+        screen("your settings", lambda m: options(m, lambda: prow, lambda *a: None, title="Your settings", note="Only yours: not the castle's"),
+               frames=[()] + [("down",)] * len(prow) + [("back",)])
         screen("update", lambda m: update_prompt(m, "0.19.0", "0.18.1", ["A much longer changelog item than usual, to see it wrap well"] * 8))
         card = {"title": "Player 2", "joined": True, "device": "DualSense Wireless Controller", "ready": False, "character": 5,
                 "name": "Ultimate Richter", "playable": False, "note": "From SOTN Ultimate: the Saturn coat",

@@ -571,6 +571,8 @@ class Launcher:
             self.open_rules()
         elif action == "check_updates":
             self.check_updates()
+        elif action == "player_settings":
+            self.player_settings()
         elif action in ("pause", "report", "leave"):
             pass  # these only mean something in a game (gameview.py)
         else:
@@ -967,17 +969,71 @@ class Launcher:
         return list(v) if len(v) == 4 else list(DEFAULT_SPELLS)
 
     def options(self, seat):
-        """The OPT_* bits for that seat's game (link/mailbox.py)."""
+        """The OPT_* bits for that seat's game (link/mailbox.py). The right stick's spells are the
+        player's, if the castle has them on (its rules: launcher/rules.py stick_spells)."""
         from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
-        return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat)) |
+        rules = getattr(self, "current_rules", None) or {}
+        spells = self.spells(seat) if rules.get("stick_spells", True) else [None] * 4
+        return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(spells) |
                 (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
                 (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
                 (OPT_ALUCARD_HUD if self.settings.get("alucard_hud") else 0) |
                 (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
 
+    def refresh_players(self):
+        """In a game: each player's own options again (a setting, or the castle's rules, changed)."""
+        view = self.view
+        if view is not None:
+            for i, g in enumerate(view.games[:2]):
+                try:
+                    g.host("set_player", options=self.options(i))
+                except Exception:  # noqa: BLE001 - next load has them anyway
+                    log.exception("player options")
+
+    def player_rows(self):
+        """Your settings: what's each player's own (not the castle's), in the game's style (issue 232)."""
+        from link.mailbox import SPELLS
+        rows = [r for r in self.option_rows() if r["key"] in ("partner_vol", "partner_hp", "partner_tint", "spell_triggers", "alucard_hud", "show_ping")]
+        rows.insert(0, {"kind": "head", "key": None, "label": "While you play"})
+        names = {None: "Nothing", **{k: n for k, n in enumerate(SPELLS) if n}}
+        for seat in (0, 1) if not ANDROID else (0,):
+            rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}'s controls" if not ANDROID else "Controls"})
+            rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
+                         "hint": "Co-op Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. Off: the original controls only."})
+            for d, spell in enumerate(self.spells(seat)):
+                rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
+                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows the spell and has the MP "
+                             "(and the castle has his spells on the right stick)."})
+        return rows
+
+    def change_player(self, key, step):
+        if key.startswith("shortcuts:"):
+            seat = int(key.split(":")[1])
+            self.set_shortcuts(seat, (not self.shortcuts(seat)) if step == 0 else step > 0)
+        elif key.startswith("spell:"):
+            _, seat, d = key.split(":")
+            spells = [list(self.spells(0)), list(self.spells(1))]
+            cur = spells[int(seat)][int(d)]
+            k = SPELL_CHOICES.index(cur) if cur in SPELL_CHOICES else 0
+            spells[int(seat)][int(d)] = SPELL_CHOICES[(k + (step or 1)) % len(SPELL_CHOICES)]
+            self.settings["spells"] = spells
+            save_settings(self.settings)
+        else:
+            self.change_option(key, step)
+        self.refresh_players()
+
+    def player_settings(self):
+        """Pause › Your settings, and Options › Your settings: each player's own."""
+        from ui.screens.options import options
+        if not self.menus:
+            return self.controls_menu()
+        options(self.menus, self.player_rows, self.change_player, title="Your settings", note="Only yours: not the castle's")
+
     def controls_menu(self):
         """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
         from link.mailbox import SPELLS
+        if self.menus:
+            return self.player_settings()
         ui, sel = self.ui, 0
         while True:
             items = []
@@ -1963,6 +2019,8 @@ class Launcher:
 
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
+        import rules as castle_rules
+        self.current_rules = castle_rules.for_castle(castle, self.settings)  # (its rules decide the players' options too)
         if fresh:
             self.new_castle_start = True
             return
@@ -1992,7 +2050,6 @@ class Launcher:
         from gameview import GameView
         if self.sound:
             self.sound.music(False)  # the game's own takes over
-        self.apply_players(s)
         if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
             cards = (playthrough.card("A"),) if playthrough else None
         else:
@@ -2010,6 +2067,8 @@ class Launcher:
                 playthrough.save_info()
             rush = bossrush.BossRush(s.joint, s.games, info["rush"], changed)
             goal = goal or f"Boss rush: {len(rush.rows)} bosses. Beat one and you're both at the next."
+        self.current_rules = castle_rules.for_castle(playthrough, self.settings) if rules is None else rules
+        self.apply_players(s)
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"),
                         castle_rules.for_castle(playthrough, self.settings) if rules is None else rules, cards,
@@ -2432,6 +2491,8 @@ class Launcher:
                 view.set_rules(rules)
                 if view.playthrough:
                     view.playthrough.set_rules(view.rules)
+                self.current_rules = view.rules
+                self.refresh_players()  # (the right stick's spells are a rule)
             self.rules_menu(view.playthrough.name if view.playthrough else "This session", dict(view.rules), apply, view.joiner)
             return
         while True:
@@ -2563,7 +2624,7 @@ class Launcher:
             return {"kind": "action", "key": key, "label": label, "hint": hint, "value": value}
         head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
         rows = [head("View"),
-                {"kind": "choice", "key": "layout", "label": "Layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
+                {"kind": "choice", "key": "layout", "label": "Couch co-op layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
                  "hint": "Couch: how the two games share the window. Also View in the menu bar."},
                 switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
                 head("Sound"),
@@ -2582,7 +2643,7 @@ class Launcher:
                 switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
                 switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
                 head("Controls"),
-                action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
+                action("controls", "Your settings", "Each player's shortcuts and spells, and what shows while you play. Also in the pause menu."),
                 action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
                 action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
                 head("PlayStation"),

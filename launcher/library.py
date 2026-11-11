@@ -95,8 +95,10 @@ def name(disc):
     labels = hack_labels()
     bits = []
     for m in disc.get("mods", []):
-        if m["kind"] == "randomizer":
-            bits.append(f"Seed {(m.get('info') or {}).get('seed', '?')}")
+        if m["kind"] == "randomizer":  # "Casual in18kr9k87"
+            info = m.get("info") or {}
+            preset = rando_presets().get(info.get("preset"), {}).get("name") or (info.get("preset") or "Seed").title()
+            bits.append(f"{preset} {info.get('seed', '?')}")
         elif m["kind"] == "ass":
             bits.append("ASS -Final-")
         elif m["kind"] == "ppf":
