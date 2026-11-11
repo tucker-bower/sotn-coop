@@ -58,12 +58,20 @@ def main():
         from ui.screens.update import update_prompt
         import app
         import rules
+        os.environ["COOP_DATA"] = d
+        import library
+        presets = {}
+        for k in range(6):
+            library.add(presets, [{"kind": "hacks", "ids": ["fast-warp", "minimap", "quick-items"]},
+                                  {"kind": "randomizer", "file": "x.sdif", "info": {"seed": "abcdefghij", "preset": "lycanthrope-spr26te", "version": "26.07.13"}}],
+                        None if k % 2 else "A long preset name here")
         castle = test_ui.Castle(LONG, 3, "Olrox's Quarters", 99, "Rules changed: XP gain, Enemy HP, alone, Damage taken, PvP")
         castle.info["created"] = time.time() - 9e6
         items = [("solo", "Solo", ""), ("couch", "Couch co-op", ""), ("online", "Online co-op", ""), ("discs", "Discs", ""),
                  ("mods", "Mods", ""), ("settings", "Options", ""), ("quit", "Quit", "")]
         for k, key in enumerate(i[0] for i in items):
             about = app.Launcher.home_about(types.SimpleNamespace(characters=[0, 0], maria_ready=lambda: True, saturn_maria_ready=lambda: False,
+                                                                  settings=presets,
                                                                   mod_line=lambda: "Randomizer seed abcdefgh · casual (26.07.13) + Fast Warp"), key) \
                 if hasattr(app.Launcher, "home_about") else {}
             if key in ("solo", "couch", "online"):
@@ -81,6 +89,25 @@ def main():
         n = len([1 for _ in rules.GROUPS for _ in _[1]]) + 20
         screen("castle settings (new)", lambda m: castle_settings(m, LONG, r, lambda x: None, start=True, mode={"mode": "rush"}),
                frames=[()] + [("down",)] * n + [("back",)])
+        mode = {"mode": "story", "preset": None, "presets": [(None, library.PLAIN)] + [(g["id"], library.name(g)) for g in library.discs(presets)]}
+        screen("castle settings (new, a preset chosen)", lambda m: castle_settings(m, LONG, dict(r), lambda x: None, start=True, mode=mode),
+               frames=[(), ("down",), ("down",), ("right",), ("right",), ("back",)])
+        rows_ = app.Launcher.preset_rows(types.SimpleNamespace(settings=presets))
+        screen("mods", lambda m: options(m, lambda: rows_, lambda *a: None, title="Mods", note="Your partner needs the same preset"),
+               frames=[()] + [("down",)] * len(rows_) + [("back",)])
+        from ui.screens.pick import pick
+        from ui.screens.progress import progress
+        from ui.screens.text_entry import text_entry
+        screen("pick", lambda m: pick(m, "Online co-op", [("host", "Host", "Choose a castle; you get a room code to give your partner."),
+                                                          ("join", "Join", "Type your partner's room code: you play their castle, and keep a copy.")],
+                                      "Both of you need the same version of SOTN Co-op."), frames=[(), ("down",), ("back",)])
+        screen("text entry", lambda m: text_entry(m, "Name your mod preset", "Randomizer seed abcdefghij · lycanthrope-spr26te (26.07.13) + Fast Warp, MiniMap, Quick Items",
+                                                 "A very long name typed into the box, longer than it", pad="{x} done   {s} paste   {o} back",
+                                                 keys="Type   Ctrl+V: paste   Enter: done   Esc: back"), frames=[()])
+        import threading
+        gate = threading.Event()
+        screen("progress", lambda m: progress(m, "Building modded disc", "A long preset name here: Seed abcdefghij + Fast Warp and 2 more",
+                                              lambda report: (report(3, 10), gate.wait(0.3))), frames=[()] * 40)
         screen("castle settings (joiner)", lambda m: castle_settings(m, LONG, dict(r), lambda x: None, read_only=True),
                frames=[()] + [("down",)] * n + [("back",)])
         long_error = ("This is the USA disc, but not an exact copy: it may be a damaged or modified rip. A clean rip (one "

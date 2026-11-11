@@ -21,11 +21,12 @@ SLOTS = (  # (key, title, system, needed?, what it's for: three lines of 17 at m
 )
 
 
-def discs(m, status, attach, first_run=False, said="", more=()):
+def discs(m, status, attach, first_run=False, said="", more=(), art=None):
     """status() -> {slot: the attached file's name, or None}. attach(slot, path) attaches a disc
     (path None: the player browses for that slot's; slot None: a dropped file, sorted by what's in
     it) and returns (slot it went to or None, what to say, went well?). Returns "continue" (first
-    run, with the PlayStation disc there), "back", "quit", or one of more (buttons after Back)."""
+    run, with the PlayStation disc there), "back", "quit", or one of more (buttons after Back).
+    art(slot) -> a picture of an attached disc (from the player's own disc), or None."""
     t, s = m.theme, m.s
     have = status()
     said = {"slot": None, "text": said, "ok": True}
@@ -86,26 +87,38 @@ def discs(m, status, attach, first_run=False, said="", more=()):
                 y += 10
             y += 6
             t.text(s, system, x + 8, y, DIM)
-            t.text(s, need, x + 8, y + 12, GOLD if need == "Required" else DIM)
-            y += 28
-            for line in wrap(unlocks, 17)[:3]:
-                t.text(s, line, x + 8, y, DIM)
-                y += 10
+            picture = art(key) if have.get(key) and art else None
+            if picture is not None:  # the disc's own art, from the player's disc (never box art: that's Konami's)
+                top, bottom = y + 12, SLOT_Y + SLOT_H - 16
+                pw, ph = picture.get_size()
+                k_ = min(1.0, (SLOT_W - 12) / pw, (bottom - top) / ph)
+                if k_ < 1:
+                    picture = pygame.transform.smoothscale(picture, (int(pw * k_), int(ph * k_)))
+                s.blit(picture, picture.get_rect(center=(x + SLOT_W // 2, (top + bottom) // 2)))
+            else:
+                t.text(s, need, x + 8, y + 12, GOLD if need == "Required" else DIM)
+                y += 28
+                for line in wrap(unlocks, 17)[:3]:
+                    t.text(s, line, x + 8, y, DIM)
+                    y += 10
             y = SLOT_Y + 96
-            if have.get(key):
+            if have.get(key) and picture is not None:
+                t.text(s, "Attached", x + 8, SLOT_Y + SLOT_H - 12, GREEN)
+            elif have.get(key):
                 t.text(s, "Attached", x + 8, y, GREEN)
                 t.text(s, shorten(have[key], 16), x + 8, y + 12, DIM)
             elif DROPS:
-                t.text(s, "Drop it here, or", x + 8, y, INK if on else DIM)
-                t.text(s, "select to browse", x + 8, y + 10, INK if on else DIM)
+                t.text(s, "Drag and drop it", x + 8, y, INK if on else DIM)
+                t.text(s, "here, or select", x + 8, y + 10, INK if on else DIM)
+                t.text(s, "to browse", x + 8, y + 20, INK if on else DIM)
             else:  # a phone: the system's picker
                 t.text(s, "Select to", x + 8, y, INK if on else DIM)
                 t.text(s, "choose it", x + 8, y + 10, INK if on else DIM)
-            if said["slot"] == key and not said["ok"]:
-                t.text(s, "Didn't work", x + 8, y + 24, RED)
+            if said["slot"] == key and not said["ok"] and not have.get(key):
+                t.text(s, "Didn't work", x + 8, SLOT_Y + SLOT_H - 12, RED)
             m.hit((0, k), box)
         m.window(NOTE)
-        lines = wrap(said["text"] or ("Drop your disc images anywhere on this window." if DROPS else
+        lines = wrap(said["text"] or ("Drag and drop your disc images anywhere on this window." if DROPS else
                                       "Select a disc to choose its files."), 56)
         if len(lines) > 3:
             lines = lines[:2] + [shorten(" ".join(lines[2:]), 56)]
