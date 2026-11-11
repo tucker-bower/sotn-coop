@@ -41,6 +41,7 @@ Death plays its normal animation, and then the engine enters `Engine_10`. Its fi
 - This needs no new DRA hook.
 - The player who died still sees their death animation, then appears next to the partner ("oh hi Mike").
 - **Both dead** (the partner is also in `Engine_10` or Game Over): both games reload the last joint save (part 5) through the same Arrive path.
+- **Dead alone** (no partner heard from in 10 s: a solo castle, or one the partner left): the host's game reloads the castle's last save too (#240). Only with no save yet does the game's own Game Over run.
 - **Boss exception (D24):** the hook point is the same, and M5 adds the condition.
 
 ## Part 4: pause rules
