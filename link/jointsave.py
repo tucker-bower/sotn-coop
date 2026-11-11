@@ -246,8 +246,14 @@ class JointSave:
         self._arrive = [[m, None, tuple(msg["start"])]] if msg.get("start") else []
 
     def _both_dead_online(self):
+        """Both players dead, or the host's player dead with no partner (a solo castle, or one
+        the partner left): the castle's last save loads. Alone, the game's own Game Over led to
+        its title and file select, which mean nothing in a castle (#240). With no save yet, it's
+        the game's Game Over."""
         m = self.mb[0]
-        both = bool(m.self_presence().flags & DEAD and m.partner_presence().flags & DEAD and m.partner_age() <= 30)
+        dead = bool(m.self_presence().flags & DEAD)
+        alone = m.partner_age() >= LINKED_FRAMES
+        both = dead and (alone or bool(m.partner_presence().flags & DEAD and m.partner_age() <= 30))
         if both:
             self.dead_frames += 1
         else:
@@ -255,7 +261,7 @@ class JointSave:
         if self.dead_frames == BOTH_DEAD_FRAMES and self.rank == 0:
             if (self.saves or self.resumed) and self.path and self.path.exists():
                 self.resume()
-            else:
+            elif not alone:
                 m.command(CMD_GAME_OVER)
                 self.host.send_control({"op": "game_over"})
 

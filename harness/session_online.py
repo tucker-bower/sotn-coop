@@ -260,6 +260,51 @@ def online_joint_save(run):
 
 
 @session_scenario()
+def online_solo_death_reloads(run):
+    """Issue 240: a host's player dying with no partner (a solo castle, or one the partner left)
+    reloads the castle's last save. The game's own Game Over went on to its title and file
+    select, which mean nothing in a castle."""
+    tmp = Path(tempfile.mkdtemp(prefix="coop-solo-death-"))
+    path = tmp / "session.coop"
+    with OnlineSession(COOP_DISC, start="nz0", rank=0, session_file=path, bind_host="127.0.0.1") as s:
+        g = s.local
+        s.step(30)
+        g.mailbox("command", 1, NZ0, SAVE_ROOM, *COFFIN)  # into the Alchemy Lab's coffin room, and save
+        for _ in range(300):
+            s.step(1)
+            p = g.mailbox("self_presence")
+            if p.stage == NZ0 and p.room_id == SAVE_ROOM and p.flags & IN_PLAY and not p.flags & BUSY:
+                break
+        s.step(60)
+        s.step(2, "up")
+        for _ in range(900):
+            s.step(1)
+            if path.exists() and g.mailbox("card_result"):
+                break
+        run.expect(path.exists(), "alone, the save was written")
+        from coop_env import savestate
+        g.load_state_file(str(savestate(COOP_DISC, "entrance")))
+        s.step(30)
+        g.write("g_Status", 1, "<i", 0x23C)  # 1 HP
+        walk = walker("left", attack_every=0)
+        for i in range(4000):
+            s.step(1, walk(g.snapshot(), i))
+            if g.mailbox("self_presence").flags & DEAD:
+                break
+        run.expect(bool(g.mailbox("self_presence").flags & DEAD), "the player died", frames=i)
+        reloaded, title = False, False
+        for i in range(1800):
+            s.step(1)
+            title |= g.read("g_GameState") == 1  # Game_Title
+            p = g.mailbox("self_presence")
+            if i > 60 and p.stage == NZ0 and p.flags & IN_PLAY and not p.flags & (BUSY | DEAD):
+                reloaded = True
+                break
+        run.expect(reloaded, "the castle's save loaded: back in the Alchemy Lab's save room", frames=i)
+        run.expect(not title, "and the game's title never showed")
+
+
+@session_scenario()
 def online_partner_leaves(run):
     """Playtest 2026-10-25: closing one player's app must tell the other at once (BYE), not leave
     it waiting in silence. The launcher then says "Your partner left the game"."""
