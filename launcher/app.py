@@ -1153,6 +1153,10 @@ class Launcher:
                 if dev != "kb" and dev not in names:
                     self.pads.refresh()
                     names[dev] = self.pads.name(dev)
+                if self.sound and key in ("ok", "back", "left", "right"):
+                    self.sound.play({"ok": "confirm", "back": "back"}.get(key, "move"))
+                if self.menus:
+                    self.menus.device = "keys" if dev == "kb" else "pad"
                 mine = [i for i, d in enumerate(joined) if d == dev]
                 # A new device joins the first free slot. So does the keyboard again, once its
                 # first player is ready (two people, one keyboard: KEYS has two layouts).
@@ -1184,6 +1188,9 @@ class Launcher:
                 self.characters[:slots] = char
                 self.settings["characters"] = list(self.characters)
                 return list(joined)
+            if self.menus:
+                self.draw_lobby(slots, joined, ready, char, names, partner, online, subtitle)
+                continue
             ui.frame("Press a button on your controller to join", subtitle)
             n = slots + (1 if online else 0)
             w = 300
@@ -1199,6 +1206,44 @@ class Launcher:
                       if joined.count(None) < slots else "No controller? Press Enter to play with the keyboard.   Esc: back")
             ui.flip()
             pygame.time.wait(16)
+
+    def controls_line(self, char, shortcuts):
+        """A character's controls, in a line for the lobby."""
+        if not shortcuts:
+            return "Shortcuts off ({t} / S)"
+        if char == 0:
+            return "Spells on the right stick"
+        if char in (3, SATURN_MARIA):
+            return "Her own controls"
+        if char == ULTIMATE_RICHTER:
+            return "His own controls"
+        return "L2 high jump, R2 dash"
+
+    def draw_lobby(self, slots, joined, ready, char, names, partner, online, subtitle):
+        """A frame of the lobby, in the game's style (ui/screens/lobby.py)."""
+        from ui.screens.lobby import draw_lobby
+        needs = {2: "Attach your Dracula X Chronicles disc (PSP) to unlock her.", 3: "Attach your Dracula X Chronicles disc (PSP) to unlock her.",
+                 4: "Attach your Saturn disc (Japan) to unlock her.", 5: "Attach your Saturn disc (Japan) to unlock him."}
+        cards = []
+        for k in range(slots):
+            dev = joined[k]
+            cards.append({"title": "You" if online else f"Player {k + 1}", "joined": dev is not None,
+                          "device": "Keyboard" if dev == "kb" else names.get(dev, "Controller"), "ready": ready[k],
+                          "character": char[k], "name": CHARACTERS[char[k]], "playable": self.playable(char[k]),
+                          "note": CHARACTER_NOTES[char[k]], "needs": needs.get(char[k], ""),
+                          "controls": self.controls_line(char[k], self.shortcuts(k)), "shortcuts": self.shortcuts(k)})
+        card_partner = None
+        if online:
+            text, connected = partner
+            lines = text.split("\n")
+            code = None
+            if not connected and len(lines) > 1 and lines[0] in ("Room code", "Room"):
+                code, lines = lines[1], lines[2:]
+            card_partner = (lines, connected, code)
+        anyone = joined.count(None) < slots
+        footer = (("{<}{>} character   {t} shortcuts   {x} ready   {o} leave", "Left / right: character   S: shortcuts   Enter: ready   Esc: leave")
+                  if anyone else ("Any button: join   {o} back", "Enter: play with the keyboard   Esc: back"))
+        draw_lobby(self.menus, "Who's playing?", subtitle, cards, card_partner, footer)
 
     def _card(self, box, title, dev, ready, char, names, shortcuts=True):
         s, ui = self.screen, self.ui

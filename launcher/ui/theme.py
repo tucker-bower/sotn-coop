@@ -119,6 +119,13 @@ class Theme:
     def text_centre(self, surface, text, centre, y, colour=INK):
         self.text(surface, text, centre - width(text) // 2, y, colour)
 
+    def text_big(self, surface, text, centre, y, colour=INK, scale=2):
+        """One line at a whole multiple of the font's size (a room code), centred on centre."""
+        line = pygame.Surface((width(text), GLYPH), pygame.SRCALPHA)
+        self.text(line, text, 0, 0, colour)
+        line = pygame.transform.scale(line, (line.get_width() * scale, GLYPH * scale))
+        surface.blit(line, (centre - line.get_width() // 2, y))
+
     def window(self, surface, rect):
         """A window as the pause menu draws one."""
         rect = pygame.Rect(rect)
