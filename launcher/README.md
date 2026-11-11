@@ -12,6 +12,10 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `characters.py` | Builds the Marias from the player's own discs: Co-op and Ultimate Maria from the DXC disc, Saturn Maria from the Saturn disc. |
 | `debugstarts.py` | Builds savestates anywhere on the route, from the player's own disc. |
 | `display.py` | The window: menus, games and their layout. |
+| `ui/` | The menus in the game's own style: the theme, the menu toolkit and one file per screen. |
+| `test_ui.py` | Checks the menus' font, lists and screens with a controller, the keyboard and the mouse, on made-up art. |
+| `gameart.py` | Reads the game's own art for the menus from the player's disc: font, logo, portraits, save icons. |
+| `gamesound.py` | Decodes the title music and menu sounds from the player's disc. |
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
@@ -25,6 +29,8 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_android_disc.py` | Checks Android's disc setup. |
 | `test_castles.py` | Checks castle names, joiners' copies and slot rules. |
 | `test_characters.py` | Checks Maria's build from a DXC disc. |
+| `test_gameart.py` | Checks the art's decoding on made-up files, and on a dev checkout's disc. |
+| `test_gamesound.py` | Checks the music's and sounds' decoding on made-up files, and on a dev checkout's disc. |
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |

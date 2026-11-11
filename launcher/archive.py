@@ -242,6 +242,27 @@ class Castle:
                 "played " + time.strftime("%b %d, %H:%M", time.localtime(self.info.get("played", 0)))]
         return "  ·  ".join(b for b in bits if b)
 
+    def icon(self):
+        """The save's icon (0..15): the one the game picked for it and its file select shows
+        (SaveInfo.cardIcon), or None for a castle not saved yet."""
+        if "_icon" not in self.__dict__:
+            self._icon = None
+            try:
+                with open(self.joint_save, "rb") as f:
+                    f.seek(16 + 0x200 + 0x20)  # the session file's first save: its SaveInfo.cardIcon
+                    raw = f.read(4)
+                if len(raw) == 4 and 0 <= int.from_bytes(raw, "little") < 16:
+                    self._icon = int.from_bytes(raw, "little")
+            except OSError:
+                pass
+        return self._icon
+
+    def rules_line(self):
+        """ "Rules changed: XP gain, PvP", or "" for a castle on the defaults."""
+        import rules
+        changed = rules.changed(self.info["rules"]) if self.info.get("rules") else []
+        return "Rules changed: " + ", ".join(changed) if changed else ""
+
     def card(self, who):
         return self.dir / f"{who}.mcd"
 

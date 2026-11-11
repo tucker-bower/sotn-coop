@@ -244,3 +244,19 @@ Richter's (BO6), Shaft's and Dracula's (RBO6) and the Succubus's (DRE) rooms hav
 
 ## Heals only Alucard takes
 The faerie's potions (`src/dra/7E4BC.c`) and Healing Mail (`src/dra/5F60C.c`) don't heal: they set `g_Player.healKind` and `healAmount`, and Alucard's player code applies them (`src/dra/692E8.c`). Healing Mail also needs `PLAYER_STATUS_UNK4000000`, which only Alucard's walk sets. Blood Cloak's hearts and Fury Plate's defense live in Alucard's `HandleDamage`, which Richter's and Maria's hits don't go through (#202).
+
+## The game's art and sound, for the launcher (found 2026-11-10, USA disc)
+
+Read from the player's disc by `launcher/gameart.py` and `launcher/gamesound.py`. Sources: sotn-decomp's `config/gfx.game.json`, `config/assets.us.yaml`, `src/dra/menu.c`, `src/dra/sound.c` and `src/st/sel`.
+
+- **`BIN/F_GAME.BIN`** is 32 sheets of 128x128 4-bit pixels, 0x2000 bytes each (64 bytes a row, the low half of a byte is the left pixel), then the palettes at 0x40000: 16 colours of 2 bytes each, and an 8-bit picture uses 16 palettes in a row. Colour 0 is clear.
+  - **Menu font:** sheet 0x30000, palette 150. 8x8 glyphs, 16 a row; a character's code is its place (`MenuDrawChar`: u = (ch & 0xF) * 8, v = (ch & 0xF0) >> 1). It has the four PlayStation button symbols and arrows in its last rows.
+  - **Logo:** two 64x128 8-bit halves at 0x2C000 and 0x2E000, palette 208.
+  - **Alucard's pause-menu portrait:** 64x128 8-bit at 0x24000, palette 80; the top 96 rows.
+  - **The settings' ON / OFF switches:** sheet 0x38000, palette 0x97, at (0,112) and (48,112), 48x16.
+- **The pause menu's windows aren't textures.** Each is a gradient rectangle from `windowColors * 8 - 0x20` at the top to `+ 0x20` at the bottom (the default colours 0, 0, 8 give (0,0,32) to (32,32,96)), with a 1-pixel white border (`MenuDrawLine`). The cursor is a red rectangle behind the row whose red pulses between 0x60 and 0x7F every 32 frames (`MenuDrawRect`). There is no hand cursor in the pause menu.
+- **The file select's animated icons are the memory-card save icons.** 16 of them, three 16x16 4-bit frames each, in `DRA.BIN`: palettes at 0x518 (32 bytes each), icons at 0x718 (0x180 bytes each, frames one above the other, 8 bytes a row). A save's icon is picked at random when it's written (`StoreSaveData(..., rand() & 0xF)`) and kept in the save as `info.cardIcon`; the file select shows frame `timer % 3`.
+- **Richter's and Maria's portraits** are their cutscene ones, 48x72 8-bit with 128 colours (`link/portraits.py`).
+- **Music is streamed CD-XA** in `SD/XA_STR1`: eight channels taking turns, sector by sector. `DRA.BIN`'s `g_XaMusicConfigs` at 0x1D224 has 16 bytes a track: sector within the file, length, file number, channel, volume. A music id is the row + 0x300. The game seeks to the sector plus the channel number. The row after a track is where it starts again from when it loops. The title screen and file select play **Prayer** (`MU_PRAYER`, 0x332): 115 s, looping from 57.7 s. Decoding it in Python takes about 2 s.
+- **A menu sound** is a row of `g_SfxData` (`DRA.BIN` 0x1F554, 7 bytes: bank, program, note, volume, mode, tone, unknown), id - 0x600. Bank 9 isn't a bank: the sound is a script, `g_SfxScripts[program + 1]` (pointers at 0x21ECC), a list of 6-byte steps (bank, program, note, tone, volume, frames) ending in 0xFF. The samples are in `SD_J010.VH` / `.VB`, a standard PlayStation sound bank (VAB). The file select uses 0x67B (move), 0x633 (confirm), 0x67D (its back and main-menu select) and 0x686 (error).
+- Our decoder plays each tone at its note and volume and ignores its envelope (attack, decay, release), so a sound's tail can differ slightly from the console's.

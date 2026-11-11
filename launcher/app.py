@@ -109,7 +109,7 @@ Rules: each castle has its own, set in Options › Open settings (Esc: Castle ru
 phone): XP, damage, boss HP, and everything co-op changes about the game. The host's go for both of you.
 
 Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
-need your Dracula X Chronicles disc: Settings › Game files). Co-op Richter and Maria learn their
+need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
 moves from Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul
 of Wolf for the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat
 for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
@@ -119,7 +119,7 @@ her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan). 
 the PS1 Richter, all his moves from the start, in the Saturn's long coat (the same disc).
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
-(Settings › Controls picks which).
+(Options › Controls picks which).
 
 Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
 
@@ -170,10 +170,13 @@ class UI:
         self.mono = pygame.font.SysFont("consolas", 14)
         self._rects = []
         self.pads = None  # gameview.Pads, once the launcher has made it
+        self.sound = None  # ui/sound.py's MenuSound, once there is one: paused while the window's in the background
 
-    def events(self, raw=False):
-        """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit",
-        ("pad", id), ("click", index) and ("hover", index). raw: also ("event", ev) for each."""
+    def events(self, raw=False, pixel=False):
+        """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit", "rules"
+        (Square / X, S, or a right click on a row), ("pad", id), ("device", "keys"), ("click", key)
+        and ("hover", key). raw: also ("event", ev) for each. pixel: the mouse is on the pixel
+        canvas (the screens in the game's style, launcher/ui)."""
         out = []
         for ev in pygame.event.get():
             if raw:
@@ -185,16 +188,21 @@ class UI:
             elif ev.type == MENU_EVENT:
                 if self.on_action(ev.action) is False:
                     raise Navigate(ev.action)
+            elif ev.type in (pygame.WINDOWFOCUSLOST, pygame.WINDOWFOCUSGAINED):
+                if self.sound:
+                    self.sound.pause(ev.type == pygame.WINDOWFOCUSLOST)
             elif ev.type == pygame.KEYDOWN:
                 a = {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
-                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back"}.get(ev.key)
+                     pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back",
+                     pygame.K_s: "rules"}.get(ev.key)
+                out.append(("device", "keys"))
                 if a:
                     out.append(a)
             elif ev.type == pygame.CONTROLLERBUTTONDOWN:
                 a = {pygame.CONTROLLER_BUTTON_DPAD_UP: "up", pygame.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                      pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left", pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
                      pygame.CONTROLLER_BUTTON_A: "ok", pygame.CONTROLLER_BUTTON_START: "ok",
-                     pygame.CONTROLLER_BUTTON_B: "back"}.get(ev.button)
+                     pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_X: "rules"}.get(ev.button)
                 out.append(("pad", ev.instance_id))
                 if a:
                     out.append(a)
@@ -205,16 +213,23 @@ class UI:
                 if self.pads:
                     self.pads.refresh()
             elif ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
-                pos = self.display.to_canvas(ev.pos)
+                pos = (self.display.to_pixels if pixel else self.display.to_canvas)(ev.pos)
                 hit = next((k for k, r in self._rects if pos and r.collidepoint(pos)), None)
                 if hit is not None:
                     out.append(("click" if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 else "hover", hit))
+                    if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
+                        out.append("rules")
                 elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
                     out.append("back")
+                elif pixel and ev.type == pygame.MOUSEMOTION:
+                    out.append(("hover", None))
         return out
 
     def flip(self, over_games=False):
         self.display.present(over_games)
+
+    def seen(self, name):
+        """A screen in the game's style is being drawn (ui/widgets.py). Tests hook this."""
 
     def frame(self, heading, subtitle=""):
         s = self.screen
@@ -502,6 +517,8 @@ class Launcher:
         self.room_info = ""  # while hosting: the port, for Help › About
         self.new_castle_start = False  # the next game view starts a new game (issue 109)
         self.view = None  # the game view, while one runs
+        self.menus = None  # ui/widgets.py's Menus, once the game's art has been read (prepare_art)
+        self.sound = None
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
             from archive import Castle
             Castle.install_bundled()
@@ -843,6 +860,39 @@ class Launcher:
                 return None
         return None
 
+    # --- the game's own art and sound, for the menus (design/launcher-overhaul.md)
+
+    def prepare_art(self):
+        """Reads the game's art from the player's disc (once a version: under a second) and its
+        music and sounds (in the background: a couple of seconds). With them, the menus are in the
+        game's style; without (a disc they can't be read from), they stay as they were."""
+        import gameart
+        from ui.sound import MenuSound
+        from ui.theme import Theme
+        from ui.widgets import Menus
+        folder = paths.art_dir()
+        disc = next((d for d in (self.settings.get("disc_source"), self.settings.get("disc")) if d and Path(d).exists()), None)
+        if disc and not gameart.ready(folder):
+            try:
+                self.ui.wait_for("Reading the game's art", "From your disc, for the menus. Once.",
+                                 lambda progress: gameart.rip(disc, folder))
+            except Exception:  # noqa: BLE001 - the menus work without it
+                log.exception("the game's art")
+        theme = Theme(folder)
+        if not theme.ok:
+            self.menus = None
+            return
+        self.sound = self.ui.sound = MenuSound(folder, self.settings)
+        self.menus = Menus(self.ui, theme, self.sound)
+        import gamesound
+        if disc and not gamesound.ready(folder):
+            def work():
+                try:
+                    gamesound.rip(disc, folder)
+                except Exception:  # noqa: BLE001
+                    log.exception("the game's sounds")
+            threading.Thread(target=work, daemon=True).start()
+
     # --- first run
 
     def update_disc(self):
@@ -926,6 +976,7 @@ class Launcher:
             save_settings(self.settings)
             ui.message("Co-op disc ready", "Your disc is set up in the app: you can delete your copy\nfrom the phone's folder now."
                        if ANDROID else f"Made {cue.name}\nnext to your disc image.")
+        self.prepare_art()  # with the disc there, the menus can be the game's own
 
     def install_test_castles(self):
         """The test castles, from the debug starts' joint saves (made with them: debugstarts.py)."""
@@ -1113,6 +1164,43 @@ class Launcher:
         from archive import total_savestates_size
         return f"Version {VERSION}   ·   Savestates: {human(total_savestates_size())}   ·   {paths.data_dir()}"
 
+    def home_about(self, key):
+        """What the main menu shows beside an item (ui/screens/home.py)."""
+        from archive import Castle
+        if key in ("solo", "couch", "online"):
+            castles = Castle.all()
+            portrait = ("alucard", "richter", "maria", "maria", "maria", "richter")[self.characters[0]]
+            if not castles:
+                return {"lines": ["No castles yet: this starts your first."], "portrait": portrait}
+            return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
+        if key == "discs":
+            return {"lines": ["Symphony of the Night (PlayStation): attached",
+                              "Dracula X Chronicles (PSP): " + ("attached" if self.maria_ready() else "not attached"),
+                              "Symphony of the Night (Saturn): " + ("attached" if self.saturn_maria_ready() else "not attached"),
+                              "Randomizer: " + (self.mod_line() or "off")]}
+        if key == "settings":
+            return {"lines": ["Layout, sound, controls, and each castle's rules.",
+                              "Also in the menus at the top of the window."]}
+        return {}
+
+    def home_new(self):
+        """The main menu, in the game's style."""
+        from ui.screens.home import home
+        items = [("solo", "Solo", "Play a castle by yourself: any castle, any time."),
+                 ("couch", "Couch co-op", "Two players on this PC, each with a controller."),
+                 ("online", "Online co-op", "Play with a friend on their own PC or phone."),
+                 ("discs", "Discs & mods", "Your discs: Symphony of the Night, and the ones that unlock more characters."),
+                 ("settings", "Options", "Layout, sound, controls, castle rules."),
+                 ("quit", "Quit", "")]
+        if ANDROID:  # one game per device on Android (design/M9)
+            items = [i for i in items if i[0] != "couch"]
+        while True:
+            choice = home(self.menus, items, self.home_about, VERSION)
+            if isinstance(choice, tuple) and choice[0] == "link":
+                paths.open_url(choice[1])
+                continue
+            return choice
+
     def home(self):
         pending = None
         while True:
@@ -1120,6 +1208,13 @@ class Launcher:
                 if pending:
                     act, pending = pending, None
                     self.go(act)
+                    continue
+                if self.menus:
+                    choice = self.home_new()
+                    if choice == "quit":
+                        return
+                    if choice:
+                        self.go(choice)
                     continue
                 items = [("Solo", "Play a castle by yourself: any castle, any time", "solo"),
                          ("Couch co-op", "Two players on this PC, each with a controller", "couch"),
@@ -1146,6 +1241,8 @@ class Launcher:
             self.online_menu()
         elif act == "settings":
             self.settings_menu()
+        elif act == "discs":
+            self.game_files()
         elif act == "savestates":
             self.savestates()
         elif act == "debug_starts":
@@ -1159,6 +1256,8 @@ class Launcher:
         """The castle list (design/M11): New castle, then castles by last played. Returns
         (castle, fresh), or None (back)."""
         from archive import Castle
+        if self.menus:
+            return self.pick_castle_new(heading)
         while True:
             castles = Castle.all()[:7]
             # Android can't make them, only get them by joining; a first game goes straight to a new castle
@@ -1181,6 +1280,49 @@ class Launcher:
             picked = self.new_castle() if k == 0 else self.pick_test_castle()
             if picked:
                 return picked
+
+    def pick_castle_new(self, heading):
+        """Continue, New castle or Load castle, in the game's style (ui/screens/castles.py)."""
+        import rules as castle_rules
+        from archive import Castle
+        from ui.screens.castles import castle_list, castle_menu
+        while True:
+            castles = Castle.all()
+            tests = Castle.tests() or (castles and not ANDROID)
+            rush = self.boss_rush_available()
+            if not castles and not tests and not rush:  # nothing to pick from: a new one
+                return self.new_castle()
+            choice = castle_menu(self.menus, heading, castles[0] if castles else None, bool(castles or tests or rush),
+                                 note=("New castles are on randomizer " + self.mod_line()) if self.mod_line() else "")
+            if choice is None:
+                return None
+            if choice == "continue":
+                return castles[0], False
+            if choice == "new":
+                picked = self.new_castle()
+                if picked:
+                    return picked
+                continue
+            sel = 0
+            while True:
+                extras = ([("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []) + \
+                         ([("rush", "Boss rush", "All 22 bosses back to back, each with a typical player's progress, timed")] if rush else [])
+                castles = Castle.all()
+                got = castle_list(self.menus, "Load castle", castles, extras, sel)
+                if got is None:
+                    break
+                if got == "rush":
+                    return self.new_boss_rush(), False
+                if got == "tests":
+                    picked = self.pick_test_castle()
+                    if picked:
+                        return picked
+                    continue
+                kind, castle = got
+                if kind == "castle":
+                    return castle, False
+                sel = castles.index(castle) if castle in castles else 0
+                self.rules_menu(castle.name, castle_rules.for_castle(castle, self.settings), castle.set_rules)
 
     def pick_test_castle(self):
         """A test castle (Tucker, 2026-10-28): a fresh copy of it, to play like any castle (solo, on
@@ -1228,28 +1370,28 @@ class Launcher:
 
     def couch(self, act="couch"):
         from archive import Castle
-        if self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is None:
-            return
         castles = Castle.all()
         if act == "new" or (act == "continue" and not castles):
             picked = self.new_castle()
         elif act == "continue":
             picked = (castles[0], False)
         else:
-            picked = self.pick_castle("Couch co-op: which castle?", "Player 1 is slot 1 of the castle, player 2 slot 2.")
-        if picked:
+            picked = self.pick_castle("Couch co-op", "Player 1 is slot 1 of the castle, player 2 slot 2.")
+        # the castle first, then who plays (design/launcher-overhaul.md)
+        if picked and self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is not None:
             self.play(*picked)
 
     def solo(self):
         """One game, no partner: 1× boss HP, full XP (the game's duo balancing waits for a
         partner it never hears from). The castle's slot 2 stays as it was."""
-        picked = self.pick_castle("Solo: which castle?", "Any castle: yours, or one you joined.")
+        picked = self.pick_castle("Solo", "Any castle: yours, or one you joined.")
         if not picked or self.lobby(1, subtitle="Playing solo.") is None:
             return
         castle, fresh = picked
         if not self.castle_on_disc(castle, fresh):
             return
         castle.played_here()
+        self.rules_at_start(castle, fresh)
         try:
             with self.online_session(None, castle, rank=0) as s:
                 s.solo = True
@@ -1294,6 +1436,8 @@ class Launcher:
     def run_view(self, s, playthrough, goal="", rules=None, joiner=False):
         import rules as castle_rules
         from gameview import GameView
+        if self.sound:
+            self.sound.music(False)  # the game's own takes over
         self.apply_players(s)
         if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
             cards = (playthrough.card("A"),) if playthrough else None
@@ -1373,7 +1517,7 @@ class Launcher:
         return self.ui.confirm("This castle is on another disc",
                                f"{castle.name} was made on {('randomizer ' + theirs) if theirs else 'the original game'}, "
                                f"and you're set to {('randomizer ' + mine) if mine else 'the original game'}\n"
-                               "(Settings › Game files › Randomizer). Its items and rooms won't match. Play it anyway?",
+                               "(Discs & mods › Randomizer). Its items and rooms won't match. Play it anyway?",
                                yes="Play anyway", no="Back")
 
     def play(self, castle, fresh=False):
@@ -1471,7 +1615,7 @@ class Launcher:
             if choice is None or choice == 2:
                 return
             if choice == 0:
-                picked = self.pick_castle("Host: which castle?", "Your partner joins it, and keeps a copy.")
+                picked = self.pick_castle("Online co-op: host", "Your partner joins it, and keeps a copy.")
                 if picked:
                     self.host_online(*picked)
             else:

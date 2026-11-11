@@ -7,6 +7,7 @@
         reports/                   F9 bug reports (zips)
         debug-starts/              savestates made from the player's own disc, to start anywhere
         characters/maria.blob      Maria, made from the player's own Dracula X Chronicles disc (M8)
+        art/                       the game's own art, music and sounds for the menus, from the player's disc
 
 COOP_DATA overrides the folder (tests, portable installs). Nothing here is ever deleted by the
 launcher, except a playthrough's savestates when the player asks, and confirms (D69).
@@ -47,6 +48,13 @@ def debug_starts_dir():
 
 def characters_dir():
     d = data_dir() / "characters"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def art_dir():
+    """The game's own art and sounds for the menus, read from the player's disc (gameart.py)."""
+    d = data_dir() / "art"
     d.mkdir(exist_ok=True)
     return d
 
@@ -100,3 +108,16 @@ def open_folder(path):
         subprocess.Popen(["open", str(path)])
     else:
         subprocess.Popen(["xdg-open", str(path)])
+
+
+def open_url(url):
+    """Shows a web page in the system's browser."""
+    import webbrowser
+    try:
+        if os.environ.get("COOP_OPEN_URL"):  # tests: written down, not opened
+            with open(os.environ["COOP_OPEN_URL"], "a") as f:
+                f.write(url + "\n")
+            return
+        webbrowser.open(url)
+    except Exception:  # noqa: BLE001 - no browser: nothing to do
+        pass
