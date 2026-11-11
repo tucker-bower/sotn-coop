@@ -16,6 +16,7 @@ u16 g_CoopWideWidth; // the view's width in pixels; 0: off (tests, and later the
 #define GP1_COOP_WIDE 0x2F000000
 void FlushCache(void); // main.exe
 void WideTilemap(s32 columns); // widescreen_tilemap.c
+void WidescreenStage(s32 extra); // widescreen_stage.c
 
 // The game's camera is left as it is: it keeps its 256-wide view of the room ("the game's view"),
 // and the wider window is centred on it, slid to stay inside the room (or centred on a room narrower
@@ -26,22 +27,24 @@ void WideTilemap(s32 columns); // widescreen_tilemap.c
 #define RENDER_TILEMAP_CALL ((u32*)0x800E3D40)
 #define JAL(fn) (0x0C000000 | (((u32)(fn) & 0x0FFFFFFF) >> 2))
 void RenderTilemap(void); // DRA
-static s32 s_Slide, s_Columns;
+s32 g_CoopWideSlide;   // how far the wide window starts left of the game's view (tests read it)
+u8 g_CoopWideStageOff; // tests: the stage's own entity windows (harness/widescreen_edges.py --raw)
+static s32 s_Columns;
 
 static void WideRenderTilemap(void) {
     s32 i;
 
-    g_Tilemap.scrollX.i.hi -= s_Slide;
+    g_Tilemap.scrollX.i.hi -= g_CoopWideSlide;
     for (i = 0; i < MAX_BG_LAYER_COUNT; i++) {
-        g_BgLayers[i].scrollX.i.hi -= s_Slide;
+        g_BgLayers[i].scrollX.i.hi -= g_CoopWideSlide;
     }
-    g_cameraOffsetX -= s_Slide;
+    g_cameraOffsetX -= g_CoopWideSlide;
     WideTilemap(s_Columns);
-    g_cameraOffsetX += s_Slide;
+    g_cameraOffsetX += g_CoopWideSlide;
     for (i = 0; i < MAX_BG_LAYER_COUNT; i++) {
-        g_BgLayers[i].scrollX.i.hi += s_Slide;
+        g_BgLayers[i].scrollX.i.hi += g_CoopWideSlide;
     }
-    g_Tilemap.scrollX.i.hi += s_Slide;
+    g_Tilemap.scrollX.i.hi += g_CoopWideSlide;
 }
 
 static void TilemapCall(bool wide) {
@@ -79,7 +82,7 @@ void WidescreenAfterPrims(void) {
     DR_OFFSET* p = &s_HudOffset[g_CurrentBuffer == &g_GpuBuffers[1]];
     u32* slot = (u32*)&g_CurrentBuffer->ot[HUD_LAYER];
 
-    if (!s_Slide) {
+    if (!g_CoopWideSlide) {
         return;
     }
     p->code[0] = 0xE5000000 | ((d->ofs[1] & 0x7FF) << 11) | (d->clip.x & 0x7FF);
@@ -100,20 +103,23 @@ void WidescreenFrame(void) {
     if (w > 512) {
         w = 512; // two side by side in the bank's 1024 columns
     }
+    if (g_GameState == Game_Play) {
+        WidescreenStage(w && !g_CoopWideStageOff ? w - DISP_STAGE_W : 0);
+    }
     if (!w || !stage) {
         GP1(GP1_COOP_WIDE);
         TilemapCall(false);
-        s_Slide = 0;
+        g_CoopWideSlide = 0;
         return;
     }
     s_Columns = w / 16 + 2;
-    s_Slide = Slide(w);
+    g_CoopWideSlide = Slide(w);
     TilemapCall(true);
     for (i = 0; i < 2; i++) {
         DRAWENV* d = &g_GpuBuffers[i].draw;
         DISPENV* p = &g_GpuBuffers[i].disp;
         d->clip.x = i * w;
-        d->ofs[0] = i * w + s_Slide;
+        d->ofs[0] = i * w + g_CoopWideSlide;
         d->clip.w = w;
         p->disp.x = (1 - i) * w; // shown while the other is drawn
         p->disp.w = w;

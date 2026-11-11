@@ -59,6 +59,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_shared.py` | Shared rooms and enemies. |
 | `session_travel.py` | Teleport, respawn, pause rules and joint saves. |
 | `spec_test.py` | A partner written from `docs/link-protocol.md` alone, against a real game. |
+| `widescreen_edges.py` | **Manual.** At a widescreen width, what each debug start's entities do in the view's extra width: pop in, vanish, or freeze (design/M19-widescreen.md). `--raw` without the module's stage windows. |
 | `vram_survey.py` | Reads VRAM out of savestates: which blocks the stages use, and whether a window is free. The Maria graphics tests use it. |
 
 ## Running things
