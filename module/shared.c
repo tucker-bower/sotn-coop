@@ -232,7 +232,7 @@ static bool PartnerShareable(void) {
     if (SceneAftermath()) {
         return false;
     }
-    if (p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
+    if (p->stage != g_CoopStage || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
     // A boss fight is shared, cameras near or not: arenas are up to two screens wide, and apart
@@ -549,7 +549,7 @@ static void ApplySnapshot(void) {
     DR_ENV* mine;
 
     if (g_CoopLink.snapInSeq == s_AppliedSeq || g_CoopLink.snapInSize < sizeof(SnapHeader) ||
-        h->stage != g_StageId || h->roomLeft != g_Tilemap.left || h->roomTop != g_Tilemap.top) {
+        h->stage != g_CoopStage || h->roomLeft != g_Tilemap.left || h->roomTop != g_Tilemap.top) {
         return; // nothing new, or not this room's
     }
     s_AppliedSeq = g_CoopLink.snapInSeq;
@@ -736,7 +736,7 @@ static void CaptureSnapshot(void) {
     Entity* e;
     Primitive* p;
 
-    h->stage = g_StageId;
+    h->stage = g_CoopStage;
     h->roomLeft = g_Tilemap.left;
     h->roomTop = g_Tilemap.top;
     h->scrollX = g_Tilemap.scrollX.i.hi;
@@ -939,7 +939,7 @@ static void SpawnEvent(u8 type, u16 a, u32 b) {
         sp->entityId = a;
         sp->pfnUpdate = b;
         sp->parts = 1;
-        sp->stage = g_StageId;
+        sp->stage = g_CoopStage;
         return;
     }
     if (!s_NSpawns) {
@@ -968,7 +968,7 @@ static void ApplySpawns(void) {
 
     for (i = 0; i < s_NSpawns; i++) {
         sp = &s_Spawns[i];
-        if (sp->parts != 3 || sp->stage != g_StageId) {
+        if (sp->parts != 3 || sp->stage != g_CoopStage) {
             continue;
         }
         e = &g_Entities[sp->range ? SPAWN_SECOND : SPAWN_FIRST];

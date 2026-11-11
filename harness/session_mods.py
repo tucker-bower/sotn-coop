@@ -276,6 +276,35 @@ def start_room(mod):
     return test
 
 
+def trap_door(mod):
+    """Issue 179, on a 2nd-castle start-room preset (startRoomRando2ndMode): the entrance's patched
+    trap door sets g_StageId to RNO0 (0x20) as A walks into the CD room, while NO3 stays loaded. B
+    map-teleports to A: B lands in A's room in NO3, not in the inverted Marble Gallery."""
+    def test(run):
+        from session_travel import map_teleport, wait_arrived
+        a, b = run.s.a, run.s.b
+        bot = walker("right", attack_every=0)
+        for i in range(600):
+            run.step(1, p1=(bot(a.snapshot(), i), ""))
+            if a.read("g_StageId") == RNO0 and a.mailbox("self_presence").flags & IN_PLAY:
+                break
+        run.expect(a.read("g_StageId") == RNO0, "A walked onto the trap door: the game counts it as RNO0", frames=i)
+        run.step(30)
+        there = a.mailbox("self_presence")
+        run.expect(there.stage == NO3, "A says NO3, the stage that's loaded", said=hex(there.stage))
+        map_teleport(run, b)
+        frames = wait_arrived(run, b, there, 900)
+        p = b.mailbox("self_presence")
+        run.expect(frames is not None and b.read("g_StageId") in (NO3, RNO0) and p.stage == NO3,
+                   "B lands in A's room in NO3", b=(hex(p.stage), p.room_id), a=(hex(there.stage), there.room_id))
+    test.__name__ = f"rando_trap_door_{mod[len('rando-'):].replace('-', '_')}"
+    return test
+
+
+RNO0 = 0x20
+SECOND_CASTLE_START = ("rando-cornivus", "rando-recycler", "rando-rampage-aut25te", "rando-max-rando", "rando-chaos-lite")
+
+
 TELEPORTS = 0x800A245C  # DRA's D_800A245C; the start-room presets' CD room exits through entry 100
 START_ROOM_PRESET = "rando-lycanthrope-spr26te"  # startRoomRandoMode alone (mods.TESTED keeps its disc)
 
@@ -287,6 +316,8 @@ for _name in mods.MODS:
         if _name.startswith("rando-"):  # casual: everyday, as the randomizer's own check (D-M20)
             session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue),
                              full=_name != "rando-casual")(finds(_name))
+        if _name in SECOND_CASTLE_START:  # #179
+            session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue))(trap_door(_name))
         if _name == START_ROOM_PRESET:  # everyday: start-room presets are a fifth of the randomizer's
             session_scenario(starts=("entrance", "entrance"), discs=(_cue, _cue))(start_room(_name))
         if _name == "rando-casual":  # Richter and Maria on the randomizer (design/M20 criterion 7): --full

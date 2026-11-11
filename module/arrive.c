@@ -143,7 +143,7 @@ static bool PartnerOnItsWay(void) {
 
 static bool SameRoomAsPartner(void) {
     const CoopPresence* p = &g_CoopLink.partner;
-    return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
+    return p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
 static bool PartnerInBossFight(void) {

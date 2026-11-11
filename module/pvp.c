@@ -56,7 +56,7 @@ static bool PvpNow(void) {
     }
     if (!(p->flags & PRESENCE_IN_PLAY) ||
         (p->flags & (PRESENCE_DEAD | PRESENCE_BUSY | PRESENCE_PAUSED | PRESENCE_BOSS | PRESENCE_CUTSCENE)) ||
-        p->stage != g_StageId || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
+        p->stage != g_CoopStage || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
         return false;
     }
     return g_CoopLink.self.roomFrames >= SAFE_FRAMES && p->roomFrames >= SAFE_FRAMES;

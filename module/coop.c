@@ -125,7 +125,7 @@ static void CapturePresence(CoopPresence* p) {
     }
     p->flags = PRESENCE_IN_PLAY;
     p->character = CharacterLoaded();
-    p->stage = g_StageId;
+    p->stage = g_CoopStage;
     p->roomLeft = g_Tilemap.left;
     p->roomTop = g_Tilemap.top;
     p->x = pl->posX.i.hi + g_Tilemap.scrollX.i.hi;
@@ -221,8 +221,18 @@ static u32 PadDrivingPlayer(void) {
 // DebugUpdate is empty (`jr ra`): it never sets a return value, and retail just happens to
 // leave a nonzero v0. Returning DebugUpdate()'s "result" would return whatever our own code
 // left in v0, and freeze the game whenever that's 0. So: call it, and always run the game.
+// The stage that's loaded (#179). g_StageId usually is, but a mod can change it in play: the
+// randomizer's 2nd-castle start sets it to RNO0 on the entrance's trap door, still in NO3, and a
+// partner sent there landed in the inverted castle. What the partner is told, and what's compared
+// with the partner's, is the loaded one: it's taken whenever a stage loads (Engine_Init), or the
+// game isn't in play.
+u16 g_CoopStage;
+
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    if (g_GameState != Game_Play || g_GameEngineStep == Engine_Init) {
+        g_CoopStage = g_StageId;
+    }
     PartnerBoot();
     CharacterFrame();
     SpellsUpdate();
