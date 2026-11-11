@@ -167,6 +167,8 @@ def install(path):
     args = [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CLOSEAPPLICATIONS"]
     if root:
         args.append(f"/DIR={root}")
+    if os.environ.get("COOP_UPDATE_NOLAUNCH"):  # tests on a PC someone's using: the launcher doesn't start again
+        args.append("/NOLAUNCH=1")
     if os.environ.get("COOP_UPDATE_DRY"):  # tests: written down, not run
         Path(os.environ["COOP_UPDATE_DRY"]).write_text(json.dumps(args))
         return
