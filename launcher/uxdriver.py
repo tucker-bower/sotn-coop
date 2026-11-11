@@ -900,7 +900,7 @@ def _characters(pg):
               ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
               ("until", lambda d: d.heading == "Game"),
-              ("expect", lambda d: d.launcher.characters == [3, 1], "player 1 plays Ultimate Maria, player 2 Co-op Richter"),
+              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria (PSP), player 2 Richter"),
               ("game_frames", 600), ("shot", "maria-and-richter"),
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]

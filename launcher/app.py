@@ -74,11 +74,13 @@ PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps") 
 # Maria's patches (characters/maria-dx/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
                       if (d / "maria.json").exists()), APP / "patcher" / "maria")
-CHARACTERS = ("Alucard", "Co-op Richter", "Co-op Maria", "Ultimate Maria", "Saturn Maria",
-              "Ultimate Richter")  # index = CHAR_* (module/link.h)
-# Under the name in the lobby: what sets the character apart (docs/design/character-mods.md)
-CHARACTER_NOTES = ("", "Alucard's gear and relics", "Alucard's gear and relics", "From SOTN Ultimate: PSP Maria",
-                   "From SOTN Ultimate: Saturn Maria", "From SOTN Ultimate: the Saturn coat")
+CHARACTERS = ("Alucard", "Richter", "Maria (PSP)", "Maria (PSP, Ultimate)", "Maria (Saturn)",
+              "Richter (Saturn)")  # index = CHAR_* (module/link.h)
+# The lobby's characters, in order (Tucker, 2026-11-11): CHAR_ULT_MARIA (3) isn't offered; one
+# remembered from before plays Maria (PSP)
+LOBBY = (0, 1, 2, 4, 5)
+# Under the name in the lobby: a few words, only where it helps
+CHARACTER_NOTES = ("", "", "", "", "Her Saturn moves", "His Saturn coat, every move")
 MARIAS = (2, 3)  # made from the player's DXC disc (characters.py)
 SATURN_MARIA = 4  # made from the player's Saturn disc (characters.py)
 ULTIMATE_RICHTER = 5  # ...and so is he
@@ -110,15 +112,13 @@ Castle settings: each castle has its own, set when you start it and in Options �
 rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
 everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
 
-Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
-need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
-moves from Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul
-of Wolf for the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat
-for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
-Maria is the SOTN Ultimate mod's PSP Maria: all her moves from the start, two sub-weapons (Circle
-swaps them), and none of Alucard's gear or levels. Saturn Maria is SOTN Ultimate's Saturn Maria:
-her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan). Ultimate Richter is
-the PS1 Richter, all his moves from the start, in the Saturn's long coat (the same disc).
+Characters: Alucard, Richter, Maria (PSP: needs your Dracula X Chronicles disc), and Maria and
+Richter (Saturn: need your Saturn disc, Japan). Richter and Maria (PSP) learn their moves from
+Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul of Wolf for
+the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat for item
+crashes. They level up and wear Alucard's armor (Start: the equipment menu): each is a castle rule.
+Maria (Saturn) has her own kicks, dives, backdash and Holy Beasts; Richter (Saturn) is the PS1
+Richter with every move from the start, in the Saturn's long coat.
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
 (Options › Controls picks which).
@@ -506,7 +506,7 @@ class Launcher:
         pygame.init()
         self.settings = load_settings()
         # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
-        self.characters = [c if 0 <= c < len(CHARACTERS) and self.playable(c) else 0
+        self.characters = [c if c in LOBBY and self.playable(c) else 2 if c == 3 and self.playable(2) else 0
                            for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
@@ -999,7 +999,7 @@ class Launcher:
         for seat in (0, 1) if not ANDROID else (0,):
             rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}'s controls" if not ANDROID else "Controls"})
             rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
-                         "hint": "Co-op Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. Off: the original controls only."})
+                         "hint": "Richter and Maria: L2 high jump, R2 dash. Alucard: right-stick spells."})
             for d, spell in enumerate(self.spells(seat)):
                 rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
                              "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows the spell and has the MP "
@@ -1114,14 +1114,14 @@ class Launcher:
         if not path:
             return
         try:
-            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}\nThis takes about half a minute.",
+            self.ui_wait("Adding Maria and Richter (Saturn)", f"From {path.name}\nThis takes about half a minute.",
                              lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             self.ui.message("That disc won't work", str(e))
             return
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
-        self.ui.message("Saturn Maria and Ultimate Richter are ready", "Pick them in the lobby, as either player.")
+        self.ui.message("Maria and Richter (Saturn) are ready", "Pick them in the lobby, as either player.")
 
     def add_dxc(self):
         """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
@@ -1161,7 +1161,7 @@ class Launcher:
                 (f"Randomizer:  optional, {'on' if self.randomizer() else 'off'}",
                  (self.mod_line() + "   (change)") if self.randomizer() else "Co-op on a disc you randomized on sotn.io"),
                 (f"Symphony of the Night (Saturn, Japan):  optional, "
-                 f"{'Saturn Maria and Ultimate Richter added' if self.saturn_maria_ready() else 'adds Saturn Maria, Ultimate Richter'}",
+                 f"{'Maria and Richter (Saturn) added' if self.saturn_maria_ready() else 'adds Maria and Richter (Saturn)'}",
                  (Path(self.settings["saturn_disc"]).name + "   (choose again)") if self.saturn_maria_ready()
                  and self.settings.get("saturn_disc") else "Adds the Saturn's Maria (from SOTN Ultimate). Choose your .cue")],
                 "Only the Symphony of the Night disc is needed to play.")
@@ -1342,17 +1342,17 @@ class Launcher:
                 return "psp", moved + str(e), False
             self.settings["dxc_iso"] = str(path)
             save_settings(self.settings)
-            return "psp", moved + "Co-op Maria and Ultimate Maria are unlocked.", True
+            return "psp", moved + "Maria (PSP) is unlocked.", True
         if not self.settings.get("disc"):
             return "saturn", "Attach the PlayStation disc first: the Saturn characters are made from both.", False
         try:
-            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}. About half a minute.",
+            self.ui_wait("Adding Maria and Richter (Saturn)", f"From {path.name}. About half a minute.",
                          lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             return "saturn", moved + str(e), False
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
-        return "saturn", moved + "Saturn Maria and Ultimate Richter are unlocked.", True
+        return "saturn", moved + "Maria and Richter (Saturn) are unlocked.", True
 
     def disc_art(self, slot):
         """An attached disc's picture, from the player's own disc (ui/screens/discs.py)."""
@@ -1616,7 +1616,8 @@ class Launcher:
                 elif key == "shortcuts" and not ready[i]:
                     self.set_shortcuts(i, not self.shortcuts(i))
                 elif key in ("left", "right") and not ready[i]:
-                    char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
+                    at = LOBBY.index(char[i]) if char[i] in LOBBY else 0
+                    char[i] = LOBBY[(at + (1 if key == "right" else -1)) % len(LOBBY)]
             partner = online() if online else None
             if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
@@ -1759,8 +1760,8 @@ class Launcher:
             return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
         if key == "discs":
             return {"lines": ["PlayStation: attached",
-                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Co-op and Ultimate Maria)"),
-                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria, Ultimate Richter)")]}
+                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Maria)"),
+                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria and Richter)")]}
         if key == "settings":
             return {"lines": ["Layout, sound, controls, and each castle's rules.",
                               "Also in the menus at the top of the window."]}

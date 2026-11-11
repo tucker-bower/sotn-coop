@@ -1,6 +1,6 @@
-# One Richter and one Maria (proposal, issue 232)
+# One Richter and one Maria (decided, issue 232)
 
-Tucker (2026-11-10): players can't tell Co-op Richter and Maria from Ultimate Richter and Maria apart. He'd like one version of each, with everything else optional in the castle rules. This lays out what each is, and recommends how to get there. **Nothing is built yet: Tucker decides.**
+**Decided (Tucker, 2026-11-11):** the lobby offers **Alucard, Richter, Maria (PSP), Maria (Saturn) and Richter (Saturn)**. Our Richter and Maria keep every co-op feature, each a castle rule as before. Ultimate Maria (the PSP Maria with SOTN Ultimate's two sub-weapon slots) leaves the lobby: a player who had her plays Maria (PSP). The Saturn pair's portraits are shown as they are, without a tint. Options B and C below were not taken; the analysis stays for the record.
 
 ## What the six characters are today
 | In the lobby | Needs | What it is | How it plays |

@@ -180,11 +180,11 @@ def saturn_files(disc, about):
     finally:
         d.close()
     if not any(files.values()):
-        raise DiscError("That isn't the Saturn Symphony of the Night: Saturn Maria and Ultimate Richter come from "
+        raise DiscError("That isn't the Saturn Symphony of the Night: Maria and Richter (Saturn) come from "
                         f"{SATURN_GAME}.")
     bad = [n for n, b in files.items() if not b or hashlib.md5(b).hexdigest() != about["saturn_files"][n]]
     if bad:
-        raise DiscError("That's the Saturn game, but not the copy Saturn Maria and Ultimate Richter were made for (a translation "
+        raise DiscError("That's the Saturn game, but not the copy Maria and Richter (Saturn) were made for (a translation "
                         f"or another version?). They need the original Japanese disc: {SATURN_GAME}, from "
                         "redump.org.")
     return files
@@ -254,9 +254,9 @@ def ultimate_richter_blob(saturn_disc, coop_disc, patches, out):
     try:
         ric2 = saturn_richter.ric2(ric, files.__getitem__, g2)[:about["size"]]
     except (ValueError, IndexError) as e:
-        raise DiscError(f"Ultimate Richter's coat didn't come out as it should ({e}). Please send us a bug report (F9).") from e
+        raise DiscError(f"The Saturn coat didn't come out as it should ({e}). Please send us a bug report (F9).") from e
     if hashlib.md5(ric2).hexdigest() != about["md5"]:
-        raise DiscError("Ultimate Richter's coat didn't come out as it should. Please send us a bug report (F9).")
+        raise DiscError("The Saturn coat didn't come out as it should. Please send us a bug report (F9).")
     blob = struct.pack("<8I", CHAR_BLOB_MAGIC, CHAR_ULT_RICHTER, len(ric2), 0, 0, 0, 0, 0) + ric2
     blob += bytes(-len(blob) % 4)
     out = Path(out)

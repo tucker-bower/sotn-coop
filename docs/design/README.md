@@ -41,4 +41,4 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `bat-carry.md` | Hanging onto Bat Alucard (#43). Proposed. |
 | `character-mods.md` | Other mods' Richter and Maria next to ours: SOTN Ultimate's, as Ultimate Maria and Richter. |
 | `launcher-overhaul.md` | The launcher's flow and look: the game's own menu, discs and mods, difficulty, one folder, updates (#227). Approved; being built. |
-| `one-richter-one-maria.md` | Co-op vs Ultimate Richter and Maria, and a proposal for one of each (#232). Proposed: Tucker decides. |
+| `one-richter-one-maria.md` | Which Richters and Marias the lobby offers, and why (#232). Decided. |

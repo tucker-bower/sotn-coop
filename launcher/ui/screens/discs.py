@@ -16,8 +16,8 @@ DROPS = not ANDROID  # files dropped on the window: not on a phone
 SLOT_Y, SLOT_W, SLOT_H = 46, 150, 132
 SLOTS = (  # (key, title, system, needed?, what it's for: three lines of 17 at most)
     ("ps1", ("Symphony of", "the Night"), "PlayStation (USA)", "Required", "Co-op is made from it."),
-    ("psp", ("Dracula X", "Chronicles"), "PSP (USA)", "Optional", "Unlocks Co-op and Ultimate Maria."),
-    ("saturn", ("Symphony of", "the Night"), "Saturn (Japan)", "Optional", "Unlocks Saturn Maria, Ultimate Richter."),
+    ("psp", ("Dracula X", "Chronicles"), "PSP (USA)", "Optional", "Unlocks Maria (PSP)."),
+    ("saturn", ("Symphony of", "the Night"), "Saturn (Japan)", "Optional", "Unlocks Maria and Richter (Saturn)."),
 )
 
 
