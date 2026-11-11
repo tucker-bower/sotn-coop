@@ -76,8 +76,25 @@ def describe(disc):
 
 
 def name(disc):
-    """What the player calls it: the name they gave it, else what's in it."""
-    return PLAIN if not disc else disc.get("name") or describe(disc)
+    """What the player calls it: the name they gave it, else what's in it, shortly:
+    "Seed abc + Fast Warp, MiniMap"."""
+    if not disc:
+        return PLAIN
+    if disc.get("name"):
+        return disc["name"]
+    labels = hack_labels()
+    bits = []
+    for m in disc.get("mods", []):
+        if m["kind"] == "randomizer":
+            bits.append(f"Seed {(m.get('info') or {}).get('seed', '?')}")
+        elif m["kind"] == "ass":
+            bits.append("ASS -Final-")
+        elif m["kind"] == "ppf":
+            bits.append(Path(m.get("name") or "patch").stem)
+    hacks = sorted(labels.get(h, h) for m in disc.get("mods", []) if m["kind"] == "hacks" for h in m["ids"])
+    if hacks:
+        bits.append(hacks[0] + (f" and {len(hacks) - 1} more" if len(hacks) > 1 else ""))
+    return " + ".join(bits) or PLAIN
 
 
 def standing(disc):

@@ -5,7 +5,7 @@ the rows (Launcher.option_rows) and does what they say."""
 
 import pygame
 
-from ..theme import DIM, GOLD, GREEN, INK, wrap
+from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
 from ..widgets import ROW, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
@@ -85,8 +85,11 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
                 continue
             if k == sel:
                 t.cursor(s, (x, y, w, ROW - 2))
-            t.text(s, row["label"], x + 14, y + 3, INK)
             kind = row["kind"]
+            room = {"switch": 48 + 8, "slider": right - BAR_X + 8}.get(kind, 0)
+            if kind in ("choice", "action") and row.get("value"):
+                room = (len(str(row["value"])) + (4 if kind == "choice" and k == sel else 0)) * 8 + 8
+            t.text(s, shorten(row["label"], max(4, (right - x - 14 - room) // 8)), x + 14, y + 3, INK)
             if kind == "switch":
                 t.switch(s, row["value"], LIST[0] + LIST[2] - 60, y - 1)
             elif kind == "choice":
@@ -100,7 +103,7 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
                 t.text_right(s, f"{row['value']}%", right, y + 3, INK)
                 m.hit(("bar", k), bar.inflate(8, 10))
             elif kind == "action" and row.get("value"):
-                t.text_right(s, str(row["value"])[:(right - x - 22) // 8 - len(row["label"])], right, y + 3, row.get("colour", GREEN))
+                t.text_right(s, str(row["value"]), right, y + 3, row.get("colour", GREEN))
             m.hit(k, (x, y, (BAR_X - x - 8) if kind == "slider" else w, ROW))
         if first:
             t.text(s, "{^}", LIST[0] + LIST[2] - 14, LIST[1] + 2)
