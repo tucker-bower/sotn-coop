@@ -1217,6 +1217,7 @@ class Launcher:
                                  lambda progress: gameart.rip(disc, folder))
             except Exception:  # noqa: BLE001 - the menus work without it
                 log.exception("the game's art")
+        self.make_sprites(folder, disc)
         theme = Theme(folder)
         if not theme.ok:
             self.menus = None
@@ -1231,6 +1232,28 @@ class Launcher:
                 except Exception:  # noqa: BLE001
                     log.exception("the game's sounds")
             threading.Thread(target=work, daemon=True).start()
+
+    def make_sprites(self, folder=None, disc=None):
+        """The characters standing, for the main menu's title (launcher/sprites.py): each made once,
+        from whichever disc has them, as soon as it's attached."""
+        import sprites
+        folder = folder or paths.art_dir()
+        disc = disc or next((d for d in (self.settings.get("disc_source"), self.settings.get("disc")) if d and Path(d).exists()), None)
+        try:
+            if disc and not (folder / "sprite-alucard.png").exists():
+                sprites.ps1(disc, folder)
+            iso = self.settings.get("dxc_iso")
+            if iso and Path(iso).exists() and not (folder / "sprite-maria.png").exists():
+                sprites.psp(iso, folder)
+            sat = self.settings.get("saturn_disc")
+            if sat and Path(sat).exists() and not (folder / "sprite-maria-saturn.png").exists():
+                import json
+                about = json.loads((MARIA_PATCHES / "sat-maria.json").read_text())
+                sprites.saturn(sat, self.ultimate_richter_blob_path(), folder, about)
+        except Exception:  # noqa: BLE001 - the title has whoever it has
+            log.exception("sprites")
+        if self.menus:
+            self.menus.theme.load_sprites()
 
     # --- first run
 
@@ -1342,6 +1365,7 @@ class Launcher:
                 return "psp", moved + str(e), False
             self.settings["dxc_iso"] = str(path)
             save_settings(self.settings)
+            self.make_sprites()
             return "psp", moved + "Maria (PSP) is unlocked.", True
         if not self.settings.get("disc"):
             return "saturn", "Attach the PlayStation disc first: the Saturn characters are made from both.", False
@@ -1352,6 +1376,7 @@ class Launcher:
             return "saturn", moved + str(e), False
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
+        self.make_sprites()
         return "saturn", moved + "Maria and Richter (Saturn) are unlocked.", True
 
     def disc_art(self, slot):

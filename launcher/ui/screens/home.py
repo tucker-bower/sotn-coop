@@ -1,6 +1,8 @@
 """The main menu: the logo, the ways to play, and on the right what the selected one is, with the
 castle Continue would load. Two links for the mouse only: our GitHub page and our Discord."""
 
+import pygame
+
 from ..theme import DIM, INK, shorten, wrap
 from ..widgets import ROW, move
 
@@ -23,6 +25,34 @@ def started(castle):
     """ "Nov 08": the day a castle began (what tells two of the same name apart)."""
     import time
     return time.strftime("%b %d", time.localtime(castle.info.get("created", 0)))
+
+
+LEFT, RIGHT = ("alucard", "richter", "richter-saturn"), ("maria", "maria-saturn")
+FACES_LEFT = {"alucard"}  # (his frame is the Doppelganger's, facing left; the others face right)
+
+
+def title_art(t, s):
+    lw, lh = t.pictures["logo"].get_size()
+    scrawl = t.pictures.get("scrawl")
+    sh = scrawl.get_height() if scrawl else 0
+    lx, ly = TITLE[0] + (TITLE[2] - lw) // 2, TITLE[1] + (TITLE[3] - lh - sh) // 2
+    t.picture(s, "logo", lx, ly)
+    if scrawl:
+        s.blit(scrawl, (lx + (lw - scrawl.get_width()) // 2, ly + lh - 2))
+    floor = TITLE[1] + TITLE[3] - 3
+    x = lx - 10  # leftwards from the logo, each facing it
+    for name in LEFT:
+        p = t.pictures.get("sprite-" + name)
+        if p and x - p.get_width() > TITLE[0] + 2:
+            x -= p.get_width()
+            s.blit(pygame.transform.flip(p, True, False) if name in FACES_LEFT else p, (x, floor - p.get_height()))
+            x -= 10
+    x = lx + lw + 10
+    for name in RIGHT:
+        p = t.pictures.get("sprite-" + name)
+        if p and x + p.get_width() < TITLE[0] + TITLE[2] - 2:
+            s.blit(p if name in FACES_LEFT else pygame.transform.flip(p, True, False), (x, floor - p.get_height()))
+            x += p.get_width() + 10
 
 
 def home(m, items, about, version, sel=0, note="", interrupt=None):
@@ -54,9 +84,8 @@ def home(m, items, about, version, sel=0, note="", interrupt=None):
                     return ("link", LINKS[a[1]])
         key = items[sel][0]
         m.begin("Home")
-        m.window(TITLE)  # the logo alone (Tucker, 2026-11-10)
-        lw, lh = t.pictures["logo"].get_size()
-        t.picture(s, "logo", TITLE[0] + (TITLE[2] - lw) // 2, TITLE[1] + (TITLE[3] - lh) // 2)
+        m.window(TITLE)  # the logo, Tucker's "co-op" under it, and the characters the player has (issue 232)
+        title_art(t, s)
         m.window(MENU)
         m.rows((MENU[0] + 4, MENU[1] + 10, MENU[2] - 8, len(items) * ROW), [i[1] for i in items], sel)
         m.window(INFO)
