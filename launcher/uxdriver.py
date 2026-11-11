@@ -1061,8 +1061,8 @@ def _randomizer(pg):
         ("expect", lambda d: d.launcher.settings.get("game_disc") is None and d.launcher.mod_line() is None, "Co-op (no mods) is in use"),
         ("key", pg.K_ESCAPE), ("screen", "Discs"), ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN), ("screen", "Solo"), ("key", pg.K_RETURN),  # Continue
-        ("screen", "Press a button"), ("expect", on_disc, "Continue put the castle's own game disc back in use"),
-        ("pad", 0, A), ("pad", 0, A), ("until", lambda d: d.heading == "Game"), ("game_frames", 300),
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A), ("until", lambda d: d.heading == "Game"), ("game_frames", 300),
+        ("expect", on_disc, "Continue put the castle's own game disc back in use"),
         ("expect", in_ram, "and the game is the randomized one"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
