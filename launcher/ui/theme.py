@@ -48,7 +48,13 @@ def wrap(text, columns):
     out = []
     for para in text.split("\n"):
         line = ""
-        for word in para.split(" "):
+        words = []
+        for word in para.split(" "):  # (a word too long for a line, a folder's path: broken where it must be)
+            while len(glyphs(word)) > columns > 0:
+                words.append(word[:columns])
+                word = word[columns:]
+            words.append(word)
+        for word in words:
             trial = f"{line} {word}" if line else word
             if line and len(glyphs(trial)) > columns:
                 out.append(line)

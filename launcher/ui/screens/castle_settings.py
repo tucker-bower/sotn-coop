@@ -175,7 +175,8 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "defaults") else 14), ty, INK)
             if value is not None:
                 arrows = kind in ("mode", "preset", "difficulty") and on and not (read_only and kind == "difficulty")
-                t.text_right(s, ("{<} " if arrows else "") + value + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
+                room = (LIST[2] - 32 - len(label) * 8) // 8 - (8 if arrows else 0)  # (what's left of the row after its label)
+                t.text_right(s, ("{<} " if arrows else "") + shorten(str(value), room) + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
             if on:
                 hint = row_hint
             if not (kind == "slider"):
