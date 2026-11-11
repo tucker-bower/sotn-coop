@@ -116,7 +116,7 @@ def main():
               f"Fast warp on the real disc: {len(changed)} sectors change, all its own")
         place = modded.patcher.find_file(got, "ST/WRP/WRP.BIN")
         other = bytearray(real)
-        at = place[0] * S + 24 + 30832  # a byte Fast Warp changes, changed first by another mod
+        at = (place[0] + 30832 // 2048) * S + 24 + 30832 % 2048  # a byte Fast Warp changes, changed first by another mod
         other[at] ^= 0xFF
         try:
             modded.mod_image(bytes(other), [{"name": "Fast warp", "hacks": ["fast-warp"]}])

@@ -162,7 +162,7 @@ def main():
     OUT.parent.mkdir(exist_ok=True)
     about = {"editor": mods.SOURCES["editor"][0], "commit": mods.SOURCES["editor"][1], "author": "pddmergilla",
              "license": "GPL-3.0", "note": "Each hack's new bytes only, made by harness/make_hack_patches.py"}
-    OUT.write_text(json.dumps({"about": about, "hacks": out, "groups": groups}, indent=1) + "\n")
+    OUT.write_text(json.dumps({"about": about, "hacks": out, "groups": groups}, separators=(",", ":")) + "\n")
     print(f"wrote {OUT.relative_to(ROOT)}: {len(out)} hacks, {OUT.stat().st_size} bytes")
 
 
