@@ -136,7 +136,7 @@ class Driver:
             drv.subtitle = subtitle
             return orig(heading, subtitle)
         ui.frame = frame
-        ui.seen = lambda name: (drv.screen(name), setattr(drv, "subtitle", ""))  # the screens in the game's style
+        ui.seen = lambda name, about="": (drv.screen(name), setattr(drv, "subtitle", about))  # the screens in the game's style
 
     def _hook_display(self, display):
         orig_present, orig_games = display.present, display.present_games
@@ -375,6 +375,14 @@ def run(script, out, retail_cue=None):
 
 # --- the scripts
 
+def first_run(pg, shot=False):
+    """A fresh install's first screen: the PlayStation disc's slot (the picker: COOP_PICK_FILE),
+    then Continue once it's attached."""
+    return [("screen", "Discs"), *([("shot", "discs-first-run")] if shot else []), ("key", pg.K_RETURN),
+            ("until", lambda d: d.launcher.disc() is not None and d.heading == "Discs"), ("shot", "discs-attached"),
+            ("key", pg.K_RETURN)]
+
+
 def _couch(pg, quit_at_end=True):
     A = pg.CONTROLLER_BUTTON_A
     B = pg.CONTROLLER_BUTTON_B
@@ -382,9 +390,7 @@ def _couch(pg, quit_at_end=True):
     R = pg.CONTROLLER_BUTTON_DPAD_RIGHT
     in_game = lambda d: d.heading == "Game"
     return [
-        ("screen", "Welcome"), ("shot", "welcome"),
-        ("key", pg.K_RETURN),                                # Choose my disc image (picker: COOP_PICK_FILE)
-        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *first_run(pg, shot=True),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op (Solo is first)
         ("screen", "Couch co-op"), ("shot", "castle-menu"), ("key", pg.K_RETURN),  # New castle (no castles yet: no Continue)
@@ -398,8 +404,8 @@ def _couch(pg, quit_at_end=True):
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
         ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Ultimate Richter: no Saturn disc yet
-        ("pad", 101, A),                                      # can't be ready as Maria: it opens Game files
-        ("screen", "Game files"), ("shot", "game-files-from-lobby"),
+        ("pad", 101, A),                                      # can't be ready as him: it opens the discs
+        ("screen", "Discs"), ("shot", "discs-from-lobby"),
         ("key", pg.K_ESCAPE), ("screen", "Press a button"),
         ("expect", lambda d: d.launcher.shortcuts(1), "shortcuts start on"),
         ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
@@ -451,8 +457,7 @@ def _solo(pg):
         from archive import Castle
         return Castle.all()
     return [
-        ("screen", "Welcome"), ("key", pg.K_RETURN),
-        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *first_run(pg),
         ("count_inputs",),
         ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
         ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle (no castles yet: no Continue)
@@ -494,7 +499,7 @@ def _test_castles(pg):
         p, want = g.mailbox("self_presence"), played[0].info["start"]
         return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16  # the save alone: x 128
     return [
-        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *first_run(pg),
         ("screen", "Home"), ("key", pg.K_RETURN),
         ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after New castle: none played here yet)
         ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
@@ -525,7 +530,7 @@ def _boss_rush(pg):
         p, want = g.mailbox("self_presence"), rush[0].info["start"]
         return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16
     return [
-        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *first_run(pg),
         ("screen", "Home"), ("key", pg.K_RETURN),
         ("call", lambda d: setattr(d, "real_settings", True)),
         ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
@@ -570,8 +575,7 @@ def _startup(pg):
                      "title_s": round(d.marks["title"] - t0, 2), "title_frame": d.view.frame}
         print("startup:", d.startup, flush=True)
     return [
-        ("screen", "Welcome"), ("key", pg.K_RETURN),
-        ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+        *first_run(pg),
         ("screen", "Home"), ("key", pg.K_RETURN),
         ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle (D136)
         ("screen", "Name your castle"), ("pad", 0, A),
@@ -663,7 +667,7 @@ def _window(pg):
 
 
 def _menus(pg):
-    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+    steps = [*first_run(pg),
              ("screen", "Home"), ("wait", 30), ("winshot", "home")]
     for action, screen in (("help_play", "How to play"), ("help_online", "Online troubleshooting"),
                            ("keys", "Keyboard keys"), ("about", "About")):
@@ -739,7 +743,7 @@ def _online_host(pg, code_file):
     def write_code(d):
         room = d.launcher.room_info.split("room ")[1].split(",")[0]
         Path(code_file).write_text(room)
-    return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+    return [*first_run(pg),
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
@@ -770,7 +774,7 @@ def _online_host(pg, code_file):
 
 def _online_join(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
-    return [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+    return [*first_run(pg),
             ("count_inputs",),
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Join your partner
@@ -863,31 +867,30 @@ def _perf(pg):
 
 
 def _characters(pg):
-    """Settings › Game files: three wrong files refused in plain words, then the DXC disc adds Maria
-    (design/M8 criterion 5). Then Maria (player 1) and Richter (player 2) start a game."""
+    """Discs & mods, the PSP slot: a European PSP disc refused in plain words, the PlayStation disc
+    put in its own slot, a text file refused, then the DXC disc adds Maria (design/M8 criterion 5). Then Maria (player 1) and Richter (player 2) start a game."""
     import test_characters
     A, L, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_LEFT, pg.CONTROLLER_BUTTON_DPAD_RIGHT
     tmp = Path(tempfile.mkdtemp(prefix="coop-ux-files-"))
     junk = tmp / "notes.txt"
     junk.write_bytes(b"hello" * 2000)
     wrong = [(test_characters.fake_psp_iso(tmp / "Castlevania DXC (Europe).iso", "ULES-00841"), "ULUS-10277", "eu"),
-             (next((ROOT / "disks").glob("*Track 1).bin")), "PlayStation disc", "ps1"),
+             (ROOT / "disks" / "sotn.us.cue", "PlayStation disc", "ps1"),  # the one attached: said, not made again
              (junk, "isn't a disc image", "junk")]
 
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
-    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+    steps = [*first_run(pg),
              ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),  # Discs & mods
-             ("screen", "Game files"), ("shot", "game-files-first"),
-             ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc")]
+             ("screen", "Discs"), ("shot", "discs"),
+             ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc"),
+             ("key", pg.K_RIGHT)]  # the PSP disc's slot
     for path, words, name in wrong:
-        steps += [pick(path), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
-                  ("screen", "That disc won't work"), ("shot", f"dxc-wrong-{name}"),
-                  ("expect", lambda d, w=words: w in d.subtitle, f"{name}: the error says {words!r}"),
-                  ("key", pg.K_RETURN), ("screen", "Game files")]
-    steps += [pick(ROOT / "disks" / "sotn.pspus.iso"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),
-              ("screen", "Maria is ready"), ("shot", "maria-ready"), ("key", pg.K_RETURN),
-              ("screen", "Game files"), ("shot", "game-files-done"),
+        steps += [pick(path), ("key", pg.K_RETURN),
+                  ("until", lambda d, w=words: d.heading == "Discs" and w in d.subtitle), ("shot", f"dxc-wrong-{name}"),
+                  ("expect", lambda d, w=words: w in d.subtitle, f"{name}: it says {words!r}")]
+    steps += [pick(ROOT / "disks" / "sotn.pspus.iso"), ("key", pg.K_RETURN),
+              ("until", lambda d: d.heading == "Discs" and "unlocked" in d.subtitle), ("shot", "maria-ready"),
               ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
               ("key", pg.K_ESCAPE), ("screen", "Home"),
               ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
@@ -962,7 +965,7 @@ def _hud(pg):
     """Both games in play (a debug start at the castle entrance: each HUD on screen), then every
     layout (two windows too), both pixel modes and three window sizes: hud_check()."""
     A = pg.CONTROLLER_BUTTON_A
-    steps = [("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
+    steps = [*first_run(pg),
              ("screen", "Home"), ("menu", "debug_starts"),
              ("until", lambda d: d.heading == "Debug starts"),
              ("call", make_starts),                               # not made yet: Yes, make them
@@ -1016,11 +1019,12 @@ def _randomizer(pg):
         want = layer.collectibles(Path(r["cue"]).with_name(Path(r["cue"]).stem + " (Track 1).bin").read_bytes())
         return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(n)] == want
 
-    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Game files")]  # Discs & mods
+    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Discs")]  # Discs & mods
     return [
-        ("screen", "Welcome"), ("key", pg.K_RETURN), ("screen", "Co-op disc ready"), ("key", pg.K_RETURN),
-        *to_files, ("shot", "game-files"),
-        *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Randomizer"), ("shot", "randomizer-empty"),
+        *first_run(pg),
+        *to_files, ("shot", "discs"),
+        ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_RETURN),  # Randomizer: after Back
+        ("screen", "Randomizer"), ("shot", "randomizer-empty"),
         pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
         ("screen", "That randomized disc won't work"), ("shot", "retail-refused"),
         ("expect", lambda d: "isn't randomized" in d.subtitle, "the retail disc: it isn't randomized"),
@@ -1028,7 +1032,7 @@ def _randomizer(pg):
         pick(seed_ppf), ("key", pg.K_RETURN),
         ("screen", "Randomizer on"), ("shot", "randomizer-on"),
         ("expect", lambda d: "sotn-coop-ux" in d.subtitle and "casual" in d.subtitle, "it names the seed and preset"),
-        ("key", pg.K_RETURN), ("screen", "Randomizer"), ("key", pg.K_ESCAPE), ("screen", "Game files"),
+        ("key", pg.K_RETURN), ("screen", "Randomizer"), ("key", pg.K_ESCAPE), ("screen", "Discs"),
         ("expect", lambda d: d.launcher.randomizer() and "Randomizer" in d.launcher.disc().name, "the games play the randomized disc"),
         ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN),  # Solo

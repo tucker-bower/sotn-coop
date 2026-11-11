@@ -22,10 +22,10 @@ class Menus:
 
     # --- one frame
 
-    def begin(self, name):
-        """A new frame of the screen called name (what tests and bug reports know it by)."""
+    def begin(self, name, about=""):
+        """A new frame of the screen called name (what tests and bug reports know it by), saying about."""
         self.name = name
-        self.ui.seen(name)
+        self.ui.seen(name, about)
         self.s.fill(BACK)
         self.ui._rects = []
 
@@ -37,10 +37,11 @@ class Menus:
         self.ui.display.present_pixels(BACK)
         pygame.time.wait(16)
 
-    def poll(self, quiet=()):
-        """This frame's actions. Plays the game's sound for each, but not for those in quiet."""
+    def poll(self, quiet=(), raw=False):
+        """This frame's actions. Plays the game's sound for each, but not for those in quiet.
+        raw: also ("event", ev) for each of pygame's events (a dropped file)."""
         out = []
-        for a in self.ui.events(pixel=True):
+        for a in self.ui.events(raw=raw, pixel=True):
             if a == "quit":
                 raise SystemExit
             if isinstance(a, tuple) and a[0] == "pad":

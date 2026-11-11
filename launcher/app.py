@@ -229,7 +229,7 @@ class UI:
     def flip(self, over_games=False):
         self.display.present(over_games)
 
-    def seen(self, name):
+    def seen(self, name, about=""):
         """A screen in the game's style is being drawn (ui/widgets.py). Tests hook this."""
 
     def frame(self, heading, subtitle=""):
@@ -933,9 +933,112 @@ class Launcher:
                 self.settings["randomizer"] = dict(r, on=False, cue=None)
             save_settings(self.settings)
 
+    # --- your discs (ui/screens/discs.py)
+
+    def plain_menus(self):
+        """The menus in the game's style, or before the player's disc is there (no art yet) the
+        same layout in plain letters."""
+        if self.menus:
+            return self.menus
+        from ui.sound import MenuSound
+        from ui.theme import Theme
+        from ui.widgets import Menus
+        self._plain = Menus(self.ui, Theme(paths.art_dir()), None)
+        return self._plain
+
+    def disc_status(self):
+        def name(key):
+            p = self.settings.get(key)
+            return Path(p).name if p else None
+        return {"ps1": name("disc_source") if self.settings.get("disc") else None,
+                "psp": name("dxc_iso") if self.maria_ready() else None,
+                "saturn": name("saturn_disc") if self.saturn_maria_ready() else None}
+
+    def attach_disc(self, slot, path):
+        """The discs screen's attach: (slot it went to or None, what to say, went well?)."""
+        import characters
+        import discs
+        import patcher
+        titles = {"ps1": "Your Symphony of the Night disc image (.cue)",
+                  "psp": "Your Castlevania: The Dracula X Chronicles disc image (.iso)",
+                  "saturn": "Your Akumajou Dracula X: Gekka no Yasoukyoku disc (Sega Saturn, Japan): its .cue"}
+        types = {"ps1": [("Disc image", "*.cue *.bin"), ("All", "*.*")], "psp": [("PSP disc image", "*.iso *.ISO"), ("All", "*.*")],
+                 "saturn": [("Saturn disc", "*.cue *.CUE *.bin *.BIN"), ("All", "*.*")]}
+        if path is None:
+            try:
+                path = pick_file(titles[slot], types[slot], self.ui, android_disc="folder" if slot == "ps1" else None)
+            except patcher.DiscError as e:
+                return slot, str(e), False
+            except OSError as e:  # copying it into the app (Android): most likely a full phone
+                log.exception("copying a disc")
+                return slot, f"Couldn't copy your disc: {e.strerror or e}. The app needs about 2 GB free.", False
+            if not path:
+                return None, "", True
+        path = Path(path)
+        found = discs.kind(path)
+        if slot is None and found is None:
+            return None, f"{path.name} isn't a disc image this can use. Drop a .cue, .bin or .iso.", False
+        names = {"ps1": "PlayStation", "psp": "Dracula X Chronicles (PSP)", "saturn": "Saturn"}
+        moved = f"That's your {names[found]} disc. " if slot and found and found != slot else ""
+        slot = found or slot
+        if slot == "ps1" and self.disc() and str(path) == self.settings.get("disc_source"):
+            return "ps1", moved + "It's already attached.", True
+        if slot == "ps1":
+            try:
+                cue = self.ui_wait("Making the co-op disc", f"From {path.name}. This takes a few seconds.",
+                                   lambda progress: patcher.apply(path, PATCH, progress=progress))
+            except (patcher.DiscError, patcher.bps.PatchError) as e:
+                return "ps1", str(e), False
+            self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.coop_patch_crc())
+            save_settings(self.settings)
+            self.prepare_art()
+            if self.menus and getattr(self, "_plain", None):  # the screen on show: the game's style from now on
+                self._plain.theme, self._plain.sound = self.menus.theme, self.menus.sound
+            return "ps1", moved + "Symphony of the Night is attached: co-op is ready.", True
+        if slot == "psp":
+            try:
+                self.ui_wait("Adding Maria", f"From {path.name}. This takes a few seconds.",
+                             lambda progress: characters.maria_blob(path, MARIA_PATCHES, self.maria_blob_path()))
+            except characters.DiscError as e:
+                return "psp", moved + str(e), False
+            self.settings["dxc_iso"] = str(path)
+            save_settings(self.settings)
+            return "psp", moved + "Co-op Maria and Ultimate Maria are unlocked.", True
+        if not self.settings.get("disc"):
+            return "saturn", "Attach the PlayStation disc first: the Saturn characters are made from both.", False
+        try:
+            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}. About half a minute.",
+                         lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
+        except characters.DiscError as e:
+            return "saturn", moved + str(e), False
+        self.settings["saturn_disc"] = str(path)
+        save_settings(self.settings)
+        return "saturn", moved + "Saturn Maria and Ultimate Richter are unlocked.", True
+
+    def ui_wait(self, heading, text, task):
+        """A long job with the old progress screen (the vial): its own screen until part 2 has one."""
+        return self.ui.wait_for(heading, text, task)
+
+    def discs_screen(self, first_run=False):
+        """Your discs. First run: until the PlayStation disc is attached (Quit: leaves the app)."""
+        from ui.screens.discs import discs
+        while True:
+            # the randomizer and the BIOS: here until the game discs and the Options screen take them (design steps 7, 8)
+            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, more=("Randomizer", "BIOS"))
+            if got == "quit":
+                raise SystemExit
+            if got == "Randomizer":
+                self.randomizer_menu()
+            elif got == "BIOS":
+                self.choose_bios()
+            elif got == "back" or (got == "continue" and self.disc()):
+                return
+
     def wizard(self):
         ui = self.ui
         self.update_disc()
+        if not self.disc() and not os.environ.get("COOP_OLD_WIZARD"):
+            self.discs_screen(first_run=True)
         while not self.disc():
             if ANDROID:  # the folder picker: Android can't see the .bin files next to a .cue
                 choice = ui.menu("Welcome", [("Choose my disc's folder", "The folder with your .cue and .bin files (or a .zip of them)"),
@@ -1065,7 +1168,7 @@ class Launcher:
                     if self.playable(char[i]):
                         ready[i] = True
                     elif char[i] in NEEDS:  # a Maria whose disc isn't added yet
-                        self.game_files()
+                        self.discs_screen() if self.menus else self.game_files()
                 elif key == "back":
                     if ready[i]:
                         ready[i] = False
@@ -1243,7 +1346,7 @@ class Launcher:
         elif act == "settings":
             self.settings_menu()
         elif act == "discs":
-            self.game_files()
+            self.discs_screen() if self.menus else self.game_files()
         elif act == "savestates":
             self.savestates()
         elif act == "debug_starts":

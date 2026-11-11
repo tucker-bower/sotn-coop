@@ -57,11 +57,12 @@ class Inputs:
     def __init__(self, frames):
         self.display, self._rects, self.frames, self.names = Display(), [], list(frames), []
 
-    def seen(self, name):
+    def seen(self, name, about=""):
+        self.about = about
         if not self.names or self.names[-1] != name:
             self.names.append(name)
 
-    def events(self, pixel=False):
+    def events(self, raw=False, pixel=False):
         if not self.frames:
             raise AssertionError("the screen is still waiting after the last scripted input")
         out = []
