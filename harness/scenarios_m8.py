@@ -736,9 +736,7 @@ def gear_on_subweapons(run, ch):
     broach, _ = with_gear([(ACC1, HEART_BROACH)], first)
     run.expect(broach == max(1, cost // 2), "a Heart Broach halves the cost", cost=cost, broach=broach)
     _, mail = with_gear([(0x80097C0C, BRILLIANT_MAIL)], first)
-    more = 10 if ch == CHAR_RICHTER else 5  # 10 on the guardian's own value, of which her attack is half
-    run.expect(mail >= attack + more, f"Brilliant Mail: 10 more on the sub-weapon's attack (+{more} here)",
-               attack=attack, mail=mail)
+    run.expect(mail >= attack + 10, "Brilliant Mail: 10 more on the sub-weapon's attack", attack=attack, mail=mail)
     off = with_gear([(ACC1, HEART_BROACH), (0x80097C0C, BRILLIANT_MAIL)], first, rules_off=RULE_NO_GEAR_EFFECTS)
     run.expect(off == (cost, attack), "gear effects off: neither", off=off, plain=(cost, attack))
     if ch == CHAR_RICHTER:
@@ -746,6 +744,62 @@ def gear_on_subweapons(run, ch):
         _, water = with_gear([], holy)
         _, stauro = with_gear([(ACC1, STAUROLITE)], holy)
         run.expect(water > 0 and stauro >= 2 * water - 2, "a Staurolite doubles holy water's attack", water=water, stauro=stauro)
+
+
+STATS_BASE, STATS_TOTAL = 0x80097BB8, 0x80097BD8  # g_Status.statsBase / statsTotal: STR, CON, INT, LCK
+STR, INT = 0, 2
+GAS_CLOUD_RELIC = 9  # RELIC_GAS_CLOUD
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def maria_attack_scaling(run):
+    """Issue 238 (Tucker: STR for her kicks, INT for her guardians). Under "Alucard's stats", her
+    guardians' attack grows with INT and not STR; her slide kick's with STR and not INT. The turtle's
+    crash poisons with Gas Cloud (it was never told it was the turtle's)."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_MARIA)
+    for r in (SOUL_OF_WOLF, GAS_CLOUD_RELIC):
+        e.write(STATUS + r, RELIC_ON, "<B")
+    run.step(30)
+    start = e.save_state()
+
+    def top_attack(stat, add, inputs, sub=None):
+        e.load_state(start)
+        if stat is not None:
+            for base in (STATS_BASE, STATS_TOTAL):
+                e.write(base + 4 * stat, e.read(base + 4 * stat, "<i") + add, "<i")
+        if sub is not None:
+            e.write(SUBWEAPON, sub)
+            e.write(HEARTS, 50, "<i")
+        top, poison, seen = 0, False, set()
+        for b in inputs:
+            run.step(1, b)
+            for slot in range(4, 64):
+                if e.read("g_Entities", "<H", slot * 0xBC + 0x26):
+                    attack, element = e.read("g_Entities", "<h", slot * 0xBC + 0x40), e.read("g_Entities", "<H", slot * 0xBC + 0x42)
+                    top = max(top, attack)
+                    poison |= bool(attack and element & 0x80)  # attackElement: ELEMENT_POISON
+                    seen.add((e.read("g_Entities", "<H", slot * 0xBC + 0x26), attack, element))
+        top_attack.seen = (sorted(seen)[:12], 50 - e.read(HEARTS, "<i"))
+        return top, poison
+
+    guardian = ["up+square"] * 2 + [""] * 60
+    kick = ["right"] * 20 + ["right+down"] * 4 + ["right+down+cross"] * 3 + ["down"] * 30
+    g = {k: top_attack(st, 100, guardian, 1)[0] for k, st in (("plain", None), ("str", STR), ("int", INT))}
+    run.expect(g["plain"] > 0 and g["int"] > g["plain"] and g["str"] == g["plain"],
+               "a guardian (Cardinal) grows with INT, not STR", attack=g)
+    k = {k: top_attack(st, 100, kick)[0] for k, st in (("plain", None), ("str", STR), ("int", INT))}
+    run.expect(k["plain"] > 0 and k["str"] > k["plain"] and k["int"] == k["plain"],
+               "her slide kick grows with STR, not INT", attack=k)
+    e.load_state(start)
+    e.write(STATUS + ECHO_OF_BAT, RELIC_ON, "<B")  # crashes, done where relic_gates_more does them
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    start = e.save_state()
+    _, poison = top_attack(None, 0, ["triangle"] + [""] * 150, 3)
+    run.expect(poison, "with Gas Cloud, the turtle's crash poisons", seen=top_attack.seen[0])
 
 
 @per_character
