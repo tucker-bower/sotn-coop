@@ -165,6 +165,11 @@ def open_url(url):
             with open(os.environ["COOP_OPEN_URL"], "a") as f:
                 f.write(url + "\n")
             return
+        from platform_android import ANDROID
+        if ANDROID:  # (Python's webbrowser has no browser to call there)
+            import platform_android
+            platform_android.open_url(url)
+            return
         webbrowser.open(url)
     except Exception:  # noqa: BLE001 - no browser: nothing to do
         pass

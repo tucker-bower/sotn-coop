@@ -19,7 +19,8 @@ You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStat
 1. Download from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest):
    - **Windows 10 or 11:** [SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)
    - **Android 7 or newer (preview, online only, needs a controller):** [SOTN-Coop.apk](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop.apk)
-2. Run it. The installer and launcher guide you through the rest.
+2. Run it, and choose where to install (`C:\Games\sotn-coop` to start with). Everything SOTN Co-op has lives in that one folder: the program, your disc's copy, your castles and saves. Move the folder and it all comes along.
+3. The launcher asks for your disc, then you're playing. When a new version is out it offers to update itself; your castles and saves stay.
 
 The downloads aren't code-signed, so your browser, Windows or Android may warn you. Choose **Keep**, **Run anyway** or **Install anyway**. Everything is built from the source in this repository.
 

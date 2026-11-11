@@ -275,6 +275,26 @@ def main():
         m, ui, _ = menus([["up"], ["ok"]])
         check(options(m, lambda: rows, lambda k, st: None)[0] == "open_log", "up from the first row is the last: OK on an action returns it")
 
+        app.ANDROID = True
+        phone = {r["key"] for r in app.Launcher.option_rows(fake)}
+        app.ANDROID = False
+        check(not phone & {"_fullscreen", "data_folder", "open_log", "bios"} and "check_updates" in phone,
+              "on a phone, Options leaves out fullscreen, folders, the log and the BIOS file")
+
+        # A newer version
+        from ui.screens.update import update_prompt
+        m, ui, _ = menus([[], ["ok"]])
+        check(update_prompt(m, "0.18.0", "0.17.0", ["A new thing"]) == "update" and "0.18.0" in ui.about,
+              "an update: Update now is selected first")
+        m, ui, _ = menus([["right"], ["ok"]])
+        check(update_prompt(m, "0.18.0", "0.17.0", []) == "later", "Later is the other")
+        m, ui, _ = menus([["back"]])
+        check(update_prompt(m, "0.18.0", "0.17.0", []) == "later", "back is Later")
+        found = iter([None, "update"])
+        m, ui, _ = menus([[], []])
+        check(home(m, ITEMS, about, "1.0", interrupt=lambda: next(found, "update")) == "update",
+              "an update found while the main menu is up interrupts it")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 

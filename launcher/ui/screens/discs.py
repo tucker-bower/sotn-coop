@@ -8,6 +8,11 @@ import pygame
 from ..theme import DIM, GOLD, GREEN, INK, RED, shorten, wrap
 
 HEAD, NOTE = (8, 6, 464, 34), (8, 182, 464, 36)
+try:
+    from platform_android import ANDROID
+except ImportError:
+    ANDROID = False
+DROPS = not ANDROID  # files dropped on the window: not on a phone
 SLOT_Y, SLOT_W, SLOT_H = 46, 150, 132
 SLOTS = (  # (key, title, system, needed?, what it's for: three lines of 17 at most)
     ("ps1", ("Symphony of", "the Night"), "PlayStation (USA)", "Required", "Co-op is made from it."),
@@ -90,14 +95,18 @@ def discs(m, status, attach, first_run=False, said="", more=()):
             if have.get(key):
                 t.text(s, "Attached", x + 8, y, GREEN)
                 t.text(s, shorten(have[key], 16), x + 8, y + 12, DIM)
-            else:
+            elif DROPS:
                 t.text(s, "Drop it here, or", x + 8, y, INK if on else DIM)
                 t.text(s, "select to browse", x + 8, y + 10, INK if on else DIM)
+            else:  # a phone: the system's picker
+                t.text(s, "Select to", x + 8, y, INK if on else DIM)
+                t.text(s, "choose it", x + 8, y + 10, INK if on else DIM)
             if said["slot"] == key and not said["ok"]:
                 t.text(s, "Didn't work", x + 8, y + 24, RED)
             m.hit((0, k), box)
         m.window(NOTE)
-        lines = wrap(said["text"] or "Drop your disc images anywhere on this window.", 56)
+        lines = wrap(said["text"] or ("Drop your disc images anywhere on this window." if DROPS else
+                                      "Select a disc to choose its files."), 56)
         if len(lines) > 3:
             lines = lines[:2] + [shorten(" ".join(lines[2:]), 56)]
         for k, line in enumerate(lines):

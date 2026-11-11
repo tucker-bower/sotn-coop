@@ -148,6 +148,7 @@ EVERYDAY = {
     "launcher_link_errors",  # + the link failing never stops the game (D191)
     "launcher_ui", "launcher_gameart", "launcher_gamesound",  # + the menus in the game's style, and its art and sound from the disc (D192)
     "launcher_library", "patcher_modded",  # + game discs with several mods (D195)
+    "launcher_update", "launcher_one_folder",  # + updates from GitHub, everything in one folder (D196)
     "patcher_layer", "rando_start_room_lycanthrope_spr26te",  # +
 }
 

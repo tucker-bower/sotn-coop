@@ -523,6 +523,9 @@ class Launcher:
         self.view = None  # the game view, while one runs
         self.menus = None  # ui/widgets.py's Menus, once the game's art has been read (prepare_art)
         self.sound = None
+        import update
+        self.updates = update.Checker(self.settings, VERSION).start()  # in the background: launcher/update.py
+        self.update_later = False
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
             from archive import Castle
             Castle.install_bundled()
@@ -565,6 +568,8 @@ class Launcher:
                          f"Your saves and bug reports: {paths.data_dir()}\n{self.room_info}")
         elif action == "rules":
             self.open_rules()
+        elif action == "check_updates":
+            self.check_updates()
         elif action in ("pause", "report", "leave"):
             pass  # these only mean something in a game (gameview.py)
         else:
@@ -1264,6 +1269,41 @@ class Launcher:
             elif got == "back" or (got == "continue" and self.disc()):
                 return
 
+    # --- updates (launcher/update.py)
+
+    def offer_update(self, release):
+        """The prompt, and if the player says yes, the update. Later: not again this run."""
+        import update
+        from ui.screens.update import update_prompt
+        self.update_later = True
+        if not release or update_prompt(self.plain_menus(), release.name, VERSION, release.notes) != "update":
+            return
+        if ANDROID:  # the system installs an APK: its page has it
+            paths.open_url(release.page)
+            return
+        try:
+            path = self.ui_wait(f"Downloading version {release.name}", "From the release on GitHub.",
+                                lambda progress: update.download(release, paths.data_dir() / "updates", progress))
+        except OSError as e:
+            self.ui.message("The update didn't download", str(e))
+            return
+        self.ui.message("Updating", "SOTN Co-op closes now, updates, and starts again by itself.\n"
+                        "Windows may ask whether to let the installer run: choose Yes or Run anyway.", button="Update")
+        update.install(path)
+        raise SystemExit
+
+    def check_updates(self):
+        """Help › Check for updates: now, whatever the hour."""
+        import update
+        release = self.ui_wait("Checking for updates", "On GitHub.", lambda progress: update.latest(self.updates.url))
+        if release is None:
+            self.ui.message("Couldn't check", "GitHub didn't answer. Check your internet, or look at the release page:\n" + update.PAGE)
+        elif update.newer(release, VERSION):
+            self.updates.result = release
+            self.offer_update(release)
+        else:
+            self.ui.message("Up to date", f"You have the latest version, {VERSION}.")
+
     def move_old_data(self):
         """The first launch after everything moved into one folder (D196): the player's things come
         from Documents, then their disc is copied in and the co-op disc made there."""
@@ -1611,8 +1651,11 @@ class Launcher:
                  ("quit", "Quit", "")]
         if ANDROID:  # one game per device on Android (design/M9)
             items = [i for i in items if i[0] != "couch"]
+        def found():
+            return "update" if self.updates.result and not self.update_later else None
         while True:
-            choice = home(self.menus, items, self.home_about, VERSION)
+            note = f"Version {self.updates.result.name} is out" if self.updates.result else ""
+            choice = home(self.menus, items, self.home_about, VERSION, note=note, interrupt=found)
             if isinstance(choice, tuple) and choice[0] == "link":
                 paths.open_url(choice[1])
                 continue
@@ -1658,6 +1701,8 @@ class Launcher:
             self.online_menu()
         elif act == "settings":
             self.settings_menu()
+        elif act == "update":
+            self.offer_update(self.updates.result)
         elif act == "discs":
             self.discs_screen() if self.menus else self.game_files()
         elif act == "savestates":
@@ -2445,6 +2490,7 @@ class Launcher:
                 action("help_play", "How to play", "Playing together, castles, characters."),
                 action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
                 action("about", "About SOTN Co-op", "The version, and where your saves are.", VERSION),
+                action("check_updates", "Check for updates", "Looks for a newer version on GitHub now."),
                 action("data_folder", "Open the data folder", str(paths.data_dir())),
                 head("Developer"),
                 action("savestates", "Savestates", "Go back to a moment in a castle."),
@@ -2452,6 +2498,9 @@ class Launcher:
                 {"kind": "choice", "key": "netsim", "label": "Simulate a network", "value": self.NETSIM_NAMES.get(st.get("netsim"), "Off"),
                  "hint": "Online: plays as if over a worse connection. For testing."},
                 action("open_log", "Open the log", "The launcher's log, for bug reports.")]
+        if ANDROID:  # always fullscreen, no file manager to open folders in, no BIOS file to pick
+            rows = [r for r in rows if r["key"] not in ("_fullscreen", "data_folder", "open_log", "bios")]
+            rows = [r for k, r in enumerate(rows) if not (r["kind"] == "head" and (k + 1 == len(rows) or rows[k + 1]["kind"] == "head"))]
         return rows
 
     def change_option(self, key, step):

@@ -19,6 +19,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `gamesound.py` | Decodes the title music and menu sounds from the player's disc. |
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |
 | `library.py` | The player's game discs: the co-op disc with mods, kept small, switched between. |
+| `move.py` | Moves a player's things from Documents into the install's folder, once, whole or not at all. |
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
 | `report.py` | F9: writes the bug report zip and emails it. |
@@ -34,6 +35,8 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_gameart.py` | Checks the art's decoding on made-up files, and on a dev checkout's disc. |
 | `test_gamesound.py` | Checks the music's and sounds' decoding on made-up files, and on a dev checkout's disc. |
 | `test_library.py` | Checks game discs: names, removal, the old randomizer setting, the Alternate Scarlet Symphony download, images kept. |
+| `test_one_folder.py` | Checks the one install folder: relative paths, the move from Documents, a disc copied in. |
+| `test_update.py` | Checks updates against a fake GitHub: found, downloaded, checked, refused. |
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |
@@ -43,5 +46,6 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |
 | `test_settings.py` | Checks the app's settings, and that PvP and aggro are no longer among them. |
 | `test_ship_lists.py` | The files the app reads are in both the installer's and the APK's lists. |
+| `update.py` | Updates from GitHub: finds a newer release, downloads and checks its installer, runs it. |
 | `uxdriver.py` | Plays the real app like a person and photographs every screen. |
 | `winmenu.py` | The native Windows menu bar. |

@@ -28,7 +28,8 @@ MENUS = [
                ("Player 2 in its own window", "layout:windows"), None,
                ("&Fullscreen\tF11", "fullscreen")]),
     ("&Controllers", [("&Who plays with which controller…", "controllers"), ("&Keyboard keys", "keys")]),
-    ("&Help", [("&How to play", "help_play"), ("&Online troubleshooting", "help_online"), None,
+    ("&Help", [("&How to play", "help_play"), ("&Online troubleshooting", "help_online"),
+               ("Check for &updates", "check_updates"), None,
                ("&Developer", [("&Debug starts…", "debug_starts"), ("Simulate a &network", [
                    ("Off", "netsim:off"), ("Across an ocean", "netsim:transatlantic"),
                    ("Bad Wi-Fi", "netsim:wifi"), ("Phone hotspot", "netsim:cellular")]),
