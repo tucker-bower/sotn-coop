@@ -943,3 +943,8 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D198: Five characters in the lobby, every co-op feature kept** (Tucker, 2026-11-11, #232)
 - Alucard, Richter, Maria (PSP), Maria (Saturn), Richter (Saturn). Our Richter and Maria keep their co-op features (gear, levels, relic moves, Alucard's stats), each a castle rule. Ultimate Maria isn't offered (her character id stays, so old saves load); one remembered from before plays Maria (PSP). No tint on the Saturn pair's portraits. `design/one-richter-one-maria.md` has the analysis.
+
+**D199: The disk check counts the room Linux has freed inside its disk file** (2026-11-11; how: agent-default)
+- WSL's disk file on C: never shrinks, but Linux reuses what it has freed inside it before the file grows (measured: 2 GB written with 44 GB freed inside, the file stayed 102,510 MB). `scripts/disk_space.py` now counts that room with C:'s free space (30 GB needed), and still stops if C: itself is under 20 GB. Before, C: at 29 GB stopped every build although nothing would have grown it.
+- Big files that don't need Linux's speed (disc images, built discs, savestates, test outputs) can live on another Windows drive, linked into place: on Tucker's PC, `E:\sotn-coop-data` (LOCAL.md). E: through WSL reads 170 MB/s, but small files are 140× slower than Linux's own disk, so code, git and the toolchain stay inside.
+- Options considered: moving the whole Linux disk to E: (`wsl --manage --move`: the app restarts WSL before it can run), or a lower fixed threshold (blind to how much room is really inside).
