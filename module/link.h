@@ -298,6 +298,7 @@ typedef struct {
 #define OPT_NO_RELIC_MOVES 0x02000000 // Richter and Maria: every move from the start (#168)
 #define OPT_NO_AIR_JUMPS 0x04000000   // Richter and Maria: their own jumps only (D122 off)
 #define OPT_NO_ALUCARD_STATS 0x08000000 // Richter and Maria: their own damage, given and taken (#160)
+#define OPT_NO_GEAR_EFFECTS 0x10000000  // to the overlays only: RULE_NO_GEAR_EFFECTS, for their sub-weapons (#202)
 extern u16 g_CoopStage; // the stage that's loaded, for anything about the partner (coop.c, #179)
 #define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
 #define RULE_PCT(field, otherwise) (g_CoopLink.field ? (s32)g_CoopLink.field : (otherwise))

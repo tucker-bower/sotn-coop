@@ -39,6 +39,26 @@ void CoopMarPartnerInit(u16 initParam) {
 }
 #endif
 
+// Gear on her guardians, as DRA gives Alucard's sub-weapons (src/dra/5D5BC.c, func_800FE3C4), with
+// the castle's gear effects on (#202): a Heart Broach halves their heart cost (a third with two),
+// Brilliant Mail adds 10 to their attack (src/maria/pl_subweapons.c: each guardian's own value,
+// before CoopMarAttack). She has no holy water, so no Staurolite.
+#define GEAR_ON (!(g_CoopOptions & OPT_NO_GEAR_EFFECTS))
+
+s32 CoopMarHeartCost(s32 cost) {
+    s32 n = GEAR_ON ? g_api.CheckEquipmentItemCount(ITEM_HEART_BROACH, EQUIP_ACCESSORY) : 0;
+
+    cost = n == 1 ? cost / 2 : n == 2 ? cost / 3 : cost;
+    return cost < 1 ? 1 : cost;
+}
+
+s32 CoopMarGuardianGear(s32 attack) {
+    if (attack && GEAR_ON && g_api.CheckEquipmentItemCount(ITEM_BRILLIANT_MAIL, EQUIP_ARMOR)) {
+        attack += 10;
+    }
+    return attack;
+}
+
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {
     if (g_CoopOptions & OPT_NO_ALUCARD_STATS) {
         return attack; // the castle's rules: her attacks as in her own game
