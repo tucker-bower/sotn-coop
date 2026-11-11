@@ -157,6 +157,8 @@ def main():
         check(castle_menu(m, "Solo", None, False) == "new", "with none, New castle is, and there's no Continue or Load castle")
         m, ui, _ = menus([["down"], ["down"], ["ok"]])
         check(castle_menu(m, "Couch co-op", last, True) == "load" and ui.names == ["Couch co-op"], "then New castle, then Load castle")
+        m, ui, _ = menus([["up"], ["up"], ["ok"]])
+        check(castle_menu(m, "Solo", last, True, has_tests=True) == "tests", "Test castles is a button of its own, before Back")
         m, ui, _ = menus([["back"]])
         check(castle_menu(m, "Solo", last, True) is None, "back leaves it")
 
@@ -194,6 +196,10 @@ def main():
               "down skips the group's heading to the first slider; moving it by hand makes the difficulty Custom")
         got, r, _, _ = settings([["down"]] * 6 + [["ok"], ["back"]])
         check(r["shared_level"] is False, "OK on a rule switches it (past the Sharing heading)")
+        got, r, _, _ = settings([["down"]] * 6 + [["right"], ["back"]])
+        off = r["shared_level"]
+        got, r, _, _ = settings([["down"]] * 6 + [["right"], ["left"], ["back"]])
+        check(off is False and r["shared_level"] is True, "a switch: right turns it OFF, left turns it ON, as it's drawn")
         got, r, applied, _ = settings([["down"]] * 6 + [["ok"], ["up"], ["up"], ["ok"], ["back"]])  # up from the first row: the last, the defaults
         check(got is None and r["shared_level"] is False, "up moves back through the list")
         got, r, applied, _ = settings([["right"], ["up"], ["ok"], ["back"]])
@@ -271,7 +277,8 @@ def main():
         m, ui, _ = menus([["down"], ["ok"], ["right"], ["back"]])
         check(options(m, lambda: rows, lambda k, st: changed.append((k, st))) is None and ui.names == ["Options"],
               "Options: back leaves")
-        check(changed == [("_fullscreen", 0), ("_fullscreen", 1)], f"down skips the heading under it; OK and right change the row: {changed}")
+        check(changed == [("_fullscreen", 0), ("_fullscreen", -1)],
+              f"down skips the heading under it; OK toggles a switch, right turns it off (ON is drawn on the left): {changed}")
         m, ui, _ = menus([["up"], ["ok"]])
         check(options(m, lambda: rows, lambda k, st: None)[0] == "open_log", "up from the first row is the last: OK on an action returns it")
 

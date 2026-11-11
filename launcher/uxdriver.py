@@ -501,9 +501,7 @@ def _test_castles(pg):
     return [
         *first_run(pg),
         ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Load castle (after New castle: none played here yet)
-        ("screen", "Load castle"), ("key", pg.K_UP), ("key", pg.K_UP), ("shot", "castle-list"),
-        ("key", pg.K_RETURN),  # Test castles: the last but one (Boss rush is last)
+        ("screen", "Solo"), ("shot", "castle-menu"), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Test castles: before Back
         ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"),
@@ -900,7 +898,7 @@ def _characters(pg):
               ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
               ("until", lambda d: d.heading == "Game"),
-              ("expect", lambda d: d.launcher.characters == [3, 1], "player 1 plays Ultimate Maria, player 2 Co-op Richter"),
+              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria (PSP), player 2 Richter"),
               ("game_frames", 600), ("shot", "maria-and-richter"),
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
@@ -1032,7 +1030,7 @@ def _randomizer(pg):
         *to_mods, ("shot", "mods-empty"),
         ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # New mod preset (after Co-op (no mods))
         ("screen", "New mod preset"), ("shot", "builder"),
-        ("key", pg.K_DOWN), ("key", pg.K_DOWN),  # A seed file from sotn.io (after Randomized castle)
+        *[("key", pg.K_DOWN)] * 3,  # A seed file from sotn.io (after ASS -Final- and Randomized castle)
         pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
         ("until", lambda d: d.heading == "New mod preset" and "isn't randomized" in d.subtitle), ("shot", "retail-refused"),
         ("expect", lambda d: "isn't randomized" in d.subtitle, "a seed file that's the retail disc: it isn't randomized"),
@@ -1041,7 +1039,7 @@ def _randomizer(pg):
         ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Off, Surprise me, Casual
         ("screen", "New mod preset"),
         *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN), ("wait", 3), ("shot", "casual-and-fast-warp"),  # Seed, seed file, MiniMap, Fast Warp
-        *[("key", pg.K_UP)] * 5, ("key", pg.K_RETURN),  # Build this mod preset
+        *[("key", pg.K_UP)] * 6, ("key", pg.K_RETURN),  # Build this mod preset (past ASS)
         ("screen", "Name your mod preset"), ("shot", "name-it"), ("key", pg.K_RETURN),  # the name it offers
         ("until", lambda d: d.heading == "Mods"), ("shot", "mods-with-preset"),
         ("expect", preset_made, "one click: a casual seed rolled, Fast Warp added, named and built"),

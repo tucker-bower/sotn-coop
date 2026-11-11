@@ -74,11 +74,13 @@ PATCH = Path(os.environ.get("COOP_PATCH") or APP / "patcher" / "sotn-coop.bps") 
 # Maria's patches (characters/maria-dx/make_patches.py): the installer's, or a dev checkout's build.
 MARIA_PATCHES = next((d for d in (APP / "patcher" / "maria", APP / ".env" / "out" / "maria")
                       if (d / "maria.json").exists()), APP / "patcher" / "maria")
-CHARACTERS = ("Alucard", "Co-op Richter", "Co-op Maria", "Ultimate Maria", "Saturn Maria",
-              "Ultimate Richter")  # index = CHAR_* (module/link.h)
-# Under the name in the lobby: what sets the character apart (docs/design/character-mods.md)
-CHARACTER_NOTES = ("", "Alucard's gear and relics", "Alucard's gear and relics", "From SOTN Ultimate: PSP Maria",
-                   "From SOTN Ultimate: Saturn Maria", "From SOTN Ultimate: the Saturn coat")
+CHARACTERS = ("Alucard", "Richter", "Maria (PSP)", "Maria (PSP, Ultimate)", "Maria (Saturn)",
+              "Richter (Saturn)")  # index = CHAR_* (module/link.h)
+# The lobby's characters, in order (Tucker, 2026-11-11): CHAR_ULT_MARIA (3) isn't offered; one
+# remembered from before plays Maria (PSP)
+LOBBY = (0, 1, 2, 4, 5)
+# Under the name in the lobby: a few words, only where it helps
+CHARACTER_NOTES = ("", "", "", "", "Her Saturn moves", "His Saturn coat, every move")
 MARIAS = (2, 3)  # made from the player's DXC disc (characters.py)
 SATURN_MARIA = 4  # made from the player's Saturn disc (characters.py)
 ULTIMATE_RICHTER = 5  # ...and so is he
@@ -110,15 +112,13 @@ Castle settings: each castle has its own, set when you start it and in Options �
 rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
 everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
 
-Characters: pick Alucard, Co-op Richter, Co-op Maria or Ultimate Maria in the lobby (the Marias
-need your Dracula X Chronicles disc: Discs & mods). Co-op Richter and Maria learn their
-moves from Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul
-of Wolf for the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat
-for item crashes. They level up and wear Alucard's armor (Start: the equipment menu). Ultimate
-Maria is the SOTN Ultimate mod's PSP Maria: all her moves from the start, two sub-weapons (Circle
-swaps them), and none of Alucard's gear or levels. Saturn Maria is SOTN Ultimate's Saturn Maria:
-her own kicks, dives, backdash and Holy Beasts (needs your Saturn disc, Japan). Ultimate Richter is
-the PS1 Richter, all his moves from the start, in the Saturn's long coat (the same disc).
+Characters: Alucard, Richter, Maria (PSP: needs your Dracula X Chronicles disc), and Maria and
+Richter (Saturn: need your Saturn disc, Japan). Richter and Maria (PSP) learn their moves from
+Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul of Wolf for
+the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat for item
+crashes. They level up and wear Alucard's armor (Start: the equipment menu): each is a castle rule.
+Maria (Saturn) has her own kicks, dives, backdash and Holy Beasts; Richter (Saturn) is the PS1
+Richter with every move from the start, in the Saturn's long coat.
 Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
 L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
 (Options › Controls picks which).
@@ -506,7 +506,7 @@ class Launcher:
         pygame.init()
         self.settings = load_settings()
         # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
-        self.characters = [c if 0 <= c < len(CHARACTERS) and self.playable(c) else 0
+        self.characters = [c if c in LOBBY and self.playable(c) else 2 if c == 3 and self.playable(2) else 0
                            for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
         self.display = Display(self.settings, WINDOW_TITLE)
         self.menubar = WinMenu(WINDOW_TITLE)
@@ -703,15 +703,13 @@ class Launcher:
             return f"{n} castle{'s' * (n != 1)}" if n else ""
         rows = [{"kind": "head", "key": None, "label": "Your mod presets: a new castle picks one"},
                 {"kind": "action", "key": "plain", "label": library.PLAIN, "value": value(None), "colour": DIM,
-                 "hint": "The original game, with co-op. Always here."}]
+                 "hint": "The original game."}]
         for g in library.discs(self.settings):
             standing = library.standing(g)
             rows.append({"kind": "action", "key": g["id"], "label": library.name(g), "value": value(g["id"]), "colour": INK,
-                         "hint": library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".") +
-                                 "  Enter: rename or remove."})
+                         "hint": library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".")})
         rows.append({"kind": "action", "key": "new", "label": "New mod preset", "value": "",
-                     "hint": "Choose your mods (a randomized castle, SOTN Editor's hacks, Alternate Scarlet Symphony), name it, "
-                             "and it's built."})
+                     "hint": "Choose mods, name it, and it's built."})
         return rows
 
     def mods_screen(self):
@@ -797,33 +795,30 @@ class Launcher:
 
         def rows():
             out = [{"kind": "action", "key": "build", "label": "Build this mod preset", "value": "",
-                    "hint": "Name it, and it's built: about a minute. Drop a seed file, or a patch, on the window to add it."},
+                    "hint": "Name it, then it's built (about a minute)."},
+                   {"kind": "head", "key": None, "label": "Alternate Scarlet Symphony"},
+                   {"kind": "switch", "key": "ass", "label": "-Final- (by pddmergilla)", "value": state["ass"],
+                    "hint": "A remix of the whole game. Downloads 5 MB. Not with hacks."},
                    {"kind": "head", "key": None, "label": "Randomizer (sotnrando)"}]
             if rolls:
                 p = state["preset"]
-                about = presets.get(p, {})
                 out.append({"kind": "action", "key": "preset", "label": "Randomized castle",
                             "value": "Off" if not p and not state["file"] else preset_name(p) if p else "From a seed file",
-                            "hint": (about.get("description") or ("A random preset that works with co-op." if p == randomizer_tool.SURPRISE else
-                                     "Choose a preset: casual is the place to start. Each castle gets its own random seed.")) +
-                                    (f" ({about['timeFrame']}, knowledge needed: {about['knowledgeCheck']})" if about.get("timeFrame") else "")})
+                            "hint": library.preset_hint(presets.get(p)) if p and p != randomizer_tool.SURPRISE else
+                                    "A random preset." if p else "Pick a preset. Casual is a good start."})
                 if p:
                     out.append({"kind": "action", "key": "seed", "label": "Seed", "value": state["seed"] or "Random",
-                                "hint": "Leave it random, or type one (a friend's, or one you liked)."})
+                                "hint": "Random, or type one (a friend's)."})
             out.append({"kind": "action", "key": "file", "label": "A seed file from sotn.io",
                         "value": randomizer.describe(state["file"]["info"]) if state["file"] else "None",
-                        "hint": "Randomized on sotn.io: its .ppf, or the .cue it made. Your partner needs the same one."})
+                        "hint": "A .ppf or .cue made on sotn.io."})
             out.append({"kind": "head", "key": None, "label": "SOTN Editor's hacks (by pddmergilla)"})
             for hid, h in hacks.items():
                 out.append({"kind": "switch", "key": "hack:" + hid, "label": h["label"], "value": hid in state["hacks"],
-                            "hint": h["summary"] + " Tested with co-op."})
-            out += [{"kind": "head", "key": None, "label": "Alternate Scarlet Symphony (by pddmergilla)"},
-                    {"kind": "switch", "key": "ass", "label": "-Final-", "value": state["ass"],
-                     "hint": "A hard-hitting remix of the whole game: retuned combat, new enemy placements and AI, a rebuilt "
-                             "Richter. Downloaded from its author's release (5 MB) when it's built. Tested with co-op."},
-                    {"kind": "head", "key": None, "label": "Another patch"},
+                            "hint": h["summary"]})
+            out += [{"kind": "head", "key": None, "label": "Another patch"},
                     {"kind": "action", "key": "patch", "label": "A .ppf", "value": (state["patch"] or {}).get("name", "None"),
-                     "hint": "Any other PPF patch for the USA disc. Untested with co-op: it's refused if it changes co-op's own code."}]
+                     "hint": "Any PPF for the USA disc. Untested with co-op."}]
             return out
 
         def change(key, step):
@@ -835,8 +830,8 @@ class Launcher:
                 state["ass"] = not state["ass"] if step == 0 else step > 0
 
         def choose_preset():
-            items = [(None, "Off", "No randomizer.")] + [(randomizer_tool.SURPRISE, "Surprise me", "A random preset that works with co-op.")] + \
-                    [(p, presets.get(p, {}).get("name", p), presets.get(p, {}).get("description", "")) for p in randomizer_tool.PRESETS]
+            items = [(None, "Off", "No randomizer.")] + [(randomizer_tool.SURPRISE, "Surprise me", "A random preset.")] + \
+                    [(p, presets.get(p, {}).get("name", p), library.preset_hint(presets.get(p))) for p in randomizer_tool.PRESETS]
             rows_ = [{"kind": "action", "key": k, "label": label, "hint": hint, "value": ""} for k, label, hint in items]
             got = options(self.menus, lambda: rows_, lambda *_: None, title="Randomizer preset", note="Each castle gets its own seed")
             if got and got[0] not in ("drop", "more"):  # (an action's key, and its row)
@@ -999,11 +994,10 @@ class Launcher:
         for seat in (0, 1) if not ANDROID else (0,):
             rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}'s controls" if not ANDROID else "Controls"})
             rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
-                         "hint": "Co-op Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. Off: the original controls only."})
+                         "hint": "Richter and Maria: L2 high jump, R2 dash. Alucard: right-stick spells."})
             for d, spell in enumerate(self.spells(seat)):
                 rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
-                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows the spell and has the MP "
-                             "(and the castle has his spells on the right stick)."})
+                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows it and has the MP."})
         return rows
 
     def change_player(self, key, step):
@@ -1114,14 +1108,14 @@ class Launcher:
         if not path:
             return
         try:
-            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}\nThis takes about half a minute.",
+            self.ui_wait("Adding Maria and Richter (Saturn)", f"From {path.name}\nThis takes about half a minute.",
                              lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             self.ui.message("That disc won't work", str(e))
             return
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
-        self.ui.message("Saturn Maria and Ultimate Richter are ready", "Pick them in the lobby, as either player.")
+        self.ui.message("Maria and Richter (Saturn) are ready", "Pick them in the lobby, as either player.")
 
     def add_dxc(self):
         """Settings › Game files: the player points at their Dracula X Chronicles .iso."""
@@ -1161,7 +1155,7 @@ class Launcher:
                 (f"Randomizer:  optional, {'on' if self.randomizer() else 'off'}",
                  (self.mod_line() + "   (change)") if self.randomizer() else "Co-op on a disc you randomized on sotn.io"),
                 (f"Symphony of the Night (Saturn, Japan):  optional, "
-                 f"{'Saturn Maria and Ultimate Richter added' if self.saturn_maria_ready() else 'adds Saturn Maria, Ultimate Richter'}",
+                 f"{'Maria and Richter (Saturn) added' if self.saturn_maria_ready() else 'adds Maria and Richter (Saturn)'}",
                  (Path(self.settings["saturn_disc"]).name + "   (choose again)") if self.saturn_maria_ready()
                  and self.settings.get("saturn_disc") else "Adds the Saturn's Maria (from SOTN Ultimate). Choose your .cue")],
                 "Only the Symphony of the Night disc is needed to play.")
@@ -1217,6 +1211,7 @@ class Launcher:
                                  lambda progress: gameart.rip(disc, folder))
             except Exception:  # noqa: BLE001 - the menus work without it
                 log.exception("the game's art")
+        self.make_sprites(folder, disc)
         theme = Theme(folder)
         if not theme.ok:
             self.menus = None
@@ -1231,6 +1226,28 @@ class Launcher:
                 except Exception:  # noqa: BLE001
                     log.exception("the game's sounds")
             threading.Thread(target=work, daemon=True).start()
+
+    def make_sprites(self, folder=None, disc=None):
+        """The characters standing, for the main menu's title (launcher/sprites.py): each made once,
+        from whichever disc has them, as soon as it's attached."""
+        import sprites
+        folder = folder or paths.art_dir()
+        disc = disc or next((d for d in (self.settings.get("disc_source"), self.settings.get("disc")) if d and Path(d).exists()), None)
+        try:
+            if disc and not (folder / "sprite-alucard.png").exists():
+                sprites.ps1(disc, folder)
+            iso = self.settings.get("dxc_iso")
+            if iso and Path(iso).exists() and not (folder / "sprite-maria.png").exists():
+                sprites.psp(iso, folder)
+            sat = self.settings.get("saturn_disc")
+            if sat and Path(sat).exists() and not (folder / "sprite-maria-saturn.png").exists():
+                import json
+                about = json.loads((MARIA_PATCHES / "sat-maria.json").read_text())
+                sprites.saturn(sat, self.ultimate_richter_blob_path(), folder, about)
+        except Exception:  # noqa: BLE001 - the title has whoever it has
+            log.exception("sprites")
+        if self.menus:
+            self.menus.theme.load_sprites()
 
     # --- first run
 
@@ -1342,17 +1359,19 @@ class Launcher:
                 return "psp", moved + str(e), False
             self.settings["dxc_iso"] = str(path)
             save_settings(self.settings)
-            return "psp", moved + "Co-op Maria and Ultimate Maria are unlocked.", True
+            self.make_sprites()
+            return "psp", moved + "Maria (PSP) is unlocked.", True
         if not self.settings.get("disc"):
             return "saturn", "Attach the PlayStation disc first: the Saturn characters are made from both.", False
         try:
-            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}. About half a minute.",
+            self.ui_wait("Adding Maria and Richter (Saturn)", f"From {path.name}. About half a minute.",
                          lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             return "saturn", moved + str(e), False
         self.settings["saturn_disc"] = str(path)
         save_settings(self.settings)
-        return "saturn", moved + "Saturn Maria and Ultimate Richter are unlocked.", True
+        self.make_sprites()
+        return "saturn", moved + "Maria and Richter (Saturn) are unlocked.", True
 
     def disc_art(self, slot):
         """An attached disc's picture, from the player's own disc (ui/screens/discs.py)."""
@@ -1616,7 +1635,8 @@ class Launcher:
                 elif key == "shortcuts" and not ready[i]:
                     self.set_shortcuts(i, not self.shortcuts(i))
                 elif key in ("left", "right") and not ready[i]:
-                    char[i] = (char[i] + (1 if key == "right" else -1)) % len(CHARACTERS)
+                    at = LOBBY.index(char[i]) if char[i] in LOBBY else 0
+                    char[i] = LOBBY[(at + (1 if key == "right" else -1)) % len(LOBBY)]
             partner = online() if online else None
             if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
@@ -1759,8 +1779,8 @@ class Launcher:
             return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
         if key == "discs":
             return {"lines": ["PlayStation: attached",
-                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Co-op and Ultimate Maria)"),
-                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria, Ultimate Richter)")]}
+                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Maria)"),
+                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria and Richter)")]}
         if key == "settings":
             return {"lines": ["Layout, sound, controls, and each castle's rules.",
                               "Also in the menus at the top of the window."]}
@@ -1888,8 +1908,7 @@ class Launcher:
             rush = self.boss_rush_available()
             if not castles and not tests and not rush:  # nothing to pick from: a new one
                 return self.new_castle()
-            choice = castle_menu(self.menus, heading, castles[0] if castles else None, bool(castles or tests or rush),
-                                 note=("New castles are on randomizer " + self.mod_line()) if self.mod_line() else "")
+            choice = castle_menu(self.menus, heading, castles[0] if castles else None, bool(castles), has_tests=bool(tests))
             if choice is None:
                 return None
             if choice == "continue":
@@ -1899,9 +1918,14 @@ class Launcher:
                 if picked:
                     return picked
                 continue
+            if choice == "tests":
+                picked = self.pick_test_castle()
+                if picked:
+                    return picked
+                continue
             sel = 0
             while True:
-                extras = [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")] if tests else []
+                extras = []
                 castles = Castle.all()
                 got = castle_list(self.menus, "Load castle", castles, extras, sel)
                 if got is None:
@@ -2236,9 +2260,9 @@ class Launcher:
             from ui.screens.pick import pick
             while True:
                 choice = pick(self.menus, "Online co-op", [
-                    ("host", "Host", "Choose a castle; you get a room code to give your partner."),
-                    ("join", "Join", "Type your partner's room code: you play their castle, and keep a copy.")],
-                    "Both of you need the same version of SOTN Co-op.")
+                    ("host", "Host", "Get a room code for your partner."),
+                    ("join", "Join", "Type your partner's room code.")],
+                    "You both need the same version.")
                 if choice is None:
                     return
                 if choice == "host":
@@ -2625,42 +2649,41 @@ class Launcher:
         head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
         rows = [head("View"),
                 {"kind": "choice", "key": "layout", "label": "Couch co-op layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
-                 "hint": "Couch: how the two games share the window. Also View in the menu bar."},
-                switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
+                 "hint": "How two games share the window."},
+                switch("_fullscreen", "Fullscreen", "Also F11 or Alt+Enter."),
                 head("Sound"),
                 {"kind": "choice", "key": "music", "label": "Music", "value": {"auto": "Automatic", "left": "Left game", "right": "Right game"}[st.get("music", "auto")],
-                 "hint": "Couch: which game plays the music. Automatic: the left one while it's in play."},
+                 "hint": "Which game's music plays, on the couch."},
                 {"kind": "slider", "key": "partner_vol", "label": "Partner's sounds", "value": st.get("partner_vol", 60), "low": 0, "high": 100, "step": 10,
-                 "hint": "How loud your partner's attacks and steps are, in your game."},
-                switch("menu_music", "Menu music", "The title screen's music, in these menus.", True),
+                 "hint": "Your partner's attacks and steps."},
+                switch("menu_music", "Menu music", "The title screen's music.", True),
                 {"kind": "slider", "key": "menu_volume", "label": "Menu volume", "value": st.get("menu_volume", 70), "low": 0, "high": 100, "step": 10,
                  "hint": "The menus' music and sounds."},
                 head("While you play"),
-                switch("partner_hp", "Partner's health bar", "Under your own health, while you play together.", True),
-                switch("partner_tint", "Tint the partner", "Tells two players of the same character apart.", True),
-                switch("spell_triggers", "Spells on triggers", "Alucard: hold R2 with Square, Circle, Cross or Triangle for Dark Metamorphosis, "
-                       "Summon Spirit, Hellfire, Tetra Spirit; L2 with Square or Circle for Soul Steal, Sword Brothers."),
-                switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
-                switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
+                switch("partner_hp", "Partner's health bar", "Under your own.", True),
+                switch("partner_tint", "Tint the partner", "Tells two of the same character apart.", True),
+                switch("spell_triggers", "Spells on triggers", "Alucard: R2 or L2 with a face button casts a spell."),
+                switch("alucard_hud", "Alucard's health bar", "Richter and Maria get Alucard's display."),
+                switch("show_ping", "Show ping", "Online: your partner's ping, top right."),
                 head("Controls"),
-                action("controls", "Your settings", "Each player's shortcuts and spells, and what shows while you play. Also in the pause menu."),
-                action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
-                action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                action("controls", "Your settings", "Shortcuts, spells, displays. Also in the pause menu."),
+                action("controllers", "Who plays with which controller", "Give each controller a player."),
+                action("keys", "Keyboard keys", "Both players' keys."),
                 head("PlayStation"),
-                action("bios", "BIOS", "OpenBIOS is built in and co-op is tested with it. Your console's own BIOS works too.",
+                action("bios", "BIOS", "Built-in OpenBIOS, or your console's own.",
                        "OpenBIOS" if self.bios() == BUNDLED_BIOS else Path(self.bios()).name),
                 head("Help"),
                 action("help_play", "How to play", "Playing together, castles, characters."),
-                action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
+                action("help_online", "Online troubleshooting", "If you can't connect."),
                 action("about", "About SOTN Co-op", "The version, and where your saves are.", VERSION),
-                action("check_updates", "Check for updates", "Looks for a newer version on GitHub now."),
+                action("check_updates", "Check for updates", "Looks for a newer version now."),
                 action("data_folder", "Open the data folder", str(paths.data_dir())),
                 head("Developer"),
                 action("savestates", "Savestates", "Go back to a moment in a castle."),
-                action("debug_starts", "Debug starts", "Start anywhere on the route, for testing and bug reports."),
+                action("debug_starts", "Debug starts", "Start anywhere, for testing."),
                 {"kind": "choice", "key": "netsim", "label": "Simulate a network", "value": self.NETSIM_NAMES.get(st.get("netsim"), "Off"),
-                 "hint": "Online: plays as if over a worse connection. For testing."},
-                action("open_log", "Open the log", "The launcher's log, for bug reports.")]
+                 "hint": "Online, as if on a worse connection."},
+                action("open_log", "Open the log", "The launcher's log.")]
         if ANDROID:  # always fullscreen, no file manager to open folders in, no BIOS file to pick
             rows = [r for r in rows if r["key"] not in ("_fullscreen", "data_folder", "open_log", "bios")]
             rows = [r for k, r in enumerate(rows) if not (r["kind"] == "head" and (k + 1 == len(rows) or rows[k + 1]["kind"] == "head"))]

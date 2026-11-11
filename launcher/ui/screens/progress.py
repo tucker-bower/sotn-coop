@@ -5,7 +5,7 @@ import threading
 
 import pygame
 
-from ..theme import DIM, GOLD, wrap
+from ..theme import DIM, GOLD
 
 BOX = (60, 80, 360, 100)
 
@@ -31,8 +31,7 @@ def progress(m, heading, about, task):
         m.window(BOX)
         x = BOX[0] + 12
         t.text(s, heading[:42], x, BOX[1] + 10, GOLD)
-        for k, line in enumerate(wrap(about, 42)[:2]):
-            t.text(s, line, x, BOX[1] + 26 + k * 10, DIM)
+        t.paragraph(s, about, x, BOX[1] + 26, 42, 2, DIM)
         bar = pygame.Rect(x, BOX[1] + 62, BOX[2] - 24, 10)
         pygame.draw.rect(s, (0, 0, 16), bar)
         if state["total"]:

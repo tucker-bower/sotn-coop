@@ -1,21 +1,23 @@
-"""Which castle: Continue (the one played last), New castle, or Load castle (the list of them all).
+"""Which castle: Continue (the one played last), New castle, Load castle (the list of them all), or
+Test castles.
 Each castle shows its save's icon, the one the game's own file select would, moving as it does there."""
 
-from ..theme import DIM, GOLD, INK, shorten, wrap
+from ..theme import DIM, GOLD, INK, shorten
 from ..widgets import ROW, move, scroll
 from .home import castle_lines, started
 
 HEAD, MENU, INFO, LIST = (8, 6, 464, 22), (8, 34, 168, 96), (182, 34, 290, 96), (8, 34, 464, 192)
 
 
-def castle_menu(m, heading, latest, has_castles, note=""):
-    """Returns "continue", "new", "load", or None (back). latest: the castle Continue loads, or None."""
+def castle_menu(m, heading, latest, has_castles, has_tests=False):
+    """Returns "continue", "new", "load", "tests", or None (back). latest: the castle Continue loads,
+    or None. Nothing but the choices, and what Continue loads (Tucker, 2026-11-11)."""
     items = ([("continue", "Continue")] if latest is not None else []) + [("new", "New castle")]
     if has_castles:
         items.append(("load", "Load castle"))
+    if has_tests:
+        items.append(("tests", "Test castles"))
     items.append((None, "Back"))
-    hints = {"continue": "The castle you played last", "new": "A new game, in a castle of its own",
-             "load": "Every castle you have, and the test castles", None: ""}
     t, s, sel = m.theme, m.s, 0
     while True:
         for a in m.poll():
@@ -35,21 +37,17 @@ def castle_menu(m, heading, latest, has_castles, note=""):
         t.text(s, heading, HEAD[0] + 8, HEAD[1] + 7, GOLD)
         m.window(MENU)
         m.rows((MENU[0] + 4, MENU[1] + 10, MENU[2] - 8, len(items) * ROW), [i[1] for i in items], sel)
-        m.window(INFO)
-        x, y = INFO[0] + 10, INFO[1] + 10
-        for k, line in enumerate(wrap(hints[key], (INFO[2] - 20) // 8)[:2]):
-            t.text(s, line, x, y + k * 10, DIM)
-        if key == "continue":
+        if key == "continue":  # what it loads
+            m.window(INFO)
+            x, y = INFO[0] + 10, INFO[1] + 10
             icon = latest.icon()
             if icon is not None:
-                t.icon(s, icon, x, y + 20, scale=3)
+                t.icon(s, icon, x, y + 10, scale=3)
             name, where, played = castle_lines(latest)
             left = x + (58 if icon is not None else 0)
-            t.text(s, shorten(name, 26), left, y + 22, INK)
-            t.text(s, shorten(where, 26), left, y + 36, DIM)
-            t.text(s, shorten(played, 26), left, y + 50, DIM)
-        if note:
-            t.text(s, shorten(note, 56), 12, 140, DIM)
+            t.text(s, shorten(name, 26), left, y + 12, INK)
+            t.text(s, shorten(where, 26), left, y + 26, DIM)
+            t.text(s, shorten(played, 26), left, y + 40, DIM)
         m.footer("{x} select   {o} back", "Enter: select   Esc: back")
         m.show()
 

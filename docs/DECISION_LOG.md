@@ -940,3 +940,6 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - **Your settings** (each player's own: sound, what shows while playing, shortcuts and right-stick spells) open from the pause menu, apart from the castle's rules, and from Options. Changes reach the running game at once.
 - **Alucard's spells on the right stick** is a castle rule, on by default; off, the launcher sends no stick spells (no module change).
 - Text that runs past its window is caught by the theme, and `launcher/test_screens_fit.py` draws every screen with long content.
+
+**D198: Five characters in the lobby, every co-op feature kept** (Tucker, 2026-11-11, #232)
+- Alucard, Richter, Maria (PSP), Maria (Saturn), Richter (Saturn). Our Richter and Maria keep their co-op features (gear, levels, relic moves, Alucard's stats), each a castle rule. Ultimate Maria isn't offered (her character id stays, so old saves load); one remembered from before plays Maria (PSP). No tint on the Saturn pair's portraits. `design/one-richter-one-maria.md` has the analysis.

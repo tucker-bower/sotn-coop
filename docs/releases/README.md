@@ -6,6 +6,7 @@ Release notes for the versions we've published.
 |---|---|
 | `v0.11.0.md` | Castles, solo play, Richter, Maria and Android. |
 | `v0.12.0.md` | The beta of 1.0: the whole first castle together. |
+| `v0.18.0.md` | 0.18.0: the new launcher, mods, updates, one folder. Draft: Tucker approves it. |
 | `v0.17.0.md` | Randomizer castles, finds that survive a disconnect, Richter's and Maria's armour. |
 | `v0.16.3.md` | Menus aren't hangs, Richter's hits land once, new castles named at the game's name entry. |
 | `v0.16.2.md` | Continue keeps your character; 0.16.1's Android fixes. Never released alone: 0.16.1 stayed a draft. |

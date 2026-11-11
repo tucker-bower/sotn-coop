@@ -5,7 +5,7 @@ the rows (Launcher.option_rows) and does what they say."""
 
 import pygame
 
-from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
+from ..theme import DIM, GOLD, GREEN, INK, shorten
 from ..widgets import ROW, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
@@ -46,7 +46,10 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
             if a in ("up", "down"):
                 sel = step_sel(sel, -1 if a == "up" else 1)
             elif a in ("left", "right") and row["kind"] in ("choice", "slider", "switch"):
-                change(row["key"], -1 if a == "left" else 1)
+                step = -1 if a == "left" else 1
+                if row["kind"] == "switch":  # its picture: ON on the left, OFF on the right (Tucker, 2026-11-11)
+                    step = -step
+                change(row["key"], step)
             elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int)):
                 if isinstance(a, tuple):
                     sel = a[1]
@@ -110,9 +113,7 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
         if first + fits < len(table):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
-        lines = [(line, INK) for line in wrap(said, 56)[:2]] if said else []
-        lines += [(line, DIM) for line in wrap(table[sel].get("hint", ""), 56)][:3 - len(lines)]
-        for k, (line, colour) in enumerate(lines):
-            t.text(s, line, HINT[0] + 8, HINT[1] + 6 + k * 10, colour)
+        used = t.paragraph(s, said, HINT[0] + 8, HINT[1] + 6, 56, 2, INK) if said else 0
+        t.paragraph(s, table[sel].get("hint", ""), HINT[0] + 8, HINT[1] + 6 + used * 10, 56, 3 - used, DIM)
         m.footer(*(footer or ("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back")))
         m.show()

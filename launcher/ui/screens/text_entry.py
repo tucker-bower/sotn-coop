@@ -3,7 +3,7 @@ on a phone), or pasted: Ctrl+V, or Square / X on a controller (A in an empty box
 
 import pygame
 
-from ..theme import DIM, GOLD, INK, shorten, wrap
+from ..theme import DIM, GOLD, INK, shorten
 
 BOX = (40, 60, 400, 120)
 
@@ -43,8 +43,7 @@ def text_entry(m, heading, about, initial="", paste=None, limit=64, pad="", keys
             m.window(BOX)
             x = BOX[0] + 12
             t.text(s, shorten(heading, 46), x, BOX[1] + 10, GOLD)
-            for k, line in enumerate(wrap(about, 46)[:3]):
-                t.text(s, line, x, BOX[1] + 26 + k * 10, DIM)
+            t.paragraph(s, about, x, BOX[1] + 26, 46, 3, DIM)
             field = pygame.Rect(x, BOX[1] + 66, BOX[2] - 24, 18)
             pygame.draw.rect(s, (0, 0, 16), field)
             pygame.draw.rect(s, INK, field, 1)

@@ -11,18 +11,13 @@ from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
 HEAD = (8, 6, 464, 22)
 CARD_Y, CARD_H = 34, 200
 FRAME_W, FRAME_H = 66, 98
-# Each character's portrait: (picture, tinted) — the Saturn two have the PlayStation pair's, tinted
+# Each character's portrait (the Saturn two have the PlayStation pair's)
 PORTRAITS = ("alucard", "richter", "maria", "maria", "maria", "richter")
-TINT = {4: (255, 214, 200), 5: (214, 214, 255)}
 
 
 def portrait(m, character):
-    """The character's portrait, tinted for the Saturn pair (the PlayStation one, until we read theirs)."""
-    picture = m.theme.pictures[PORTRAITS[character]]
-    if character in TINT:
-        picture = picture.copy()
-        picture.fill((*TINT[character], 255), special_flags=pygame.BLEND_RGBA_MULT)
-    return picture
+    """The character's portrait (Tucker, 2026-11-11: as it is, no tint)."""
+    return m.theme.pictures[PORTRAITS[character]]
 
 
 def draw_lobby(m, heading, about, cards, partner, footer):

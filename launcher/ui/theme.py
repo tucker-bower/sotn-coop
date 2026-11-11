@@ -102,9 +102,26 @@ class Theme:
             except (pygame.error, OSError, FileNotFoundError):
                 pass
         self.ok = all(n in self.pictures for n in NEEDS)
+        self.folder = Path(folder)
+        self.load_sprites()
         if "font" not in self.pictures:  # before the player's disc is attached: plain letters, same size
             self.pictures["font"] = plain_font()
         self._tinted = {}
+
+    def load_sprites(self):
+        """The characters standing (launcher/sprites.py), as many as the player's discs have given,
+        and the hand-drawn "co-op" (Tucker's, launcher/assets/coop-scrawl.png) if it's there."""
+        for p in self.folder.glob("sprite-*.png"):
+            try:
+                self.pictures[p.stem] = pygame.image.load(str(p))
+            except (pygame.error, OSError):
+                pass
+        scrawl = Path(__file__).resolve().parent.parent / "assets" / "coop-scrawl.png"
+        if scrawl.exists() and "scrawl" not in self.pictures:
+            try:
+                self.pictures["scrawl"] = pygame.image.load(str(scrawl))
+            except (pygame.error, OSError):
+                pass
 
     def _font(self, colour):
         sheet = self._tinted.get(colour)
@@ -135,6 +152,17 @@ class Theme:
             surface.blit(tinted if tint else plain, (x, y), (place % 16 * GLYPH, place // 16 * GLYPH, GLYPH, GLYPH))
             x += GLYPH
         return x
+
+    def paragraph(self, surface, text, x, y, columns, lines, colour=INK, step=10):
+        """Wrapped text, at most `lines` lines. Text that needs more is cut off: noted, as text past
+        its window is, so a test fails on it (launcher/test_screens_fit.py)."""
+        parts = wrap(text, columns)
+        if len(parts) > lines:
+            self.overflows = getattr(self, "overflows", [])
+            self.overflows.append((text, x, y, ("needs", len(parts), "lines; has", lines)))
+        for k, line in enumerate(parts[:lines]):
+            self.text(surface, line, x, y + k * step, colour)
+        return min(len(parts), lines)
 
     def text_right(self, surface, text, right, y, colour=INK):
         self.text(surface, text, right - width(text), y, colour)

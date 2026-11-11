@@ -40,6 +40,22 @@ def rando_presets():
         return {}
 
 
+def preset_hint(about):
+    """A preset in a line or two: how long, how much knowledge, and what it is (the randomizer's own
+    words, its first useful sentence)."""
+    if not about:
+        return ""
+    import re
+    said = [x.strip() for x in re.split(r"(?<=[.!?])\s+", about.get("description") or "") if x.strip()]
+    said = [x for x in said if not x.lower().startswith(("a source preset", "this is a source preset"))]
+    first = (said[0] if said else "").rstrip(".")
+    if len(first) > 70:
+        first = first[:68].rsplit(" ", 1)[0] + ".."
+    knows = about.get("knowledgeCheck")
+    bits = [b for b in (about.get("timeFrame"), ("no tricks needed" if knows in (None, "", "None") else f"needs {knows.lower()}")) if b]
+    return (first + ". " if first else "") + (", ".join(bits) + "." if bits else "")
+
+
 def folder():
     d = paths.data_dir() / "game-discs"
     (d / "mods").mkdir(parents=True, exist_ok=True)
