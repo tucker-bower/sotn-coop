@@ -67,7 +67,7 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             low, high, each = sliders[key][4:]
             rules[key] = max(low, min(high, rules[key] + step * each))
         elif kind == "toggle":
-            rules[key] = not rules[key] if step == 0 else step > 0
+            rules[key] = not rules[key] if step == 0 else step < 0  # left: ON, right: OFF, as the switch is drawn
         elif kind == "button":
             castle_rules.set_target(rules, key, castle_rules.next_target(rules, key))
         elif kind == "defaults" and step == 0:

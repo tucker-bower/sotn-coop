@@ -46,7 +46,10 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
             if a in ("up", "down"):
                 sel = step_sel(sel, -1 if a == "up" else 1)
             elif a in ("left", "right") and row["kind"] in ("choice", "slider", "switch"):
-                change(row["key"], -1 if a == "left" else 1)
+                step = -1 if a == "left" else 1
+                if row["kind"] == "switch":  # its picture: ON on the left, OFF on the right (Tucker, 2026-11-11)
+                    step = -step
+                change(row["key"], step)
             elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int)):
                 if isinstance(a, tuple):
                     sel = a[1]
