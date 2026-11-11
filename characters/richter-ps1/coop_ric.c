@@ -38,7 +38,38 @@ s16** CoopRicBanks[4] = {spritebank0, spritebank1, spritebank2, spritebank3};
 // RicSetSubweaponParams's attack, for every attack Richter makes (the whip is a "subweapon").
 int g_CoopAirJumps; // D122: jumps in the air used since the ground (coop_ric.h)
 
+// Gear on his sub-weapons, as DRA's func_800FE3C4 gives Alucard's (src/dra/5D5BC.c), with the
+// castle's gear effects on (#202): a Heart Broach halves their heart cost (a third with two),
+// Brilliant Mail adds 10 to their attack, a Staurolite doubles holy water's and its flames' (triples with two).
+#define GEAR_ON (!(g_CoopOptions & OPT_NO_GEAR_EFFECTS))
+
+s32 CoopRicHeartCost(s32 cost) {
+    s32 n = GEAR_ON ? g_api.CheckEquipmentItemCount(ITEM_HEART_BROACH, EQUIP_ACCESSORY) : 0;
+
+    cost = n == 1 ? cost / 2 : n == 2 ? cost / 3 : cost;
+    return cost < 1 ? 1 : cost;
+}
+
+static s32 SubweaponGear(s32 id, s32 attack) {
+    s32 n;
+
+    if (!GEAR_ON || !attack) {
+        return attack;
+    }
+    if (g_api.CheckEquipmentItemCount(ITEM_BRILLIANT_MAIL, EQUIP_ARMOR)) {
+        attack += 10;
+    }
+    if (id == SUBWPN_HOLY_WATER || id == SUBWPN_HOLY_FLAMES) { // Alucard's 4 and 12: the vial and its flames
+        n = g_api.CheckEquipmentItemCount(ITEM_STAUROLITE, EQUIP_ACCESSORY);
+        attack *= n == 2 ? 3 : n == 1 ? 2 : 1;
+    }
+    return attack;
+}
+
 s32 CoopRicAttack(Entity* entity, s32 id, s32 attack) {
+    if (!(id == SUBWPN_WHIP || id == SUBWPN_FLAME_WHIP) && !BODY_ATTACK(entity, id)) {
+        attack = SubweaponGear(id, attack);
+    }
     if (g_CoopOptions & OPT_NO_ALUCARD_STATS) {
         return attack; // the castle's rules: his attacks as in his own game
     }

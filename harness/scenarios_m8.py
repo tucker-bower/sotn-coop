@@ -615,6 +615,193 @@ def blood_cloak(run, ch):
                hearts=e.read(HEARTS, "<i"), without=got[False][0])
 
 
+# Gear that changes a hit or a sub-weapon in Alucard's code (src/dra/5D5BC.c), for Richter and Maria (#202)
+HEAD, ACC1, ACC2 = 0x80097C08, 0x80097C14, 0x80097C18  # g_Status.equipment[HEAD..ACCESSORY_2]
+LCK_BASE = 0x80097BB8 + 12                             # g_Status.statsBase[STAT_LCK]
+STAT_BUFFS = 0x80139828                                # g_StatBuffTimers ([0]: DEF)
+PL_TIMERS = 0x80072F00                                 # g_Player.timers
+BRILLIANT_MAIL, FURY_PLATE, BALLROOM_MASK, RUBY_CIRCLET, CAT_EYE = 0x14, 0x16, 0x1C, 0x27, 0x2B  # include/items.h
+STAUROLITE, HEART_BROACH, TALISMAN = 0x3D, 0x4D, 0x53
+FIRE, SOLID_FROM_BELOW = 0x8000, 0x80                  # ELEMENT_FIRE, EFFECT_SOLID_FROM_BELOW
+
+
+def hit(run, params, points=0x3E):
+    """A hit as hit detection leaves it on the player; returns the HP it took (negative: healed)."""
+    e = run.emu
+    hp = e.read(HP_NOW, "<i")
+    e.write("g_Entities", points, "<h", 0x3E)  # PLAYER.hitPoints
+    e.write("g_Entities", params, "<H", 0x44)  # PLAYER.hitParams: effects | damage kind
+    run.step(4)
+    taken = hp - e.read(HP_NOW, "<i")
+    run.step(90)  # out of the hit, and its invincibility
+    e.write(HP_NOW, hp, "<i")
+    return taken
+
+
+@per_character
+def gear_on_hits(run, ch):
+    """Issue 202: gear that changes a hit for Alucard does it for Richter and Maria too. A fire hit
+    heals with the Ruby Circlet (it absorbs fire), a kind-7 hit heals twice over with the Cat-Eye
+    Circlet, the Ballroom Mask takes a fifth off, two Talismans with high luck dodge every hit, and
+    the Fury Plate raises DEF after one. With the castle's gear effects off, only the absorbing
+    (an element, as resistances are) is left."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, e.read(HP_MAX, "<i") // 2, "<i")
+    run.step(30)
+    start = e.save_state()
+
+    def wearing(slots, params, rules_off=0, points=0x3E):
+        e.load_state(start)
+        if rules_off:
+            mb.set_rules(off=rules_off)
+        for addr, item in slots:
+            e.write(addr, item, "<I")
+        run.step(30)
+        return hit(run, params, points)
+
+    plain = wearing([], 4)
+    run.expect(plain > 0, "a plain hit hurts", taken=plain)
+    fire = wearing([(HEAD, RUBY_CIRCLET)], FIRE | 4)
+    run.expect(fire < 0, "the Ruby Circlet: a fire hit heals", taken=fire)
+    cat = wearing([(HEAD, CAT_EYE)], 7)
+    room = e.read(HP_MAX, "<i") - e.read(HP_MAX, "<i") // 2
+    run.expect(-cat == min(2 * 0x3E, room), "the Cat-Eye Circlet: a kind-7 hit heals twice its points (up to max HP)",
+               taken=cat, room=room)
+    bare = wearing([], SOLID_FROM_BELOW | 4, points=30) + e.read(DEFENSE_EQUIP, "<i")
+    masked = wearing([(HEAD, BALLROOM_MASK)], SOLID_FROM_BELOW | 4, points=30) + e.read(DEFENSE_EQUIP, "<i")
+    run.expect(bare - masked == 30 // 5, "the Ballroom Mask takes a fifth off (before defense)", bare=bare, masked=masked)
+    e.load_state(start)
+    e.write(LCK_BASE, 400, "<i")
+    start_lucky = e.save_state()
+    e.load_state(start_lucky)
+    e.write(ACC1, TALISMAN, "<I")
+    e.write(ACC2, TALISMAN, "<I")
+    run.step(30)
+    dodged = [hit(run, 4) for _ in range(5)]
+    run.expect(dodged == [0] * 5, "two Talismans and 400 luck: every hit is dodged", taken=dodged)
+    e.load_state(start)
+    e.write(0x80097C0C, FURY_PLATE, "<I")
+    run.step(30)
+    e.write(STAT_BUFFS, 0, "<i")
+    hit(run, 4)
+    run.expect(e.read(STAT_BUFFS, "<i") > 0x100, "the Fury Plate: DEF up after a hit", timer=e.read(STAT_BUFFS, "<i"))
+    mask_off = wearing([(HEAD, BALLROOM_MASK)], SOLID_FROM_BELOW | 4, RULE_NO_GEAR_EFFECTS, points=30) + \
+        e.read(DEFENSE_EQUIP, "<i")
+    fire_off = wearing([(HEAD, RUBY_CIRCLET)], FIRE | 4, RULE_NO_GEAR_EFFECTS)
+    run.expect(mask_off == bare and fire_off < 0, "gear effects off: no mask, the circlet still absorbs",
+               mask_off=mask_off, bare=bare, fire_off=fire_off)
+
+
+def throw(run, subweapon, frames=60):
+    """Throws a sub-weapon (↑ + □); returns (hearts spent, the highest attack among the player's
+    sub-weapon entities meanwhile)."""
+    e = run.emu
+    e.write(SUBWEAPON, subweapon)
+    e.write(HEARTS, 50, "<i")
+    run.step(2, "up+square")
+    top = 0
+    for _ in range(frames):
+        run.step(1)
+        for slot in range(4, 64):
+            if e.read("g_Entities", "<H", slot * 0xBC + 0x26):  # entityId
+                top = max(top, e.read("g_Entities", "<h", slot * 0xBC + 0x40))  # attack
+    return 50 - e.read(HEARTS, "<i"), top
+
+
+@per_character
+def gear_on_subweapons(run, ch):
+    """Issue 202: a Heart Broach halves what a sub-weapon (Maria's guardian) costs, Brilliant Mail
+    adds 10 to its attack, and for Richter a Staurolite doubles holy water's, as they do
+    Alucard's. With the castle's gear effects off, none of them."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    run.step(30)
+    start = e.save_state()
+
+    def with_gear(slots, sub, rules_off=0):
+        e.load_state(start)
+        if rules_off:
+            mb.set_rules(off=rules_off)
+        for addr, item in slots:
+            e.write(addr, item, "<I")
+        run.step(30)
+        return throw(run, sub)
+
+    for first in range(1, 10):  # one that costs 2 or more, so halving shows (the dagger costs 1)
+        cost, attack = with_gear([], first)
+        if cost >= 2:
+            break
+    run.expect(cost >= 2 and attack > 0, "a sub-weapon costs hearts and hits", cost=cost, attack=attack, sub=first)
+    broach, _ = with_gear([(ACC1, HEART_BROACH)], first)
+    run.expect(broach == max(1, cost // 2), "a Heart Broach halves the cost", cost=cost, broach=broach)
+    _, mail = with_gear([(0x80097C0C, BRILLIANT_MAIL)], first)
+    run.expect(mail >= attack + 10, "Brilliant Mail: 10 more on the sub-weapon's attack", attack=attack, mail=mail)
+    off = with_gear([(ACC1, HEART_BROACH), (0x80097C0C, BRILLIANT_MAIL)], first, rules_off=RULE_NO_GEAR_EFFECTS)
+    run.expect(off == (cost, attack), "gear effects off: neither", off=off, plain=(cost, attack))
+    if ch == CHAR_RICHTER:
+        holy = 3  # SUBWPN_HOLY_WATER (characters/richter-ps1/coop_ric.c)
+        _, water = with_gear([], holy)
+        _, stauro = with_gear([(ACC1, STAUROLITE)], holy)
+        run.expect(water > 0 and stauro >= 2 * water - 2, "a Staurolite doubles holy water's attack", water=water, stauro=stauro)
+
+
+STATS_BASE, STATS_TOTAL = 0x80097BB8, 0x80097BD8  # g_Status.statsBase / statsTotal: STR, CON, INT, LCK
+STR, INT = 0, 2
+GAS_CLOUD_RELIC = 9  # RELIC_GAS_CLOUD
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def maria_attack_scaling(run):
+    """Issue 238 (Tucker: STR for her kicks, INT for her guardians). Under "Alucard's stats", her
+    guardians' attack grows with INT and not STR; her slide kick's with STR and not INT. The turtle's
+    crash poisons with Gas Cloud (it was never told it was the turtle's)."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_MARIA)
+    for r in (SOUL_OF_WOLF, GAS_CLOUD_RELIC):
+        e.write(STATUS + r, RELIC_ON, "<B")
+    run.step(30)
+    start = e.save_state()
+
+    def top_attack(stat, add, inputs, sub=None):
+        e.load_state(start)
+        if stat is not None:
+            for base in (STATS_BASE, STATS_TOTAL):
+                e.write(base + 4 * stat, e.read(base + 4 * stat, "<i") + add, "<i")
+        if sub is not None:
+            e.write(SUBWEAPON, sub)
+            e.write(HEARTS, 50, "<i")
+        top, poison, seen = 0, False, set()
+        for b in inputs:
+            run.step(1, b)
+            for slot in range(4, 64):
+                if e.read("g_Entities", "<H", slot * 0xBC + 0x26):
+                    attack, element = e.read("g_Entities", "<h", slot * 0xBC + 0x40), e.read("g_Entities", "<H", slot * 0xBC + 0x42)
+                    top = max(top, attack)
+                    poison |= bool(attack and element & 0x80)  # attackElement: ELEMENT_POISON
+                    seen.add((e.read("g_Entities", "<H", slot * 0xBC + 0x26), attack, element))
+        top_attack.seen = (sorted(seen)[:12], 50 - e.read(HEARTS, "<i"))
+        return top, poison
+
+    guardian = ["up+square"] * 2 + [""] * 60
+    kick = ["right"] * 20 + ["right+down"] * 4 + ["right+down+cross"] * 3 + ["down"] * 30
+    g = {k: top_attack(st, 100, guardian, 1)[0] for k, st in (("plain", None), ("str", STR), ("int", INT))}
+    run.expect(g["plain"] > 0 and g["int"] > g["plain"] and g["str"] == g["plain"],
+               "a guardian (Cardinal) grows with INT, not STR", attack=g)
+    k = {k: top_attack(st, 100, kick)[0] for k, st in (("plain", None), ("str", STR), ("int", INT))}
+    run.expect(k["plain"] > 0 and k["str"] > k["plain"] and k["int"] == k["plain"],
+               "her slide kick grows with STR, not INT", attack=k)
+    e.load_state(start)
+    e.write(STATUS + ECHO_OF_BAT, RELIC_ON, "<B")  # crashes, done where relic_gates_more does them
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    start = e.save_state()
+    _, poison = top_attack(None, 0, ["triangle"] + [""] * 150, 3)
+    run.expect(poison, "with Gas Cloud, the turtle's crash poisons", seen=top_attack.seen[0])
+
+
 @per_character
 def poison_water(run, ch):
     """M8b §2: poison water hurts Richter and Maria without Holy Symbol, as it does Alucard, and
