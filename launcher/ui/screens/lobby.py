@@ -34,7 +34,7 @@ def draw_lobby(m, heading, about, cards, partner, footer):
     m.window(HEAD)
     t.text(s, heading, HEAD[0] + 8, HEAD[1] + 7, GOLD)
     if about:
-        t.text_right(s, shorten(about, 30), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        t.text_right(s, shorten(about, 38), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
     n = len(cards) + (1 if partner else 0)
     gap = 8
     w = (464 - gap * (n - 1)) // n

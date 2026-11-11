@@ -1543,7 +1543,7 @@ class Launcher:
         else:
             picked = self.pick_castle("Couch co-op", "Player 1 is slot 1 of the castle, player 2 slot 2.")
         # the castle first, then who plays (design/launcher-overhaul.md)
-        if picked and self.lobby(subtitle="Player 1 plays the left screen, player 2 the right one.") is not None:
+        if picked and self.lobby(subtitle="Player 1: left screen. 2: right.") is not None:
             self.play(*picked)
 
     def solo(self):
@@ -1837,7 +1837,7 @@ class Launcher:
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them.{pvp_line}"),
-                              f"Give your partner the room code {room}: it's on your clipboard.") is None:
+                              f"Hosting room {room}") is None:
                     return
             except ConnectFailed as e:
                 self.ui.message("Couldn't reach your partner", str(e))
@@ -1871,7 +1871,7 @@ class Launcher:
                     s.connect(target)
                     waiting = f"{target[0]}:{target[1]}\nconnecting…"
                 try:
-                    if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner's game.") is None:
+                    if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner") is None:
                         continue
                 except ConnectFailed as e:
                     self.ui.message("Couldn't reach your partner", str(e))
