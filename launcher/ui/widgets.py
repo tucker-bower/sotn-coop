@@ -50,9 +50,10 @@ class Menus:
             if isinstance(a, tuple) and a[0] == "device":
                 self.device = a[1]
                 continue
-            name = {"up": "move", "down": "move", "left": "move", "right": "move", "ok": "confirm", "back": "back"}.get(a)
-            if isinstance(a, tuple) and a[0] == "click":
-                name = "confirm"
+            if isinstance(a, tuple):
+                name = "confirm" if a[0] == "click" else None
+            else:
+                name = {"up": "move", "down": "move", "left": "move", "right": "move", "ok": "confirm", "back": "back"}.get(a)
             if name and a not in quiet and self.sound:
                 self.sound.play(name)
             out.append(a)
