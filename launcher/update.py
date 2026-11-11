@@ -176,6 +176,15 @@ def install(path):
     subprocess.Popen(args, creationflags=flags, close_fds=True)
 
 
+def tidy(folder):
+    """The installers earlier updates downloaded: done with once the new version runs."""
+    for f in Path(folder).glob("SOTN-Coop-setup-*"):
+        try:
+            f.unlink()
+        except OSError:  # (an installer still running: next time)
+            pass
+
+
 def _android():
     try:
         from platform_android import ANDROID

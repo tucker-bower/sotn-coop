@@ -524,6 +524,7 @@ class Launcher:
         self.menus = None  # ui/widgets.py's Menus, once the game's art has been read (prepare_art)
         self.sound = None
         import update
+        update.tidy(paths.data_dir() / "updates")  # the installer that brought this version, if one did
         self.updates = update.Checker(self.settings, VERSION).start()  # in the background: launcher/update.py
         self.update_later = False
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
