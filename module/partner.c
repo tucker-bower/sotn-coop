@@ -722,7 +722,7 @@ static bool PartnerLive(void) { return g_CoopLink.partnerAge <= BODY_STALE_FRAME
 // Maria (their partner builds), in any game.
 static bool PartnerHere(void) {
     const CoopPresence* p = &g_CoopLink.partner;
-    return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
+    return p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
            (p->flags & PRESENCE_IN_PLAY) && g_PlayableCharacter == 0 &&
            (p->character == CHAR_ALUCARD || PartnerCode(p->character));
 }

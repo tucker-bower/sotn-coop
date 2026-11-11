@@ -503,7 +503,7 @@ static void RefreshGated(void) {
             continue;
         }
         for (g = g_FlagGated; g->stage >= 0; g++) {
-            if (g->stage == g_StageId && g->entityId == e->entityId && ReadsChangedFlag(g)) {
+            if (g->stage == g_CoopStage && g->entityId == e->entityId && ReadsChangedFlag(g)) {
                 if (e->flags & FLAG_HAS_PRIMS) {
                     g_api.FreePrimitives(e->primIndex);
                     e->flags &= ~FLAG_HAS_PRIMS;

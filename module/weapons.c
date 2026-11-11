@@ -380,7 +380,7 @@ static void DrawArm(const CoopSprite* s, bool partner) {
 static bool PartnerHere(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     return g_CoopLink.partnerAge <= 30 && (p->flags & PRESENCE_IN_PLAY) && SAME_WORLD(p) &&
-           p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
+           p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
 u32 g_CoopWeaponsDrawn; // sprites drawn last frame (tests read it: coop.map)

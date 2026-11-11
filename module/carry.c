@@ -38,7 +38,7 @@ static bool InPlay(void) {
 }
 
 static bool SameRoom(const CoopPresence* p) {
-    return p->stage == g_StageId && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
+    return p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
 static bool Clear(s32 x, s32 y) {

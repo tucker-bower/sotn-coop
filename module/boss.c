@@ -127,7 +127,7 @@ static bool PartnerLinked(void) {
 static bool PartnerFighting(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
-    return PartnerLinked() && !(p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) && p->stage == g_StageId &&
+    return PartnerLinked() && !(p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) && p->stage == g_CoopStage &&
            p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 

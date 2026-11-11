@@ -35,6 +35,26 @@ def map_teleport(run, g):
     run.step(1, p1=pads("cross"))
 
 
+@session_scenario(starts=("entrance", "nz0"))
+def teleport_to_partner_with_another_stage_id(run):
+    """Issue 179: the randomizer's 2nd-castle start sets g_StageId to RNO0 (0x20) on the
+    entrance's trap door while the player stays in NO3. A partner who map-teleported there loaded
+    the inverted Marble Gallery. Presence now says the stage that's loaded, and the partner lands
+    next to the player."""
+    a, b = run.s.a, run.s.b
+    run.step(60)
+    there = a.mailbox("self_presence")
+    a.write("g_StageId", 0x20)  # what the trap door's patch does
+    run.step(10)
+    run.expect(a.mailbox("self_presence").stage == there.stage, "A still says the stage it's in",
+               said=hex(a.mailbox("self_presence").stage), loaded=hex(there.stage))
+    map_teleport(run, b)
+    frames = wait_arrived(run, b, there, 900)
+    p = b.mailbox("self_presence")
+    run.expect(frames is not None, "B lands in A's room, not the inverted castle", b=(hex(p.stage), p.room_id),
+               a=(hex(there.stage), there.room_id))
+
+
 @session_scenario(starts=("entrance", "entrance"))
 def teleport_map_matrix(run):
     """M3 criteria 1 and 3: for every pair of test stages, B opens the map and presses ✕; B ends

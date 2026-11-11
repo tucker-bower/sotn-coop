@@ -46,7 +46,8 @@ SOURCES = {
 SEED = "sotn-coop"
 # The presets whose discs the tests use (session_mods.py): kept. Every other preset's disc is
 # deleted once it has been checked (disk space, AGENTS.md).
-TESTED = ("rando-casual", "rando-safe", "rando-boss-rush", "rando-lycanthrope-spr26te")
+TESTED = ("rando-casual", "rando-safe", "rando-boss-rush", "rando-lycanthrope-spr26te",
+          "rando-cornivus")  # 2nd-castle start room: rando_trap_door_cornivus (#179)
 # Presets the randomizer's own command line can't make at the pinned commit, with any seed: not
 # co-op's (#144). gem-farmer and bingo crash in randomize_relics.js (target.min, no complexity
 # goal); glitch and glitch-legacy search for over 15 minutes. Left out of every-preset runs.
