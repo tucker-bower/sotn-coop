@@ -108,8 +108,22 @@ class Theme:
             self._tinted[colour] = sheet
         return sheet
 
+    def frame(self):
+        """A new frame: the windows drawn in it, and any text that ran out of its window."""
+        self.windows, self.overflows = [], []
+
+    def _fits(self, surface, text, x, y, end):
+        """Text must end inside the window it starts in (or the screen): else it's cut off. Tests read
+        self.overflows (launcher/test_ui.py), so a screen that cuts text off fails, not just looks wrong."""
+        box = next((w for w in reversed(getattr(self, "windows", [])) if w.collidepoint(x, y)), surface.get_rect())
+        inside = box.right if box == surface.get_rect() else box.right - 1  # (a window's last column is its border)
+        if end > inside or x < box.left or y + GLYPH > box.bottom:
+            self.overflows = getattr(self, "overflows", [])
+            self.overflows.append((text, x, y, tuple(box)))
+
     def text(self, surface, text, x, y, colour=INK):
         """Draws one line; returns the x after it."""
+        self._fits(surface, text, x, y, x + width(text))
         tinted, plain = self._font(colour), self.pictures["font"]
         for place, tint in glyphs(text):
             surface.blit(tinted if tint else plain, (x, y), (place % 16 * GLYPH, place // 16 * GLYPH, GLYPH, GLYPH))
@@ -132,6 +146,7 @@ class Theme:
     def window(self, surface, rect):
         """A window as the pause menu draws one."""
         rect = pygame.Rect(rect)
+        self.windows = getattr(self, "windows", []) + [rect]
         for k in range(rect.h):
             f = k / max(1, rect.h - 1)
             c = [round(a + (b - a) * f) for a, b in zip(WINDOW_TOP, WINDOW_BOTTOM)]

@@ -1,7 +1,7 @@
 """Which castle: Continue (the one played last), New castle, or Load castle (the list of them all).
 Each castle shows its save's icon, the one the game's own file select would, moving as it does there."""
 
-from ..theme import DIM, GOLD, INK, shorten
+from ..theme import DIM, GOLD, INK, shorten, wrap
 from ..widgets import ROW, move, scroll
 from .home import castle_lines, started
 
@@ -37,7 +37,8 @@ def castle_menu(m, heading, latest, has_castles, note=""):
         m.rows((MENU[0] + 4, MENU[1] + 10, MENU[2] - 8, len(items) * ROW), [i[1] for i in items], sel)
         m.window(INFO)
         x, y = INFO[0] + 10, INFO[1] + 10
-        t.text(s, hints[key], x, y, DIM)
+        for k, line in enumerate(wrap(hints[key], (INFO[2] - 20) // 8)[:2]):
+            t.text(s, line, x, y + k * 10, DIM)
         if key == "continue":
             icon = latest.icon()
             if icon is not None:

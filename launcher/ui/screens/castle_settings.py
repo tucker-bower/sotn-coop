@@ -6,7 +6,7 @@ import pygame
 
 import rules as castle_rules
 
-from ..theme import DIM, GOLD, GREEN, INK, wrap
+from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
 from ..widgets import ROW, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
@@ -121,7 +121,7 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         m.begin("Castle settings")
         m.window(HEAD)
         t.text(s, "Castle settings", HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text_right(s, name[:36] + ("   the host's: only they can change them" if read_only else ""), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        t.text_right(s, shorten(name, (HEAD[2] - 16) // 8 - len("Castle settings") - 3), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
         m.window(LIST)
         hint = ""
         x, y0, w = LIST[0] + 4, LIST[1] + 6, LIST[2] - 8
@@ -178,7 +178,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         if first + fits < len(rows):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
-        for k, line in enumerate(wrap(hint, 56)[:4]):
+        if read_only:  # (said first in the explanation window)
+            hint = "The host's settings: only they can change them. " + hint
+        for k, line in enumerate(wrap(hint, 56)[:3]):
             t.text(s, line, HINT[0] + 8, HINT[1] + 7 + k * 10, DIM)
         if read_only:
             m.footer("{o} back", "Esc: back")

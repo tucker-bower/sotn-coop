@@ -1,7 +1,7 @@
 """The main menu: the logo, the ways to play, and on the right what the selected one is, with the
 castle Continue would load. Two links for the mouse only: our GitHub page and our Discord."""
 
-from ..theme import DIM, GOLD, INK, shorten, wrap
+from ..theme import DIM, INK, shorten, wrap
 from ..widgets import ROW, move
 
 LINKS = {"github": "https://github.com/tucker-bower/sotn-coop", "discord": "https://discord.gg/q7V9eFtAW"}
@@ -52,13 +52,11 @@ def home(m, items, about, version, sel=0, note="", interrupt=None):
                         return items[sel][0]
                 elif a[0] == "click" and a[1] in LINKS:
                     return ("link", LINKS[a[1]])
-        key, _, hint = items[sel]
+        key = items[sel][0]
         m.begin("Home")
-        m.window(TITLE)
-        t.picture(s, "logo", TITLE[0] + 10, TITLE[1] + 5)
-        t.text(s, "Co-op", 146, 22, GOLD)
-        for k, line in enumerate(wrap(hint, 39)[:3]):
-            t.text(s, line, 146, 38 + k * 10, DIM)
+        m.window(TITLE)  # the logo alone (Tucker, 2026-11-10)
+        lw, lh = t.pictures["logo"].get_size()
+        t.picture(s, "logo", TITLE[0] + (TITLE[2] - lw) // 2, TITLE[1] + (TITLE[3] - lh) // 2)
         m.window(MENU)
         m.rows((MENU[0] + 4, MENU[1] + 10, MENU[2] - 8, len(items) * ROW), [i[1] for i in items], sel)
         m.window(INFO)
