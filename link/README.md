@@ -18,6 +18,7 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `rendezvous.py` | Connect codes, STUN and direct-IP parsing. |
 | `test_connect.py` | Connects every pair of router types on the virtual internet. |
 | `test_layout.py` | Checks `mailbox.py`'s offsets, constants and sizes against `module/link.h`. |
+| `test_backlog.py` | Events to a partner who isn't there: the host's sending stays flat after the partner leaves, a solo castle keeps none, and an outage loses none (issue 223). |
 | `test_malformed.py` | Sends two linked hosts what a partner's game never would: no packet stops a host's frame or fills its memory. |
 | `test_portmap.py` | Checks `portmap.py` against fake routers. |
 | `transport.py` | Messages between hosts over UDP. |
