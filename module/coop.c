@@ -269,6 +269,7 @@ static void __attribute__((used)) RenderPrimitivesHook(void) {
     RenderPrimitives();
     FamiliarOwnPrimsBack();
     PartnerAfterPrims(gt4, gt3);
+    WidescreenAfterPrims();
 }
 
 // The save room's StoreSaveData (src/dra/62DEC.c): the game saved, so post the save.

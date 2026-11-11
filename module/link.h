@@ -300,6 +300,7 @@ typedef struct {
 #define OPT_NO_ALUCARD_STATS 0x08000000 // Richter and Maria: their own damage, given and taken (#160)
 #define OPT_NO_GEAR_EFFECTS 0x10000000  // to the overlays only: RULE_NO_GEAR_EFFECTS, for their sub-weapons (#202)
 void WidescreenFrame(void); // widescreen.c (design/M19)
+void WidescreenAfterPrims(void);
 extern u16 g_CoopWideWidth;
 extern u16 g_CoopStage; // the stage that's loaded, for anything about the partner (coop.c, #179)
 #define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))

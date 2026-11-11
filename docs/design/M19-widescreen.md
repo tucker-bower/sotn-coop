@@ -1,6 +1,6 @@
 # M19 design: widescreen
 
-**Status:** approved by Tucker (2026-10-27) as "spike, then stage by stage". Spiked 2026-11-11 (`coop-widescreen-spike`); this revision adds 21:9 and 32:9 (Tucker, 2026-11-11) and is up for approval again. Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it.
+**Status:** approved by Tucker (2026-10-27) as "spike, then stage by stage"; 21:9 and 32:9 added (Tucker, 2026-11-11), with the questions below taken as recommended (D201). In progress on `coop-widescreen-spike`. Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it.
 
 ## Goal
 A wider view of the castle, not a stretch (D76), optional: 16:9, and 21:9 or 32:9 for ultrawide screens. The game's pixels keep the shape they have at 4:3 (each a little wider than tall), so nothing looks squashed: the extra width is more castle.
@@ -18,18 +18,15 @@ A wider view of the castle, not a stretch (D76), optional: 16:9, and 21:9 or 32:
 - **Result:** the Alchemy Lab and Marble Gallery draw correctly at 352 and 448, with no garbage and every texture intact (contact sheet kept locally: ripped art). Menus and the title run as before; the core is at 256 whenever the game isn't in its stage layout.
 - **Measured limits:**
   - The tile sprite pool is 640. The Alchemy Lab uses 500 at 4:3, 596 at 352, and hits 640 at 448, so tiles drop. Wide views need a tile pool of our own.
-  - The camera keeps the player at a fixed screen x (a variable, 128) and clamps to the room with a constant 256. Until that changes, all the extra view is to the player's right.
-  - Rooms narrower than the view show what's past their edge (the entrance's gate room).
+- **The camera stays the game's.** Changing it would touch room transitions and cutscenes, which assume the player's screen x is under 256. Instead the game keeps its 256-wide view, and the wider window is centred on it and slid to stay inside the room (centred on a room narrower than it). Everything moves by the slide through the drawing offset; the tilemap is drawn from the slide further left; the HUD and anything over it are drawn without the slide (an offset command in the ordering table, at the HUD's layer).
+- **The tilemap is the module's** while the view is wide (`module/widescreen_tilemap.c`, the game's `RenderTilemap` with as many columns as the view needs), with a pool of 2,048 tiles per framebuffer: the game's holds 640, and the Alchemy Lab needs more than that at 448.
 
 ## What's left
 | Part | How | Size |
 |---|---|---|
-| Camera | Player's screen x = width / 2; the 256 clamps = width (two immediates, as the tile loops) | Small |
-| Rooms narrower than the view | Black bars past the room's edges, the room centred | Medium |
-| Tile pool | `RenderTilemap`'s sprites from a pool in the module's memory when the view is wider than 16:9 | Medium |
+| Camera, narrow rooms, HUD, tile pool | Done (above). A narrow room shows its background layers past its edges (the entrance's sky), not black | Done |
 | **Enemies at the edges** | Stage code checks "on screen" against 256 (about 183 checks in 93 stage files), and the spawner's window is `scroll + 320`. Widen the shared helpers first, then fix stage by stage what's left, found by an automatic check | **Large: the long tail** |
 | Screen copies | Effects that read the framebuffer (room fades, Richter's and Maria's death dissolve) read the second bank in wide mode: the core's copy and read paths | Medium |
-| HUD | Stays at the left | None |
 | 32:9 | Two 688 framebuffers need more than one bank: a third bank in the core, and the partner's textures move there | Medium |
 | The app | Width setting (4:3, 16:9, 21:9, 32:9) in Your settings; the window and fullscreen fit the wider picture; Windows and Android cores rebuilt | Medium |
 | Co-op | See question 3 | Small |

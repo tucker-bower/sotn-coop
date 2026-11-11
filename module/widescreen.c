@@ -1,4 +1,4 @@
-// Widescreen (design/M19-widescreen.md), spike: a wider view of the castle, not a stretch.
+// Widescreen (design/M19-widescreen.md): a wider view of the castle, not a stretch. Unfinished.
 //
 // The game draws its stage view into two 256x240 framebuffers side by side in VRAM's top band,
 // next to the stage's texture pages. Our core (patches/swanstation.patch, GP1 0x2F) takes a display
@@ -14,27 +14,77 @@ u16 g_CoopWideWidth; // the view's width in pixels; 0: off (tests, and later the
 
 #define GP1(cmd) (*(volatile u32*)0x1F801814 = (cmd))
 #define GP1_COOP_WIDE 0x2F000000
-// RenderTilemap (src/dra/4CE2C.c) draws N_HORIZ_TILES (17) columns of 16 px, for the foreground and
-// the background layers: `slti v0, t1, 17`, here made one more than the view needs.
-#define TILE_COLUMN_SITES 2
-static u32* const s_TileColumns[TILE_COLUMN_SITES] = {(u32*)0x800ED258, (u32*)0x800ED670};
-#define SLTI_V0_T1 0x29220000
 void FlushCache(void); // main.exe
+void WideTilemap(s32 columns); // widescreen_tilemap.c
 
-static void TileColumns(s32 n) {
-    bool changed = false;
+// The game's camera is left as it is: it keeps its 256-wide view of the room ("the game's view"),
+// and the wider window is centred on it, slid to stay inside the room (or centred on a room narrower
+// than it, the tilemap drawing nothing past the room's edges). Everything the game draws moves by
+// the slide through the drawing offset; the tilemap, which draws from the camera's scroll, is drawn
+// from that many pixels further left instead, through its one call (main loop, src/dra/5087C.c),
+// with as many columns as the view needs (widescreen_tilemap.c).
+#define RENDER_TILEMAP_CALL ((u32*)0x800E3D40)
+#define JAL(fn) (0x0C000000 | (((u32)(fn) & 0x0FFFFFFF) >> 2))
+void RenderTilemap(void); // DRA
+static s32 s_Slide, s_Columns;
+
+static void WideRenderTilemap(void) {
     s32 i;
 
-    for (i = 0; i < TILE_COLUMN_SITES; i++) {
-        u32* p = s_TileColumns[i];
-        if ((*p & 0xFFFF0000) == SLTI_V0_T1 && (*p & 0xFFFF) != (u32)n) {
-            *p = SLTI_V0_T1 | n;
-            changed = true;
-        }
+    g_Tilemap.scrollX.i.hi -= s_Slide;
+    for (i = 0; i < MAX_BG_LAYER_COUNT; i++) {
+        g_BgLayers[i].scrollX.i.hi -= s_Slide;
     }
-    if (changed) {
+    g_cameraOffsetX -= s_Slide;
+    WideTilemap(s_Columns);
+    g_cameraOffsetX += s_Slide;
+    for (i = 0; i < MAX_BG_LAYER_COUNT; i++) {
+        g_BgLayers[i].scrollX.i.hi += s_Slide;
+    }
+    g_Tilemap.scrollX.i.hi += s_Slide;
+}
+
+static void TilemapCall(bool wide) {
+    u32 want = JAL(wide ? (void*)WideRenderTilemap : (void*)RenderTilemap);
+
+    if (*RENDER_TILEMAP_CALL != want && (*RENDER_TILEMAP_CALL == JAL(RenderTilemap) ||
+                                         *RENDER_TILEMAP_CALL == JAL(WideRenderTilemap))) {
+        *RENDER_TILEMAP_CALL = want;
         FlushCache();
     }
+}
+
+// How far the wide window starts left of the game's view: half the extra width in mid-room, less
+// against the room's left edge, more against its right one.
+static s32 Slide(s32 w) {
+    s32 view = g_Tilemap.scrollX.i.hi, left = g_Tilemap.x, right = g_Tilemap.width, start;
+
+    if (right - left >= w) {
+        start = view - (w - DISP_STAGE_W) / 2;
+        start = start < left ? left : start > right - w ? right - w : start;
+    } else {
+        start = left - (w - (right - left)) / 2;
+    }
+    return view - start;
+}
+
+// The HUD (priority 0x1EE-0x1F0, src/dra/5F60C.c) and whatever is drawn over it (message boxes)
+// belong to the screen, not the castle: an offset command at the head of that layer of the ordering
+// table takes the slide back off for them.
+#define HUD_LAYER 0x1EE
+static DR_OFFSET s_HudOffset[2];
+
+void WidescreenAfterPrims(void) {
+    DRAWENV* d = &g_CurrentBuffer->draw;
+    DR_OFFSET* p = &s_HudOffset[g_CurrentBuffer == &g_GpuBuffers[1]];
+    u32* slot = (u32*)&g_CurrentBuffer->ot[HUD_LAYER];
+
+    if (!s_Slide) {
+        return;
+    }
+    p->code[0] = 0xE5000000 | ((d->ofs[1] & 0x7FF) << 11) | (d->clip.x & 0x7FF);
+    p->tag = (1u << 24) | (*slot & 0xFFFFFF);
+    *slot = (*slot & 0xFF000000) | ((u32)p & 0xFFFFFF);
 }
 
 #define STAGE_CLIP_Y 0x14 // func_800E34DC (src/dra/42398.c): the stage view is drawn in lines 20-226
@@ -52,14 +102,18 @@ void WidescreenFrame(void) {
     }
     if (!w || !stage) {
         GP1(GP1_COOP_WIDE);
-        TileColumns(N_HORIZ_TILES);
+        TilemapCall(false);
+        s_Slide = 0;
         return;
     }
-    TileColumns(w / 16 + 1);
+    s_Columns = w / 16 + 2;
+    s_Slide = Slide(w);
+    TilemapCall(true);
     for (i = 0; i < 2; i++) {
         DRAWENV* d = &g_GpuBuffers[i].draw;
         DISPENV* p = &g_GpuBuffers[i].disp;
-        d->clip.x = d->ofs[0] = i * w;
+        d->clip.x = i * w;
+        d->ofs[0] = i * w + s_Slide;
         d->clip.w = w;
         p->disp.x = (1 - i) * w; // shown while the other is drawn
         p->disp.w = w;
