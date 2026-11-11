@@ -61,7 +61,8 @@ OPT_SPELL_TRIGGERS = 0x40000000  # options: spells on R2 or L2 and a face button
 OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)
 OPT_WIDE_SHIFT, OPT_WIDE_MASK = 3, 0x18  # options: the screen's shape, 0-2 (WIDE_SHAPES): module/widescreen.c
 WIDE_SHAPES = ("4:3", "16:9", "21:9")
-WIDE_WIDTHS = (256, 352, 448)  # the game's view, in its pixels, for each (design/M19-widescreen.md)
+WIDE_WIDTHS = (256, 294, 392)  # the game's view, in its pixels, for each: 207 lines of it shown wide (design/M19-widescreen.md)
+WIDE_LINES = 207
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
 

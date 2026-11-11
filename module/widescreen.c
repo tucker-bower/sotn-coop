@@ -14,6 +14,7 @@ u16 g_CoopWideWidth; // tests: the view's width in pixels, over the player's set
 
 #define GP1(cmd) (*(volatile u32*)0x1F801814 = (cmd))
 #define GP1_COOP_WIDE 0x2F000000
+#define GP1_COOP_LINES 0x2E000000 // the lines shown: first | count << 9
 void FlushCache(void); // main.exe
 void WideTilemap(s32 columns); // widescreen_tilemap.c
 void WidescreenStage(s32 extra); // widescreen_stage.c
@@ -95,10 +96,13 @@ void WidescreenAfterPrims(void) {
 #define STAGE_CLIP_H 0xCF
 
 // The player's screen shape (OPT_WIDE_*, link/mailbox.py WIDE_SHAPES): 4:3, 16:9, 21:9.
-static const u16 s_ShapeWidths[4] = {0, 352, 448, 0};
+// The stage is drawn in 207 of the framebuffer's lines (STAGE_CLIP_*), and only those are shown wide:
+// the game's pixels are 1.25 times as wide as tall, so 207 lines make 16:9 at 294 and 21:9 (64:27,
+// a 2560x1080 screen) at 392.
+static const u16 s_ShapeWidths[4] = {0, 294, 392, 0};
 
 void WidescreenFrame(void) {
-    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[(g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT]) & ~0xF, i;
+    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[(g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT]) & ~1, i;
     DRAWENV* d0 = &g_GpuBuffers[0].draw;
     DRAWENV* d1 = &g_GpuBuffers[1].draw;
     static s32 s_Applied; // the width the framebuffers were last made (a change starts from it)
@@ -120,8 +124,9 @@ void WidescreenFrame(void) {
         g_CoopWideSlide = 0;
         return;
     }
-    s_Columns = w / 16 + 2;
+    s_Columns = (w + 15) / 16 + 2;
     g_CoopWideSlide = Slide(w);
+    GP1(GP1_COOP_LINES | STAGE_CLIP_Y | (STAGE_CLIP_H << 9));
     TilemapCall(true);
     for (i = 0; i < 2; i++) {
         DRAWENV* d = &g_GpuBuffers[i].draw;

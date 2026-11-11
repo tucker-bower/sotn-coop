@@ -15,6 +15,7 @@ to fill:
 The window remembers its size; F11 or Alt+Enter toggles fullscreen."""
 
 import os
+import time
 
 import pygame
 from pygame._sdl2.video import Renderer, Texture, Window
@@ -37,18 +38,20 @@ def _on_a_monitor(pos):
 CANVAS = (1032, 532)
 PIXELS = (480, 270)    # the menus in the game's own style: drawn in the game's pixels, shown at a whole multiple
 BAR = 26               # the status bar under the games (window pixels)
+BAR_SHOWN = 4          # seconds the status line shows over the games in fullscreen, after it changes
 GAP = 8
 LAYOUTS = ("auto", "side", "stacked", "p1", "p2", "windows")
 LAYOUT_NAMES = {"auto": "Automatic", "side": "Side by side", "stacked": "Stacked (vertical monitor)", "p1": "Player 1 only",
                 "p2": "Player 2 only", "windows": "Player 2 in its own window"}
 
 
-WIDE_WIDTHS = (352, 448, 688)  # widescreen views (design/M19): the game's pixels, as wide as at 4:3
+WIDE_LINES = 207  # a widescreen view shows the game's 207 lines (link/mailbox.py, design/M19)
 
 
 def aspect_of(size):
-    """A game frame's shape on screen: 4:3, or wider for a widescreen view (link/mailbox.py)."""
-    return 4 / 3 * size[0] / 256 if size and size[0] in WIDE_WIDTHS else 4 / 3
+    """A game frame's shape on screen: 4:3, or for a widescreen view its width in the game's pixels,
+    each 1.25 times as wide as tall (as at 4:3)."""
+    return 1.25 * size[0] / size[1] if size and size[1] == WIDE_LINES else 4 / 3
 
 
 def fit(area, aspect=4 / 3):
@@ -63,11 +66,11 @@ def fit(area, aspect=4 / 3):
     return pygame.Rect(x + (w - nw) // 2, y + (h - nh) // 2, nw, nh)
 
 
-def cells(layout, size, players, aspects=(4 / 3, 4 / 3)):
+def cells(layout, size, players, aspects=(4 / 3, 4 / 3), bar=BAR):
     """Where each game goes in the main window: [rect or None per game]. aspects: each game's
-    picture's shape (aspect_of)."""
+    picture's shape (aspect_of). bar: the status bar's height under them (0 in fullscreen)."""
     w, h = size
-    h -= BAR
+    h -= bar
     a0, a1 = (list(aspects) + [4 / 3, 4 / 3])[:2]
     if layout == "auto":  # whichever gives each game the bigger picture
         side = min((w - GAP) / 2 / max(a0, a1), h)
@@ -318,7 +321,8 @@ class Display:
             self.second = None
 
     def _draw_games(self):
-        rects = cells(self.layout, self.window.size, len(self.games), [aspect_of(g.size) for g in self.games])
+        rects = cells(self.layout, self.window.size, len(self.games), [aspect_of(g.size) for g in self.games],
+                      0 if self.fullscreen else BAR)
         for g, rect in zip(self.games, rects):
             g.draw(rect)
 
@@ -352,8 +356,15 @@ class Display:
         self._corner_tex.draw(dstrect=(w - tw - 6, 4, tw, th))
 
     def _draw_bar(self, lines, color):
+        """Under the games; in fullscreen, where the games fill the screen, over them, only for
+        BAR_SHOWN seconds after its text changes."""
         w, h = self.window.size
         key = (tuple(lines), color, w)
+        if self.fullscreen:
+            if key[:2] != getattr(self, "_bar_text", None):
+                self._bar_text, self._bar_since = key[:2], time.monotonic()
+            if time.monotonic() - self._bar_since > BAR_SHOWN:
+                return
         if key != self._bar_key:
             surf = pygame.Surface((w, BAR))
             surf.fill((16, 16, 24))
