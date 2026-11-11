@@ -955,7 +955,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - The gear rule reaches their code through g_CoopOptions as OPT_NO_GEAR_EFFECTS (0x10000000): the castle's rule bit stays 0x800, as saved castles have it.
 - Alucard-only gear stays so: Axe Lord Armor, Alucart set, Mojo Mail, Mystic Pendant, Secret Boots. Stat, defense and resistance gear already counted for them through make_all.
 
-**D201: Maria's guardians grow with INT, her own attacks with STR** (Tucker, 2026-11-11, #238; the body moves' rule: agent-default)
+**D201: Maria's guardians grow with INT, her own attacks with STR** (Tucker, 2026-11-11, #238, both rules; he'd rather they err underpowered early on, since they also get Alucard's weapons)
 - Under "Alucard's stats", every guardian attack (src/maria/pl_subweapons.c, which now says so through `g_CoopMarGuardian`) is × (1 + INT / 50), as CoopMarAttack always meant; they had gone through her own attack's rule (half, plus STR).
 - Her body's moves (slide kick 20, blade dash 15, high jump 80) scale as her owl does (12: half, plus STR), in proportion to their own value, as Richter's do to his whip's. At the start (STR 14) the slide kick goes from about 22 to 33 and the high jump from 90 to 133; before, they grew with INT. Options considered: × (1 + STR / 50), a smaller change (25 at the start), but it treats her kicks unlike her owl and unlike Richter's.
 - The turtle's crash poisons with Gas Cloud again: it never knew it was the turtle's.
