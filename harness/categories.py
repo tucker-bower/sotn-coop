@@ -149,6 +149,7 @@ EVERYDAY = {
     "launcher_ui", "launcher_gameart", "launcher_gamesound",  # + the menus in the game's style, and its art and sound from the disc (D192)
     "launcher_library", "patcher_modded",  # + game discs with several mods (D195)
     "launcher_update", "launcher_one_folder",  # + updates from GitHub, everything in one folder (D196)
+    "launcher_screens_fit",  # + no text cut off in any screen (#232)
     "patcher_layer", "rando_start_room_lycanthrope_spr26te",  # +
 }
 

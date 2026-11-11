@@ -30,6 +30,16 @@ ASS = {"name": "Alternate Scarlet Symphony -Final-", "file": "ASS-F.01.ppf",
 PLAIN = "Co-op (no mods)"
 
 
+def rando_presets():
+    """{id: {"name", "description", "author", "timeFrame", "knowledgeCheck"}}: the randomizer's presets
+    that work with co-op (patcher/mods/rando-presets.json, from the randomizer's own preset-data)."""
+    try:
+        return {p["id"]: p for p in json.loads((Path(__file__).resolve().parent.parent / "patcher" / "mods" / "rando-presets.json")
+                                              .read_text())["presets"]}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
 def folder():
     d = paths.data_dir() / "game-discs"
     (d / "mods").mkdir(parents=True, exist_ok=True)
@@ -85,8 +95,10 @@ def name(disc):
     labels = hack_labels()
     bits = []
     for m in disc.get("mods", []):
-        if m["kind"] == "randomizer":
-            bits.append(f"Seed {(m.get('info') or {}).get('seed', '?')}")
+        if m["kind"] == "randomizer":  # "Casual in18kr9k87"
+            info = m.get("info") or {}
+            preset = rando_presets().get(info.get("preset"), {}).get("name") or (info.get("preset") or "Seed").title()
+            bits.append(f"{preset} {info.get('seed', '?')}")
         elif m["kind"] == "ass":
             bits.append("ASS -Final-")
         elif m["kind"] == "ppf":

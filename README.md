@@ -12,7 +12,7 @@ AI wrote all of this code. However, this is not just low effort slop that will b
 ## Getting started
 You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional.
 
-**Mods:** in Discs & mods › Game discs, make a game disc with the [randomizer](https://sotn.io) (randomize your own disc there and choose it), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Keep as many game discs as you like and switch between them: each castle remembers its own. Both players need the same game disc.
+**Mods:** in Mods on the main menu, make a mod preset: a randomized castle in one click (pick a [randomizer](https://sotn.io) preset; the seed is random, or type one), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Name it, and a new castle can use it. Both players need the same preset.
 
 **Find people to play with:** [join our Discord](https://discord.gg/q7V9eFtAW).
 

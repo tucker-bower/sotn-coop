@@ -48,7 +48,13 @@ def wrap(text, columns):
     out = []
     for para in text.split("\n"):
         line = ""
-        for word in para.split(" "):
+        words = []
+        for word in para.split(" "):  # (a word too long for a line, a folder's path: broken where it must be)
+            while len(glyphs(word)) > columns > 0:
+                words.append(word[:columns])
+                word = word[columns:]
+            words.append(word)
+        for word in words:
             trial = f"{line} {word}" if line else word
             if line and len(glyphs(trial)) > columns:
                 out.append(line)
@@ -64,23 +70,26 @@ def shorten(text, columns):
 
 
 def plain_font():
-    """A stand-in for the game's font, from a system one: the same 8x8 places, the letters only."""
+    """A stand-in for the game's font, from a system one: the same 8x8 places, the letters only.
+    Each letter is drawn large, cut to the band every letter's ink fits in (tails too), and that
+    band is shrunk to 8 pixels: whatever the font's own spacing, nothing is cut off."""
     sheet = pygame.Surface((128, 128), pygame.SRCALPHA)
     pygame.font.init()
-    names = "consolas,dejavusansmono,liberationmono,couriernew,monospace"
-    size = 12
-    font = pygame.font.SysFont(names, size)
-    while size > 6 and font.get_height() > GLYPH + 1:  # the whole letter in its cell, tails too
-        size -= 1
-        font = pygame.font.SysFont(names, size)
-    letters = {code - 0x20: chr(code) for code in range(0x20, 0x7F)}
+    font = pygame.font.SysFont("consolas,dejavusansmono,liberationmono,couriernew,monospace", 16)
+    letters = {code - 0x20: chr(code) for code in range(0x21, 0x7F)}
     letters.update({224: "<", 226: "^", 228: ">", 230: "v", 232: "O", 233: "X", 234: "#", 235: "A"})  # the symbols, as letters
-    for place, letter in letters.items():
-        glyph = font.render(letter, False, (255, 255, 255))
-        cell = pygame.Rect(place % 16 * GLYPH, place // 16 * GLYPH, GLYPH, GLYPH)
-        sheet.set_clip(cell)
-        sheet.blit(glyph, (cell.x + (GLYPH - glyph.get_width()) // 2, cell.y + min(0, GLYPH - glyph.get_height())))
-    sheet.set_clip(None)
+    drawn = {place: font.render(letter, True, (255, 255, 255)) for place, letter in letters.items()}
+    inked = [g.get_bounding_rect() for g in drawn.values() if g.get_bounding_rect().h]
+    top, bottom = min(r.top for r in inked), max(r.bottom for r in inked)
+    band = bottom - top
+    for place, glyph in drawn.items():
+        ink = glyph.get_bounding_rect()
+        if not ink.w:
+            continue
+        cut = glyph.subsurface((ink.x, top, ink.w, band))
+        w = max(1, min(GLYPH, round(ink.w * GLYPH / band)))
+        small = pygame.transform.smoothscale(cut.convert_alpha() if pygame.display.get_surface() else cut, (w, GLYPH))
+        sheet.blit(small, (place % 16 * GLYPH + (GLYPH - w) // 2, place // 16 * GLYPH))
     return sheet
 
 
@@ -105,8 +114,22 @@ class Theme:
             self._tinted[colour] = sheet
         return sheet
 
+    def frame(self):
+        """A new frame: the windows drawn in it, and any text that ran out of its window."""
+        self.windows, self.overflows = [], []
+
+    def _fits(self, surface, text, x, y, end):
+        """Text must end inside the window it starts in (or the screen): else it's cut off. Tests read
+        self.overflows (launcher/test_ui.py), so a screen that cuts text off fails, not just looks wrong."""
+        box = next((w for w in reversed(getattr(self, "windows", [])) if w.collidepoint(x, y)), surface.get_rect())
+        inside = box.right if box == surface.get_rect() else box.right - 1  # (a window's last column is its border)
+        if end > inside or x < box.left or y + GLYPH > box.bottom:
+            self.overflows = getattr(self, "overflows", [])
+            self.overflows.append((text, x, y, tuple(box)))
+
     def text(self, surface, text, x, y, colour=INK):
         """Draws one line; returns the x after it."""
+        self._fits(surface, text, x, y, x + width(text))
         tinted, plain = self._font(colour), self.pictures["font"]
         for place, tint in glyphs(text):
             surface.blit(tinted if tint else plain, (x, y), (place % 16 * GLYPH, place // 16 * GLYPH, GLYPH, GLYPH))
@@ -129,6 +152,7 @@ class Theme:
     def window(self, surface, rect):
         """A window as the pause menu draws one."""
         rect = pygame.Rect(rect)
+        self.windows = getattr(self, "windows", []) + [rect]
         for k in range(rect.h):
             f = k / max(1, rect.h - 1)
             c = [round(a + (b - a) * f) for a, b in zip(WINDOW_TOP, WINDOW_BOTTOM)]

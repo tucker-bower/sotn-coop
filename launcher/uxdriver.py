@@ -985,20 +985,15 @@ def _hud(pg):
 
 
 def _randomizer(pg):
-    """design/M20-randomizer.md criterion 5, and launcher-overhaul.md criterion 12: Discs & mods ›
-    Game discs › New game disc. The retail disc is refused (not randomized); a seed's .ppf (made
-    here by the randomizer) and Fast Warp make a game disc; a new solo castle plays it, and its
-    game holds the randomizer's items. With Co-op (no mods) in use, Continue puts it back."""
-    import subprocess
+    """design/M20-randomizer.md criterion 5, issue 232: Mods › New mod preset. A seed file that's the
+    retail disc is refused; a casual seed rolled in one click (the randomizer here) and Fast Warp are
+    named and built; a new solo castle picks that preset and plays it, its game holding the
+    randomizer's items; with another preset in use, Continue puts the castle's own back."""
     sys.path.insert(0, str(ROOT / "harness"))
     sys.path.insert(0, str(ROOT / "patcher"))
     import layer
     import mods
     A = pg.CONTROLLER_BUTTON_A
-    tmp = Path(tempfile.mkdtemp(prefix="coop-ux-rando-"))
-    seed_ppf = tmp / "seed.ppf"
-    subprocess.run(["node", "randomize", "-s", "sotn-coop-ux", "-p", "casual", "-q", "-o", str(seed_ppf)],
-                   cwd=mods.source("randomizer"), check=True)
 
     def pick(path):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
@@ -1025,44 +1020,49 @@ def _randomizer(pg):
         c = Castle.all()
         return bool(c) and c[0].info.get("disc") and c[0].info["disc"] == d.launcher.settings.get("game_disc")
 
-    to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Discs")]  # Discs & mods
-    to_game_discs = [*to_files, ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_RETURN), ("screen", "Game discs")]  # after Back
+    os.environ["COOP_RANDOMIZER_DIR"] = str(mods.source("randomizer"))  # (rolled with the checkout here: no download in a test)
+    to_mods = [("screen", "Home"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN), ("screen", "Mods")]  # after Discs
+
+    def preset_made(d):
+        import library
+        g = library.discs(d.launcher.settings)
+        return len(g) == 1 and "casual" in library.describe(g[0]) and "Fast Warp" in library.describe(g[0]) and library.ready(g[0], d.launcher.coop_patch_crc())
     return [
         *first_run(pg),
-        *to_game_discs, ("shot", "game-discs-empty"),
-        ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # New game disc (after Co-op (no mods))
-        ("screen", "New game disc"), ("shot", "builder"),
-        ("key", pg.K_DOWN),  # Seed
+        *to_mods, ("shot", "mods-empty"),
+        ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # New mod preset (after Co-op (no mods))
+        ("screen", "New mod preset"), ("shot", "builder"),
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN),  # A seed file from sotn.io (after Randomized castle)
         pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
-        ("until", lambda d: d.heading == "New game disc" and "isn't randomized" in d.subtitle), ("shot", "retail-refused"),
-        ("expect", lambda d: "isn't randomized" in d.subtitle, "the retail disc: it isn't randomized"),
-        pick(seed_ppf), ("key", pg.K_RETURN),
-        ("until", lambda d: d.heading == "New game disc" and "sotn-coop-ux" in d.subtitle), ("shot", "seed-on"),
-        ("expect", lambda d: "sotn-coop-ux" in d.subtitle and "casual" in d.subtitle, "it names the seed and preset"),
-        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("wait", 3),  # SOTN Editor's second hack: Fast Warp
-        ("shot", "fast-warp-on"),
-        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Make this game disc
-        ("until", lambda d: d.heading == "Game discs"), ("shot", "game-disc-in-use"),
-        ("expect", lambda d: d.launcher.randomizer() and "modded" in d.launcher.disc().name
-         and "Fast Warp" in d.launcher.mod_line() and "sotn-coop-ux" in d.launcher.mod_line(),
-         "the game disc is in use: the seed and Fast Warp, made and played"),
-        ("key", pg.K_ESCAPE), ("screen", "Discs"), ("key", pg.K_ESCAPE),
+        ("until", lambda d: d.heading == "New mod preset" and "isn't randomized" in d.subtitle), ("shot", "retail-refused"),
+        ("expect", lambda d: "isn't randomized" in d.subtitle, "a seed file that's the retail disc: it isn't randomized"),
+        ("key", pg.K_UP), ("key", pg.K_RETURN),  # Randomized castle: the preset list
+        ("screen", "Randomizer preset"), ("shot", "presets"),
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Off, Surprise me, Casual
+        ("screen", "New mod preset"),
+        *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN), ("wait", 3), ("shot", "casual-and-fast-warp"),  # Seed, seed file, MiniMap, Fast Warp
+        *[("key", pg.K_UP)] * 5, ("key", pg.K_RETURN),  # Build this mod preset
+        ("screen", "Name your mod preset"), ("shot", "name-it"), ("key", pg.K_RETURN),  # the name it offers
+        ("until", lambda d: d.heading == "Mods"), ("shot", "mods-with-preset"),
+        ("expect", preset_made, "one click: a casual seed rolled, Fast Warp added, named and built"),
+        ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN),  # Solo
-        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
+        ("screen", "Solo"), ("call", lambda d: setattr(d, "real_settings", True)), ("key", pg.K_RETURN),  # New castle
         ("screen", "Name your castle"), ("pad", 0, A),
+        ("screen", "Castle settings"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-preset"),
+        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Start (Mode, then Mod preset: the one made)
+        ("call", lambda d: setattr(d, "real_settings", False)),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"), ("game_frames", 600), ("shot", "randomized-game"),
         ("expect", in_ram, "the game's collectibles are the randomizer's"),
-        ("expect", lambda d: "sotn-coop-ux" in (d.view.playthrough.info.get("mod") or "") and on_disc(d),
-         "the castle keeps its game disc"),
+        ("expect", lambda d: "casual" in (d.view.playthrough.info.get("mod") or "") and on_disc(d), "the castle keeps its mod preset"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        # Co-op (no mods) in use: Continue switches back to the castle's own disc, without asking
-        *to_game_discs, ("key", pg.K_RETURN), ("wait", 3),  # Co-op (no mods): selected first
-        ("expect", lambda d: d.launcher.settings.get("game_disc") is None and d.launcher.mod_line() is None, "Co-op (no mods) is in use"),
-        ("key", pg.K_ESCAPE), ("screen", "Discs"), ("key", pg.K_ESCAPE),
-        ("screen", "Home"), ("key", pg.K_RETURN), ("screen", "Solo"), ("key", pg.K_RETURN),  # Continue
+        # Another preset in use: Continue puts the castle's own back, without asking
+        ("screen", "Home"), ("call", lambda d: d.launcher.use_disc(None)),
+        ("expect", lambda d: d.launcher.settings.get("game_disc") is None, "Co-op (no mods) is in use"),
+        ("key", pg.K_RETURN), ("screen", "Solo"), ("key", pg.K_RETURN),  # Continue
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A), ("until", lambda d: d.heading == "Game"), ("game_frames", 300),
-        ("expect", on_disc, "Continue put the castle's own game disc back in use"),
+        ("expect", on_disc, "Continue put the castle's own mod preset back in use"),
         ("expect", in_ram, "and the game is the randomized one"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]

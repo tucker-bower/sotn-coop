@@ -524,6 +524,7 @@ class Launcher:
         self.menus = None  # ui/widgets.py's Menus, once the game's art has been read (prepare_art)
         self.sound = None
         import update
+        update.tidy(paths.data_dir() / "updates")  # the installer that brought this version, if one did
         self.updates = update.Checker(self.settings, VERSION).start()  # in the background: launcher/update.py
         self.update_later = False
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
@@ -570,6 +571,8 @@ class Launcher:
             self.open_rules()
         elif action == "check_updates":
             self.check_updates()
+        elif action == "player_settings":
+            self.player_settings()
         elif action in ("pause", "report", "leave"):
             pass  # these only mean something in a game (gameview.py)
         else:
@@ -685,132 +688,139 @@ class Launcher:
             else:
                 self.use_disc(None)
 
-    def game_disc_rows(self):
+    # --- Mods (issue 232): mod presets, each a game disc (launcher/library.py) with the name it's given
+
+    def preset_rows(self):
         import library
-        from ui.theme import DIM, GOLD, INK
-        current = self.settings.get("game_disc")
+        from ui.theme import DIM, INK
         counts = {}
         from archive import Castle
         for c in Castle.all():
             counts[c.info.get("disc")] = counts.get(c.info.get("disc"), 0) + 1
 
-        def row(did, label, standing, hint):
+        def value(did):
             n = counts.get(did, 0)
-            value = "in use" if did == current else (f"{n} castle{'s' * (n != 1)}" if n else standing)
-            return {"kind": "action", "key": did or "plain", "label": label, "hint": hint, "value": value,
-                    "colour": GOLD if did == current else (DIM if not n else INK)}
-        rows = [{"kind": "head", "key": None, "label": "Game discs: new castles are made on the one in use"},
-                row(None, library.PLAIN, "", "The original game, with co-op.")]
+            return f"{n} castle{'s' * (n != 1)}" if n else ""
+        rows = [{"kind": "head", "key": None, "label": "Your mod presets: a new castle picks one"},
+                {"kind": "action", "key": "plain", "label": library.PLAIN, "value": value(None), "colour": DIM,
+                 "hint": "The original game, with co-op. Always here."}]
         for g in library.discs(self.settings):
             standing = library.standing(g)
-            rows.append(row(g["id"], library.name(g), standing,
-                            library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".") +
-                            "  Square / X / S: rename or remove."))
-        rows.append({"kind": "action", "key": "new", "label": "New game disc", "value": "",
-                     "hint": "Your disc with mods: a randomizer seed, SOTN Editor's hacks, Alternate Scarlet Symphony, or another patch."})
+            rows.append({"kind": "action", "key": g["id"], "label": library.name(g), "value": value(g["id"]), "colour": INK,
+                         "hint": library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".") +
+                                 "  Enter: rename or remove."})
+        rows.append({"kind": "action", "key": "new", "label": "New mod preset", "value": "",
+                     "hint": "Choose your mods (a randomized castle, SOTN Editor's hacks, Alternate Scarlet Symphony), name it, "
+                             "and it's built."})
         return rows
 
-    def game_discs_screen(self):
-        """Discs & mods › Game discs: which one is in use, and making new ones."""
+    def mods_screen(self):
+        """Main menu › Mods: the player's mod presets, and making new ones."""
         from ui.screens.options import options
         sel = 1
         while True:
-            got = options(self.menus, self.game_disc_rows, lambda *_: None, sel, title="Game discs",
-                          note="Your partner needs the same one",
-                          footer=("{x} use   {s} rename, remove   {o} back", "Enter: use   S: rename, remove   Esc: back"))
+            got = options(self.menus, self.preset_rows, lambda *_: None, sel, title="Mods",
+                          note="Your partner needs the same preset",
+                          footer=("{x} select   {o} back", "Enter: select   Esc: back"))
             if got is None:
                 return
             kind, key = got
             if kind == "drop":
-                self.disc_builder(dropped=key)
+                self.preset_builder(dropped=key)
                 continue
             if kind == "more":
-                if key in ("plain", "new"):
-                    continue
-                self.game_disc_more(key)
                 continue
             sel = key
-            key = self.game_disc_rows()[key]["key"]
+            key = self.preset_rows()[key]["key"]
             if key == "new":
-                self.disc_builder()
-            else:
-                self.use_disc(None if key == "plain" else key)
+                self.preset_builder()
+            elif key != "plain":
+                self.preset_more(key)
 
-    def game_disc_more(self, did):
+    def preset_more(self, did):
         import library
-        from ui.screens.options import options
+        from ui.screens.pick import pick
         g = library.get(self.settings, did)
-        rows = [{"kind": "action", "key": "rename", "label": "Rename", "hint": "Call it what you like. Partners compare what's in it, not its name."},
-                {"kind": "action", "key": "remove", "label": "Remove", "hint": "Its castles stay; they'll ask for a disc with the same mods."}]
-        got = options(self.menus, lambda: rows, lambda *_: None, title=library.name(g)[:40], note="")
-        if not got or got[0] != "action" and got[0] in ("drop", "more"):
-            return
-        if rows[got[1]]["key"] == "rename":
-            text = self.ask_text("Name this game disc", library.describe(g), initial=g.get("name") or "", limit=32)
+        what = pick(self.menus, library.name(g), [("rename", "Rename", "Call it what you like. Partners compare its mods, not its name."),
+                                                  ("remove", "Remove", "Its castles stay; to play them, make the same preset again.")])
+        if what == "rename":
+            text = self.ask_text("Name this mod preset", library.describe(g), initial=g.get("name") or "", limit=24)
             if text is not None:
                 g["name"] = text.strip() or None
-        else:
+        elif what == "remove":
             n = len(self.castles_on(did))
-            if n and not self.ui.confirm("Remove this game disc?", f"{n} castle{'s' * (n != 1)} are played on it. They're kept, "
-                                         "and you can make the disc again to play them.", yes="Remove it", no="Keep it"):
+            if n and not self.ui.confirm("Remove this mod preset?", f"{n} castle{'s' * (n != 1)} are played on it. They're kept, "
+                                         "and you can make the same preset again to play them.", yes="Remove it", no="Keep it"):
                 return
             library.remove(self.settings, did)
         save_settings(self.settings)
 
-    def disc_builder(self, dropped=None):
-        """A new game disc: a randomizer seed, hacks, Alternate Scarlet Symphony, another patch."""
+    def preset_builder(self, dropped=None):
+        """A new mod preset: the mods, a name, then "Building modded disc"."""
         import library
         import modded
         import patcher
+        import randomizer
+        import randomizer_tool
         from ui.screens.options import options
         retail = self.settings.get("disc_source")
         if not retail:
             return
         retail_t1 = patcher.find_track1(retail)[0]
         hacks = modded.hacks()
-        state = {"randomizer": None, "hacks": set(), "ass": False, "patch": None, "said": ""}
+        presets = library.rando_presets()
+        rolls = randomizer_tool.available()
+        state = {"preset": None, "seed": "", "file": None, "hacks": set(), "ass": False, "patch": None, "said": ""}
 
         def take(path):
-            """A dropped or chosen file: a randomized disc or seed, ASS, or another patch."""
-            import randomizer
+            """A dropped or chosen file: a randomizer seed file or disc, ASS, or another patch."""
             path = Path(path)
             try:
                 if path.suffix.lower() == ".ppf":
                     if library.keep_ass_file(path):
-                        state["ass"] = True
-                        state["said"] = "Alternate Scarlet Symphony -Final-: on."
+                        state["ass"], state["said"] = True, "Alternate Scarlet Symphony -Final-: on."
                         return
                     try:
-                        state["randomizer"] = self.ui_wait("Reading the seed", path.name,
-                                                           lambda progress: library.keep_randomized(retail_t1, path))
-                        state["said"] = "Randomizer " + randomizer.describe(state["randomizer"]["info"]) + ": on."
+                        state["file"] = self.ui_wait("Reading the seed", path.name, lambda progress: library.keep_randomized(retail_t1, path))
+                        state["preset"], state["said"] = None, "Randomizer " + randomizer.describe(state["file"]["info"]) + ": on."
                     except patcher.DiscError:
                         state["patch"] = library.keep_patch(retail_t1, path)
                         state["said"] = f"{path.name}: on (untested with co-op)."
                 else:
-                    state["randomizer"] = self.ui_wait("Reading your randomized disc", path.name,
-                                                       lambda progress: library.keep_randomized(retail_t1, path))
-                    state["said"] = "Randomizer " + randomizer.describe(state["randomizer"]["info"]) + ": on."
+                    state["file"] = self.ui_wait("Reading your randomized disc", path.name, lambda progress: library.keep_randomized(retail_t1, path))
+                    state["preset"], state["said"] = None, "Randomizer " + randomizer.describe(state["file"]["info"]) + ": on."
             except (patcher.DiscError, OSError) as e:
                 state["said"] = f"{path.name}: {e}"
 
+        def preset_name(pid):
+            return "Surprise me" if pid == randomizer_tool.SURPRISE else presets.get(pid, {}).get("name", pid)
+
         def rows():
-            import randomizer
-            r = state["randomizer"]
-            out = [{"kind": "action", "key": "make", "label": "Make this game disc", "value": "",
-                    "hint": "About a minute. Drop a randomized disc, a seed's .ppf or another patch on the window, or choose below."},
-                   {"kind": "head", "key": None, "label": "Randomizer (sotn.io)"},
-                   {"kind": "action", "key": "randomizer", "label": "Seed", "value": randomizer.describe(r["info"]) if r else "None",
-                    "hint": "Randomize your own disc on sotn.io and choose the .cue it made, or the seed's .ppf. "
-                            "By the sotnrando team. Your partner needs the same seed and preset."},
-                   {"kind": "head", "key": None, "label": "SOTN Editor's hacks (by pddmergilla)"}]
+            out = [{"kind": "action", "key": "build", "label": "Build this mod preset", "value": "",
+                    "hint": "Name it, and it's built: about a minute. Drop a seed file, or a patch, on the window to add it."},
+                   {"kind": "head", "key": None, "label": "Randomizer (sotnrando)"}]
+            if rolls:
+                p = state["preset"]
+                about = presets.get(p, {})
+                out.append({"kind": "action", "key": "preset", "label": "Randomized castle",
+                            "value": "Off" if not p and not state["file"] else preset_name(p) if p else "From a seed file",
+                            "hint": (about.get("description") or ("A random preset that works with co-op." if p == randomizer_tool.SURPRISE else
+                                     "Choose a preset: casual is the place to start. Each castle gets its own random seed.")) +
+                                    (f" ({about['timeFrame']}, knowledge needed: {about['knowledgeCheck']})" if about.get("timeFrame") else "")})
+                if p:
+                    out.append({"kind": "action", "key": "seed", "label": "Seed", "value": state["seed"] or "Random",
+                                "hint": "Leave it random, or type one (a friend's, or one you liked)."})
+            out.append({"kind": "action", "key": "file", "label": "A seed file from sotn.io",
+                        "value": randomizer.describe(state["file"]["info"]) if state["file"] else "None",
+                        "hint": "Randomized on sotn.io: its .ppf, or the .cue it made. Your partner needs the same one."})
+            out.append({"kind": "head", "key": None, "label": "SOTN Editor's hacks (by pddmergilla)"})
             for hid, h in hacks.items():
                 out.append({"kind": "switch", "key": "hack:" + hid, "label": h["label"], "value": hid in state["hacks"],
                             "hint": h["summary"] + " Tested with co-op."})
             out += [{"kind": "head", "key": None, "label": "Alternate Scarlet Symphony (by pddmergilla)"},
                     {"kind": "switch", "key": "ass", "label": "-Final-", "value": state["ass"],
                      "hint": "A hard-hitting remix of the whole game: retuned combat, new enemy placements and AI, a rebuilt "
-                             "Richter. Downloaded from its author's release (5 MB). Tested with co-op; not with the hacks above."},
+                             "Richter. Downloaded from its author's release (5 MB) when it's built. Tested with co-op."},
                     {"kind": "head", "key": None, "label": "Another patch"},
                     {"kind": "action", "key": "patch", "label": "A .ppf", "value": (state["patch"] or {}).get("name", "None"),
                      "hint": "Any other PPF patch for the USA disc. Untested with co-op: it's refused if it changes co-op's own code."}]
@@ -822,20 +832,24 @@ class Launcher:
                 on = hid not in state["hacks"] if step == 0 else step > 0
                 (state["hacks"].add if on else state["hacks"].discard)(hid)
             elif key == "ass":
-                on = not state["ass"] if step == 0 else step > 0
-                if on and not library.have_ass():
-                    try:
-                        self.ui_wait("Downloading Alternate Scarlet Symphony", "From its author's release on GitHub (5 MB).",
-                                     lambda progress: library.download_ass(progress))
-                    except OSError as e:
-                        state["said"] = str(e)
-                        return
-                state["ass"] = on
+                state["ass"] = not state["ass"] if step == 0 else step > 0
+
+        def choose_preset():
+            items = [(None, "Off", "No randomizer.")] + [(randomizer_tool.SURPRISE, "Surprise me", "A random preset that works with co-op.")] + \
+                    [(p, presets.get(p, {}).get("name", p), presets.get(p, {}).get("description", "")) for p in randomizer_tool.PRESETS]
+            rows_ = [{"kind": "action", "key": k, "label": label, "hint": hint, "value": ""} for k, label, hint in items]
+            got = options(self.menus, lambda: rows_, lambda *_: None, title="Randomizer preset", note="Each castle gets its own seed")
+            if got and got[0] not in ("drop", "more"):  # (an action's key, and its row)
+                state["preset"] = rows_[got[1]]["key"]
+                if state["preset"]:
+                    state["file"] = None
+                state["said"] = ""
+
         if dropped:
             take(dropped)
         sel = 0
         while True:
-            got = options(self.menus, rows, change, sel, title="New game disc", note="Your partner needs the same mods",
+            got = options(self.menus, rows, change, sel, title="New mod preset", note="Your partner needs the same mods",
                           status=lambda: state["said"])
             if got is None:
                 return
@@ -847,9 +861,15 @@ class Launcher:
                 continue
             sel = key
             key = rows()[key]["key"]
-            if key == "randomizer":
-                if state["randomizer"]:
-                    state["randomizer"], state["said"] = None, "Randomizer: off."
+            if key == "preset":
+                choose_preset()
+            elif key == "seed":
+                seed = self.ask_text("Seed", "Leave it empty for a random one.", initial=state["seed"], limit=30)
+                if seed is not None:
+                    state["seed"] = seed.strip()
+            elif key == "file":
+                if state["file"]:
+                    state["file"], state["said"] = None, "Seed file: off."
                     continue
                 path = pick_file("Your randomized disc (.cue) or the seed's .ppf", [("Randomized disc or PPF", "*.cue *.bin *.ppf"), ("All", "*.*")], self.ui)
                 if path:
@@ -865,21 +885,50 @@ class Launcher:
                         state["said"] = f"{path.name}: on (untested with co-op)."
                     except (patcher.DiscError, OSError) as e:
                         state["said"] = str(e)
-            elif key == "make":
-                mods = ([state["randomizer"]] if state["randomizer"] else []) + ([{"kind": "ass"}] if state["ass"] else []) + \
-                       ([state["patch"]] if state["patch"] else []) + ([{"kind": "hacks", "ids": sorted(state["hacks"])}] if state["hacks"] else [])
-                if not mods:
-                    state["said"] = "Choose a mod first: a seed, a hack, Alternate Scarlet Symphony or a patch."
+            elif key == "build":
+                if not (state["preset"] or state["file"] or state["hacks"] or state["ass"] or state["patch"]):
+                    state["said"] = "Choose a mod first: a randomized castle, a hack, Alternate Scarlet Symphony or a patch."
                     continue
-                same = next((g for g in library.discs(self.settings) if library.describe(g) == library.describe({"mods": mods})), None)
-                g = same or library.add(self.settings, mods)
-                self.disc_error = ""
-                if self.use_disc(g["id"], quiet=True):
+                said = self.build_preset(state, retail_t1, presets)
+                if said is None:
                     return
-                if not same:  # (its mods' files stay: the player may leave one out and make it again)
-                    library.remove(self.settings, g["id"], keep_files=True)
-                save_settings(self.settings)
-                state["said"] = self.disc_error or "That game disc can't be made."
+                state["said"] = said
+
+    def build_preset(self, state, retail_t1, presets):
+        """Builds the preset the builder has: None when it's made, else why not."""
+        import library
+        import patcher
+        import randomizer_tool
+        mods = []
+        try:
+            if state["preset"]:
+                if not randomizer_tool.ready():
+                    self.ui_wait("Getting the randomizer", "The first time only: Node.js and the randomizer (about 40 MB).",
+                                 lambda progress: randomizer_tool.fetch(progress))
+                out = library.folder() / "mods" / "rolling.ppf"
+                ppf, preset, seed = self.ui_wait("Rolling a randomized castle", "", lambda progress: randomizer_tool.roll(state["preset"], state["seed"], out))
+                state["file"] = library.keep_randomized(retail_t1, ppf)
+                ppf.unlink(missing_ok=True)
+            if state["ass"] and not library.have_ass():
+                self.ui_wait("Downloading Alternate Scarlet Symphony", "From its author's release on GitHub (5 MB).",
+                             lambda progress: library.download_ass(progress))
+        except (OSError, patcher.DiscError) as e:
+            return str(e)
+        mods = ([state["file"]] if state["file"] else []) + ([{"kind": "ass"}] if state["ass"] else []) + \
+               ([state["patch"]] if state["patch"] else []) + ([{"kind": "hacks", "ids": sorted(state["hacks"])}] if state["hacks"] else [])
+        name = self.ask_text("Name your mod preset", library.describe({"mods": mods}), initial=library.name({"mods": mods}), limit=24)
+        if name is None:
+            return "Not built: it needs a name."
+        g = library.add(self.settings, mods, name.strip() or None)
+        try:
+            self.ui_wait("Building modded disc", library.name(g), lambda progress: library.build(
+                self.settings, g, self.settings["disc_source"], self.settings["disc"], self.coop_patch_crc(), progress))
+        except (patcher.DiscError, OSError) as e:
+            library.remove(self.settings, g["id"], keep_files=True)
+            save_settings(self.settings)
+            return str(e)
+        save_settings(self.settings)
+        return None
 
     # --- characters (design/M8)
 
@@ -920,17 +969,71 @@ class Launcher:
         return list(v) if len(v) == 4 else list(DEFAULT_SPELLS)
 
     def options(self, seat):
-        """The OPT_* bits for that seat's game (link/mailbox.py)."""
+        """The OPT_* bits for that seat's game (link/mailbox.py). The right stick's spells are the
+        player's, if the castle has them on (its rules: launcher/rules.py stick_spells)."""
         from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, spell_options
-        return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(self.spells(seat)) |
+        rules = getattr(self, "current_rules", None) or {}
+        spells = self.spells(seat) if rules.get("stick_spells", True) else [None] * 4
+        return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(spells) |
                 (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
                 (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
                 (OPT_ALUCARD_HUD if self.settings.get("alucard_hud") else 0) |
                 (0 if self.settings.get("partner_tint", True) else OPT_NO_TINT))
 
+    def refresh_players(self):
+        """In a game: each player's own options again (a setting, or the castle's rules, changed)."""
+        view = self.view
+        if view is not None:
+            for i, g in enumerate(view.games[:2]):
+                try:
+                    g.host("set_player", options=self.options(i))
+                except Exception:  # noqa: BLE001 - next load has them anyway
+                    log.exception("player options")
+
+    def player_rows(self):
+        """Your settings: what's each player's own (not the castle's), in the game's style (issue 232)."""
+        from link.mailbox import SPELLS
+        rows = [r for r in self.option_rows() if r["key"] in ("partner_vol", "partner_hp", "partner_tint", "spell_triggers", "alucard_hud", "show_ping")]
+        rows.insert(0, {"kind": "head", "key": None, "label": "While you play"})
+        names = {None: "Nothing", **{k: n for k, n in enumerate(SPELLS) if n}}
+        for seat in (0, 1) if not ANDROID else (0,):
+            rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}'s controls" if not ANDROID else "Controls"})
+            rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
+                         "hint": "Co-op Richter and Maria: L2 high jump, R2 blade dash. Alucard: spells on the right stick. Off: the original controls only."})
+            for d, spell in enumerate(self.spells(seat)):
+                rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
+                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows the spell and has the MP "
+                             "(and the castle has his spells on the right stick)."})
+        return rows
+
+    def change_player(self, key, step):
+        if key.startswith("shortcuts:"):
+            seat = int(key.split(":")[1])
+            self.set_shortcuts(seat, (not self.shortcuts(seat)) if step == 0 else step > 0)
+        elif key.startswith("spell:"):
+            _, seat, d = key.split(":")
+            spells = [list(self.spells(0)), list(self.spells(1))]
+            cur = spells[int(seat)][int(d)]
+            k = SPELL_CHOICES.index(cur) if cur in SPELL_CHOICES else 0
+            spells[int(seat)][int(d)] = SPELL_CHOICES[(k + (step or 1)) % len(SPELL_CHOICES)]
+            self.settings["spells"] = spells
+            save_settings(self.settings)
+        else:
+            self.change_option(key, step)
+        self.refresh_players()
+
+    def player_settings(self):
+        """Pause › Your settings, and Options › Your settings: each player's own."""
+        from ui.screens.options import options
+        if not self.menus:
+            return self.controls_menu()
+        options(self.menus, self.player_rows, self.change_player, title="Your settings", note="Only yours: not the castle's")
+
     def controls_menu(self):
         """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
         from link.mailbox import SPELLS
+        if self.menus:
+            return self.player_settings()
         ui, sel = self.ui, 0
         while True:
             items = []
@@ -1011,7 +1114,7 @@ class Launcher:
         if not path:
             return
         try:
-            self.ui.wait_for("Adding Saturn Maria and Ultimate Richter", f"From {path.name}\nThis takes about half a minute.",
+            self.ui_wait("Adding Saturn Maria and Ultimate Richter", f"From {path.name}\nThis takes about half a minute.",
                              lambda progress: self.make_saturn_characters(path, self.settings["disc"]))
         except characters.DiscError as e:
             self.ui.message("That disc won't work", str(e))
@@ -1033,7 +1136,7 @@ class Launcher:
         if not path:
             return
         try:
-            self.ui.wait_for("Adding Maria", f"From {path.name}\nThis takes a few seconds.",
+            self.ui_wait("Adding Maria", f"From {path.name}\nThis takes a few seconds.",
                              lambda progress: characters.maria_blob(path, MARIA_PATCHES, self.maria_blob_path()))
         except characters.DiscError as e:
             self.ui.message("That disc won't work", str(e))
@@ -1147,7 +1250,7 @@ class Launcher:
                                     coop.with_name(stem + " (Track 1).bin")) if p.exists()), coop.with_name(stem + ".cue"))
         src = Path(src)
         try:
-            cue = self.ui.wait_for("Updating the co-op disc",
+            cue = self.ui_wait("Updating the co-op disc",
                                    f"This version of SOTN Co-op changes the co-op disc: it's remade\nfrom {src.name}, once.",
                                    lambda progress: patcher.apply(src, PATCH, progress=progress))
         except (patcher.DiscError, patcher.bps.PatchError, OSError) as e:
@@ -1251,8 +1354,35 @@ class Launcher:
         save_settings(self.settings)
         return "saturn", moved + "Saturn Maria and Ultimate Richter are unlocked.", True
 
+    def disc_art(self, slot):
+        """An attached disc's picture, from the player's own disc (ui/screens/discs.py)."""
+        import gameart
+        theme = (self.menus or self.plain_menus()).theme
+        try:
+            if slot == "ps1":
+                return theme.pictures.get("logo")
+            if slot == "psp":
+                icon = paths.art_dir() / "psp-icon.png"
+                if not icon.exists() and self.settings.get("dxc_iso"):
+                    gameart.psp_icon(self.settings["dxc_iso"], icon)
+                return pygame.image.load(str(icon)) if icon.exists() else None
+            if slot == "saturn" and "maria" in theme.pictures:  # the two it unlocks: their portraits
+                from ui.screens.lobby import portrait
+                pair = [portrait(self.menus, c) for c in (4, 5)] if self.menus else []
+                if pair:
+                    out = pygame.Surface((pair[0].get_width() + pair[1].get_width() + 6, max(p.get_height() for p in pair)), pygame.SRCALPHA)
+                    out.blit(pair[0], (0, 0))
+                    out.blit(pair[1], (pair[0].get_width() + 6, 0))
+                    return out
+        except (pygame.error, OSError):
+            pass
+        return None
+
     def ui_wait(self, heading, text, task):
-        """A long job with the old progress screen (the vial): its own screen until part 2 has one."""
+        """A long job with a progress bar: in the game's style once its art is here, else the older one."""
+        if self.menus:
+            from ui.screens.progress import progress
+            return progress(self.menus, heading, " ".join(text.split("\n")), task)
         return self.ui.wait_for(heading, text, task)
 
     def discs_screen(self, first_run=False):
@@ -1260,12 +1390,9 @@ class Launcher:
         from ui.screens.discs import discs
         while True:
             # the randomizer and the BIOS: here until the game discs and the Options screen take them (design steps 7, 8)
-            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run,
-                        more=("Game discs & mods",) if self.menus and not first_run else ())
+            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, art=self.disc_art)
             if got == "quit":
                 raise SystemExit
-            if got == "Game discs & mods":
-                self.game_discs_screen()
             elif got == "back" or (got == "continue" and self.disc()):
                 return
 
@@ -1631,13 +1758,17 @@ class Launcher:
                 return {"lines": ["No castles yet: this starts your first."], "portrait": portrait}
             return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
         if key == "discs":
-            return {"lines": ["Symphony of the Night (PlayStation): attached",
-                              "Dracula X Chronicles (PSP): " + ("attached" if self.maria_ready() else "not attached"),
-                              "Symphony of the Night (Saturn): " + ("attached" if self.saturn_maria_ready() else "not attached"),
-                              "Randomizer: " + (self.mod_line() or "off")]}
+            return {"lines": ["PlayStation: attached",
+                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Co-op and Ultimate Maria)"),
+                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria, Ultimate Richter)")]}
         if key == "settings":
             return {"lines": ["Layout, sound, controls, and each castle's rules.",
                               "Also in the menus at the top of the window."]}
+        if key == "mods":
+            import library
+            names = [library.name(g) for g in library.discs(self.settings)]
+            return {"lines": ["Your mod presets: " + (", ".join(names[:4]) + (" and more" if len(names) > 4 else "") if names else "none yet"),
+                              "A new castle picks one. Your partner needs the same."]}
         return {}
 
     def home_new(self):
@@ -1646,7 +1777,8 @@ class Launcher:
         items = [("solo", "Solo", "Play a castle by yourself: any castle, any time."),
                  ("couch", "Couch co-op", "Two players on this PC, each with a controller."),
                  ("online", "Online co-op", "Play with a friend on their own PC or phone."),
-                 ("discs", "Discs & mods", "Your discs: Symphony of the Night, and the ones that unlock more characters."),
+                 ("discs", "Discs", "Your discs: Symphony of the Night, and the ones that unlock more characters."),
+                 ("mods", "Mods", "Mod presets: a randomized castle, SOTN Editor's hacks, Alternate Scarlet Symphony."),
                  ("settings", "Options", "Layout, sound, controls, castle rules."),
                  ("quit", "Quit", "")]
         if ANDROID:  # one game per device on Android (design/M9)
@@ -1705,6 +1837,8 @@ class Launcher:
             self.offer_update(self.updates.result)
         elif act == "discs":
             self.discs_screen() if self.menus else self.game_files()
+        elif act == "mods":
+            self.mods_screen() if self.menus else self.randomizer_menu()
         elif act == "savestates":
             self.savestates()
         elif act == "debug_starts":
@@ -1828,11 +1962,16 @@ class Launcher:
             if name is None:
                 return None
             # its settings, before it exists (design/launcher-overhaul.md): the mode is chosen once
+            import library
             rules = castle_rules.for_castle(None, self.settings)
             mode = {"mode": "story"} if self.boss_rush_available() else None
+            if self.menus:  # its mod preset: Co-op (no mods) unless the player picks one (issue 232)
+                mode = dict(mode or {}, preset=None, presets=[(None, library.PLAIN)] + [(g["id"], library.name(g)) for g in library.discs(self.settings)])
             if self.new_castle_settings(name or "New castle", rules, mode) is None:
                 continue  # back: to its name
-            if mode and mode["mode"] == "rush":
+            if mode and "preset" in mode and mode["preset"] != self.settings.get("game_disc") and not self.use_disc(mode["preset"]):
+                continue  # its preset couldn't be built: said, and back to its name
+            if mode and mode.get("mode") == "rush":
                 castle, fresh = self.new_boss_rush(name or None), False
             else:
                 castle, fresh = Castle.new(name=name or None), True
@@ -1880,6 +2019,8 @@ class Launcher:
 
     def continue_castle(self, s, castle, fresh):
         """Loads a castle's cards and joint save (unless it's new) into the game(s)."""
+        import rules as castle_rules
+        self.current_rules = castle_rules.for_castle(castle, self.settings)  # (its rules decide the players' options too)
         if fresh:
             self.new_castle_start = True
             return
@@ -1909,7 +2050,6 @@ class Launcher:
         from gameview import GameView
         if self.sound:
             self.sound.music(False)  # the game's own takes over
-        self.apply_players(s)
         if len(s.games) == 1:  # a castle's slot 1 is this machine's player: card A (design/M11)
             cards = (playthrough.card("A"),) if playthrough else None
         else:
@@ -1927,6 +2067,8 @@ class Launcher:
                 playthrough.save_info()
             rush = bossrush.BossRush(s.joint, s.games, info["rush"], changed)
             goal = goal or f"Boss rush: {len(rush.rows)} bosses. Beat one and you're both at the next."
+        self.current_rules = castle_rules.for_castle(playthrough, self.settings) if rules is None else rules
+        self.apply_players(s)
         view = GameView(s, self.display, self.pads, self.audio, playthrough, goal,
                         self.settings.get("music", "auto"),
                         castle_rules.for_castle(playthrough, self.settings) if rules is None else rules, cards,
@@ -2039,6 +2181,10 @@ class Launcher:
     def ask_text(self, heading, subtitle, initial="", paste=None, footer="", limit=64):
         """A line of text: typed (the on-screen keyboard on a phone), or pasted when `paste` gives
         it (Ctrl+V; Square / X, or A in an empty box, on a controller). Returns it, or None (back)."""
+        if self.menus:  # in the game's style (ui/screens/text_entry.py)
+            from ui.screens.text_entry import text_entry
+            pad, keys = ("{x} done   {s} paste   {o} back", "Type   Ctrl+V: paste   Enter: done   Esc: back") if paste else ("", "")
+            return text_entry(self.menus, heading, subtitle, initial, paste, limit, pad, keys)
         text = initial
         pygame.key.start_text_input()
         try:
@@ -2086,6 +2232,21 @@ class Launcher:
             pygame.key.stop_text_input()
 
     def online_menu(self):
+        if self.menus:  # Host or Join, in the game's style
+            from ui.screens.pick import pick
+            while True:
+                choice = pick(self.menus, "Online co-op", [
+                    ("host", "Host", "Choose a castle; you get a room code to give your partner."),
+                    ("join", "Join", "Type your partner's room code: you play their castle, and keep a copy.")],
+                    "Both of you need the same version of SOTN Co-op.")
+                if choice is None:
+                    return
+                if choice == "host":
+                    picked = self.pick_castle("Online co-op: host", "Your partner joins it, and keeps a copy.")
+                    if picked:
+                        self.host_online(*picked)
+                else:
+                    self.join_online()
         while True:
             items = [("Host", "Pick a castle; you get a room code to give your partner"),
                      ("Join your partner", "Type their room code: you play their castle, and keep a copy"),
@@ -2330,6 +2491,8 @@ class Launcher:
                 view.set_rules(rules)
                 if view.playthrough:
                     view.playthrough.set_rules(view.rules)
+                self.current_rules = view.rules
+                self.refresh_players()  # (the right stick's spells are a rule)
             self.rules_menu(view.playthrough.name if view.playthrough else "This session", dict(view.rules), apply, view.joiner)
             return
         while True:
@@ -2461,7 +2624,7 @@ class Launcher:
             return {"kind": "action", "key": key, "label": label, "hint": hint, "value": value}
         head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
         rows = [head("View"),
-                {"kind": "choice", "key": "layout", "label": "Layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
+                {"kind": "choice", "key": "layout", "label": "Couch co-op layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
                  "hint": "Couch: how the two games share the window. Also View in the menu bar."},
                 switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
                 head("Sound"),
@@ -2480,7 +2643,7 @@ class Launcher:
                 switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
                 switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
                 head("Controls"),
-                action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
+                action("controls", "Your settings", "Each player's shortcuts and spells, and what shows while you play. Also in the pause menu."),
                 action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
                 action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
                 head("PlayStation"),

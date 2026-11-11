@@ -120,6 +120,8 @@ def main():
         args = json.loads(Path(os.environ["COOP_UPDATE_DRY"]).read_text())
         check(args[0] == str(path) and "/VERYSILENT" in args and f"/DIR={Path(d) / 'Games' / 'sotn-coop'}" in args,
               "the installer is started silently, over the same folder")
+        update.tidy(d)
+        check(not path.exists(), "the next version's first start deletes the installer that brought it")
     server.shutdown()
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0

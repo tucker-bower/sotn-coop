@@ -50,6 +50,8 @@ def _merge(src, dst, last=None):
 
 def move(progress=None):
     old, new = paths.old_data_dir(), paths.install_root() / "data"
+    if not (old / "settings.json").exists():  # moved already, or nothing there: nothing to do
+        return True, ""
     files = _files(old)
     total = sum(f.stat().st_size for f in files)
     free = shutil.disk_usage(new.parent).free

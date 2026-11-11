@@ -46,7 +46,7 @@ def main():
         b = library.add(st, [dict(hacks, ids=["fast-warp", "minimap"]), seed])
         check(library.describe(a) == library.describe(b) and "seed abc" in library.describe(a) and "Fast Warp, MiniMap" in library.describe(a),
               f"the same mods are described the same whatever their order: {library.describe(a)!r}")
-        check(library.name(a) == "Seed abc + Fast Warp and 1 more", f"its short name: {library.name(a)!r}")
+        check(library.name(a) == "Casual abc + Fast Warp and 1 more", f"its short name: {library.name(a)!r}")
         a["name"] = "Our run"
         check(library.name(a) == "Our run" and library.describe(a) != "Our run", "a name the player gives it shows; partners still compare what's in it")
         check([library.standing({"mods": [seed]}), library.standing({"mods": [hacks]}), library.standing(a),

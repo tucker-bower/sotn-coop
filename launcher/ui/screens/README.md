@@ -5,6 +5,9 @@ One file per screen: each is a function that draws, takes input and returns what
 | File | What it does |
 |---|---|
 | `discs.py` | Your discs: the PlayStation one (needed) and the two that unlock characters, by drop or browse. |
+| `pick.py` | A small choice in the middle of the screen (Host or Join). |
+| `progress.py` | A long job's progress bar. |
+| `text_entry.py` | A line of text: a castle's or preset's name, a room code. |
 | `update.py` | A newer version is out: what's new, that saves are safe, Update now or Later. |
 | `options.py` | Options: the menu bar's items and the app's settings, in one list a controller can reach. |
 | `lobby.py` | Who's playing: each player's card with their character's portrait, and online the partner's with the room code. |

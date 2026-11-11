@@ -657,8 +657,8 @@ class GameView:
         st = self.launcher.settings if self.launcher else self.display.settings
         while True:
             items = ["Resume",
-                     f"Layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
-                     "How to play", "Castle rules", "Report a problem (F9)", "Save and go back to the menu"]
+                     f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
+                     "How to play", "Castle rules", "Your settings", "Report a problem (F9)", "Save and go back to the menu"]
             for ev in pygame.event.get():
                 if self.display.handle(ev):
                     continue
@@ -709,7 +709,11 @@ class GameView:
                         if self.launcher:
                             self.launcher.action("rules")
                         continue
-                    if sel == 4:
+                    if sel == 4:  # each player's own: apart from the castle's rules (issue 232)
+                        if self.launcher:
+                            self.launcher.action("player_settings")
+                        continue
+                    if sel == 5:
                         self.report()
                         return "resume"
                     return "menu"

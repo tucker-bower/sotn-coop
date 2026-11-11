@@ -119,6 +119,24 @@ def disc_files(disc, paths):
     return out
 
 
+def psp_icon(iso, out):
+    """The PSP game's own icon (PSP_GAME/ICON0.PNG, 144x80), from the player's disc image, for the
+    discs screen. True if it's there."""
+    import characters
+    try:
+        disc = characters.Iso(iso)
+        try:
+            data = disc.read("PSP_GAME/ICON0.PNG")
+        finally:
+            disc.close()
+    except Exception:  # noqa: BLE001 - no icon: the slot shows the characters it unlocked
+        return False
+    if not data or not data.startswith(b"\x89PNG"):
+        return False
+    Path(out).write_bytes(data)
+    return True
+
+
 def ready(out):
     try:
         about = json.loads((Path(out) / "art.json").read_text())

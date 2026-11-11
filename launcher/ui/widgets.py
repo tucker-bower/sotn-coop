@@ -27,6 +27,7 @@ class Menus:
         self.name = name
         self.ui.seen(name, about)
         self.s.fill(BACK)
+        self.theme.frame()
         self.ui._rects = []
 
     def hit(self, key, rect):

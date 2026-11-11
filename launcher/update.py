@@ -167,11 +167,22 @@ def install(path):
     args = [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CLOSEAPPLICATIONS"]
     if root:
         args.append(f"/DIR={root}")
+    if os.environ.get("COOP_UPDATE_NOLAUNCH"):  # tests on a PC someone's using: the launcher doesn't start again
+        args.append("/NOLAUNCH=1")
     if os.environ.get("COOP_UPDATE_DRY"):  # tests: written down, not run
         Path(os.environ["COOP_UPDATE_DRY"]).write_text(json.dumps(args))
         return
     flags = 0x00000008 | 0x00000200 if sys.platform == "win32" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(args, creationflags=flags, close_fds=True)
+
+
+def tidy(folder):
+    """The installers earlier updates downloaded: done with once the new version runs."""
+    for f in Path(folder).glob("SOTN-Coop-setup-*"):
+        try:
+            f.unlink()
+        except OSError:  # (an installer still running: next time)
+            pass
 
 
 def _android():

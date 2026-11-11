@@ -6,7 +6,7 @@ import pygame
 
 import rules as castle_rules
 
-from ..theme import DIM, GOLD, GREEN, INK, wrap
+from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
 from ..widgets import ROW, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
@@ -20,8 +20,10 @@ DIFFICULTY_HINT = ("Sets enemy HP, damage taken and XP together. Easy: 100% HP w
 def table(rules, start, mode, read_only):
     """The screen's rows: (kind, key). Headings aren't selectable."""
     out = [("start", "")] if start else []
-    if mode is not None:
+    if mode is not None and "mode" in mode:
         out.append(("mode", ""))
+    if mode is not None and "presets" in mode:
+        out.append(("preset", ""))
     out.append(("difficulty", ""))
     sliders = {s[0] for s in castle_rules.SLIDERS}
     for heading, keys in castle_rules.GROUPS:
@@ -52,6 +54,10 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         if kind == "mode":
             if choose_mode:
                 mode["mode"] = "rush" if mode["mode"] == "story" else "story"
+            return
+        if kind == "preset":
+            ids = [p for p, _ in mode["presets"]]
+            mode["preset"] = ids[(ids.index(mode.get("preset")) + (step or 1)) % len(ids)]
             return
         if read_only:
             return
@@ -121,7 +127,7 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         m.begin("Castle settings")
         m.window(HEAD)
         t.text(s, "Castle settings", HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text_right(s, name[:36] + ("   the host's: only they can change them" if read_only else ""), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        t.text_right(s, shorten(name, (HEAD[2] - 16) // 8 - len("Castle settings") - 3), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
         m.window(LIST)
         hint = ""
         x, y0, w = LIST[0] + 4, LIST[1] + 6, LIST[2] - 8
@@ -140,6 +146,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             elif kind == "mode":
                 current = next(mo for mo in MODES if mo[0] == mode["mode"])
                 label, value, row_hint = "Mode", current[1], current[2]
+            elif kind == "preset":
+                label, value, row_hint = "Mod preset", dict(mode["presets"]).get(mode.get("preset"), "?"), \
+                    "The castle's mods, made in Mods on the main menu. Co-op (no mods) is the original game."
             elif kind == "difficulty":
                 now = castle_rules.difficulty(rules)
                 label, value, row_hint, plain = "Difficulty", now, DIFFICULTY_HINT, now == "Medium"
@@ -163,10 +172,11 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 label, value, row_hint = f"{names[key]} acts as", names[rules["remap_map"].get(key, key)], "For both players."
             else:
                 label, row_hint = "Back to the defaults", "Every setting as it comes."
-            t.text(s, label, x + (6 if kind in ("start", "mode", "difficulty", "defaults") else 14), ty, INK)
+            t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "defaults") else 14), ty, INK)
             if value is not None:
-                arrows = kind in ("mode", "difficulty") and on and not (read_only and kind == "difficulty")
-                t.text_right(s, ("{<} " if arrows else "") + value + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
+                arrows = kind in ("mode", "preset", "difficulty") and on and not (read_only and kind == "difficulty")
+                room = (LIST[2] - 32 - len(label) * 8) // 8 - (8 if arrows else 0)  # (what's left of the row after its label)
+                t.text_right(s, ("{<} " if arrows else "") + shorten(str(value), room) + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
             if on:
                 hint = row_hint
             if not (kind == "slider"):
@@ -178,7 +188,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         if first + fits < len(rows):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
-        for k, line in enumerate(wrap(hint, 56)[:4]):
+        if read_only:  # (said first in the explanation window)
+            hint = "The host's settings: only they can change them. " + hint
+        for k, line in enumerate(wrap(hint, 56)[:3]):
             t.text(s, line, HINT[0] + 8, HINT[1] + 7 + k * 10, DIM)
         if read_only:
             m.footer("{o} back", "Esc: back")
