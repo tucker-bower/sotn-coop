@@ -1047,9 +1047,8 @@ def _randomizer(pg):
         ("expect", preset_made, "one click: a casual seed rolled, Fast Warp added, named and built"),
         ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN),  # Solo
-        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
+        ("screen", "Solo"), ("call", lambda d: setattr(d, "real_settings", True)), ("key", pg.K_RETURN),  # New castle
         ("screen", "Name your castle"), ("pad", 0, A),
-        ("call", lambda d: setattr(d, "real_settings", True)),
         ("screen", "Castle settings"), ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-preset"),
         ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Start (Mode, then Mod preset: the one made)
         ("call", lambda d: setattr(d, "real_settings", False)),
