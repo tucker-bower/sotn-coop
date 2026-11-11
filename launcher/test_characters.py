@@ -26,6 +26,9 @@ import characters  # noqa: E402
 DXC = ROOT / "disks" / "sotn.pspus.iso"
 PATCHES = ROOT / ".env" / "out" / "maria"
 DECOMP = ROOT / ".env" / "src" / "sotn-decomp"
+sys.path.insert(0, str(ROOT / "harness"))
+from coop_env import ENV, path as env_path  # noqa: E402
+ULTIMATE = env_path(ENV["paths"].get("sotn_ultimate", ".env/src/sotn-ultimate"))  # optional (env.example.toml)
 SECTOR = 2048
 
 
@@ -111,7 +114,7 @@ def test_saturn_maria(tmp):
           f"({ovl} bytes, and {partner} as the partner)")
     out.append(same)
     # her sound banks: the ones SOTN Ultimate makes, byte for byte (its MARIA_SD.BIN, when here)
-    ult = Path("/home/tucker/research-src/sotn-ultimate/build/us/MARIA_SD.BIN")
+    ult = ULTIMATE / "build/us/MARIA_SD.BIN"
     banks = (blob[32 + al(ovl):32 + al(ovl) + vh], blob[32 + al(ovl) + al(vh):32 + al(ovl) + al(vh) + vb],
              blob[p0 + al(partner):p0 + al(partner) + vh2], blob[p0 + al(partner) + al(vh2):p0 + al(partner) + al(vh2) + vb2])
     same = all(banks) and (not ult.exists() or [ult.read_bytes()[o:o + len(b)] for o, b in
@@ -133,7 +136,7 @@ def test_saturn_maria(tmp):
     # Ultimate Richter (D184): RIC.BIN with the coat, as SOTN Ultimate's build_ric2.py makes it
     ur = characters.ultimate_richter_blob(cue, coop, PATCHES, tmp / "ur.blob").read_bytes()
     who, size = struct.unpack_from("<2I", ur, 4)
-    ult = Path("/home/tucker/research-src/sotn-ultimate/build/us/RIC2.BIN")
+    ult = ULTIMATE / "build/us/RIC2.BIN"
     same = who == characters.CHAR_ULT_RICHTER and ur[32:32 + 8] != b"" and (
         not ult.exists() or ur[32:32 + size] == ult.read_bytes()[:size])
     print(f"{'ok ' if same else 'BAD'} Ultimate Richter's blob: {size} bytes of RIC.BIN in the coat"

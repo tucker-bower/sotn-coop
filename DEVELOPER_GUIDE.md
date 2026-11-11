@@ -32,6 +32,23 @@ Three git-ignored places hold what's specific to your machine.
 
 **`local/`: anything else of yours,** such as playtest sheets and notes.
 
+## Disk space
+A disc image is 540 MB, a savestate 12 MB, and a full set of savestates, fixtures and mod discs a few GB. On WSL2, Linux's disk is a file on a Windows drive (C: by default) that grows and never shrinks by itself, so Linux's own `df` can show plenty free while C: fills, and a full C: stops WSL. `scripts/disk_space.py` checks the drive that really fills (30 GB on C: under WSL) before anything big, and the scripts that write gigabytes run it for you. With `big_files` set (below), it checks for 30 GB there and only 15 GB on C:.
+
+**Big files on another drive.** If another drive has more room, set `big_files` in `env.toml` to a folder there (on WSL, `/mnt/<drive>/<folder>`), then run:
+```
+python3 scripts/worktree_env.py offload --discs
+```
+It moves your savestates, fixtures, mod discs and big disc images there, checks each copy, and leaves links, so every path stays the same. Keep code, toolchains and test output on Linux's own disk: through WSL another drive reads big files fast, but small files about 140 times slower, and it can't hold the Unix sockets some tests make.
+
+## Worktrees
+To build and test a branch without disturbing your main checkout, give it a worktree with its own environment:
+```
+python3 scripts/worktree_env.py new ../sotn-coop-work --ref origin/<branch>
+../sotn-coop-work/scripts/rebuild_fixtures.sh
+```
+It copies this checkout's environment (about 4 GB, without savestates or test output), points the copy's decomp at the new worktree, applies its `patches/sotn-decomp.patch`, links `disks`, copies `env.toml`, and puts the big folders under `big_files` if that's set. When you switch the worktree to a branch with a different `patches/sotn-decomp.patch`, reset its decomp first (the script prints how), or the character builds fail.
+
 ## What each kind of work needs
 | To | You also need |
 |---|---|

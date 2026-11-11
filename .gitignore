@@ -1,6 +1,8 @@
 # co-op: local machine state and game data (never commit)
 .env
 .env/
+.env-local
+.env-local/
 env.toml
 launcher/report_key.txt
 patcher/*.bps
