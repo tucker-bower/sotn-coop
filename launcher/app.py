@@ -2103,7 +2103,100 @@ class Launcher:
             ui.flip()
             pygame.time.wait(16)
 
+    # --- Options (ui/screens/options.py): the menu bar's items and the app's settings, for a controller too
+
+    NETSIMS = (None, "transatlantic", "wifi", "cellular")
+    NETSIM_NAMES = {None: "Off", "transatlantic": "Across an ocean", "wifi": "Bad Wi-Fi", "cellular": "Phone hotspot"}
+
+    def option_rows(self):
+        st = self.settings
+
+        def switch(key, label, hint, default=False):
+            return {"kind": "switch", "key": key, "label": label, "hint": hint, "value": bool(st.get(key, default))}
+
+        def action(key, label, hint, value=""):
+            return {"kind": "action", "key": key, "label": label, "hint": hint, "value": value}
+        head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
+        rows = [head("View"),
+                {"kind": "choice", "key": "layout", "label": "Layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
+                 "hint": "Couch: how the two games share the window. Also View in the menu bar."},
+                switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
+                head("Sound"),
+                {"kind": "choice", "key": "music", "label": "Music", "value": {"auto": "Automatic", "left": "Left game", "right": "Right game"}[st.get("music", "auto")],
+                 "hint": "Couch: which game plays the music. Automatic: the left one while it's in play."},
+                {"kind": "slider", "key": "partner_vol", "label": "Partner's sounds", "value": st.get("partner_vol", 60), "low": 0, "high": 100, "step": 10,
+                 "hint": "How loud your partner's attacks and steps are, in your game."},
+                switch("menu_music", "Menu music", "The title screen's music, in these menus.", True),
+                {"kind": "slider", "key": "menu_volume", "label": "Menu volume", "value": st.get("menu_volume", 70), "low": 0, "high": 100, "step": 10,
+                 "hint": "The menus' music and sounds."},
+                head("While you play"),
+                switch("partner_hp", "Partner's health bar", "Under your own health, while you play together.", True),
+                switch("partner_tint", "Tint the partner", "Tells two players of the same character apart.", True),
+                switch("spell_triggers", "Spells on triggers", "Alucard: hold R2 with Square, Circle, Cross or Triangle for Dark Metamorphosis, "
+                       "Summon Spirit, Hellfire, Tetra Spirit; L2 with Square or Circle for Soul Steal, Sword Brothers."),
+                switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
+                switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
+                head("Controls"),
+                action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
+                action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
+                action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                head("Help"),
+                action("help_play", "How to play", "Playing together, castles, characters."),
+                action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
+                action("about", "About SOTN Co-op", "The version, and where your saves are.", VERSION),
+                action("data_folder", "Open the data folder", str(paths.data_dir())),
+                head("Developer"),
+                action("savestates", "Savestates", "Go back to a moment in a castle."),
+                action("debug_starts", "Debug starts", "Start anywhere on the route, for testing and bug reports."),
+                {"kind": "choice", "key": "netsim", "label": "Simulate a network", "value": self.NETSIM_NAMES.get(st.get("netsim"), "Off"),
+                 "hint": "Online: plays as if over a worse connection. For testing."},
+                action("open_log", "Open the log", "The launcher's log, for bug reports.")]
+        return rows
+
+    def change_option(self, key, step):
+        st = self.settings
+        if key == "layout":
+            order = list(LAYOUT_NAMES)
+            st["layout"] = order[(order.index(st.get("layout", "auto")) + (step or 1)) % len(order)]
+        elif key == "music":
+            order = ["auto", "left", "right"]
+            st["music"] = order[(order.index(st.get("music", "auto")) + (step or 1)) % 3]
+        elif key == "netsim":
+            order = list(self.NETSIMS)
+            now = st.get("netsim") if st.get("netsim") in order else None
+            st["netsim"] = order[(order.index(now) + (step or 1)) % len(order)]
+        elif key in ("partner_vol", "menu_volume"):
+            st[key] = max(0, min(100, st.get(key, 60 if key == "partner_vol" else 70) + step * 10))
+        elif key == "_fullscreen":
+            if (step == 0) or (step > 0) != self.display.fullscreen:
+                self.display.toggle_fullscreen()
+        else:  # a switch
+            defaults = {"partner_hp": True, "partner_tint": True, "menu_music": True}
+            now = bool(st.get(key, defaults.get(key, False)))
+            st[key] = (not now) if step == 0 else step > 0
+        if key in ("menu_music", "menu_volume") and self.sound:
+            self.sound.refresh()
+        save_settings(st)
+        self.menubar.update(st)
+
+    def options_screen(self):
+        from ui.screens.options import options
+        sel = 0
+        while True:
+            got = options(self.menus, self.option_rows, self.change_option, sel)
+            if got is None:
+                return
+            key, sel = got
+            if key == "controls":
+                self.controls_menu()
+            elif key in ("controllers", "savestates", "debug_starts"):
+                self.go(key)
+            else:
+                self.action(key)  # help pages, About, the data folder, the log
+
     def settings_menu(self):
+        if self.menus:
+            return self.options_screen()
         ui = self.ui
         sel = 0
         while True:

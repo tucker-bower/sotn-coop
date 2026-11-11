@@ -244,6 +244,37 @@ def main():
         got, calls, _, _ = disc_screen([[], [("mouse", 8 + 157 + 20, 100, True)], ["back"]], have={"ps1": "sotn.cue"})
         check(calls == [("psp", None)], "the mouse: a click on the PSP slot browses for that disc")
 
+        # Options
+        import types
+
+        import app
+        from ui.screens.options import options
+        from winmenu import MENUS
+        fake = types.SimpleNamespace(settings={}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES)
+        rows = app.Launcher.option_rows(fake)
+        keys = {r["key"] for r in rows}
+
+        def actions(items):
+            for item in items:
+                if item is None:
+                    continue
+                if isinstance(item[1], list):
+                    yield from actions(item[1])
+                else:
+                    yield item[1]
+        elsewhere = {"new", "continue", "quit", "rules", "settings",  # the main menu and the castle list have these; this is Settings
+                     "pause", "report", "moment", "leave"}             # only in a game: the pause menu has them
+        missing = sorted({a.split(":")[0] if a.startswith(("layout:", "netsim:")) else a for a in actions(MENUS)} - keys - elsewhere
+                         - {"fullscreen"} if "_fullscreen" in keys else ["fullscreen"])
+        check(not missing, f"every item in the window's menu bar is in Options, for a controller too: missing {missing}")
+        changed = []
+        m, ui, _ = menus([["down"], ["ok"], ["right"], ["back"]])
+        check(options(m, lambda: rows, lambda k, st: changed.append((k, st))) is None and ui.names == ["Options"],
+              "Options: back leaves")
+        check(changed == [("_fullscreen", 0), ("_fullscreen", 1)], f"down skips the heading under it; OK and right change the row: {changed}")
+        m, ui, _ = menus([["up"], ["ok"]])
+        check(options(m, lambda: rows, lambda k, st: None)[0] == "open_log", "up from the first row is the last: OK on an action returns it")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 
