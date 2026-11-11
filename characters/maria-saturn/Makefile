@@ -7,7 +7,7 @@
 # checkout, $(ULT)).
 VERSION ?= us
 ROOT    ?= $(shell if [ -f ../../.env/src/sotn-decomp/sotn.sh ]; then echo ../../.env/src/sotn-decomp; else echo ../../../..; fi)
-ULT     ?= /home/tucker/research-src/sotn-ultimate
+ULT     ?= $(shell cd ../.. && python3 -c 'import sys; sys.path.insert(0, "harness"); from coop_env import ENV, path; print(path(ENV["paths"].get("sotn_ultimate", ".env/src/sotn-ultimate")))' 2>/dev/null)
 GEN     ?= $(ULT)/build/us/mod/mar
 BUILD   := $(ROOT)/build/coop/maria-saturn
 TREE    := $(BUILD)/tree
