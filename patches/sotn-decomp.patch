@@ -306,7 +306,7 @@ index 027137b..89fb5df 100644
          } else {
  #ifdef VERSION_PSP
 diff --git a/src/maria/pl_blueprints.c b/src/maria/pl_blueprints.c
-index ce01a3c..275a9a3 100644
+index ce01a3c..67c5d91 100644
 --- a/src/maria/pl_blueprints.c
 +++ b/src/maria/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -329,7 +329,17 @@ index ce01a3c..275a9a3 100644
      entity->attack = g_api.CalcDealDamageMaria(entity->attack);
      func_maria_8015F9F0(entity);
  }
-@@ -285,7 +292,24 @@ void MarUpdatePlayerEntities(void) {
+@@ -91,6 +98,9 @@ s32 MarCheckSubweapon(
+     // Not an item crash. Just read the item in.
+     if (isItemCrash == 0) {
+         *actualSubwpn = subweapons_def[g_Status.subWeapon];
++#ifdef COOP_MARIA
++        actualSubwpn->heartCost = CoopMarHeartCost(actualSubwpn->heartCost); // #202: the Heart Broach
++#endif
+         if (g_Status.hearts >= actualSubwpn->heartCost) {
+             if (useHearts) {
+                 g_Status.hearts -= actualSubwpn->heartCost;
+@@ -285,7 +295,24 @@ void MarUpdatePlayerEntities(void) {
      for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
          if (entity->entityId != 0) {
              if (entity->step == 0) {
@@ -355,7 +365,7 @@ index ce01a3c..275a9a3 100644
              }
              if (!isPrologueTimeStopped || (entity->flags & FLAG_UNK_10000)) {
                  entity->pfnUpdate(entity);
-@@ -1283,6 +1307,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
+@@ -1283,6 +1310,9 @@ void MarSetWeaponParams(Entity* entity, s32 attack, s32 attackElement,
      entity->stunFrames = stunFrames;
      entity->hitEffect = hitEffect;
      entity->entityRoomIndex = entityRoomIndex;
@@ -537,8 +547,22 @@ index 80452af..4156ec7 100644
      if (PLAYER.facingLeft == 0 && g_Player.vram_flag & TOUCHING_R_WALL) {
          isTouchingGround = 1;
      }
+diff --git a/src/maria/pl_subweapons.c b/src/maria/pl_subweapons.c
+index 391e087..2180f7c 100644
+--- a/src/maria/pl_subweapons.c
++++ b/src/maria/pl_subweapons.c
+@@ -1,5 +1,9 @@
+ // SPDX-License-Identifier: AGPL-3.0-or-later
+ #include "maria.h"
++#ifdef COOP_MARIA
++// Every attack here is a guardian's: Brilliant Mail adds to its own value (#202, coop_maria.c)
++#define MarSetWeaponParams(e, attack, ...) MarSetWeaponParams(e, CoopMarGuardianGear(attack), __VA_ARGS__)
++#endif
+ 
+ // ** How to calculate self->unk5A
+ // GFX_ENTRY(Y, X, ...
 diff --git a/src/ric/pl_blueprints.c b/src/ric/pl_blueprints.c
-index 4fd8301..31ed46a 100644
+index 4fd8301..aef4fe3 100644
 --- a/src/ric/pl_blueprints.c
 +++ b/src/ric/pl_blueprints.c
 @@ -1,5 +1,8 @@
@@ -561,7 +585,17 @@ index 4fd8301..31ed46a 100644
      entity->attack = g_api.func_800FD664(entity->attack);
      func_8015F9F0(entity);
  }
-@@ -481,7 +488,24 @@ void RicUpdatePlayerEntities(void) {
+@@ -114,6 +121,9 @@ s32 RicCheckSubweapon(
+     // Not an item crash. Just read the item in.
+     if (isItemCrash == 0) {
+         *actualSubwpn = subweapons_def[g_Status.subWeapon];
++#ifdef COOP_RIC
++        actualSubwpn->heartCost = CoopRicHeartCost(actualSubwpn->heartCost); // #202: the Heart Broach
++#endif
+         if (g_Status.hearts >= actualSubwpn->heartCost) {
+             if (useHearts) {
+                 g_Status.hearts -= actualSubwpn->heartCost;
+@@ -481,7 +491,24 @@ void RicUpdatePlayerEntities(void) {
      for (i = 4; i < STAGE_ENTITY_START; i++, g_CurrentEntity++, entity++) {
          if (entity->entityId != 0) {
              if (entity->step == 0) {
