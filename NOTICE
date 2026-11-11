@@ -20,6 +20,9 @@ What the releases include, and under which licence (full texts in licenses/):
   saturn_sfx.ts, vab.ts and dsp.ts and its tools/satxa.c VAG encoder, and launcher/saturn_richter.py
   its ric2.ts makeRic2 (Ultimate Richter's coat).
   https://github.com/renanbianchi/sotn-ultimate
+- SOTN Editor's Extra Hacks, by pddmergilla: GPL-3.0. patcher/mods/hacks.json holds the bytes
+  the hacks we've tested write, made with the editor's own code by harness/make_hack_patches.py.
+  https://github.com/pddmergilla/sotn-editor
 - Python: PSF License. The Windows build uses python.org's embeddable distribution.
 - libretro.py: MIT. pygame-ce (Windows) and pygame (Android): LGPL-2.1. Pillow: MIT-CMU.
 - Android only: python-for-android (MIT), pyjnius (MIT), SDL2, SDL2_image, SDL2_mixer and

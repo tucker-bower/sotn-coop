@@ -300,6 +300,7 @@ Four PRs: steps 1–3, so the style is agreed on real screens before the rest is
 - Three built disc images are kept; the rest are recipes, rebuilt when used.
 - A castle switches to its own disc without asking.
 - The host's mods aren't sent to the joiner: the joiner makes the same disc themselves.
+- A joiner who switches to the host's disc asks the host to host again, rather than reconnecting to the same room (D195).
 - Alternate Scarlet Symphony is downloaded from its author's release rather than shipped in our installer; its 34 hacks stay out of the checklist until issue 181 tests them.
 - The Discord link is mouse-only, like the GitHub one.
 - Enemy HP alone is half the co-op figure at every difficulty (50 / 100 / 150 / 200%).

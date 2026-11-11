@@ -2400,6 +2400,9 @@ class Launcher:
                 action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
                 action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
                 action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                head("PlayStation"),
+                action("bios", "BIOS", "OpenBIOS is built in and co-op is tested with it. Your console's own BIOS works too.",
+                       "OpenBIOS" if self.bios() == BUNDLED_BIOS else Path(self.bios()).name),
                 head("Help"),
                 action("help_play", "How to play", "Playing together, castles, characters."),
                 action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
@@ -2449,6 +2452,8 @@ class Launcher:
             key, sel = got
             if key == "controls":
                 self.controls_menu()
+            elif key == "bios":
+                self.choose_bios()
             elif key in ("controllers", "savestates", "debug_starts"):
                 self.go(key)
             else:

@@ -14,7 +14,8 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `emu.py` | One headless, frame-stepped game on SwanStation. |
 | `fixtures_m12.py` | Builds the savestates the coverage tests start from. |
 | `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
-| `editor_hacks.js` | **Manual.** Applies SOTN Editor hacks for `mods.py` (not a supported mod: D174). |
+| `editor_hacks.js` | **Manual.** Applies SOTN Editor hacks for `mods.py` and `make_hack_patches.py`. |
+| `make_hack_patches.py` | **Manual.** Makes `patcher/mods/hacks.json` from the pinned SOTN Editor: each tested hack's bytes, checked against the editor's own builds. |
 | `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates. Keeps only the tested presets' discs (540 MB each); `--test` checks every preset one disc at a time. |
 | `module.py` | Reads the co-op module's symbols and state from RAM. |
 | `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |

@@ -23,13 +23,13 @@ def patcher_files(script):
     """The patcher files a build script copies."""
     m = re.search(r'/patcher/\{([^}]*)\}\.py', (ROOT / script).read_text())
     shipped = {f"{n}.py" for n in m.group(1).split(",")} if m else set()
-    return shipped | set(re.findall(r'/patcher/(\w+\.json)"', (ROOT / script).read_text()))
+    return shipped | set(re.findall(r'/patcher/(?:mods/)?(\w+\.json)"', (ROOT / script).read_text()))
 
 
 def patcher_needs():
     """The patcher modules the app imports (launcher/app.py's randomizer and patcher, and what
     they import from the patcher folder), plus the data files they read."""
-    need, todo = set(), ["patcher.py", "randomizer.py"]
+    need, todo = set(), ["patcher.py", "randomizer.py", "modded.py"]
     while todo:
         f = todo.pop()
         if f in need:
@@ -57,6 +57,11 @@ def main():
         print(("ok   " if not missing else "FAIL ") + f"{script} ships Maria's {sorted(read)}" +
               (f": missing {sorted(missing)}" if missing else ""))
         if missing:
+            failures.append(script)
+    for script in ("scripts/build_release.sh", "android/build.sh"):
+        ok = "/patcher/mods/hacks.json" in (ROOT / script).read_text()
+        print(("ok   " if ok else "FAIL ") + f"{script} ships patcher/mods/hacks.json, SOTN Editor's tested hacks")
+        if not ok:
             failures.append(script)
     for script in ("scripts/build_release.sh", "android/build.sh"):
         text = (ROOT / script).read_text()
