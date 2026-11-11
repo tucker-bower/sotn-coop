@@ -19,4 +19,5 @@ Licence texts for the third-party software in our releases.
 | `SDL2_mixer-zlib.txt` | SDL2_mixer (zlib). |
 | `SDL2_ttf-zlib.txt` | SDL2_ttf (zlib). |
 | `SQLite.md` | SQLite (public domain). |
+| `SOTN-Editor-GPL-3.0.txt` | SOTN Editor's Extra Hacks (GPL-3.0). |
 | `SwanStation-GPL-3.0.txt` | SwanStation (GPL 3.0). |

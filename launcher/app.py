@@ -21,6 +21,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
@@ -154,7 +155,9 @@ class Navigate(Exception):
 
 
 class ConnectFailed(Exception):
-    pass
+    def __init__(self, why, theirs=None):
+        super().__init__(why)
+        self.theirs = theirs or {}  # the partner's HELO, when they were refused (their game disc: "mod")
 
 
 class UI:
@@ -580,72 +583,298 @@ class Launcher:
         os.environ["COOP_BIOS"] = str(bios or self.bios())
 
     def disc(self):
-        """The disc the games play: the randomized one while the randomizer is on, else the co-op disc."""
-        r = self.randomizer()
-        if r:
-            return Path(r["cue"])
+        """The disc the games play: the game disc in use once it's made (launcher/library.py), else
+        the co-op disc."""
+        import library
+        g = library.current(self.settings)
+        if g and library.ready(g, self.coop_patch_crc()):
+            return Path(g["built"]["cue"])
         d = self.settings.get("disc")
         return Path(d) if d and Path(d).exists() else None
 
-    # --- the randomizer (design/M20-randomizer.md)
+    # --- game discs: the co-op disc with mods (launcher/library.py, design/launcher-overhaul.md)
 
     def randomizer(self):
-        """The randomized co-op disc while it's on and made: {"cue", "source", "info", "crc", "on"}."""
-        r = self.settings.get("randomizer") or {}
-        return r if r.get("on") and r.get("cue") and Path(r["cue"]).exists() else None
+        """The game disc in use, if it has mods (the name stays from when there was one, a randomizer)."""
+        import library
+        return library.current(self.settings)
 
     def mod_line(self):
-        """The seed in words (link/host.py set_mod), or None for the plain co-op disc."""
-        import randomizer
-        r = self.randomizer()
-        return randomizer.describe(r["info"]) if r else None
+        """The game disc in use in words (link/host.py set_mod: partners compare it), or None for
+        Co-op (no mods)."""
+        import library
+        g = library.current(self.settings)
+        return library.describe(g) if g else None
 
-    def make_randomized(self, source, quiet=False):
-        """Layers co-op onto the player's randomized disc (or a seed's .ppf). Returns True if made;
-        says why not, unless quiet."""
+    def use_disc(self, did, quiet=False):
+        """Puts a game disc in use (None: Co-op (no mods)), making its image if it isn't made.
+        Returns True if it's ready; says why not, unless quiet."""
+        import library
         import patcher
-        import randomizer
-        retail, coop = self.settings.get("disc_source"), self.settings.get("disc")
-        if not retail or not coop:
+        g = library.get(self.settings, did) if did else None
+        if did and not g:
             return False
-        try:
-            cue, info, crc = self.ui.wait_for(
-                "Making the randomized co-op disc", f"From {Path(source).name}\nThis takes about a minute.",
-                lambda progress: randomizer.make(retail, source, coop, Path(coop).parent))
-        except (patcher.DiscError, OSError) as e:
-            log.warning("randomizer disc from %s: %s", source, e)
-            if not quiet:
-                self.ui.message("That randomized disc won't work", str(e))
-            return False
-        self.settings["randomizer"] = {"cue": str(cue), "source": str(source), "info": info, "crc": crc,
-                                       "on": True, "patch": self.coop_patch_crc()}
+        if g and not library.ready(g, self.coop_patch_crc()):
+            retail, coop = self.settings.get("disc_source"), self.settings.get("disc")
+            if not retail or not coop:
+                return False
+            try:
+                self.ui_wait(f"Making {library.name(g)}", "Your disc with these mods, and co-op. About a minute.",
+                             lambda progress: library.build(self.settings, g, retail, coop, self.coop_patch_crc(), progress))
+            except (patcher.DiscError, OSError) as e:
+                log.warning("game disc %s: %s", did, e)
+                self.disc_error = str(e)
+                save_settings(self.settings)
+                if not quiet:
+                    self.ui.message("That game disc can't be made", str(e))
+                return False
+        elif g:
+            g["used"] = time.time()
+        self.settings["game_disc"] = did
         save_settings(self.settings)
         return True
 
+    def castles_on(self, did):
+        from archive import Castle
+        return [c for c in Castle.all() if c.info.get("disc") == did]
+
+    def make_randomized(self, source, quiet=False):
+        """A game disc from the player's randomized disc (or a seed's .ppf), put in use. Returns
+        True if made; says why not, unless quiet."""
+        import library
+        import patcher
+        retail = self.settings.get("disc_source")
+        if not retail or not self.settings.get("disc"):
+            return False
+        try:
+            mod = self.ui_wait("Reading your randomized disc", f"From {Path(source).name}",
+                               lambda progress: library.keep_randomized(patcher.find_track1(retail)[0], source))
+        except (patcher.DiscError, OSError) as e:
+            if not quiet:
+                self.ui.message("That randomized disc won't work", str(e))
+            return False
+        g = library.add(self.settings, [mod])
+        if not self.use_disc(g["id"], quiet):
+            library.remove(self.settings, g["id"])
+            save_settings(self.settings)
+            return False
+        return True
+
     def randomizer_menu(self):
-        """Settings › Game files › Randomizer: choose a randomized disc, or turn it off and on."""
-        import randomizer
+        """The older screens' randomizer (no game art): choose a randomized disc, or no mods."""
+        import library
         ui = self.ui
         while True:
-            r = self.settings.get("randomizer") or {}
-            made = r.get("cue") and Path(r["cue"]).exists()
+            g = library.current(self.settings)
             rows = [("Choose a randomized disc", "Randomize your own disc on sotn.io, then choose the .cue it made "
-                     "(or the seed's .ppf). Your partner needs the same seed and preset.")]
-            if made:
-                rows.append((f"Randomizer: {'On' if r.get('on') else 'Off'}", randomizer.describe(r.get("info")) +
-                             ("   (new castles are randomized)" if r.get("on") else "   (new castles are the original game)")))
-            k = ui.menu("Randomizer", rows, "Co-op on the randomizer: both players play the same randomized castle.")
+                     "(or the seed's .ppf). Your partner needs the same seed and preset."),
+                    (f"Use {library.PLAIN}", "The original game, with co-op")]
+            k = ui.menu("Randomizer", rows, "In use: " + library.name(g))
             if k is None:
                 return
             if k == 0:
                 path = pick_file("Your randomized disc (.cue) or the seed's .ppf",
                                  [("Randomized disc or PPF", "*.cue *.bin *.ppf"), ("All", "*.*")], ui)
                 if path and self.make_randomized(path):
-                    ui.message("Randomizer on", randomizer.describe(self.settings["randomizer"]["info"]) +
-                               "\nNew castles are randomized. Your partner needs this seed too.")
-            elif k == 1:
-                r["on"] = not r.get("on")
+                    ui.message("Randomizer on", self.mod_line() + "\nNew castles are randomized. Your partner needs this seed too.")
+            else:
+                self.use_disc(None)
+
+    def game_disc_rows(self):
+        import library
+        from ui.theme import DIM, GOLD, INK
+        current = self.settings.get("game_disc")
+        counts = {}
+        from archive import Castle
+        for c in Castle.all():
+            counts[c.info.get("disc")] = counts.get(c.info.get("disc"), 0) + 1
+
+        def row(did, label, standing, hint):
+            n = counts.get(did, 0)
+            value = "in use" if did == current else (f"{n} castle{'s' * (n != 1)}" if n else standing)
+            return {"kind": "action", "key": did or "plain", "label": label, "hint": hint, "value": value,
+                    "colour": GOLD if did == current else (DIM if not n else INK)}
+        rows = [{"kind": "head", "key": None, "label": "Game discs: new castles are made on the one in use"},
+                row(None, library.PLAIN, "", "The original game, with co-op.")]
+        for g in library.discs(self.settings):
+            standing = library.standing(g)
+            rows.append(row(g["id"], library.name(g), standing,
+                            library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".") +
+                            "  Square / X / S: rename or remove."))
+        rows.append({"kind": "action", "key": "new", "label": "New game disc", "value": "",
+                     "hint": "Your disc with mods: a randomizer seed, SOTN Editor's hacks, Alternate Scarlet Symphony, or another patch."})
+        return rows
+
+    def game_discs_screen(self):
+        """Discs & mods › Game discs: which one is in use, and making new ones."""
+        from ui.screens.options import options
+        sel = 1
+        while True:
+            got = options(self.menus, self.game_disc_rows, lambda *_: None, sel, title="Game discs",
+                          note="Your partner needs the same one",
+                          footer=("{x} use   {s} rename, remove   {o} back", "Enter: use   S: rename, remove   Esc: back"))
+            if got is None:
+                return
+            kind, key = got
+            if kind == "drop":
+                self.disc_builder(dropped=key)
+                continue
+            if kind == "more":
+                if key in ("plain", "new"):
+                    continue
+                self.game_disc_more(key)
+                continue
+            sel = key
+            key = self.game_disc_rows()[key]["key"]
+            if key == "new":
+                self.disc_builder()
+            else:
+                self.use_disc(None if key == "plain" else key)
+
+    def game_disc_more(self, did):
+        import library
+        from ui.screens.options import options
+        g = library.get(self.settings, did)
+        rows = [{"kind": "action", "key": "rename", "label": "Rename", "hint": "Call it what you like. Partners compare what's in it, not its name."},
+                {"kind": "action", "key": "remove", "label": "Remove", "hint": "Its castles stay; they'll ask for a disc with the same mods."}]
+        got = options(self.menus, lambda: rows, lambda *_: None, title=library.name(g)[:40], note="")
+        if not got or got[0] != "action" and got[0] in ("drop", "more"):
+            return
+        if rows[got[1]]["key"] == "rename":
+            text = self.ask_text("Name this game disc", library.describe(g), initial=g.get("name") or "", limit=32)
+            if text is not None:
+                g["name"] = text.strip() or None
+        else:
+            n = len(self.castles_on(did))
+            if n and not self.ui.confirm("Remove this game disc?", f"{n} castle{'s' * (n != 1)} are played on it. They're kept, "
+                                         "and you can make the disc again to play them.", yes="Remove it", no="Keep it"):
+                return
+            library.remove(self.settings, did)
+        save_settings(self.settings)
+
+    def disc_builder(self, dropped=None):
+        """A new game disc: a randomizer seed, hacks, Alternate Scarlet Symphony, another patch."""
+        import library
+        import modded
+        import patcher
+        from ui.screens.options import options
+        retail = self.settings.get("disc_source")
+        if not retail:
+            return
+        retail_t1 = patcher.find_track1(retail)[0]
+        hacks = modded.hacks()
+        state = {"randomizer": None, "hacks": set(), "ass": False, "patch": None, "said": ""}
+
+        def take(path):
+            """A dropped or chosen file: a randomized disc or seed, ASS, or another patch."""
+            import randomizer
+            path = Path(path)
+            try:
+                if path.suffix.lower() == ".ppf":
+                    if library.keep_ass_file(path):
+                        state["ass"] = True
+                        state["said"] = "Alternate Scarlet Symphony -Final-: on."
+                        return
+                    try:
+                        state["randomizer"] = self.ui_wait("Reading the seed", path.name,
+                                                           lambda progress: library.keep_randomized(retail_t1, path))
+                        state["said"] = "Randomizer " + randomizer.describe(state["randomizer"]["info"]) + ": on."
+                    except patcher.DiscError:
+                        state["patch"] = library.keep_patch(retail_t1, path)
+                        state["said"] = f"{path.name}: on (untested with co-op)."
+                else:
+                    state["randomizer"] = self.ui_wait("Reading your randomized disc", path.name,
+                                                       lambda progress: library.keep_randomized(retail_t1, path))
+                    state["said"] = "Randomizer " + randomizer.describe(state["randomizer"]["info"]) + ": on."
+            except (patcher.DiscError, OSError) as e:
+                state["said"] = f"{path.name}: {e}"
+
+        def rows():
+            import randomizer
+            r = state["randomizer"]
+            out = [{"kind": "action", "key": "make", "label": "Make this game disc", "value": "",
+                    "hint": "About a minute. Drop a randomized disc, a seed's .ppf or another patch on the window, or choose below."},
+                   {"kind": "head", "key": None, "label": "Randomizer (sotn.io)"},
+                   {"kind": "action", "key": "randomizer", "label": "Seed", "value": randomizer.describe(r["info"]) if r else "None",
+                    "hint": "Randomize your own disc on sotn.io and choose the .cue it made, or the seed's .ppf. "
+                            "By the sotnrando team. Your partner needs the same seed and preset."},
+                   {"kind": "head", "key": None, "label": "SOTN Editor's hacks (by pddmergilla)"}]
+            for hid, h in hacks.items():
+                out.append({"kind": "switch", "key": "hack:" + hid, "label": h["label"], "value": hid in state["hacks"],
+                            "hint": h["summary"] + " Tested with co-op."})
+            out += [{"kind": "head", "key": None, "label": "Alternate Scarlet Symphony (by pddmergilla)"},
+                    {"kind": "switch", "key": "ass", "label": "-Final-", "value": state["ass"],
+                     "hint": "A hard-hitting remix of the whole game: retuned combat, new enemy placements and AI, a rebuilt "
+                             "Richter. Downloaded from its author's release (5 MB). Tested with co-op; not with the hacks above."},
+                    {"kind": "head", "key": None, "label": "Another patch"},
+                    {"kind": "action", "key": "patch", "label": "A .ppf", "value": (state["patch"] or {}).get("name", "None"),
+                     "hint": "Any other PPF patch for the USA disc. Untested with co-op: it's refused if it changes co-op's own code."}]
+            return out
+
+        def change(key, step):
+            if key.startswith("hack:"):
+                hid = key[5:]
+                on = hid not in state["hacks"] if step == 0 else step > 0
+                (state["hacks"].add if on else state["hacks"].discard)(hid)
+            elif key == "ass":
+                on = not state["ass"] if step == 0 else step > 0
+                if on and not library.have_ass():
+                    try:
+                        self.ui_wait("Downloading Alternate Scarlet Symphony", "From its author's release on GitHub (5 MB).",
+                                     lambda progress: library.download_ass(progress))
+                    except OSError as e:
+                        state["said"] = str(e)
+                        return
+                state["ass"] = on
+        if dropped:
+            take(dropped)
+        sel = 0
+        while True:
+            got = options(self.menus, rows, change, sel, title="New game disc", note="Your partner needs the same mods",
+                          status=lambda: state["said"])
+            if got is None:
+                return
+            kind, key = got
+            if kind == "drop":
+                take(key)
+                continue
+            if kind == "more":
+                continue
+            sel = key
+            key = rows()[key]["key"]
+            if key == "randomizer":
+                if state["randomizer"]:
+                    state["randomizer"], state["said"] = None, "Randomizer: off."
+                    continue
+                path = pick_file("Your randomized disc (.cue) or the seed's .ppf", [("Randomized disc or PPF", "*.cue *.bin *.ppf"), ("All", "*.*")], self.ui)
+                if path:
+                    take(path)
+            elif key == "patch":
+                if state["patch"]:
+                    state["patch"], state["said"] = None, "Patch: off."
+                    continue
+                path = pick_file("A PPF patch for the USA disc", [("PPF patch", "*.ppf *.PPF"), ("All", "*.*")], self.ui)
+                if path:
+                    try:
+                        state["patch"] = library.keep_patch(retail_t1, path)
+                        state["said"] = f"{path.name}: on (untested with co-op)."
+                    except (patcher.DiscError, OSError) as e:
+                        state["said"] = str(e)
+            elif key == "make":
+                mods = ([state["randomizer"]] if state["randomizer"] else []) + ([{"kind": "ass"}] if state["ass"] else []) + \
+                       ([state["patch"]] if state["patch"] else []) + ([{"kind": "hacks", "ids": sorted(state["hacks"])}] if state["hacks"] else [])
+                if not mods:
+                    state["said"] = "Choose a mod first: a seed, a hack, Alternate Scarlet Symphony or a patch."
+                    continue
+                same = next((g for g in library.discs(self.settings) if library.describe(g) == library.describe({"mods": mods})), None)
+                g = same or library.add(self.settings, mods)
+                self.disc_error = ""
+                if self.use_disc(g["id"], quiet=True):
+                    return
+                if not same:  # (its mods' files stay: the player may leave one out and make it again)
+                    library.remove(self.settings, g["id"], keep_files=True)
                 save_settings(self.settings)
+                state["said"] = self.disc_error or "That game disc can't be made."
 
     # --- characters (design/M8)
 
@@ -847,9 +1076,10 @@ class Launcher:
         return paths.debug_starts_dir() / f"{self.disc().stem}@{self.bios().stem}"
 
     def patch_crc(self):
-        """The CRC partners compare (HELO): the randomized disc's while the randomizer is on."""
-        r = self.randomizer()
-        return r["crc"] if r else self.coop_patch_crc()
+        """The CRC partners compare (HELO): the game disc's in use, else the co-op disc's."""
+        import library
+        g = library.current(self.settings)
+        return g["built"]["crc"] if g and library.ready(g, self.coop_patch_crc()) else self.coop_patch_crc()
 
     def coop_patch_crc(self):
         import json
@@ -924,13 +1154,9 @@ class Launcher:
             return
         self.settings.update(disc=str(cue), disc_source=str(src), disc_patch=want)
         save_settings(self.settings)
-        r = self.settings.get("randomizer") or {}
-        if r.get("source") and Path(r["source"]).exists():  # its co-op part changed too: remade, quietly
-            on = r.get("on")
-            if self.make_randomized(r["source"], quiet=True):
-                self.settings["randomizer"]["on"] = on
-            else:
-                self.settings["randomizer"] = dict(r, on=False, cue=None)
+        import library  # the game disc in use: its co-op part changed too, so it's made again, quietly
+        if library.current(self.settings) and not self.use_disc(self.settings["game_disc"], quiet=True):
+            self.settings["game_disc"] = None
             save_settings(self.settings)
 
     # --- your discs (ui/screens/discs.py)
@@ -940,7 +1166,6 @@ class Launcher:
         same layout in plain letters."""
         if self.menus:
             return self.menus
-        from ui.sound import MenuSound
         from ui.theme import Theme
         from ui.widgets import Menus
         self._plain = Menus(self.ui, Theme(paths.art_dir()), None)
@@ -1024,18 +1249,20 @@ class Launcher:
         from ui.screens.discs import discs
         while True:
             # the randomizer and the BIOS: here until the game discs and the Options screen take them (design steps 7, 8)
-            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, more=("Randomizer", "BIOS"))
+            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run,
+                        more=("Game discs & mods",) if self.menus and not first_run else ())
             if got == "quit":
                 raise SystemExit
-            if got == "Randomizer":
-                self.randomizer_menu()
-            elif got == "BIOS":
-                self.choose_bios()
+            if got == "Game discs & mods":
+                self.game_discs_screen()
             elif got == "back" or (got == "continue" and self.disc()):
                 return
 
     def wizard(self):
         ui = self.ui
+        import library
+        if library.migrate(self.settings):  # the randomizer setting from before game discs
+            save_settings(self.settings)
         self.update_disc()
         if not self.disc() and not os.environ.get("COOP_OLD_WIZARD"):
             self.discs_screen(first_run=True)
@@ -1662,21 +1889,31 @@ class Launcher:
         return False
 
     def castle_on_disc(self, castle, fresh):
-        """A castle keeps the disc it was made on: the randomizer's seed, or the original game
-        (castle.json "mod"). Playing it on another asks first: its finds and rooms differ."""
-        mine = self.mod_line()
+        """A castle keeps the game disc it was made on (castle.json "disc", and "mod": it in words).
+        A new one is made on the disc in use; an old one switches to its own, without asking. One
+        from before game discs is matched by its words. Returns False if its disc can't be had."""
+        import library
         if fresh:
-            castle.info["mod"] = mine
+            castle.info["disc"], castle.info["mod"] = self.settings.get("game_disc"), self.mod_line()
             castle.save_info()
             return True
-        theirs = castle.info.get("mod")
-        if theirs == mine:
-            return True
-        return self.ui.confirm("This castle is on another disc",
-                               f"{castle.name} was made on {('randomizer ' + theirs) if theirs else 'the original game'}, "
-                               f"and you're set to {('randomizer ' + mine) if mine else 'the original game'}\n"
-                               "(Discs & mods › Randomizer). Its items and rooms won't match. Play it anyway?",
-                               yes="Play anyway", no="Back")
+        if "disc" in castle.info:
+            did = castle.info["disc"] if castle.info["disc"] is None or library.get(self.settings, castle.info["disc"]) else "gone"
+        else:  # from before game discs: its randomizer seed in words, or None
+            theirs = castle.info.get("mod")
+            match = next((g for g in library.discs(self.settings) if library.describe(g) in (theirs, f"Randomizer {theirs}")), None)
+            did = None if not theirs else match["id"] if match else "gone"
+        if did == "gone":
+            return self.ui.confirm("This castle's game disc isn't here",
+                                   f"{castle.name} was made on {castle.info.get('mod')}. Make that disc again in Discs & mods "
+                                   "› Game discs to play it as it was. Its items and rooms won't match another. Play it anyway?",
+                                   yes="Play anyway", no="Back")
+        if did != self.settings.get("game_disc") and not self.use_disc(did):
+            return False
+        if "disc" not in castle.info:
+            castle.info["disc"] = did
+            castle.save_info()
+        return True
 
     def play(self, castle, fresh=False):
         if not self.castle_on_disc(castle, fresh):
@@ -1797,7 +2034,7 @@ class Launcher:
         st = s.local.host("handshake_tick")
         c = s.local.host("connect_status") or {}
         if st.get("mismatch"):
-            raise ConnectFailed(st["mismatch"])
+            raise ConnectFailed(st["mismatch"], st.get("partner_hello"))
         if st.get("partner_hello") and c.get("state", "connected") == "connected":
             ping = f"ping {st['rtt_ms']} ms" if st.get("rtt_ms") is not None else "measuring the ping…"
             return f"Connected!\n{ping}", True
@@ -1847,6 +2084,24 @@ class Launcher:
             self.continue_castle(s, playthrough, fresh)
             self.run_view(s, playthrough)
 
+    def offer_their_disc(self, failed):
+        """Refused for being on another game disc than the host: if this player has the host's,
+        offer to switch to it. True if it was offered (and said what's next)."""
+        import library
+        if "mod" not in failed.theirs or failed.theirs.get("mod") == self.mod_line():
+            return False
+        want = failed.theirs.get("mod")
+        match = None if want is None else next((g for g in library.discs(self.settings) if library.describe(g) == want), None)
+        if want is not None and not match:
+            return False
+        name = library.name(match)
+        if not self.ui.confirm("Your partner is on another game disc", f"{failed}\nYou have it: {name}. Switch to it?",
+                               yes="Switch to it", no="Not now"):
+            return True
+        if self.use_disc(match["id"] if match else None):
+            self.ui.message("Switched", f"You're on {name} now. Ask your partner to host again, then join them.")
+        return True
+
     def join_online(self):
         import rules as castle_rules
         from archive import Castle
@@ -1874,7 +2129,8 @@ class Launcher:
                     if self.lobby(1, lambda: self.partner_line(s, waiting), "Joining your partner") is None:
                         continue
                 except ConnectFailed as e:
-                    self.ui.message("Couldn't reach your partner", str(e))
+                    if not self.offer_their_disc(e):
+                        self.ui.message("Couldn't reach your partner", str(e))
                     continue
                 # The host's castle: this player's copy of it (design/M11)
                 theirs = s.local.host("status").get("partner_hello") or {}
@@ -1883,6 +2139,7 @@ class Launcher:
                 rules = castle_rules.clean(theirs.get("rules"))  # the host's castle, the host's rules (D162)
                 castle.set_rules(rules)
                 castle.info["mod"] = self.mod_line()  # the host's too: HELO refused any other (link/host.py)
+                castle.info["disc"] = self.settings.get("game_disc")
                 castle.save_info()
                 s.joint.path = castle.joint_save
                 s.joint.on_write = lambda blobs, c=castle: c.saved(blobs, theirs=True)
@@ -2140,6 +2397,9 @@ class Launcher:
                 action("controls", "Shortcuts and spells", "Each player's button shortcuts, and Alucard's spells on the right stick."),
                 action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
                 action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                head("PlayStation"),
+                action("bios", "BIOS", "OpenBIOS is built in and co-op is tested with it. Your console's own BIOS works too.",
+                       "OpenBIOS" if self.bios() == BUNDLED_BIOS else Path(self.bios()).name),
                 head("Help"),
                 action("help_play", "How to play", "Playing together, castles, characters."),
                 action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
@@ -2189,6 +2449,8 @@ class Launcher:
             key, sel = got
             if key == "controls":
                 self.controls_menu()
+            elif key == "bios":
+                self.choose_bios()
             elif key in ("controllers", "savestates", "debug_starts"):
                 self.go(key)
             else:

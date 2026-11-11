@@ -10,7 +10,11 @@ This co-op mod utilizes custom SwanStation launcher running *two instances* of P
 AI wrote all of this code. However, this is not just low effort slop that will be abandon. A lot of human time, effort, and love has gone into designing, architecting, and playtesting this work. I plan to finish this mod and support it into the future. All of the code is public amd open for anyone to use, and all the prior works that made this possible are credited below.
 
 ## Getting started
-You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional. To play the [randomizer](https://sotn.io) in co-op, randomize your own disc there and choose it in Discs & mods › Randomizer: both players need the same seed and preset.
+You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional.
+
+**Mods:** in Discs & mods › Game discs, make a game disc with the [randomizer](https://sotn.io) (randomize your own disc there and choose it), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Keep as many game discs as you like and switch between them: each castle remembers its own. Both players need the same game disc.
+
+**Find people to play with:** [join our Discord](https://discord.gg/q7V9eFtAW).
 
 1. Download from the [latest release](https://github.com/tucker-bower/sotn-coop/releases/latest):
    - **Windows 10 or 11:** [SOTN-Coop-setup.exe](https://github.com/tucker-bower/sotn-coop/releases/latest/download/SOTN-Coop-setup.exe)
@@ -86,6 +90,12 @@ SOTN Co-op stands on other people's work. Thank you to all of them.
 - **[libretro](https://www.libretro.com/)**: the core API that lets one frontend host the emulator.
 - **[splat](https://github.com/ethteck/splat)** by Ethan Roseman, the decomp's binary splitter, which also splits Maria's PSP overlay.
 - **[sotn-player-mmx](https://github.com/Xeeynamo/sotn-player-mmx)** by Xeeynamo: a custom player character, and our reference for injecting palettes (the partner's tint).
+
+**Mods you can play with co-op**
+- **[The SOTN randomizer](https://github.com/sotnrando/sotnrando)** ([sotn.io](https://sotn.io)), by the sotnrando team: 3snowp7im, eldri7ch2, crazy4blades, LuciaRolon, MottZilla and its other contributors. Co-op layers onto the disc you randomize there; we've tested 68 of its 72 presets.
+- **[SOTN Editor](https://github.com/pddmergilla/sotn-editor)** by pddmergilla, a romhack editor for the PS1 game. The 28 Extra Hacks we've tested with co-op ship in the launcher as the bytes each writes, made from the editor's own code (GPL-3.0); you can also make your own hacks with it and add them as a patch.
+- **[Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor/releases)** by pddmergilla: a hard-hitting remix of the whole game. The launcher downloads it from its author's release, the version we tested, so the download counts for them.
+- **[SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)** by renanbianchi: the Saturn and PSP content it ports is where our Ultimate Maria, Saturn Maria and Ultimate Richter come from (above).
 
 **Inspiration: what shaped the design**
 - **[sotn-online-coop](https://github.com/jweyden/sotn-online-coop)** by jweyden: an online co-op mod with the same goal, built on a recompilation of the game. Reading it gave us the partner as a real second player in your game (our M13), PvP decided by the victim's game (M15), fairy revives and per-character respawn effects, more players (M17), and the Saturn characters (M16, on their AGPL ports). It also confirmed our shared-room design: the first player in runs the room.

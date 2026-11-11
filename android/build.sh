@@ -30,7 +30,8 @@ cp "$MOD"/launcher/*.py "$STAGE/launcher/"
 cp -r "$MOD/launcher/assets" "$STAGE/launcher/"
 cp -r "$MOD/launcher/ui" "$STAGE/launcher/" && find "$STAGE/launcher/ui" -name __pycache__ -prune -exec rm -rf {} +   # the menus in the game's style
 cp "$MOD"/link/*.py "$STAGE/link/"
-cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$STAGE/patcher/"
+cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer,modded,sectordiff}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$STAGE/patcher/"
+mkdir -p "$STAGE/patcher/mods" && cp "$MOD/patcher/mods/hacks.json" "$STAGE/patcher/mods/"   # SOTN Editor's tested hacks
 # the same as the installer's (scripts/build_release.sh): 0.13 to 0.16.0 left out maria-partner.bps
 cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps,ult-maria.bps,ult-maria-partner.bps,sat-maria.bps,sat-maria-partner.bps,sat-maria.json} "$STAGE/patcher/maria/"
 cp "$ROOT"/config/symbols.us.txt "$ROOT"/config/symbols.us.main.txt "$ROOT"/config/symbols.us.dra.txt "$STAGE/config/"

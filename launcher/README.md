@@ -18,6 +18,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `gameart.py` | Reads the game's own art for the menus from the player's disc: font, logo, portraits, save icons. |
 | `gamesound.py` | Decodes the title music and menu sounds from the player's disc. |
 | `gameview.py` | The frame loop: both games, pads, sound, joint saves and F9 reports. |
+| `library.py` | The player's game discs: the co-op disc with mods, kept small, switched between. |
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
 | `report.py` | F9: writes the bug report zip and emails it. |
@@ -32,6 +33,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_characters.py` | Checks Maria's build from a DXC disc. |
 | `test_gameart.py` | Checks the art's decoding on made-up files, and on a dev checkout's disc. |
 | `test_gamesound.py` | Checks the music's and sounds' decoding on made-up files, and on a dev checkout's disc. |
+| `test_library.py` | Checks game discs: names, removal, the old randomizer setting, the Alternate Scarlet Symphony download, images kept. |
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |

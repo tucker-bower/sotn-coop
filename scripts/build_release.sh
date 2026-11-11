@@ -55,7 +55,8 @@ cp "$MOD"/launcher/*.py "$A/launcher/"
 cp -r "$MOD/launcher/assets" "$A/launcher/"
 cp -r "$MOD/launcher/ui" "$A/launcher/" && find "$A/launcher/ui" -name __pycache__ -prune -exec rm -rf {} +   # the menus in the game's style
 cp "$MOD"/link/*.py "$A/link/"
-cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
+cp "$MOD"/patcher/{bps,patcher,sectors,layer,ppf,randomizer,modded,sectordiff}.py "$MOD/patcher/collectibles.json" "$MOD/.env/release/sotn-coop.bps" "$MOD/.env/release/manifest.json" "$A/patcher/"
+mkdir -p "$A/patcher/mods" && cp "$MOD/patcher/mods/hacks.json" "$A/patcher/mods/"   # SOTN Editor's tested hacks
 # Maria's patches (design/M8 §4): our changes only; the launcher applies them to the player's DXC disc.
 mkdir -p "$A/patcher/maria"
 cp "$MOD"/.env/out/maria/{maria.json,maria.bps,maria-partner.bps,maria-vh.bps,maria-vb.bps,ult-maria.bps,ult-maria-partner.bps,sat-maria.bps,sat-maria-partner.bps,sat-maria.json} "$A/patcher/maria/"

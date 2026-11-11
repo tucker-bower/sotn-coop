@@ -985,9 +985,10 @@ def _hud(pg):
 
 
 def _randomizer(pg):
-    """design/M20-randomizer.md criterion 5: Settings › Game files › Randomizer. The retail disc is
-    refused (not randomized); a seed's .ppf (made here by the randomizer) makes the randomized
-    co-op disc; a new solo castle plays it, and its game holds the randomizer's items, not retail's."""
+    """design/M20-randomizer.md criterion 5, and launcher-overhaul.md criterion 12: Discs & mods ›
+    Game discs › New game disc. The retail disc is refused (not randomized); a seed's .ppf (made
+    here by the randomizer) and Fast Warp make a game disc; a new solo castle plays it, and its
+    game holds the randomizer's items. With Co-op (no mods) in use, Continue puts it back."""
     import subprocess
     sys.path.insert(0, str(ROOT / "harness"))
     sys.path.insert(0, str(ROOT / "patcher"))
@@ -1003,11 +1004,10 @@ def _randomizer(pg):
         return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
 
     def forget_disc(d):
-        """The randomized disc (540 MB, next to the co-op disc) is deleted: disk space (AGENTS.md)."""
-        cue = d.launcher.disc()
-        for f in [cue, *cue.parent.glob(cue.stem + " (Track *).bin")]:
-            if "Randomizer" in f.name:
-                f.unlink(missing_ok=True)
+        """The game disc's image (540 MB) is deleted: disk space (AGENTS.md)."""
+        import library
+        for g in library.discs(d.launcher.settings):
+            library._drop_image(g)
 
     def in_ram(d):
         """The running game's collectibles table (the module's, from COOP.BIN) is the randomized disc's."""
@@ -1016,32 +1016,54 @@ def _randomizer(pg):
         n = layer.COLLECTIBLES["n"]
         from module import symbols
         raw = g.read_bytes(symbols()["g_Collectibles"], 12 + 2 * n)[12:]
-        want = layer.collectibles(Path(r["cue"]).with_name(Path(r["cue"]).stem + " (Track 1).bin").read_bytes())
+        cue = Path(r["built"]["cue"])
+        want = layer.collectibles(cue.with_name(cue.stem + " (Track 1).bin").read_bytes())
         return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(n)] == want
 
+    def on_disc(d):
+        from archive import Castle
+        c = Castle.all()
+        return bool(c) and c[0].info.get("disc") and c[0].info["disc"] == d.launcher.settings.get("game_disc")
+
     to_files = [("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN), ("screen", "Discs")]  # Discs & mods
+    to_game_discs = [*to_files, ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_RETURN), ("screen", "Game discs")]  # after Back
     return [
         *first_run(pg),
-        *to_files, ("shot", "discs"),
-        ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_RETURN),  # Randomizer: after Back
-        ("screen", "Randomizer"), ("shot", "randomizer-empty"),
+        *to_game_discs, ("shot", "game-discs-empty"),
+        ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # New game disc (after Co-op (no mods))
+        ("screen", "New game disc"), ("shot", "builder"),
+        ("key", pg.K_DOWN),  # Seed
         pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
-        ("screen", "That randomized disc won't work"), ("shot", "retail-refused"),
+        ("until", lambda d: d.heading == "New game disc" and "isn't randomized" in d.subtitle), ("shot", "retail-refused"),
         ("expect", lambda d: "isn't randomized" in d.subtitle, "the retail disc: it isn't randomized"),
-        ("key", pg.K_RETURN), ("screen", "Randomizer"),
         pick(seed_ppf), ("key", pg.K_RETURN),
-        ("screen", "Randomizer on"), ("shot", "randomizer-on"),
+        ("until", lambda d: d.heading == "New game disc" and "sotn-coop-ux" in d.subtitle), ("shot", "seed-on"),
         ("expect", lambda d: "sotn-coop-ux" in d.subtitle and "casual" in d.subtitle, "it names the seed and preset"),
-        ("key", pg.K_RETURN), ("screen", "Randomizer"), ("key", pg.K_ESCAPE), ("screen", "Discs"),
-        ("expect", lambda d: d.launcher.randomizer() and "Randomizer" in d.launcher.disc().name, "the games play the randomized disc"),
-        ("key", pg.K_ESCAPE),
+        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("wait", 3),  # SOTN Editor's second hack: Fast Warp
+        ("shot", "fast-warp-on"),
+        ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Make this game disc
+        ("until", lambda d: d.heading == "Game discs"), ("shot", "game-disc-in-use"),
+        ("expect", lambda d: d.launcher.randomizer() and "modded" in d.launcher.disc().name
+         and "Fast Warp" in d.launcher.mod_line() and "sotn-coop-ux" in d.launcher.mod_line(),
+         "the game disc is in use: the seed and Fast Warp, made and played"),
+        ("key", pg.K_ESCAPE), ("screen", "Discs"), ("key", pg.K_ESCAPE),
         ("screen", "Home"), ("key", pg.K_RETURN),  # Solo
         ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle
         ("screen", "Name your castle"), ("pad", 0, A),
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
         ("until", lambda d: d.heading == "Game"), ("game_frames", 600), ("shot", "randomized-game"),
         ("expect", in_ram, "the game's collectibles are the randomizer's"),
-        ("expect", lambda d: "sotn-coop-ux" in (d.view.playthrough.info.get("mod") or ""), "the castle keeps its seed"),
+        ("expect", lambda d: "sotn-coop-ux" in (d.view.playthrough.info.get("mod") or "") and on_disc(d),
+         "the castle keeps its game disc"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        # Co-op (no mods) in use: Continue switches back to the castle's own disc, without asking
+        *to_game_discs, ("key", pg.K_RETURN), ("wait", 3),  # Co-op (no mods): selected first
+        ("expect", lambda d: d.launcher.settings.get("game_disc") is None and d.launcher.mod_line() is None, "Co-op (no mods) is in use"),
+        ("key", pg.K_ESCAPE), ("screen", "Discs"), ("key", pg.K_ESCAPE),
+        ("screen", "Home"), ("key", pg.K_RETURN), ("screen", "Solo"), ("key", pg.K_RETURN),  # Continue
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A), ("until", lambda d: d.heading == "Game"), ("game_frames", 300),
+        ("expect", on_disc, "Continue put the castle's own game disc back in use"),
+        ("expect", in_ram, "and the game is the randomized one"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 

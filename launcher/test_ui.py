@@ -250,7 +250,7 @@ def main():
         import app
         from ui.screens.options import options
         from winmenu import MENUS
-        fake = types.SimpleNamespace(settings={}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES)
+        fake = types.SimpleNamespace(settings={}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES, bios=lambda: app.BUNDLED_BIOS)
         rows = app.Launcher.option_rows(fake)
         keys = {r["key"] for r in rows}
 

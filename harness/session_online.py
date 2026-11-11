@@ -154,7 +154,7 @@ def online_randomizer_seed_mismatch(run):
         why0, why1 = s0.local.host("status")["mismatch"], s1.local.host("status")["mismatch"]
         run.expect(why0 and "your partner doesn't" in why0 and "seed abc" in why0,
                    "randomized and not: the randomized side is told to share its seed", why=why0)
-        run.expect(why1 and "plays a randomized castle: seed abc" in why1,
+        run.expect(why1 and "plays on another disc: seed abc" in why1,
                    "the other side is told the seed to randomize with", why=why1)
         s1.local.host("set_mod", a_seed)
         s1.local.host("set_hello", patch_crc=0x11111111)

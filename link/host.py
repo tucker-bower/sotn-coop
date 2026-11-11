@@ -303,12 +303,12 @@ class Host:
                              f"yours {self.hello['link']}): both need the same version.")
         elif theirs.get("mod") != self.hello.get("mod"):
             mine, other = self.hello.get("mod"), theirs.get("mod")
-            self.mismatch = ("Your partner plays a randomized castle: " + other + ". Randomize your disc with the same "
-                             "seed and preset (Settings › Game files › Randomizer)." if other and not mine else
-                             "You play a randomized castle, and your partner doesn't. Both need the same disc: "
-                             "turn the randomizer off, or give them your seed (" + mine + ")." if mine and not other else
-                             f"Your partner's randomizer seed is different: theirs is {other}, yours {mine}. "
-                             "Both need the same seed, preset and randomizer version.")
+            # (a game disc in words: launcher/library.py describe. Both must be on the same one)
+            self.mismatch = ("Your partner plays on another disc: " + other + ". Make the same one in Discs & mods, "
+                             "or ask them to switch to Co-op (no mods)." if other and not mine else
+                             "You play on " + mine + ", and your partner doesn't. Both need the same disc: switch to "
+                             "Co-op (no mods) in Discs & mods, or give them yours." if mine and not other else
+                             f"Your partner's disc is {other}, and yours is {mine}. Both need the same one (Discs & mods).")
         elif theirs.get("patch") and self.hello["patch"] and theirs["patch"] != self.hello["patch"]:
             self.mismatch = "Your partner's co-op disc is a different version: both need the same."
         else:
