@@ -43,3 +43,36 @@ def kind(path):
         if b"PLAYSTATION" in head[0x8008:0x8030]:
             return "ps1"
     return None
+
+
+def copy_in(path, folder, progress=None):
+    """Copies a disc image (its .cue and every file it names, or a single file) into folder, and
+    returns the copy's path. Already there: returned as it is."""
+    import shutil
+    path, folder = Path(path), Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.resolve().parent == folder.resolve():
+            return path
+    except OSError:
+        pass
+    files = [path]
+    if path.suffix.lower() == ".cue":
+        from patcher import cue_files  # (quoted names or not)
+        files += [path.parent / n for n in cue_files(path.read_text(errors="replace"))]
+    total = sum(f.stat().st_size for f in files if f.exists())
+    done = 0
+    for f in files:
+        target = folder / f.name
+        part = target.with_name(target.name + ".part")
+        with open(f, "rb") as src, open(part, "wb") as dst:
+            while True:
+                chunk = src.read(1 << 22)
+                if not chunk:
+                    break
+                dst.write(chunk)
+                done += len(chunk)
+                if progress:
+                    progress(done, total)
+        part.replace(target)
+    return folder / path.name

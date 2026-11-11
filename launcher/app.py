@@ -1210,10 +1210,16 @@ class Launcher:
             return "ps1", moved + "It's already attached.", True
         if slot == "ps1":
             try:
+                patcher.find_track1(path)  # (its files are all there: before copying 540 MB)
+                if paths.install_root():  # installed: a copy in the folder, so it depends on nothing outside it (D196)
+                    path = self.ui_wait("Copying your disc", "Into the SOTN Co-op folder, once (540 MB).",
+                                        lambda progress: discs.copy_in(path, paths.data_dir() / "discs", progress))
                 cue = self.ui_wait("Making the co-op disc", f"From {path.name}. This takes a few seconds.",
                                    lambda progress: patcher.apply(path, PATCH, progress=progress))
             except (patcher.DiscError, patcher.bps.PatchError) as e:
                 return "ps1", str(e), False
+            except OSError as e:
+                return "ps1", f"Couldn't copy your disc: {e.strerror or e}. The folder needs about 1.2 GB free.", False
             self.settings.update(disc=str(cue), disc_source=str(path), disc_patch=self.coop_patch_crc())
             save_settings(self.settings)
             self.prepare_art()
@@ -1258,8 +1264,43 @@ class Launcher:
             elif got == "back" or (got == "continue" and self.disc()):
                 return
 
+    def move_old_data(self):
+        """The first launch after everything moved into one folder (D196): the player's things come
+        from Documents, then their disc is copied in and the co-op disc made there."""
+        import move
+        if not move.needed():
+            return
+        ok, said = self.ui_wait("Moving your castles and saves", "Into the SOTN Co-op folder, once.", move.move)
+        self.settings.clear()
+        self.settings.update(load_settings())
+        self.display.settings = self.settings
+        if ok:
+            self.copy_disc_in()
+        self.ui.message("Your castles and saves" if ok else "Your castles and saves stayed where they were", said)
+
+    def copy_disc_in(self):
+        """An installed launcher's PlayStation disc lives in its folder (D196): one outside it is
+        copied in, and the co-op disc is made again there. Quietly kept as it was if it can't be."""
+        import discs
+        import patcher
+        src = self.settings.get("disc_source")
+        inside = paths.data_dir() / "discs"
+        if not paths.install_root() or not src or not Path(src).exists() or Path(src).resolve().parent == inside.resolve():
+            return
+        try:
+            copy = self.ui_wait("Copying your disc", "Into the SOTN Co-op folder, once (540 MB).",
+                                lambda progress: discs.copy_in(src, inside, progress))
+            cue = self.ui_wait("Making the co-op disc", "In the SOTN Co-op folder.",
+                               lambda progress: patcher.apply(copy, PATCH, progress=progress))
+        except (patcher.DiscError, patcher.bps.PatchError, OSError) as e:
+            log.warning("copying the disc in: %s", e)
+            return
+        self.settings.update(disc=str(cue), disc_source=str(copy), disc_patch=self.coop_patch_crc())
+        save_settings(self.settings)
+
     def wizard(self):
         ui = self.ui
+        self.move_old_data()
         import library
         if library.migrate(self.settings):  # the randomizer setting from before game discs
             save_settings(self.settings)
