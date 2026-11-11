@@ -153,6 +153,17 @@ class Theme:
             x += GLYPH
         return x
 
+    def paragraph(self, surface, text, x, y, columns, lines, colour=INK, step=10):
+        """Wrapped text, at most `lines` lines. Text that needs more is cut off: noted, as text past
+        its window is, so a test fails on it (launcher/test_screens_fit.py)."""
+        parts = wrap(text, columns)
+        if len(parts) > lines:
+            self.overflows = getattr(self, "overflows", [])
+            self.overflows.append((text, x, y, ("needs", len(parts), "lines; has", lines)))
+        for k, line in enumerate(parts[:lines]):
+            self.text(surface, line, x, y + k * step, colour)
+        return min(len(parts), lines)
+
     def text_right(self, surface, text, right, y, colour=INK):
         self.text(surface, text, right - width(text), y, colour)
 

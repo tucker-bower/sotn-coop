@@ -1030,7 +1030,7 @@ def _randomizer(pg):
         *to_mods, ("shot", "mods-empty"),
         ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # New mod preset (after Co-op (no mods))
         ("screen", "New mod preset"), ("shot", "builder"),
-        ("key", pg.K_DOWN), ("key", pg.K_DOWN),  # A seed file from sotn.io (after Randomized castle)
+        *[("key", pg.K_DOWN)] * 3,  # A seed file from sotn.io (after ASS -Final- and Randomized castle)
         pick(next((ROOT / "disks").glob("*(USA)*.cue"), ROOT / "disks" / "sotn.us.cue")), ("key", pg.K_RETURN),
         ("until", lambda d: d.heading == "New mod preset" and "isn't randomized" in d.subtitle), ("shot", "retail-refused"),
         ("expect", lambda d: "isn't randomized" in d.subtitle, "a seed file that's the retail disc: it isn't randomized"),
@@ -1039,7 +1039,7 @@ def _randomizer(pg):
         ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Off, Surprise me, Casual
         ("screen", "New mod preset"),
         *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RETURN), ("wait", 3), ("shot", "casual-and-fast-warp"),  # Seed, seed file, MiniMap, Fast Warp
-        *[("key", pg.K_UP)] * 5, ("key", pg.K_RETURN),  # Build this mod preset
+        *[("key", pg.K_UP)] * 6, ("key", pg.K_RETURN),  # Build this mod preset (past ASS)
         ("screen", "Name your mod preset"), ("shot", "name-it"), ("key", pg.K_RETURN),  # the name it offers
         ("until", lambda d: d.heading == "Mods"), ("shot", "mods-with-preset"),
         ("expect", preset_made, "one click: a casual seed rolled, Fast Warp added, named and built"),

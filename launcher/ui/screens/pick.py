@@ -1,7 +1,7 @@
 """A small choice in the middle of the screen (Host or Join): a few rows, each with a line saying
 what it is."""
 
-from ..theme import DIM, GOLD, shorten, wrap
+from ..theme import DIM, GOLD, shorten
 from ..widgets import ROW, move
 
 BOX = (100, 60, 280, 140)
@@ -28,10 +28,8 @@ def pick(m, heading, items, about=""):
         t.text(s, shorten(heading, 32), x, BOX[1] + 8, GOLD)
         m.rows((BOX[0] + 4, BOX[1] + 24, BOX[2] - 8, len(items) * ROW), [i[1] for i in items], sel)
         y = BOX[1] + 30 + len(items) * ROW
-        for k, line in enumerate(wrap(items[sel][2], 32)[:3]):
-            t.text(s, line, x, y + k * 10, DIM)
+        t.paragraph(s, items[sel][2], x, y, 32, 3, DIM)
         if about:
-            for k, line in enumerate(wrap(about, 32)[:2]):
-                t.text(s, line, x, BOX[1] + BOX[3] - 24 + k * 10, DIM)
+            t.paragraph(s, about, x, BOX[1] + BOX[3] - 24, 32, 2, DIM)
         m.footer("{x} select   {o} back", "Enter: select   Esc: back")
         m.show()

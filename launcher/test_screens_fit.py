@@ -80,8 +80,7 @@ def main():
                                                                note="Version 0.19.0 is out"), frames=((), ("back",), ("ok",)))
         for heading in ("Solo", "Couch co-op", "Online co-op: host"):
             for sel in range(3):
-                screen(f"castle menu: {heading}", lambda m, h=heading: castle_menu(m, h, castle, True,
-                       note="New castles are on randomizer seed abcdefgh · casual (26.07.13)"),
+                screen(f"castle menu: {heading}", lambda m, h=heading: castle_menu(m, h, castle, True, has_tests=True),
                        frames=[()] + [("down",)] * sel + [("back",)])
         castles = [castle] + [test_ui.Castle(f"{LONG} {k}", k, "Marble Gallery", k) for k in range(12)]
         screen("castle list", lambda m: castle_list(m, "Load castle", castles, [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")]))
@@ -127,6 +126,17 @@ def main():
         prow = app.Launcher.player_rows(fake)
         screen("your settings", lambda m: options(m, lambda: prow, lambda *a: None, title="Your settings", note="Only yours: not the castle's"),
                frames=[()] + [("down",)] * len(prow) + [("back",)])
+        import library
+        presets_ = library.rando_presets()
+        import randomizer_tool
+        prows = [{"kind": "action", "key": p, "label": presets_[p]["name"], "hint": library.preset_hint(presets_[p]), "value": ""}
+                 for p in randomizer_tool.PRESETS]
+        screen("randomizer presets", lambda m: options(m, lambda: prows, lambda *a: None, title="Randomizer preset", note="Each castle gets its own seed"),
+               frames=[()] + [("down",)] * len(prows) + [("back",)])
+        import modded
+        hrows = [{"kind": "switch", "key": h, "label": v["label"], "hint": v["summary"], "value": False} for h, v in modded.hacks().items()]
+        screen("hacks", lambda m: options(m, lambda: hrows, lambda *a: None, title="New mod preset", note="Your partner needs the same mods"),
+               frames=[()] + [("down",)] * len(hrows) + [("back",)])
         screen("update", lambda m: update_prompt(m, "0.19.0", "0.18.1", ["A much longer changelog item than usual, to see it wrap well"] * 8))
         card = {"title": "Player 2", "joined": True, "device": "DualSense Wireless Controller", "ready": False, "character": 5,
                 "name": "Ultimate Richter", "playable": False, "note": "From SOTN Ultimate: the Saturn coat",

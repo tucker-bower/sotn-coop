@@ -703,15 +703,13 @@ class Launcher:
             return f"{n} castle{'s' * (n != 1)}" if n else ""
         rows = [{"kind": "head", "key": None, "label": "Your mod presets: a new castle picks one"},
                 {"kind": "action", "key": "plain", "label": library.PLAIN, "value": value(None), "colour": DIM,
-                 "hint": "The original game, with co-op. Always here."}]
+                 "hint": "The original game."}]
         for g in library.discs(self.settings):
             standing = library.standing(g)
             rows.append({"kind": "action", "key": g["id"], "label": library.name(g), "value": value(g["id"]), "colour": INK,
-                         "hint": library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".") +
-                                 "  Enter: rename or remove."})
+                         "hint": library.describe(g) + (f". {standing[0].upper() + standing[1:]}." if standing else ".")})
         rows.append({"kind": "action", "key": "new", "label": "New mod preset", "value": "",
-                     "hint": "Choose your mods (a randomized castle, SOTN Editor's hacks, Alternate Scarlet Symphony), name it, "
-                             "and it's built."})
+                     "hint": "Choose mods, name it, and it's built."})
         return rows
 
     def mods_screen(self):
@@ -797,33 +795,30 @@ class Launcher:
 
         def rows():
             out = [{"kind": "action", "key": "build", "label": "Build this mod preset", "value": "",
-                    "hint": "Name it, and it's built: about a minute. Drop a seed file, or a patch, on the window to add it."},
+                    "hint": "Name it, then it's built (about a minute)."},
+                   {"kind": "head", "key": None, "label": "Alternate Scarlet Symphony"},
+                   {"kind": "switch", "key": "ass", "label": "-Final- (by pddmergilla)", "value": state["ass"],
+                    "hint": "A remix of the whole game. Downloads 5 MB. Not with hacks."},
                    {"kind": "head", "key": None, "label": "Randomizer (sotnrando)"}]
             if rolls:
                 p = state["preset"]
-                about = presets.get(p, {})
                 out.append({"kind": "action", "key": "preset", "label": "Randomized castle",
                             "value": "Off" if not p and not state["file"] else preset_name(p) if p else "From a seed file",
-                            "hint": (about.get("description") or ("A random preset that works with co-op." if p == randomizer_tool.SURPRISE else
-                                     "Choose a preset: casual is the place to start. Each castle gets its own random seed.")) +
-                                    (f" ({about['timeFrame']}, knowledge needed: {about['knowledgeCheck']})" if about.get("timeFrame") else "")})
+                            "hint": library.preset_hint(presets.get(p)) if p and p != randomizer_tool.SURPRISE else
+                                    "A random preset." if p else "Pick a preset. Casual is a good start."})
                 if p:
                     out.append({"kind": "action", "key": "seed", "label": "Seed", "value": state["seed"] or "Random",
-                                "hint": "Leave it random, or type one (a friend's, or one you liked)."})
+                                "hint": "Random, or type one (a friend's)."})
             out.append({"kind": "action", "key": "file", "label": "A seed file from sotn.io",
                         "value": randomizer.describe(state["file"]["info"]) if state["file"] else "None",
-                        "hint": "Randomized on sotn.io: its .ppf, or the .cue it made. Your partner needs the same one."})
+                        "hint": "A .ppf or .cue made on sotn.io."})
             out.append({"kind": "head", "key": None, "label": "SOTN Editor's hacks (by pddmergilla)"})
             for hid, h in hacks.items():
                 out.append({"kind": "switch", "key": "hack:" + hid, "label": h["label"], "value": hid in state["hacks"],
-                            "hint": h["summary"] + " Tested with co-op."})
-            out += [{"kind": "head", "key": None, "label": "Alternate Scarlet Symphony (by pddmergilla)"},
-                    {"kind": "switch", "key": "ass", "label": "-Final-", "value": state["ass"],
-                     "hint": "A hard-hitting remix of the whole game: retuned combat, new enemy placements and AI, a rebuilt "
-                             "Richter. Downloaded from its author's release (5 MB) when it's built. Tested with co-op."},
-                    {"kind": "head", "key": None, "label": "Another patch"},
+                            "hint": h["summary"]})
+            out += [{"kind": "head", "key": None, "label": "Another patch"},
                     {"kind": "action", "key": "patch", "label": "A .ppf", "value": (state["patch"] or {}).get("name", "None"),
-                     "hint": "Any other PPF patch for the USA disc. Untested with co-op: it's refused if it changes co-op's own code."}]
+                     "hint": "Any PPF for the USA disc. Untested with co-op."}]
             return out
 
         def change(key, step):
@@ -835,8 +830,8 @@ class Launcher:
                 state["ass"] = not state["ass"] if step == 0 else step > 0
 
         def choose_preset():
-            items = [(None, "Off", "No randomizer.")] + [(randomizer_tool.SURPRISE, "Surprise me", "A random preset that works with co-op.")] + \
-                    [(p, presets.get(p, {}).get("name", p), presets.get(p, {}).get("description", "")) for p in randomizer_tool.PRESETS]
+            items = [(None, "Off", "No randomizer.")] + [(randomizer_tool.SURPRISE, "Surprise me", "A random preset.")] + \
+                    [(p, presets.get(p, {}).get("name", p), library.preset_hint(presets.get(p))) for p in randomizer_tool.PRESETS]
             rows_ = [{"kind": "action", "key": k, "label": label, "hint": hint, "value": ""} for k, label, hint in items]
             got = options(self.menus, lambda: rows_, lambda *_: None, title="Randomizer preset", note="Each castle gets its own seed")
             if got and got[0] not in ("drop", "more"):  # (an action's key, and its row)
@@ -1002,8 +997,7 @@ class Launcher:
                          "hint": "Richter and Maria: L2 high jump, R2 dash. Alucard: right-stick spells."})
             for d, spell in enumerate(self.spells(seat)):
                 rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
-                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows the spell and has the MP "
-                             "(and the castle has his spells on the right stick)."})
+                             "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows it and has the MP."})
         return rows
 
     def change_player(self, key, step):
@@ -2266,9 +2260,9 @@ class Launcher:
             from ui.screens.pick import pick
             while True:
                 choice = pick(self.menus, "Online co-op", [
-                    ("host", "Host", "Choose a castle; you get a room code to give your partner."),
-                    ("join", "Join", "Type your partner's room code: you play their castle, and keep a copy.")],
-                    "Both of you need the same version of SOTN Co-op.")
+                    ("host", "Host", "Get a room code for your partner."),
+                    ("join", "Join", "Type your partner's room code.")],
+                    "You both need the same version.")
                 if choice is None:
                     return
                 if choice == "host":
@@ -2655,42 +2649,41 @@ class Launcher:
         head = lambda label: {"kind": "head", "key": None, "label": label}  # noqa: E731
         rows = [head("View"),
                 {"kind": "choice", "key": "layout", "label": "Couch co-op layout", "value": LAYOUT_NAMES[st.get("layout", "auto")],
-                 "hint": "Couch: how the two games share the window. Also View in the menu bar."},
-                switch("_fullscreen", "Fullscreen", "F11 or Alt+Enter, any time."),
+                 "hint": "How two games share the window."},
+                switch("_fullscreen", "Fullscreen", "Also F11 or Alt+Enter."),
                 head("Sound"),
                 {"kind": "choice", "key": "music", "label": "Music", "value": {"auto": "Automatic", "left": "Left game", "right": "Right game"}[st.get("music", "auto")],
-                 "hint": "Couch: which game plays the music. Automatic: the left one while it's in play."},
+                 "hint": "Which game's music plays, on the couch."},
                 {"kind": "slider", "key": "partner_vol", "label": "Partner's sounds", "value": st.get("partner_vol", 60), "low": 0, "high": 100, "step": 10,
-                 "hint": "How loud your partner's attacks and steps are, in your game."},
-                switch("menu_music", "Menu music", "The title screen's music, in these menus.", True),
+                 "hint": "Your partner's attacks and steps."},
+                switch("menu_music", "Menu music", "The title screen's music.", True),
                 {"kind": "slider", "key": "menu_volume", "label": "Menu volume", "value": st.get("menu_volume", 70), "low": 0, "high": 100, "step": 10,
                  "hint": "The menus' music and sounds."},
                 head("While you play"),
-                switch("partner_hp", "Partner's health bar", "Under your own health, while you play together.", True),
-                switch("partner_tint", "Tint the partner", "Tells two players of the same character apart.", True),
-                switch("spell_triggers", "Spells on triggers", "Alucard: hold R2 with Square, Circle, Cross or Triangle for Dark Metamorphosis, "
-                       "Summon Spirit, Hellfire, Tetra Spirit; L2 with Square or Circle for Soul Steal, Sword Brothers."),
-                switch("alucard_hud", "Alucard's health bar", "Richter and Maria: his health and hearts display."),
-                switch("show_ping", "Show ping", "Online: the round trip to your partner, top right while you play."),
+                switch("partner_hp", "Partner's health bar", "Under your own.", True),
+                switch("partner_tint", "Tint the partner", "Tells two of the same character apart.", True),
+                switch("spell_triggers", "Spells on triggers", "Alucard: R2 or L2 with a face button casts a spell."),
+                switch("alucard_hud", "Alucard's health bar", "Richter and Maria get Alucard's display."),
+                switch("show_ping", "Show ping", "Online: your partner's ping, top right."),
                 head("Controls"),
-                action("controls", "Your settings", "Each player's shortcuts and spells, and what shows while you play. Also in the pause menu."),
-                action("controllers", "Who plays with which controller", "Press a button on each controller to give it a player."),
-                action("keys", "Keyboard keys", "Both players' keys, for playing on one keyboard."),
+                action("controls", "Your settings", "Shortcuts, spells, displays. Also in the pause menu."),
+                action("controllers", "Who plays with which controller", "Give each controller a player."),
+                action("keys", "Keyboard keys", "Both players' keys."),
                 head("PlayStation"),
-                action("bios", "BIOS", "OpenBIOS is built in and co-op is tested with it. Your console's own BIOS works too.",
+                action("bios", "BIOS", "Built-in OpenBIOS, or your console's own.",
                        "OpenBIOS" if self.bios() == BUNDLED_BIOS else Path(self.bios()).name),
                 head("Help"),
                 action("help_play", "How to play", "Playing together, castles, characters."),
-                action("help_online", "Online troubleshooting", "If you can't connect to your partner."),
+                action("help_online", "Online troubleshooting", "If you can't connect."),
                 action("about", "About SOTN Co-op", "The version, and where your saves are.", VERSION),
-                action("check_updates", "Check for updates", "Looks for a newer version on GitHub now."),
+                action("check_updates", "Check for updates", "Looks for a newer version now."),
                 action("data_folder", "Open the data folder", str(paths.data_dir())),
                 head("Developer"),
                 action("savestates", "Savestates", "Go back to a moment in a castle."),
-                action("debug_starts", "Debug starts", "Start anywhere on the route, for testing and bug reports."),
+                action("debug_starts", "Debug starts", "Start anywhere, for testing."),
                 {"kind": "choice", "key": "netsim", "label": "Simulate a network", "value": self.NETSIM_NAMES.get(st.get("netsim"), "Off"),
-                 "hint": "Online: plays as if over a worse connection. For testing."},
-                action("open_log", "Open the log", "The launcher's log, for bug reports.")]
+                 "hint": "Online, as if on a worse connection."},
+                action("open_log", "Open the log", "The launcher's log.")]
         if ANDROID:  # always fullscreen, no file manager to open folders in, no BIOS file to pick
             rows = [r for r in rows if r["key"] not in ("_fullscreen", "data_folder", "open_log", "bios")]
             rows = [r for k, r in enumerate(rows) if not (r["kind"] == "head" and (k + 1 == len(rows) or rows[k + 1]["kind"] == "head"))]

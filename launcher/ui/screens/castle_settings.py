@@ -6,15 +6,14 @@ import pygame
 
 import rules as castle_rules
 
-from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
+from ..theme import DIM, GOLD, GREEN, INK, shorten
 from ..widgets import ROW, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
 BAR_X, BAR_W = 300, 100          # a slider's bar
 MODES = (("story", "Story", "The game from its start."),
-         ("rush", "Boss rush", "All 22 bosses back to back, each with a typical player's progress, timed."))
-DIFFICULTY_HINT = ("Sets enemy HP, damage taken and XP together. Easy: 100% HP with a partner, half damage, more XP. "
-                   "Medium: 200% HP. Hard: 300%, more damage, half XP. Nightmare: 400%, double damage.")
+         ("rush", "Boss rush", "All 22 bosses back to back, timed."))
+DIFFICULTY_HINT = "Sets enemy HP, damage taken and XP."
 
 
 def table(rules, start, mode, read_only):
@@ -142,13 +141,13 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 t.text(s, key, x + 6, ty, GOLD)
                 continue
             if kind == "start":
-                label, row_hint = "Start", "Play with these settings."
+                label, row_hint = "Start", ""
             elif kind == "mode":
                 current = next(mo for mo in MODES if mo[0] == mode["mode"])
                 label, value, row_hint = "Mode", current[1], current[2]
             elif kind == "preset":
                 label, value, row_hint = "Mod preset", dict(mode["presets"]).get(mode.get("preset"), "?"), \
-                    "The castle's mods, made in Mods on the main menu. Co-op (no mods) is the original game."
+                    "Make presets in Mods, on the main menu."
             elif kind == "difficulty":
                 now = castle_rules.difficulty(rules)
                 label, value, row_hint, plain = "Difficulty", now, DIFFICULTY_HINT, now == "Medium"
@@ -171,7 +170,7 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 names = castle_rules.BUTTON_NAMES
                 label, value, row_hint = f"{names[key]} acts as", names[rules["remap_map"].get(key, key)], "For both players."
             else:
-                label, row_hint = "Back to the defaults", "Every setting as it comes."
+                label, row_hint = "Back to the defaults", ""
             t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "defaults") else 14), ty, INK)
             if value is not None:
                 arrows = kind in ("mode", "preset", "difficulty") and on and not (read_only and kind == "difficulty")
@@ -189,9 +188,8 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
         if read_only:  # (said first in the explanation window)
-            hint = "The host's settings: only they can change them. " + hint
-        for k, line in enumerate(wrap(hint, 56)[:3]):
-            t.text(s, line, HINT[0] + 8, HINT[1] + 7 + k * 10, DIM)
+            hint = "Only the host can change these. " + hint
+        t.paragraph(s, hint, HINT[0] + 8, HINT[1] + 7, 56, 3, DIM)
         if read_only:
             m.footer("{o} back", "Esc: back")
         else:
