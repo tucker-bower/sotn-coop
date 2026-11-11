@@ -63,7 +63,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 - Play sender frame `(now - minimum - delay) * 60`, where `delay` covers the 80th percentile of `offset - minimum` (at least a frame while presences go missing; at most 100 ms; falling back by at most 100 ms per second).
 - Between two presences less than 6 frames apart in the same room, interpolate x, y and the camera.
 
-**Retransmission:** reliable channels (`EVTS`, `CTRL`) resend what's unacked after `srtt + max(4 × rttvar, 1 frame) + 2 frames` (between 50 ms and 1 s; 250 ms before any round trip is measured).
+**Retransmission:** reliable channels (`EVTS`, `CTRL`) resend what's unacked after `srtt + max(4 × rttvar, 1 frame) + 2 frames` (between 50 ms and 1 s; 250 ms before any round trip is measured). `EVTS` sends nothing while the partner has been silent for 2 s, and resends everything unacked the moment it's heard again; with no partner at all (a solo castle, or a host still waiting) events aren't kept (issue 223).
 
 **Restarts:** when the partner's `sid` changes, it started again: reset everything numbered (reliable channels both ways, snapshot ids and bases, playback).
 

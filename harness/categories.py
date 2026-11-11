@@ -136,6 +136,7 @@ EVERYDAY = {
     "online_connect_codes", "online_version_mismatch", "online_partner_leaves", "online_mtu_and_loss",  # +
     "online_in_process", "online_randomizer_seed_mismatch", "link_connect", "link_portmap",  # +
     "link_malformed", "link_layout",  # a packet that stopped the host's frame (2026-11-10); the mailbox's two copies
+    "link_backlog",  # events resent for ever to a partner who left (#223)
     # rules, pvp
     "rules_no_air_jumps", "rules_no_growth", "rules_no_offhand", "rules_damage_taken_richter", "pvp_familiar",
     "rules_reach_the_game", "rules_host_tells_joiner", "rules_richter_defense", "rules_damage_taken",  # +

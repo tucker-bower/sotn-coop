@@ -430,9 +430,15 @@ class ReliableChannel:
     The sender keeps every record until the peer acks it, and resends the unacked tail when no
     ack has come for a retransmission timeout (from the measured round trip); the receiver
     delivers in sequence order and drops duplicates. Call tick() once per frame with the
-    datagrams of interest."""
+    datagrams of interest.
+
+    With no partner at all (a solo castle, or a host still waiting) nothing is kept. While the
+    partner has been silent for QUIET_S, nothing is sent: what's unacked is kept and goes the
+    moment it's heard again (issue 223: a partner who left was sent the whole backlog, growing,
+    several times a second)."""
 
     MAX_PER_DATAGRAM = 128
+    QUIET_S = 2.0  # a partner sends its presence every frame: this long silent is gone, or an outage
 
     def __init__(self, transport, record_size):
         self.t, self.size = transport, record_size
@@ -442,13 +448,21 @@ class ReliableChannel:
         self.early = {}             # seq -> record, received ahead of a gap
         self._sent_at = 0.0
         self._ack_due = False
+        self._since = transport.clock()  # silence before anything is heard counts from here
         self.resends = 0
 
+    def quiet(self):
+        """True while the partner has said nothing for QUIET_S."""
+        heard = self.t.last_rx_time if self.t.last_rx_time is not None else self._since
+        return self.t.clock() - heard >= self.QUIET_S
+
     def queue(self, records):
+        if self.t.peer is None:
+            return  # no partner: its finds catch up from the castle when one joins (D172)
         for r in records:
             self.unacked.append((self.next_seq, r))
             self.next_seq += 1
-        if records:
+        if records and not self.quiet():
             self._send_unacked()
 
     def _send_unacked(self):
@@ -480,7 +494,7 @@ class ReliableChannel:
         if self._ack_due:
             self.t.send(TAG_ACK, struct.pack("<I", self.delivered))
             self._ack_due = False
-        if self.unacked and self.t.clock() - self._sent_at >= self.t.rtt.rto():
+        if self.unacked and self.t.clock() - self._sent_at >= self.t.rtt.rto() and not self.quiet():
             self.resends += 1
             self._send_unacked()
         return out
