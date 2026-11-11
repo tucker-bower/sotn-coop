@@ -122,7 +122,10 @@ def main():
             check([g["id"] for g in kept] == [g["id"] for g, *_ in made[1:]] and not (library.folder() / made[0][0]["id"]).exists(),
                   f"four game discs made ({', '.join(f'{t:.0f} s' for *_, t in made)}): the three used last keep their image")
             track2 = Path(made[-1][1]).with_name("Symphony of the Night (Co-op, modded) (Track 2).bin")
-            check(track2.exists() and track2.stat().st_nlink > 1, "the audio track is linked to the co-op disc's, not copied")
+            if os.stat(work).st_dev == os.stat(coop).st_dev:  # (a link can't cross drives: then it's copied)
+                check(track2.exists() and track2.stat().st_nlink > 1, "the audio track is linked to the co-op disc's, not copied")
+            else:
+                check(track2.exists(), "the audio track is there (copied: the test's folder is on another drive)")
             check(not library.ready(made[-1][0], 2), "after an update (another co-op patch) it's made again")
             for g, *_ in made:
                 library.remove(st, g["id"])
