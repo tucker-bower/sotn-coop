@@ -12,12 +12,14 @@ extern unsigned int g_CoopOptions; // included before game.h: no u32 yet
 #define OPT_NO_RELIC_MOVES 0x02000000
 #define OPT_NO_AIR_JUMPS 0x04000000
 #define OPT_NO_ALUCARD_STATS 0x08000000
+#define OPT_NO_GEAR_EFFECTS 0x10000000 // module/link.h: the castle's gear effects off (#202)
 
 // A move Alucard's relic unlocks (M8b §3): the relic is found and switched on. With the castle's
 // "Relics teach Richter and Maria" off, they know every move from the start (#168, Tucker).
 #define COOP_CAN(relic) ((g_CoopOptions & OPT_NO_RELIC_MOVES) || (g_Status.relics[relic] & RELIC_FLAG_ACTIVE))
 struct Entity;
 int CoopRicAttack(struct Entity* entity, int id, int attack); // coop_ric.c
+int CoopRicHeartCost(int cost); // coop_ric.c: the Heart Broach (#202)
 // The number of HP a hit took, over the player as Alucard's (#171): the module makes the entity with
 // this id, and the player's entity loop runs DRA's code for it (g_CoopNumberEntity, coop_player.ld).
 #define COOP_ENT_NUMBER 0xCF

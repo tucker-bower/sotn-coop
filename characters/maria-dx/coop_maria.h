@@ -8,6 +8,8 @@
 
 struct Entity;
 int CoopMarAttack(struct Entity* entity, int subweapon, int attack); // coop_maria.c
+int CoopMarHeartCost(int cost); // coop_maria.c: the Heart Broach (#202)
+int CoopMarGuardianGear(int attack); // coop_maria.c: Brilliant Mail on a guardian's attack (#202)
 #define COOP_MAR_BASIC (-1) // CoopMarAttack: her own attack, not a guardian
 
 // The partner's build (coop_ric.h, COOP_PARTNER): her palettes go into a g_Clut of her own,

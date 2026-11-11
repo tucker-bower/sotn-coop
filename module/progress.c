@@ -191,6 +191,69 @@ static s32 TheirDefense(s32 hit) {
     return hit < 1 ? 1 : hit;
 }
 
+// Gear that changes a hit in Alucard's HandleDamage, which Richter's and Maria's hits never go
+// through (#202), in its order: an element their gear absorbs heals instead (part of "Alucard's
+// stats", as resistances are); then, with the castle's gear effects on, the Cat-Eye Circlet
+// turns a kind-7 hit into twice the heal, the Ballroom Mask takes a fifth off some hits, and
+// after defense the Talisman may dodge (LCK in 512 a Talisman), with the same moment of
+// invincibility Alucard's dodge gets, so one hit isn't rolled for again every frame.
+#define CAT_EYE_KIND 7 // DAMAGEKIND_7
+#define BALLROOM_EFFECTS (EFFECT_UNK_8000 | EFFECT_UNK_4000 | EFFECT_UNK_2000 | EFFECT_UNK_1000 | EFFECT_UNK_0800 | \
+                          EFFECT_UNK_0100 | EFFECT_SOLID_FROM_BELOW)
+#define DODGE_FRAMES 12 // func_8010E168(1, 12), src/dra/692E8.c
+#define T_INVINCIBLE 14 // PL_T_INVINCIBLE, Richter's and Maria's (src/ric/ric_shared.h), Alucard's timers[14] too
+#define FURY_PLATE_FRAMES 0x200
+extern s32 g_StatBuffTimers[16]; // DRA
+
+static void NoHit(void) {
+    PLAYER.hitParams = 0;
+    PLAYER.hitPoints = 0;
+}
+
+static bool GearHeals(s32 hit) {
+    u16 effects = PLAYER.hitParams & ~0x1F;
+    s32 heal = 0;
+
+    if (!RULE_OFF(OPT_NO_ALUCARD_STATS) && (g_Status.elementsAbsorb & effects) && !(g_Status.elementsImmune & effects)) {
+        heal = hit;
+    } else if (!RULE_OFF(RULE_NO_GEAR_EFFECTS) && (PLAYER.hitParams & 0x1F) == CAT_EYE_KIND &&
+               g_api.CheckEquipmentItemCount(ITEM_CAT_EYE_CIRCLET, EQUIP_HEAD)) {
+        heal = hit * 2;
+    }
+    if (!heal) {
+        return false;
+    }
+    g_Player.healKind = 2; // healed by character.c's Heal, as Healing Mail is
+    g_Player.healAmount = heal;
+    NoHit();
+    return true;
+}
+
+static s32 BallroomMask(s32 hit) {
+    s32 n;
+
+    if (RULE_OFF(RULE_NO_GEAR_EFFECTS) || !(PLAYER.hitParams & BALLROOM_EFFECTS)) {
+        return hit;
+    }
+    n = g_api.CheckEquipmentItemCount(ITEM_BALLROOM_MASK, EQUIP_HEAD);
+    return n == 1 ? hit - hit / 5 : n == 2 ? hit - hit / 3 : hit;
+}
+
+static bool TalismanDodges(void) {
+    s32 n;
+
+    if (RULE_OFF(RULE_NO_GEAR_EFFECTS) || (PLAYER.hitParams & 0x1F) == DAMAGEKIND_6 ||
+        !(n = g_api.CheckEquipmentItemCount(ITEM_TALISMAN, EQUIP_ACCESSORY)) ||
+        g_Status.statsTotal[STAT_LCK] * n < (rand() & 511)) {
+        return false;
+    }
+    NoHit();
+    if (g_Player.timers[T_INVINCIBLE] < DODGE_FRAMES) {
+        g_Player.timers[T_INVINCIBLE] = DODGE_FRAMES;
+    }
+    return true;
+}
+
 // Damage to this game's player. Hit detection left it in PLAYER.hitPoints last frame (PvP this
 // frame), and the player's update takes it in this frame's UpdateGame: each hit is changed here
 // once. Alucard's code then takes off his defense, so the castle's damage rule scales what's left
@@ -210,8 +273,20 @@ void ProgressDamageTaken(void) {
     }
     if (g_CoopCharacter == PLAYER_ALUCARD) {
         def = g_Status.defenseEquip;
-    } else if (!RULE_OFF(OPT_NO_ALUCARD_STATS) && CHAR_COOP(CharacterLoaded())) {
-        hit = TheirDefense(hit);
+    } else if (CHAR_COOP(CharacterLoaded())) {
+        make_all(); // their gear's elements and defense: nothing else updates them
+        if (GearHeals(hit)) {
+            s_Scaled = -1;
+            return;
+        }
+        hit = BallroomMask(hit);
+        if (!RULE_OFF(OPT_NO_ALUCARD_STATS)) {
+            hit = TheirDefense(hit);
+        }
+        if (TalismanDodges()) {
+            s_Scaled = -1;
+            return;
+        }
     }
     if (pct != 100 && hit > def) {
         hit = def + (hit - def) * pct / 100;
@@ -222,6 +297,12 @@ void ProgressDamageTaken(void) {
     if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) && !RULE_OFF(RULE_NO_GEAR_EFFECTS) &&
         g_api.CheckEquipmentItemCount(ITEM_BLOOD_CLOAK, EQUIP_CAPE)) {
         g_api.AddHearts(hit);
+    }
+    // Fury Plate: DEF up for a while after a hit (DecrementStatBuffTimers counts it down for anyone)
+    if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) && !RULE_OFF(RULE_NO_GEAR_EFFECTS) &&
+        hit > 0 && g_api.CheckEquipmentItemCount(ITEM_FURY_PLATE, EQUIP_ARMOR) &&
+        g_StatBuffTimers[SBT_DEF] < FURY_PLATE_FRAMES) {
+        g_StatBuffTimers[SBT_DEF] = FURY_PLATE_FRAMES;
     }
     s_Scaled = PLAYER.hitPoints = hit;
     if (g_CoopCharacter != PLAYER_ALUCARD && CHAR_COOP(CharacterLoaded()) && hit > 0) {

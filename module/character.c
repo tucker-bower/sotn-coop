@@ -708,7 +708,8 @@ void CharacterFrame(void) {
     TelescopeFix();
 
     // for the player overlays, with the castle's rules for them
-    g_CoopOptions = g_CoopLink.options | (g_CoopLink.rulesOff & RULE_OVERLAY_MASK);
+    g_CoopOptions = g_CoopLink.options | (g_CoopLink.rulesOff & RULE_OVERLAY_MASK) |
+                    (RULE_OFF(RULE_NO_GEAR_EFFECTS) ? OPT_NO_GEAR_EFFECTS : 0);
     DoorWalkGround();
     ArenaWalls();
 
