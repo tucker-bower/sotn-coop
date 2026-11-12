@@ -26,7 +26,7 @@ Zoom of any kind (fitting the view to each room, a camera that zooms in and out)
 
 ## Not done
 - **32:9** needs a third VRAM bank (two 688-wide framebuffers don't fit in one), and the partner's textures moving there.
-- **The per-stage tail:** `harness/widescreen_edges.py` over the 37 debug starts: at 16:9, 4 pop-ins and 2 vanishes in the extra width; at 21:9, 46 and 20 (60 and 29 without the stage windows), most in boss fights (their projectiles and particles near the edge). Some rooms park things just off the 4:3 screen that a wide view shows (a red block in the Castle Keep's scene at 21:9).
+- **The per-stage tail:** `harness/widescreen_edges.py` over the 37 debug starts, now over all the stage's slots (64-255; it saw only 64-191 before #260) and with both window forms widened: at 16:9, 7 pop-ins and 3 vanishes in the extra width; at 21:9, 77 and 77 (2026-11-12), most in boss fights (their projectiles and particles near the edge). Some rooms park things just off the 4:3 screen that a wide view shows (a red block in the Castle Keep's scene at 21:9).
 - **The Game Over's picture** is partly garbled in wide mode: it copies a frame the game draws after the state changes.
 - **Summon Spirit's** ripple copies its patch of screen from slightly the wrong place while the window is slid.
 
