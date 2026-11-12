@@ -966,3 +966,6 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - **Pages:** Castle settings, Options and Your settings show one group a page, turned with L1 / R1, Q / E or a click on the arrows. Rows before the first group (Start, Mode, Difficulty, Back to the defaults) go on the first page.
 - **Installer:** the folder page shows on every install, filled in with the current folder. Choosing another folder copies `data\` there, deletes the old one only once the copy is whole (robocopy's exit code), and removes the old program. The launcher's silent updates stay in place.
 
+
+**D203: 2.0 is the inverted castle** (2026-11-12, Tucker; replaces D114's "v1.1")
+- 1.0 is the first castle with any two characters. 2.0 is the inverted castle with any pairing of characters, every ending working for both players, and no soft locks (#47). The work toward it is resilience first: tests that fail, then fixes.

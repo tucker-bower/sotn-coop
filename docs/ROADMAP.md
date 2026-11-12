@@ -4,6 +4,8 @@
 
 Project tracking is in [GitHub issues](https://github.com/tucker-bower/sotn-coop/issues), on the [tracker](https://github.com/users/tucker-bower/projects/1) (D150).
 
+**Releases (Tucker, 2026-11-12):** 1.0 is the first castle with any two characters (released). **2.0 is the inverted castle with any pairing of characters**, every ending working, and no soft locks: #47.
+
 ## Decisions needed
 None right now.
 

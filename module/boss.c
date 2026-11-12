@@ -358,7 +358,16 @@ static void ScanBosses(void) {
 }
 
 void BossUpdate(void) {
+    static s32 s_WasState;
+
     s_Frame++;
+    // Any way into the ending (also a guest's copy of Dracula's death scene, whose fade only the
+    // authority's game runs): the ending's first CD read ends whatever music was streaming, so
+    // it's marked stopped, or the ending's dialogue waits for it for good (#257, as FollowEnding).
+    if (g_GameState == Game_Ending && s_WasState != Game_Ending) {
+        g_PlayingXaBgmId = 0;
+    }
+    s_WasState = g_GameState;
     if (g_GameState == Game_Ending) {
         if (s_FinalGone && !s_EndSaid) {
             ProgressEmit(EV_KILLED, s_FinalGone, 1 | D_800978B4 << 8);

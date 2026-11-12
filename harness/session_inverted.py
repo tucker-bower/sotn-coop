@@ -161,7 +161,7 @@ def _authority_changes(name, test_name, full):
     def test(run):
         import bossstarts
         from link.mailbox import BOSS, CMD_ARRIVE, ROLE_AUTHORITY
-        from session_m12 import SceneWatch, enemies
+        from session_m12 import SceneWatch, enemies, fight_pad
         a, b = run.s.a, run.s.b
         row = next(r for r in bossstarts.B if r["name"] == name)
         walk, stage = row["walk"], bossstarts.STAGES[row["stage"]]
@@ -177,8 +177,10 @@ def _authority_changes(name, test_name, full):
         event = bossstarts.EVENTS.get(row.get("event")) if row.get("inverted") else None
         w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
         w.until(lambda: boss(b), 3000, ("", walk))
-        if event is not None:
-            w.until(lambda: a.read("g_Settings", "<I", 0x108) & (1 << event), 600, (walk, ""))
+        if event is not None:  # both into the arena, where the fight's manager starts it (its visited bit)
+            near = lambda g: fight_pad(g).replace("+square", "").replace("square", "")  # toward the boss
+            w.until(lambda: a.read("g_Settings", "<I", 0x108) & (1 << event), 900, lambda i: (walk, "") if trio else (near(a), near(b)))  # (the trio's starts at x 224-320)
+            run.expect(a.read("g_Settings", "<I", 0x108) & (1 << event), "the fight has started", a=a.snapshot())
         run.expect(boss(a) and boss(b), "both are in the fight", a=a.snapshot(), b=b.snapshot())
         w.step(300, alive)
         w.until(lambda: auth() is not None, 1200, alive)  # (after the boss's entrance scene)
@@ -213,7 +215,10 @@ def _authority_changes(name, test_name, full):
         run.expect(done(), "the fight ends in both games" + (", with its record" if k is not None else ""),
                    fallen=[g.read(TRIO_FALLEN, "<i") for g in (a, b)] if trio else None,
                    boss=[bool(boss(g)) for g in (a, b)], left=[sorted(enemies(g).values())[:4] for g in (a, b)],
-                   records=[g.read("g_Settings", "<i", k) for g in (a, b)] if k is not None else None)
+                   records=[g.read("g_Settings", "<i", k) for g in (a, b)] if k is not None else None,
+                   steps=[[(i, g.read("g_Entities", "<H", i * 0xBC + 0x26), g.read("g_Entities", "<H", i * 0xBC + 0x2C))
+                           for i in range(64, 96) if g.read("g_Entities", "<H", i * 0xBC + 0x26)] for g in (a, b)],
+                   xa=[g.read(0x8013901C, "<h") for g in (a, b)])
     test.__name__ = test_name
     test.__doc__ = _authority_changes.__doc__
     session_scenario(starts=(str(STARTS / f"Boss - {name.replace(' & ', ' and ')}.state"),) * 2, full=full)(test)
