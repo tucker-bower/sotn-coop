@@ -493,6 +493,68 @@ static void StuckWalkRescue(void) {
     }
 }
 
+// Locked out of the fight (#248): a partner who stays at an arena's door while the other walks in
+// is shut out when the door closes (the fake trio's: and its way out loads the arena again, at the
+// door, so they're stuck in the doorway until the fight ends). In a boss fight both share, with a
+// wall between the two players at about the same height for LOCKED_OUT_FRAMES, this one is put on the
+// partner's ground spot, if the wall is between this one and the boss and not between the partner
+// and it. A wall: solid at the body's chest and head at some x between them.
+#define LOCKED_OUT_FRAMES 300
+#define LOCKED_OUT_FLOOR 96 // px: the two at about the same height (the trio's doorstep is 80 up)
+#define LOCKED_OUT_STEP 8
+
+void CheckCollision(s32 x, s32 y, Collider* res, s32 unk); // DRA
+static bool CanBePulled(bool sameRoom);
+
+static bool Solid(s32 x, s32 y) {
+    Collider col;
+
+    CheckCollision(x, y, &col, 0);
+    return col.effects & EFFECT_SOLID;
+}
+
+static bool WallBetween(s32 x0, s32 x1, s32 y) {
+    s32 x, step = x1 > x0 ? LOCKED_OUT_STEP : -LOCKED_OUT_STEP;
+
+    for (x = x0 + step; step > 0 ? x < x1 : x > x1; x += step) {
+        if (Solid(x, y) && Solid(x, y - 16)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void LockedOutRescue(void) {
+    static u16 s_Out;
+    const CoopPresence* p = &g_CoopLink.partner;
+    Entity* pl = &PLAYER;
+    s32 x = pl->posX.i.hi, y = pl->posY.i.hi;
+    s32 gx = p->groundX - g_Tilemap.scrollX.i.hi, gy = p->groundY - g_Tilemap.scrollY.i.hi;
+
+    const Entity* boss = BossNearest(x);
+
+    // the one locked out: a wall between them and the boss, and none between the partner and it
+    if (!PartnerInBossFight() || !boss || !SameRoomAsPartner() || !CanBePulled(true) ||
+        (p->flags & (PRESENCE_BUSY | PRESENCE_CUTSCENE)) || RULE_OFF(RULE_NO_BOSS_PULL) ||
+        p->groundX < 0 || p->groundX >= (g_Tilemap.hSize << 8) || p->groundY < 0 ||
+        p->groundY >= (g_Tilemap.vSize << 8) || ABS(gy - y) > LOCKED_OUT_FLOOR || ABS(gx - x) >= 256 ||
+        !WallBetween(x, gx, y) || !WallBetween(x, boss->posX.i.hi, y) ||
+        WallBetween(gx, boss->posX.i.hi, gy)) {
+        s_Out = 0;
+        return;
+    }
+    if (++s_Out < LOCKED_OUT_FRAMES) {
+        return;
+    }
+    s_Out = 0;
+    pl->posX.i.hi += gx - x; // the world position too, or the camera puts the player back
+    g_PlayerX += gx - x;
+    pl->posY.i.hi += gy - y;
+    g_PlayerY += gy - y;
+    pl->velocityX = pl->velocityY = 0;
+    CoopMessage("Back beside your partner");
+}
+
 // sameRoom: a cutscene pulls a partner in the same room too, to the spot that started it
 // (playtest 2026-10-25: two players in one room each started a room's scene on their own).
 static bool CanBePulled(bool sameRoom) {
@@ -522,6 +584,9 @@ static void PullIn(void) {
         s_BossPulled = false;
     } else if (!s_BossPulled && !s_BossPullCooldown && !(p->flags & PRESENCE_BUSY) && // not mid-intro
                !RULE_OFF(RULE_NO_BOSS_PULL) &&
+               // Never out of this player's own fight: a partner just out of an arena's stage still
+               // showed its boss for a frame or two, and pulled this player out of the fight (#248)
+               !BossHere() &&
                CanBePulled(false)) { // the same room is never reloaded: the fight is shared (shared.c)
         s_BossPulled = true;
         s_BossPullCooldown = BOSS_PULL_COOLDOWN;
@@ -826,6 +891,7 @@ bool ArriveFrame(void) {
     SkipVote();
     PullIn();
     StuckWalkRescue();
+    LockedOutRescue();
     ArriveUpdate();
     if (!DeathUpdate()) {
         return false;

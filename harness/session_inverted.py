@@ -227,3 +227,43 @@ def _authority_changes(name, test_name, full):
 _authority_changes("Fake Trevor, Grant & Sypha", "boss_trio_authority_changes", False)
 _authority_changes("Darkwing Bat", "boss_darkwing_bat_authority_changes", False)
 _authority_changes("Karasuman", "boss_karasuman_authority_changes", True)
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Fake Trevor, Grant and Sypha.state"),) * 2, characters=(0, 1))
+def boss_trio_partner_locked_out(run):
+    """Issue 248: B waits at the fake trio's door while A walks in and starts the fight; the arena's
+    door closes with B outside, where its way out loads the arena again at the door. B walks at
+    the door, then waits: within some seconds B is put beside A, and A is never pulled out of the
+    fight after B (the chain lost the fight this way: B, just out of the arena's stage, still
+    showed its boss for a frame, and A followed)."""
+    import bossstarts
+    from link.mailbox import BOSS
+    from session_m12 import SceneWatch
+    a, b = run.s.a, run.s.b
+    row = next(r for r in bossstarts.B if r["name"].startswith("Fake"))
+    walk, arena = row["walk"], []
+    w = SceneWatch(run)
+    boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    where = lambda g: g.mailbox("self_presence")
+    left_fight = []
+
+    def alive(pads):
+        def f(*_):
+            for g in (a, b):
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            pa = where(a)
+            if pa.stage != arena[0] and not left_fight:
+                left_fight.append((w.t, pa.stage, a.snapshot()))
+            return pads
+        return f
+    w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
+    w.until(lambda: boss(b), 3000, ("", ""))
+    event = bossstarts.EVENTS[row["event"]]
+    w.until(lambda: a.read("g_Settings", "<I", 0x108) & (1 << event), 900, (walk, ""))
+    run.expect(a.read("g_Settings", "<I", 0x108) & (1 << event), "A starts the fight", a=a.snapshot(), b=b.snapshot())
+    arena.append(where(a).stage)  # RBO0: the arena's own stage
+    w.step(300, alive(("", walk)))  # B walks at the closed door, then waits
+    inside = lambda: where(b).stage == arena[0] and b.snapshot()["world_x"] > 80 and boss(b)  # (the door: x 64-80)
+    w.until(inside, 900, alive(("", "")))
+    run.expect(inside(), "B is put beside A, past the door", b=b.snapshot(), a=a.snapshot(), b_flags=where(b).flags)
+    run.expect(not left_fight, "A never leaves the fight", left=left_fight[:1])
