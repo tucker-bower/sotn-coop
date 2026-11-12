@@ -29,6 +29,8 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Online co-op:** share a room code and play, with no account or server setup. PCs and phones can play each other.
 - **Couch co-op:** two controllers on one PC, side by side, stacked, or in two windows.
 - **Solo:** every castle can also be played alone, with normal boss HP and full XP.
+- **Your own controls:** each player sets their own buttons and keys. Any controller works, with Cross always the bottom button.
+- **Widescreen (experimental):** 16:9 or 21:9 shows more of the castle, with nothing stretched.
 
 **A shared castle**
 - **Explore independently,** each on your own screen, and see your partner on the map.
