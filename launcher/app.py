@@ -116,48 +116,41 @@ STICK = ("↑", "→", "↓", "←")
 
 log = logging.getLogger("launcher")
 
-HELP_PLAY = """Each of you plays your own game, on your own half of the window.
-Whatever one of you finds (relics, items, gold, the map) the other gets too, at once.
-An item an enemy drops is for whoever picks it up.
-Meet in the same room to fight the same enemies. Bosses pull you both in.
+HELP_PLAY = """Each player runs their own game. What one of you finds (relics, items, gold, the map),
+the other gets too. Items dropped by enemies go to whoever picks them up.
+Be in the same room to fight the same enemies. Boss fights pull in both players.
 
-Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
-Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
-Save at a coffin: it saves both games. Continue loads both.
+Controls: as on a PlayStation controller. Change your buttons and keys in Options › Your settings.
+Your partner is the blue dot on the map. Press Cross on the map to teleport to them.
+Saving at a coffin saves both games.
 
-Castles: every game is a castle, with the name you give it when you start it (or the name you type
-in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
-Whoever joins you online keeps a copy of your castle, to play solo or host later.
-Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
-their normal HP.
-Castle settings: each castle has its own, set when you start it and in Options › Open settings (Esc: Castle
-rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
-everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
+Castles: each playthrough is a castle. Play it solo, on the couch, or host it online.
+Whoever joins keeps a copy of your castle.
+Castle settings: the difficulty (Easy to Nightmare) and every co-op option. Set them when you start
+a castle, or from the pause menu. The host's settings apply to both players.
 
-Characters: Alucard, Richter, Maria (PSP: needs your Dracula X Chronicles disc), and Maria and
-Richter (Saturn: need your Saturn disc, Japan). Richter and Maria (PSP) learn their moves from
-Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul of Wolf for
-the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat for item
-crashes. They level up and wear Alucard's armor (Start: the equipment menu): each is a castle rule.
-Maria (Saturn) has her own kicks, dives, backdash and Holy Beasts; Richter (Saturn) is the PS1
-Richter with every move from the start, in the Saturn's long coat.
-Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
-L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
-(Options › Controls picks which).
+Characters: Alucard and Richter. Maria needs your Dracula X Chronicles disc (PSP). The Saturn
+versions of Maria and Richter need your Saturn disc (Japan). On the character screen, left and
+right pick a character, up and down their version.
+Richter and Maria learn moves from Alucard's relics: Leap Stone (double jump), Gravity Boots (high
+jump), Soul of Wolf (slide), Form of Mist (through grates), Echo of Bat (item crashes).
+They level up and wear Alucard's gear (Start: the equipment menu).
 
-Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
+Shortcuts (Triangle on the character screen): Richter and Maria high-jump with L2 and dash with
+R2. Alucard casts spells with the right stick.
 
-HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Read it to your partner, or paste it to them.
-Joining: type your partner's room code. Both of you need the same version of SOTN Co-op.
+Esc pauses. F9 saves a bug report: please send it to us."""
 
-If it can't connect (only one of you needs to fix it):
-·  Windows may ask whether to allow SOTN Co-op through its firewall: choose Allow.
-·  Turn on UPnP in your router's settings (most routers have it on already). The game then opens
-   its own port.
-·  A phone hotspot, or some internet providers, can't connect directly. Try another network.
+HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Send it to your partner.
+Joining: type your partner's room code. You both need the same version of SOTN Co-op.
+
+Can't connect? Only one of you needs to fix it:
+·  If Windows asks about its firewall, choose Allow.
+·  Turn on UPnP in your router's settings (most routers have it on already).
+·  Phone hotspots and some internet providers can't connect directly. Try another network.
 ·  Or forward UDP port 47811 on your router to your PC or phone.
-·  Still stuck? Forward the port on the host's router; the joiner then types the host's address as
-   ip:port instead of the room code (Help › About shows the port while hosting).
+·  Still stuck? Forward the port on the host's router. The joiner then types the host's address
+   (ip:port) instead of the room code. Help › About shows the port while hosting.
 The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
 
 KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
@@ -1472,7 +1465,7 @@ class Launcher:
             self.prepare_art()
             if self.menus and getattr(self, "_plain", None):  # the screen on show: the game's style from now on
                 self._plain.theme, self._plain.sound = self.menus.theme, self.menus.sound
-            return "ps1", moved + "Symphony of the Night is attached: co-op is ready.", True
+            return "ps1", moved + "Disc added. Ready to play.", True
         if slot == "psp":
             try:
                 self.ui_wait("Adding Maria", f"From {path.name}. This takes a few seconds.",
@@ -1902,20 +1895,20 @@ class Launcher:
             castles = Castle.all()
             portrait = ("alucard", "richter", "maria", "maria", "maria", "richter")[self.characters[0]]
             if not castles:
-                return {"lines": ["No castles yet: this starts your first."], "portrait": portrait}
+                return {"lines": ["Start your first castle."], "portrait": portrait}
             return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
         if key == "discs":
             return {"lines": ["PlayStation: attached",
-                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Maria)"),
-                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria and Richter)")]}
+                              "PSP: " + ("attached" if self.maria_ready() else "not added (unlocks Maria)"),
+                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not added (unlocks Saturn Maria and Richter)")]}
         if key == "settings":
             return {"lines": ["Layout, sound, controls, and each castle's rules.",
-                              "Also in the menus at the top of the window."]}
+                              "Also in the window's menu bar."]}
         if key == "mods":
             import library
             names = [library.name(g) for g in library.discs(self.settings)]
             return {"lines": ["Your mod presets: " + (", ".join(names[:4]) + (" and more" if len(names) > 4 else "") if names else "none yet"),
-                              "A new castle picks one. Your partner needs the same."]}
+                              "New castles can use one. Online, both players need the same preset."]}
         return {}
 
     def home_new(self):

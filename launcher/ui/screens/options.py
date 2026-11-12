@@ -12,7 +12,7 @@ HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
 BAR_X, BAR_W = 300, 100
 
 
-def options(m, rows, change, sel=0, title="Options", note="Also in the menus at the top of the window", footer=None,
+def options(m, rows, change, sel=0, title="Options", note="Also in the menu bar", footer=None,
             status=None, pages=False):
     """rows() -> [{"kind": "head" | "choice" | "slider" | "switch" | "action", "key", "label", "hint",
     "value", ("low", "high", "step" for a slider)}]. change(key, step) applies a choice, slider or
