@@ -30,6 +30,7 @@ void SetStageDisplayBuffer(void); // DRA
 #define JAL(fn) (0x0C000000 | (((u32)(fn) & 0x0FFFFFFF) >> 2))
 void RenderTilemap(void); // DRA
 s32 g_CoopWideSlide;   // how far the wide window starts left of the game's view (tests read it)
+s32 g_CoopWideWindows;  // tests: the width the stage's entity windows are for (WindowsWidth)
 u8 g_CoopWideStageOff; // tests: the stage's own entity windows (harness/widescreen_edges.py --raw)
 static s32 s_Columns;
 
@@ -100,9 +101,20 @@ void WidescreenAfterPrims(void) {
 // the game's pixels are 1.25 times as wide as tall, so 207 lines make 16:9 at 294 and 21:9 (64:27,
 // a 2560x1080 screen) at 392.
 static const u16 s_ShapeWidths[4] = {0, 294, 392, 0};
+#define PARTNER_LINKED_FRAMES 600 // heard from within 10 s (as progress.c's PartnerLinked)
+
+u16 WidescreenShape(void) { return (g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT; }
+
+// The width the stage's entity windows are for: this player's view, or the partner's if wider, so
+// that in a shared room the authority keeps enemies alive across the guest's whole view.
+static s32 WindowsWidth(s32 w) {
+    s32 theirs = s_ShapeWidths[(g_CoopLink.partner.aggroSwitches >> 14) & 3];
+
+    return g_CoopLink.partnerAge < PARTNER_LINKED_FRAMES && theirs > w ? theirs : w;
+}
 
 void WidescreenFrame(void) {
-    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[(g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT]) & ~1, i;
+    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[WidescreenShape()]) & ~1, i, windows;
     DRAWENV* d0 = &g_GpuBuffers[0].draw;
     DRAWENV* d1 = &g_GpuBuffers[1].draw;
     static s32 s_Applied; // the width the framebuffers were last made (a change starts from it)
@@ -112,10 +124,11 @@ void WidescreenFrame(void) {
     if (w > 512) {
         w = 512; // two side by side in the bank's 1024 columns
     }
+    windows = g_CoopWideWindows = WindowsWidth(w);
     if (g_GameState == Game_Play) {
-        WidescreenStage(w && !g_CoopWideStageOff ? w - DISP_STAGE_W : 0);
+        WidescreenStage(windows && !g_CoopWideStageOff ? windows - DISP_STAGE_W : 0);
     }
-    if (!w || !stage) {
+    if (!w || !stage || g_GameState != Game_Play) { // (the Game Over, the title: as the game draws them)
         if (stage && d0->clip.w != DISP_STAGE_W) { // turned off in play: the game's own framebuffers
             SetStageDisplayBuffer();
         }

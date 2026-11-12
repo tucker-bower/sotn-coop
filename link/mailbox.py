@@ -120,7 +120,7 @@ class Presence:
     scroll_y: int = 0
     role: int = 0
     stand_slot: int = 0  # a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
-    aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
+    aggro_switches: int = 0  # bosses switching to/from the partner so far (tests); bits 14-15: wide
     pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 
     SIZE = _PRESENCE.size
@@ -135,6 +135,11 @@ class Presence:
     @property
     def room(self):
         return self.stage, self.room_left, self.room_top
+
+    @property
+    def wide(self):
+        """The player's screen shape (WIDE_SHAPES), in aggro_switches' top two bits."""
+        return self.aggro_switches >> 14
 
 
 class Mailbox:

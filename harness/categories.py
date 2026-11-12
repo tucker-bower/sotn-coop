@@ -43,7 +43,7 @@ CATEGORIES = {
     "launcher": ("The app: menus, settings, reports, the UI flows", r"launcher_|ui_|char_select|report_state|solo_continue", ()),
     "mods": ("Other mods' discs: the randomizer, editor hacks, the patcher", r"mod_|patcher_|rando", ("session_mods",)),
     "inverted": ("The inverted castle", r"inverted|final_boss|shaft|crawl_r", ("session_inverted",)),
-    "widescreen": ("Widescreen views (design/M19)", r"widescreen", ("scenarios_widescreen",)),
+    "widescreen": ("Widescreen views (design/M19)", r"widescreen", ("scenarios_widescreen", "session_widescreen")),
 }
 
 # Source file (a prefix of its path) -> the categories a change there touches. A file not listed

@@ -147,7 +147,7 @@ static void CapturePresence(CoopPresence* p) {
     if (BossHere()) {
         p->flags |= PRESENCE_BOSS;
     }
-    p->aggroSwitches = BossSwitches();
+    p->aggroSwitches = (BossSwitches() & 0x3FFF) | (WidescreenShape() << 14);
     if (ArriveSharedScene()) {
         p->flags |= PRESENCE_CUTSCENE;
     }

@@ -157,7 +157,8 @@ typedef struct {
     /* 0x26 */ s16 scrollY;
     /* 0x28 */ u8 role;        // ROLE_* (design/M4)
     /* 0x29 */ u8 standSlot;   // a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
-    /* 0x2A */ u16 aggroSwitches; // bosses switching to/from the partner so far (tests)
+    /* 0x2A */ u16 aggroSwitches; // bits 0-13: bosses switching to/from the partner so far (tests);
+                                  // 14-15: the player's screen shape (OPT_WIDE_*, widescreen.c)
 } CoopPresence; // size = 0x2C
 
 #define ROLE_NONE 0      // my own world
@@ -301,6 +302,7 @@ typedef struct {
 #define OPT_NO_GEAR_EFFECTS 0x10000000  // to the overlays only: RULE_NO_GEAR_EFFECTS, for their sub-weapons (#202)
 void WidescreenFrame(void); // widescreen.c (design/M19)
 void WidescreenAfterPrims(void);
+u16 WidescreenShape(void);
 extern u16 g_CoopWideWidth;
 extern u16 g_CoopStage; // the stage that's loaded, for anything about the partner (coop.c, #179)
 #define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
