@@ -403,16 +403,16 @@ def _couch(pg, quit_at_end=True):
         ("wait", 3), ("shot", "lobby-p2-left"),
         ("pad", 101, pg.CONTROLLER_BUTTON_X),                 # ...and comes back (any button)
         ("pad", 0, A), ("wait", 2), ("shot", "lobby-p1-ready"),
-        ("pad", 101, L), ("wait", 3), ("shot", "lobby-maria-locked"),  # Ultimate Richter: no Saturn disc yet
+        ("pad", 101, L), ("pad", 101, pg.CONTROLLER_BUTTON_DPAD_DOWN), ("wait", 3), ("shot", "lobby-maria-locked"),  # Maria, her Saturn version: no Saturn disc yet
         ("pad", 101, A),                                      # can't be ready as him: it opens the discs
         ("screen", "Discs"), ("shot", "discs-from-lobby"),
         ("key", pg.K_ESCAPE), ("screen", "Press a button"),
         ("expect", lambda d: d.launcher.shortcuts(1), "shortcuts start on"),
         ("pad", 101, pg.CONTROLLER_BUTTON_Y), ("wait", 3), ("shot", "lobby-shortcuts-off"),
         ("expect", lambda d: not d.launcher.shortcuts(1) and d.launcher.shortcuts(0), "Triangle / Y: player 2's shortcuts off, player 1's on"),
-        ("pad", 101, R), ("pad", 101, R), ("wait", 3), ("shot", "lobby-richter"),  # past Alucard: Co-op Richter
+        ("pad", 101, R), ("pad", 101, R), ("wait", 3), ("shot", "lobby-richter"),  # past Alucard: Richter
         ("pad", 101, A),                                      # both ready
-        ("until", in_game), ("expect", lambda d: d.inputs <= 16, "home to playing in 16 inputs or fewer (12, plus the detours to Game files and shortcuts, and back past Alucard)"),
+        ("until", in_game), ("expect", lambda d: d.inputs <= 17, "home to playing in 17 inputs or fewer (12, plus the detours to a locked version, Discs and shortcuts, and back past Alucard)"),
         ("expect", lambda d: d.launcher.characters == [0, 1] and d.launcher.options(0) & 1 and not d.launcher.options(1) & 1,
          "player 1 plays Alucard with shortcuts, player 2 Richter without"),
         ("game_frames", 900), ("shot", "both-games"), ("game_frames", 2000), ("shot", "both-games-later"),
@@ -432,7 +432,7 @@ def _couch(pg, quit_at_end=True):
         ("key", pg.K_RIGHT), ("wait", 3),  # Difficulty: Medium -> Hard
         ("expect", lambda d: (d.view.rules["enemy_hp_pct"], d.view.rules["taken_pct"], d.view.rules["exp_pct"]) == (300, 150, 50),
          "Hard, chosen in a game, sets enemy HP, damage taken and XP at once, in the game"),
-        ("key", pg.K_LEFT), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-settings-custom"),  # back to Medium; XP gain is the fourth slider
+        ("key", pg.K_LEFT), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-settings-custom"),  # back to Medium; past the defaults row, XP gain is the fourth slider
         ("expect", lambda d: d.view.rules["exp_pct"] == 125 and d.view.playthrough.info["rules"]["exp_pct"] == 125,
          "a slider moved in a game goes to the game and into the castle"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"),
@@ -695,9 +695,9 @@ def _menus(pg):
         return Castle(d.castle.dir).info.get("rules") or {}
     steps += [("menu", "rules"), ("screen", "Castle settings"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
               ("call", a_castle), ("menu", "rules"), ("screen", "which castle"), ("key", pg.K_RETURN),
-              ("screen", "Castle settings"), ("shot", "rules"), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3),  # XP gain
+              ("screen", "Castle settings"), ("shot", "rules"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT), ("wait", 3),  # XP gain
               ("expect", lambda d: saved_rules(d).get("exp_pct") == 125, "Options > Open settings: a slider saves to the castle"),
-              *[("key", pg.K_DOWN)] * 2, ("key", pg.K_RETURN), ("wait", 3),  # past Boss aggro, to One shared level
+              ("key", pg.K_e), ("key", pg.K_RETURN), ("wait", 3), ("shot", "rules-sharing"),  # E: the Sharing page, One shared level
               ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
               ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
     steps += [("menu", "quit")]
@@ -895,7 +895,7 @@ def _characters(pg):
               ("screen", "Couch co-op"), ("key", pg.K_RETURN),  # New castle (D136)
               ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
               ("screen", "Press a button"),
-              ("pad", 0, A), ("pad", 0, L), ("pad", 0, L), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
+              ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
               ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
               ("until", lambda d: d.heading == "Game"),
               ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria (PSP), player 2 Richter"),

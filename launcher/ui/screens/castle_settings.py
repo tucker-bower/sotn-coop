@@ -7,7 +7,7 @@ import pygame
 import rules as castle_rules
 
 from ..theme import DIM, GOLD, GREEN, INK, shorten
-from ..widgets import ROW, scroll
+from ..widgets import ROW, page_step, paged, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
 BAR_X, BAR_W = 300, 100          # a slider's bar
@@ -24,14 +24,14 @@ def table(rules, start, mode, read_only):
     if mode is not None and "presets" in mode:
         out.append(("preset", ""))
     out.append(("difficulty", ""))
+    if not read_only:
+        out.append(("defaults", ""))
     sliders = {s[0] for s in castle_rules.SLIDERS}
     for heading, keys in castle_rules.GROUPS:
         out.append(("head", heading))
         out += [("slider" if k in sliders else "toggle", k) for k in keys]
     if rules["remap"]:
         out += [("button", b) for b in castle_rules.REMAP_BUTTONS]
-    if not read_only:
-        out.append(("defaults", ""))
     return out
 
 
@@ -45,7 +45,13 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
     toggles = {x[0]: x for x in castle_rules.TOGGLES}
     choose_mode = isinstance(mode, dict)
     rows = table(rules, start, mode if choose_mode else None, read_only)
-    sel, first = 0, 0
+    sel, first, page = 0, 0, 0
+
+    def on_page():
+        """(the rows on this page, as indices into rows, the page names): a group a page (issue 253)"""
+        names, pages = paged(rows, lambda r: r[1] if r[0] == "head" else None)
+        return pages[page % len(pages)], names
+    shown, names = on_page()
 
     def change(row, step):
         """step: -1 / +1 (left / right), 0 (OK or a click)."""
@@ -77,15 +83,19 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
         apply(dict(rules))
 
     def step_sel(sel, by):
-        while True:
-            sel = (sel + by) % len(rows)
-            if rows[sel][0] != "head":
-                return sel
+        at = shown.index(sel) if sel in shown else 0
+        return shown[(at + by) % len(shown)]
 
     while True:
         for a in m.poll():
             if a == "back":
                 return None
+            turn = page_step(a)
+            if turn:
+                page = (page + turn) % len(names)
+                shown, names = on_page()
+                sel, first = shown[0], 0
+                continue
             if a in ("up", "down"):
                 sel = step_sel(sel, -1 if a == "up" else 1)
             elif a in ("left", "right"):
@@ -95,6 +105,8 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                     return "start"
                 change(rows[sel], 0)
             elif isinstance(a, tuple) and a[0] in ("hover", "click") and a[1] is not None:
+                if isinstance(a[1], tuple) and a[1][0] == "page":
+                    continue
                 bar = isinstance(a[1], tuple) and a[1][0] == "bar"
                 k = a[1][1] if bar else a[1]
                 if not isinstance(k, int) or k >= len(rows) or rows[k][0] == "head":
@@ -115,24 +127,23 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                     elif rows[k][0] != "slider":
                         change(rows[k], 0)
         rows = table(rules, start, mode if choose_mode else None, read_only)
-        sel = min(sel, len(rows) - 1)
-        if rows[sel][0] == "head":
-            sel = step_sel(sel, 1)
+        shown, names = on_page()
+        if sel not in shown:
+            sel = shown[0]
+        at = shown.index(sel)
         fits = (LIST[3] - 12) // ROW
-        first = scroll(first, sel, fits, len(rows))
-        if first and rows[first - 1][0] == "head" and sel - first < fits - 1:
-            first -= 1  # keep a group's heading above its first rule
+        first = scroll(first, at, fits, len(shown))
 
         m.begin("Castle settings")
         m.window(HEAD)
         t.text(s, "Castle settings", HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text_right(s, shorten(name, (HEAD[2] - 16) // 8 - len("Castle settings") - 3), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        m.tabs(names, page % len(names), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7)
         m.window(LIST)
         hint = ""
         x, y0, w = LIST[0] + 4, LIST[1] + 6, LIST[2] - 8
-        for k in range(first, min(len(rows), first + fits)):
+        for n, k in enumerate(shown[first:first + fits]):
             kind, key = rows[k]
-            y = y0 + (k - first) * ROW
+            y = y0 + n * ROW
             on = k == sel
             if on:
                 t.cursor(s, (x, y, w, ROW - 2))
@@ -184,14 +195,14 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 m.hit(k, (x, y, BAR_X - x - 8, ROW))
         if first:
             t.text(s, "{^}", LIST[0] + LIST[2] - 14, LIST[1] + 2)
-        if first + fits < len(rows):
+        if first + fits < len(shown):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
         if read_only:  # (said first in the explanation window)
             hint = "Only the host can change these. " + hint
         t.paragraph(s, hint, HINT[0] + 8, HINT[1] + 7, 56, 3, DIM)
         if read_only:
-            m.footer("{o} back", "Esc: back")
+            m.footer("L1 R1 page   {o} back", "Q E: page   Esc: back")
         else:
-            m.footer("{<}{>} change   {x} switch   {o} back", "Left / right: change   Enter: switch   Esc: back")
+            m.footer("{<}{>} change   {x} switch   L1 R1 page   {o} back", "Arrows: change   Enter: switch   Q E: page   Esc: back")
         m.show()

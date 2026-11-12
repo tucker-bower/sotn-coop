@@ -4,6 +4,7 @@ game's music, joint saves, savestates at moments worth going back to, and F9 bug
 
 import collections
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -38,7 +39,7 @@ def _not_black(surface):
     w, h = surface.get_size()
     return any(sum(surface.get_at((x * w // 8, y * h // 6))[:3]) > 24 for x in range(1, 8) for y in range(1, 6))   # online: seconds of silence before telling the player their partner is gone
 
-PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harness/emu.py)
+PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harness/emu.py): the defaults
     pygame.CONTROLLER_BUTTON_A: "cross", pygame.CONTROLLER_BUTTON_B: "circle",
     pygame.CONTROLLER_BUTTON_X: "square", pygame.CONTROLLER_BUTTON_Y: "triangle",
     pygame.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", pygame.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1",
@@ -46,6 +47,30 @@ PAD_BUTTONS = {  # SDL game controller button -> PlayStation button name (harnes
     pygame.CONTROLLER_BUTTON_DPAD_UP: "up", pygame.CONTROLLER_BUTTON_DPAD_DOWN: "down",
     pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left", pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
 }
+# Controllers by where a button is, not what's printed on it (issue 250): the bottom face button
+# is Cross on an Xbox pad and a Switch pad alike (SDL otherwise swaps A/B and X/Y on Nintendo's)
+os.environ.setdefault("SDL_GAMECONTROLLER_USE_BUTTON_LABELS", "0")
+# The buttons a player can set (Your settings), in the order shown, with their names
+BINDABLE = ("cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2", "start", "select", "up", "down", "left", "right")
+BUTTON_LABELS = {"cross": "Cross", "circle": "Circle", "square": "Square", "triangle": "Triangle", "l1": "L1", "r1": "R1",
+                 "l2": "L2", "r2": "R2", "start": "Start", "select": "Select", "up": "Up", "down": "Down", "left": "Left",
+                 "right": "Right"}
+TRIGGERS = {"lefttrigger": pygame.CONTROLLER_AXIS_TRIGGERLEFT, "righttrigger": pygame.CONTROLLER_AXIS_TRIGGERRIGHT}
+PAD_NAMES = {  # SDL's names for a controller's buttons (and the triggers, which are axes)
+    "a": pygame.CONTROLLER_BUTTON_A, "b": pygame.CONTROLLER_BUTTON_B, "x": pygame.CONTROLLER_BUTTON_X,
+    "y": pygame.CONTROLLER_BUTTON_Y, "leftshoulder": pygame.CONTROLLER_BUTTON_LEFTSHOULDER,
+    "rightshoulder": pygame.CONTROLLER_BUTTON_RIGHTSHOULDER, "back": pygame.CONTROLLER_BUTTON_BACK,
+    "start": pygame.CONTROLLER_BUTTON_START, "leftstick": pygame.CONTROLLER_BUTTON_LEFTSTICK,
+    "rightstick": pygame.CONTROLLER_BUTTON_RIGHTSTICK, "dpup": pygame.CONTROLLER_BUTTON_DPAD_UP,
+    "dpdown": pygame.CONTROLLER_BUTTON_DPAD_DOWN, "dpleft": pygame.CONTROLLER_BUTTON_DPAD_LEFT,
+    "dpright": pygame.CONTROLLER_BUTTON_DPAD_RIGHT}
+# How a controller's buttons are shown: by position, as a PlayStation pad's
+PAD_SHOWN = {"a": "Bottom", "b": "Right", "x": "Left", "y": "Top", "leftshoulder": "L1", "rightshoulder": "R1",
+             "lefttrigger": "L2", "righttrigger": "R2", "back": "Select", "start": "Start", "leftstick": "L3",
+             "rightstick": "R3", "dpup": "D-pad up", "dpdown": "D-pad down", "dpleft": "D-pad left", "dpright": "D-pad right"}
+DEFAULT_PAD = {"cross": "a", "circle": "b", "square": "x", "triangle": "y", "l1": "leftshoulder", "r1": "rightshoulder",
+               "l2": "lefttrigger", "r2": "righttrigger", "start": "start", "select": "back", "up": "dpup",
+               "down": "dpdown", "left": "dpleft", "right": "dpright"}
 KEYS = [  # per player: key -> button
     {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
      pygame.K_z: "cross", pygame.K_x: "square", pygame.K_c: "circle", pygame.K_v: "triangle",
@@ -57,6 +82,39 @@ KEYS = [  # per player: key -> button
      pygame.K_q: "l1", pygame.K_e: "r1", pygame.K_r: "l2", pygame.K_y: "r2",
      pygame.K_SPACE: "start", pygame.K_TAB: "select"},
 ]
+
+
+def pad_map(overrides=None):
+    """A player's controller: PlayStation button -> SDL button name, the defaults with theirs over them."""
+    out = dict(DEFAULT_PAD)
+    out.update({b: n for b, n in (overrides or {}).items() if b in DEFAULT_PAD and (n in PAD_NAMES or n in TRIGGERS)})
+    return out
+
+
+def key_map(player, overrides=None):
+    """A player's keys: key -> PlayStation button. overrides: {button: pygame key name}."""
+    out = dict(KEYS[player])
+    for button, name in (overrides or {}).items():
+        try:
+            code = pygame.key.key_code(name)
+        except (ValueError, pygame.error):
+            continue
+        for k in [k for k, b in out.items() if b == button]:
+            del out[k]
+        out[code] = button
+    return out
+
+
+def bind(overrides, button, value, defaults):
+    """overrides with button set to value; a button that had value gets button's old one (a swap)."""
+    now = {**defaults, **overrides}
+    old = now.get(button)
+    out = dict(overrides)
+    for other, v in now.items():
+        if v == value and other != button:
+            out[other] = old
+    out[button] = value
+    return {b: v for b, v in out.items() if v is not None and defaults.get(b) != v}
 FORMATS = {  # libretro pixel format -> (bits per pixel, RGB masks)
     0: (16, (0x7C00, 0x03E0, 0x001F, 0)),       # 0RGB1555
     1: (32, (0xFF0000, 0x00FF00, 0x0000FF, 0)),  # XRGB8888
@@ -284,7 +342,14 @@ class Pads:
         sdl_controller.init()
         self.assign = list(assign)
         self.virtual = {}  # tests (launcher/uxdriver.py): instance id -> {name, pressed buttons}
+        self.pad_maps = [pad_map(), pad_map()]  # each player's buttons (Your settings: issue 250)
+        self.key_maps = [dict(KEYS[0]), dict(KEYS[1])]
         self.refresh()
+
+    def set_buttons(self, player, pad=None, keys=None):
+        """A player's own buttons: {PlayStation button: SDL button name} and {button: key name}."""
+        self.pad_maps[player] = pad_map(pad)
+        self.key_maps[player] = key_map(player, keys)
 
     def refresh(self):
         """The plugged-in controllers, as {instance id: Controller}. (Controller.as_joystick()
@@ -325,7 +390,12 @@ class Pads:
         pressed = set()
         c = self.controller(player)
         if c is not None:
-            pressed |= {name for btn, name in PAD_BUTTONS.items() if c.get_button(btn)}
+            for name, btn in self.pad_maps[player].items():
+                if btn in TRIGGERS:
+                    if c.get_axis(TRIGGERS[btn]) > 16000:
+                        pressed.add(name)
+                elif c.get_button(PAD_NAMES[btn]):
+                    pressed.add(name)
             x, y = c.get_axis(pygame.CONTROLLER_AXIS_LEFTX), c.get_axis(pygame.CONTROLLER_AXIS_LEFTY)
             pressed |= {n for n, on in (("left", x < -16000), ("right", x > 16000), ("up", y < -16000),
                                         ("down", y > 16000)) if on}
@@ -333,14 +403,10 @@ class Pads:
             x, y = c.get_axis(pygame.CONTROLLER_AXIS_RIGHTX), c.get_axis(pygame.CONTROLLER_AXIS_RIGHTY)
             pressed |= {n for n, on in (("rs_left", x < -20000), ("rs_right", x > 20000), ("rs_up", y < -20000),
                                         ("rs_down", y > 20000)) if on}
-            if c.get_axis(pygame.CONTROLLER_AXIS_TRIGGERLEFT) > 16000:
-                pressed.add("l2")
-            if c.get_axis(pygame.CONTROLLER_AXIS_TRIGGERRIGHT) > 16000:
-                pressed.add("r2")
         want = self.assign[player] if player < len(self.assign) else None
         if want in self.virtual:
             pressed |= self.virtual[want]["pressed"]
-        pressed |= {name for key, name in KEYS[player].items() if keys[key]}
+        pressed |= {name for key, name in self.key_maps[player].items() if keys[key]}
         return "+".join(sorted(pressed))
 
 

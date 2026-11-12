@@ -5,6 +5,7 @@ mouse the same. No game data is needed.
     python launcher/test_ui.py
 """
 
+import collections
 import os
 import sys
 import tempfile
@@ -191,19 +192,23 @@ def main():
               and applied[-1] == r and ui.names == ["Castle settings"], "Difficulty is the first row: right is Hard, and its sliders move at once")
         got, r, _, _ = settings([["left"], ["left"], ["left"], ["back"]])
         check(castle_rules.difficulty(r) == "Easy", "left stops at Easy")
-        got, r, _, _ = settings([["down"], ["right"], ["back"]])
+        got, r, _, _ = settings([["down"], ["down"], ["right"], ["back"]])
         check(r["enemy_hp_pct"] == 225 and castle_rules.difficulty(r) == "Custom",
-              "down skips the group's heading to the first slider; moving it by hand makes the difficulty Custom")
-        got, r, _, _ = settings([["down"]] * 6 + [["ok"], ["back"]])
-        check(r["shared_level"] is False, "OK on a rule switches it (past the Sharing heading)")
-        got, r, _, _ = settings([["down"]] * 6 + [["right"], ["back"]])
+              "Balance is the first page: Difficulty, Back to the defaults, the sliders; moving one by hand makes it Custom")
+        got, r, _, _ = settings([["page_next"], ["ok"], ["back"]])
+        check(r["shared_level"] is False, "R1 / E: the Sharing page; OK on its first rule switches it")
+        got, r, _, _ = settings([["page_next"], ["right"], ["back"]])
         off = r["shared_level"]
-        got, r, _, _ = settings([["down"]] * 6 + [["right"], ["left"], ["back"]])
+        got, r, _, _ = settings([["page_next"], ["right"], ["left"], ["back"]])
         check(off is False and r["shared_level"] is True, "a switch: right turns it OFF, left turns it ON, as it's drawn")
-        got, r, applied, _ = settings([["down"]] * 6 + [["ok"], ["up"], ["up"], ["ok"], ["back"]])  # up from the first row: the last, the defaults
-        check(got is None and r["shared_level"] is False, "up moves back through the list")
-        got, r, applied, _ = settings([["right"], ["up"], ["ok"], ["back"]])
-        check(r == castle_rules.clean({}) and applied[-1] == r, "Back to the defaults (the last row) restores every setting")
+        got, r, _, _ = settings([["page_prev"], ["ok"], ["back"]])
+        check(r["bat_carry"] is not castle_rules.clean({})["bat_carry"], "L1 / Q from the first page: the last page, Extras")
+        got, r, _, _ = settings([["page_next"]] * 7 + [["down"], ["down"], ["right"], ["back"]])
+        check(r["enemy_hp_pct"] == 225, "the pages go round: seven on, Balance again")
+        got, r, applied, _ = settings([["right"], ["down"], ["ok"], ["back"]])
+        check(r == castle_rules.clean({}) and applied[-1] == r, "Back to the defaults (under Difficulty) restores every setting")
+        got, r, applied, _ = settings([["page_next"], ["ok"], ["page_prev"], ["down"], ["ok"], ["back"]])
+        check(got is None and r == castle_rules.clean({}), "...from any page's change")
         got, r, applied, _ = settings([["right"], ["down"], ["right"], ["ok"], ["back"]], read_only=True)
         check(r == castle_rules.clean({}) and applied == [], "the host's settings, shown to a joiner: nothing changes")
         mode = {"mode": "story"}
@@ -215,8 +220,53 @@ def main():
         check(got is None and castle_rules.difficulty(r) == "Hard", "then Difficulty; back returns to the castle's name")
         got, r, _, _ = settings([["down"], ["right"], ["back"]], start=True)
         check(castle_rules.difficulty(r) == "Hard", "with no boss rush to offer, there's no Mode row")
-        got, r, _, _ = settings([["down"]] * 7 + [[], [("mouse", 420, 34 + 6 + 16 * 6 + 4, True)], ["back"]])  # scrolled by two
+        got, r, _, _ = settings([["page_next"], [], [("mouse", 420, 34 + 6 + 4, True)], ["back"]])
         check(r["shared_level"] is False and r["shared_gold"] is True, "the mouse: a click on a rule's row switches it")
+
+        # pages in a list of options (issue 253)
+        from ui.screens.options import options
+        orows = [{"kind": "head", "key": None, "label": "One"}, {"kind": "switch", "key": "a", "label": "A", "value": False},
+                 {"kind": "action", "key": "b", "label": "B"}, {"kind": "head", "key": None, "label": "Two"},
+                 {"kind": "action", "key": "c", "label": "C"}]
+        m, ui, _ = menus([["page_next"], ["ok"]])
+        check(options(m, lambda: orows, lambda *a: None, pages=True) == ("c", 4), "Options: R1 / E turns to the next page")
+        m, ui, _ = menus([["down"], ["ok"]])
+        check(options(m, lambda: orows, lambda *a: None, pages=True) == ("b", 2), "up and down stay on the page")
+        m, ui, _ = menus([["page_prev"], ["down"], ["ok"]])
+        check(options(m, lambda: orows, lambda *a: None, pages=True) == ("c", 4), "L1 / Q goes round to the last page")
+
+        # each player's buttons (issue 250)
+        import gameview
+        check(gameview.bind({}, "cross", "b", gameview.DEFAULT_PAD) == {"cross": "b", "circle": "a"},
+              "a button given to Cross swaps with the one that had it")
+        check(gameview.bind({"cross": "b", "circle": "a"}, "cross", "a", gameview.DEFAULT_PAD) == {},
+              "setting it back to the default leaves nothing stored")
+
+        class Pad:
+            def __init__(self, down=(), axes=()):
+                self.down, self.axes = down, axes
+
+            def get_button(self, b):
+                return b in self.down
+
+            def get_axis(self, a):
+                return 30000 if a in self.axes else 0
+        pads = gameview.Pads.__new__(gameview.Pads)
+        pads.assign, pads.virtual, pads.controllers = [7, None], {}, []
+        pads.by_id = {7: Pad({pygame.CONTROLLER_BUTTON_B})}
+        pads.pad_maps, pads.key_maps = [gameview.pad_map(), gameview.pad_map()], [dict(gameview.KEYS[0]), dict(gameview.KEYS[1])]
+        nokeys = collections.defaultdict(bool)
+        check(pads.mask(0, nokeys) == "circle", "the controller's right face button is Circle by default")
+        pads.set_buttons(0, {"cross": "b", "circle": "a"}, {"cross": "q"})
+        check(pads.mask(0, nokeys) == "cross", "rebound: it's Cross for that player")
+        pads.by_id = {7: Pad()}
+        keys = collections.defaultdict(bool, {pygame.K_q: True})
+        check(pads.mask(0, keys) == "cross" and pads.mask(1, keys) == "l1", "a key rebound for player 1 only; player 2 keeps Q as L1")
+        keys = collections.defaultdict(bool, {pygame.K_z: True})
+        check("cross" not in pads.mask(0, keys).split("+"), "the old key no longer presses it")
+        pads.by_id = {7: Pad(axes={pygame.CONTROLLER_AXIS_TRIGGERLEFT})}
+        pads.set_buttons(0, gameview.bind({}, "square", "lefttrigger", gameview.DEFAULT_PAD), {})
+        check(pads.mask(0, nokeys) == "square", "a trigger can be any button (and L2 gets Square's old one)")
 
         # your discs
         from ui.screens.discs import discs
