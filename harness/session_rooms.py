@@ -359,3 +359,42 @@ def spell_by_hand_with_partner_near(run):
             run.step(150, ("", b_pad))  # the spell ends
             run.step(60, ("right", ""))  # facing right again
     run.expect(not missed, "A's Hellfire comes out every time, whatever B does", missed=missed)
+
+
+BODY_COUNT = 0x80097A33  # g_Status.equipBodyCount: armour in the bag
+BODY_ORDER = 0x80097B36  # g_Status.equipBodyOrder: the order the menu lists it in
+PLATINUM_MAIL, HEALING_MAIL_ID, ARMOR_SLOT = 0x08, 0x11, 0x80097C0C
+
+
+@session_scenario(starts=(LAB, LAB), characters=(1, 0))
+def unpause_after_changing_armour_richter_and_alucard(run):
+    """Issue 194 (0.16.3): paused as Richter after a load, swapped Healing Mail for Platinum Mail in
+    the equipment menu, and the game hung on unpausing. Through the real menu: Equip, Body, the
+    Platinum Mail (put next to Unequip in the list), then back out and unpause."""
+    import os
+    a = run.s.a
+    out = os.environ.get("COOP_SHOTS")
+    run.step(30)
+    run.expect(reload_game(run, a), "Continue's load brings this game's player in")
+    a.write(ARMOR_SLOT, HEALING_MAIL_ID, "<I")
+    a.write(BODY_COUNT + PLATINUM_MAIL, 1, "<B")
+    order = list(a.read_bytes(BODY_ORDER, 90))  # the list's order: the Platinum Mail second, beside Unequip
+    at = order.index(PLATINUM_MAIL)
+    order[1], order[at] = order[at], order[1]
+    a.write_bytes(BODY_ORDER, bytes(order))
+    run.step(60)
+    for k, (button, frames, gap) in enumerate((("start", 7, 60), ("cross", 6, 40), ("down", 4, 12), ("down", 4, 12),
+                                               ("down", 4, 12), ("cross", 6, 30), ("right", 4, 12), ("cross", 6, 30),
+                                               ("triangle", 6, 30), ("triangle", 6, 30), ("triangle", 6, 60))):
+        run.step(frames, (button, ""))
+        run.step(gap)
+        if out:
+            a.screenshot().save(f"{out}/{k:02d}-{button}.png")
+    run.expect(a.read(ARMOR_SLOT, "<I") == PLATINUM_MAIL, "the menu put the Platinum Mail on",
+               armour=hex(a.read(ARMOR_SLOT, "<I")))
+    beat, frame = a.mailbox("heartbeat"), a.mailbox("self_presence").frame
+    run.step(300)
+    p = a.mailbox("self_presence")
+    run.expect(a.mailbox("heartbeat") != beat, "the main loop runs after unpausing", beat=(beat, a.mailbox("heartbeat")))
+    run.expect(p.frame != frame and not p.flags & PAUSED, "the game's timer runs after unpausing",
+               frame=(frame, p.frame), flags=p.flags)
