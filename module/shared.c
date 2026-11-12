@@ -83,6 +83,17 @@ typedef struct {
 DR_ENV* func_800EDB08(Primitive* prim); // DRA: allocates a DR_ENV for prim, sets it up as PRIM_ENV
 #define PRIM_ENV_PTR(p) (*(DR_ENV**)&(p)->r1)
 
+// The overlay's state a snapshot carries after its entities: its BSS, then its .data words
+// (overlay_table.h; a variable given a starting value isn't in the BSS: issue 248).
+static u32 StateSize(const OverlayInfo* ovl) {
+    u32 n = 0;
+
+    while (n < LEN(ovl->data) && ovl->data[n]) {
+        n++;
+    }
+    return ovl->bssSize + n * 4;
+}
+
 static s32 s_Role, s_Want, s_Settle;
 static u16 s_RoomFrames;
 static s16 s_RoomLeft, s_RoomTop;
@@ -706,8 +717,11 @@ static void ApplySnapshot(void) {
             ClearSlot(i);
         }
     }
-    if (ovl && h->bssSize == ovl->bssSize && r + h->bssSize <= end) {
-        CopyWords((void*)ovl->bssStart, r, h->bssSize);
+    if (ovl && h->bssSize == StateSize(ovl) && r + h->bssSize <= end) {
+        CopyWords((void*)ovl->bssStart, r, ovl->bssSize);
+        for (i = 0; i < LEN(ovl->data) && ovl->data[i]; i++) {
+            *(u32*)ovl->data[i] = ((const u32*)(r + ovl->bssSize))[i];
+        }
     }
     r += h->bssSize;
     if (h->fgTiles && h->fgTiles == FgTiles() && r + h->fgTiles * 2 <= end) {
@@ -797,14 +811,17 @@ static void CaptureSnapshot(void) {
         }
         h->nEntities++;
     }
-    if (ovl && w + ovl->bssSize <= end) {
+    if (ovl && w + StateSize(ovl) <= end) {
         CopyWords(w, (void*)ovl->bssStart, ovl->bssSize);
         w += ovl->bssSize;
-        h->bssSize = ovl->bssSize;
+        for (i = 0; i < LEN(ovl->data) && ovl->data[i]; i++, w += 4) {
+            *(u32*)w = *(u32*)ovl->data[i];
+        }
+        h->bssSize = StateSize(ovl);
     }
     h->fgTiles = 0;
     n = FgTiles();
-    if (n && (n & 1) == 0 && h->bssSize == (ovl ? ovl->bssSize : 0)) {
+    if (n && (n & 1) == 0 && h->bssSize == (ovl ? StateSize(ovl) : 0)) {
         u32 sum = FgSum(n);
         if ((sum != s_FgSum || ++s_FgAge >= FG_RESEND) && w + n * 2 <= end) {
             CopyWords(w, g_Tilemap.fg, n * 2);

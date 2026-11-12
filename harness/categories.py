@@ -23,7 +23,7 @@ CATEGORIES = {
                r"damage_rate|poison|offhand|subweapon|crashes|familiar|spell|relics_|vlad_|telescope|hand_items|"
                r"partner_(attack|dagger|swing|fist)|librarian", ()),
     "bosses": ("Boss fights, pulls, aggro, boss rush", r"boss|aggro", ("session_bossrush",)),
-    "cutscenes": ("Story scenes, the prologue, scene pulls and skips", r"scene|prologue|death_waits", ()),
+    "cutscenes": ("Story scenes, the prologue, scene pulls and skips", r"scene|prologue|death_waits|ending_", ()),
     "progression": ("Shared XP, items, relics, gold, map, saves, castles",
                     r"shared_xp|relic_shared|items_and|finds_|gold|map_shared|exactly_once|live_despawn|"
                     r"live_object|rules_xp|drop_enemy|level_up|castle_|joint_save|save_room|resume_from|"
@@ -94,6 +94,9 @@ PATHS = {
 # The PR gate (run.py with no tests named), by category. The first of each group caught a bug
 # (run.py --history); "+" marks the quick ones kept so every category has a check.
 EVERYDAY = {
+    # caught a bug when written (2026-11-12): a fight changing hands (#248), a stranded Mist Step
+    # (#211), the partner's ending (#257)
+    "boss_trio_authority_changes", "mist_step_never_stuck_maria", "ending_richter_alucard_and_richter",
     # richter, maria, alucard, combat
     "alucard_health_bar_richter", "alucard_health_bar_maria", "poison_hits_richter", "poison_hits_maria",
     "damage_rate_alucard", "damage_rate_richter", "damage_rate_maria", "offhand_frame_palettes_richter",

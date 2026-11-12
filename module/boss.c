@@ -262,12 +262,32 @@ void BossKilled(u16 enemyId, u32 ending) {
     }
 }
 
+extern s16 g_PlayingXaBgmId; // DRA (src/dra/bss.c): the XA music playing, as PlaySfx's id - 0x300
+void PlaySfx(s32 sfxId);     // DRA
+#define SET_STOP_MUSIC 0xA   // include/sfx.h: the CD music fades out and stops
+#define MUSIC_STOP_WAIT 90   // frames for it (it takes a few); then the game is told it stopped
+
 // The ending the death scene starts: the partner's, else Richter's (BO6's func_us_801A9208)
-// by the castle flag.
+// by the castle flag. The music stops first, as the death scene's own fade stops it: the ending's
+// dialogue waits for "the sound" to be done before each line (SEL's CSOP_SCRIPT_UNKNOWN_11,
+// func_80131F68), and a game that followed with its stage's music still on waited for good: the
+// ending's CD reads end the stream without the game ever marking it stopped (ending_*).
 static void FollowEnding(void) {
+    static u8 s_Stopping;
+
     if (g_GameStep != Play_Default) {
         return; // not mid-load
     }
+    if (g_PlayingXaBgmId) {
+        if (!s_Stopping) {
+            PlaySfx(SET_STOP_MUSIC);
+        }
+        if (++s_Stopping < MUSIC_STOP_WAIT) {
+            return;
+        }
+        g_PlayingXaBgmId = 0;
+    }
+    s_Stopping = 0;
     g_PauseAllowed = true;
     g_unkGraphicsStruct.pauseEnemies = false;
     D_800978B4 = s_Ending ? s_Ending : g_CastleFlags[0xD8] ? 2 : 1;
@@ -281,8 +301,6 @@ bool BossFinalGone(void) { return s_FinalGone != 0; }
 // once its bosses fall (NZ0's EntityBossFightManager, steps 5 and 6), but in a guest's game the
 // manager is a copy that never runs, and the boss's music played on through the stage. A guest
 // whose fight ends in the room it began in gets back the music from before the fight.
-extern s16 g_PlayingXaBgmId; // DRA (src/dra/bss.c): the XA music playing, as PlaySfx's id - 0x300
-void PlaySfx(s32 sfxId);     // DRA
 #define MUSIC_BACK_AFTER 180 // frames after the last boss falls: the authority's game has its say first
 #define XA_MUSIC 0x300
 static s16 s_MusicBefore;
@@ -340,7 +358,16 @@ static void ScanBosses(void) {
 }
 
 void BossUpdate(void) {
+    static s32 s_WasState;
+
     s_Frame++;
+    // Any way into the ending (also a guest's copy of Dracula's death scene, whose fade only the
+    // authority's game runs): the ending's first CD read ends whatever music was streaming, so
+    // it's marked stopped, or the ending's dialogue waits for it for good (#257, as FollowEnding).
+    if (g_GameState == Game_Ending && s_WasState != Game_Ending) {
+        g_PlayingXaBgmId = 0;
+    }
+    s_WasState = g_GameState;
     if (g_GameState == Game_Ending) {
         if (s_FinalGone && !s_EndSaid) {
             ProgressEmit(EV_KILLED, s_FinalGone, 1 | D_800978B4 << 8);

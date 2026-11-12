@@ -21,11 +21,13 @@ void PlaySfx(s32 sfxId);                                   // DRA
 #define SHORT_REACH 40   // px of grate: without Power of Mist, about 2 tiles (Alucard's in practice)
 #define LONG_REACH 1024  // px: with it
 #define PL_T_INVINCIBLE 14 // Richter's (src/ric/ric_shared.h) and Maria's player timers
+#define STALL_FRAMES 16  // drifting this long without getting closer: back where the step began
 
 enum { MIST_IDLE, MIST_FADE_OUT, MIST_DRIFT, MIST_FADE_IN };
 
 static s32 s_State, s_Timer, s_Dir;
 static s32 s_TargetX; // in the room (world) pixels
+static s32 s_StartX, s_StartY, s_Closest, s_Stall; // where the step began; how close it got, and since when
 static void (*s_Collision)(s32 x, s32 y, Collider* res, s32 unk);
 
 static u32 Effects(s32 x, s32 y) {
@@ -97,6 +99,10 @@ void MistStepUpdate(void) {
             return;
         }
         s_TargetX = x + g_Tilemap.scrollX.i.hi;
+        s_StartX = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi;
+        s_StartY = PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi;
+        s_Closest = s_Dir * (s_TargetX - s_StartX);
+        s_Stall = 0;
         PlaySfx(SFX_TRANSFORM);
         s_State = MIST_FADE_OUT;
         break;
@@ -109,6 +115,20 @@ void MistStepUpdate(void) {
     case MIST_DRIFT:
         x = PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi;
         if (s_Dir * (s_TargetX - x) <= 0 || ++s_Timer > LONG_REACH) {
+            s_Timer = 0;
+            s_State = MIST_FADE_IN;
+            break;
+        }
+        // Issue 211: something other than the grate stops the drift (the step began in the air and
+        // the player fell to a floor where a wall is in the way). Rather than drifting, unseen and
+        // deaf to the pad, until the time runs out (some 17 s, and then maybe inside the grate),
+        // the step gives up at once and the player is back where it began.
+        if (s_Dir * (s_TargetX - x) < s_Closest) {
+            s_Closest = s_Dir * (s_TargetX - x);
+            s_Stall = 0;
+        } else if (++s_Stall >= STALL_FRAMES) {
+            PLAYER.posX.i.hi = s_StartX - g_Tilemap.scrollX.i.hi;
+            PLAYER.posY.i.hi = s_StartY - g_Tilemap.scrollY.i.hi;
             s_Timer = 0;
             s_State = MIST_FADE_IN;
             break;

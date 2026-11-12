@@ -20,6 +20,7 @@ typedef struct {
     u32 layout[4]; // layout spawner cursors: horizontal, vertical, and their directions (0 = none)
     u32 bottomText; // BottomCornerText(u8* str, u8 leftAlign): the item-pickup text box, or 0
     OverlayHelper solid; // GetPlayerCollisionWith: patched to the module's copy (solid.c)
+    u32 data[16]; // words of the overlay's .data that are state (0 ends the list): mirrored with the BSS
 } OverlayInfo;
 
 #define LAYOUT_H 0
