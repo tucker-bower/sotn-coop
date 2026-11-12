@@ -11,6 +11,7 @@ from ..theme import DIM, GOLD, GREEN, INK, shorten, wrap
 HEAD = (8, 6, 464, 22)
 CARD_Y, CARD_H = 34, 200
 FRAME_W, FRAME_H = 66, 98
+SIDE_GAP = 6
 # Each character's portrait (the Saturn two have the PlayStation pair's)
 PORTRAITS = ("alucard", "richter", "maria", "maria", "maria", "richter")
 
@@ -55,6 +56,18 @@ def card(m, box, c):
     t.text_centre(s, shorten(c["device"], (box.w - 12) // 8), cx, box.y + 19, DIM)
     frame = pygame.Rect(0, 0, FRAME_W, FRAME_H)
     frame.midtop = (cx, box.y + 32)
+    # The carousel (issue 252): the characters either side, dimmed, where the card has room
+    if not c["ready"] and box.w >= 3 * FRAME_W + 2 * SIDE_GAP + 12:
+        for (other, playable), dx in zip(c.get("neighbours", ()), (-1, 1)):
+            side = frame.move(dx * (FRAME_W + SIDE_GAP), 0)
+            pygame.draw.rect(s, (0, 0, 16), side)
+            if playable:
+                picture = portrait(m, other)
+                s.blit(picture, picture.get_rect(center=side.center))
+            veil = pygame.Surface(side.size, pygame.SRCALPHA)
+            veil.fill((0, 0, 16, 150))
+            s.blit(veil, side)
+            pygame.draw.rect(s, DIM, side, 1)
     pygame.draw.rect(s, (0, 0, 16), frame)
     pygame.draw.rect(s, GREEN if c["ready"] else INK, frame, 1)
     if c["playable"]:
@@ -68,8 +81,16 @@ def card(m, box, c):
         t.text(s, "{<}", cx - half - 14, y)
         t.text(s, "{>}", cx + half + 6, y)
     y += 12
+    if c.get("version"):  # up and down: their versions
+        version = shorten(c["version"], (box.w - 36) // 8)
+        t.text_centre(s, version, cx, y, GOLD if c["playable"] else DIM)
+        if not c["ready"] and c.get("versions", 1) > 1:
+            half = len(version) * 4
+            t.text(s, "{^}", cx - half - 14, y)
+            t.text(s, "{v}", cx + half + 6, y)
+        y += 12
     if c["playable"]:
-        for line in wrap(c["note"], (box.w - 12) // 8)[:2] if c["note"] else []:
+        for line in wrap(c["note"], (box.w - 12) // 8)[:1] if c["note"] else []:
             t.text_centre(s, line, cx, y, DIM)
             y += 10
         t.text_centre(s, shorten(c["controls"], (box.w - 12) // 8), cx, box.bottom - 30, INK if c["shortcuts"] else DIM)

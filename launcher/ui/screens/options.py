@@ -6,32 +6,52 @@ the rows (Launcher.option_rows) and does what they say."""
 import pygame
 
 from ..theme import DIM, GOLD, GREEN, INK, shorten
-from ..widgets import ROW, scroll
+from ..widgets import ROW, page_step, paged, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 164), (8, 202, 464, 36)
 BAR_X, BAR_W = 300, 100
 
 
-def options(m, rows, change, sel=0, title="Options", note="Also in the menus at the top of the window", footer=None,
-            status=None):
+def options(m, rows, change, sel=0, title="Options", note="Also in the menu bar", footer=None,
+            status=None, pages=False):
     """rows() -> [{"kind": "head" | "choice" | "slider" | "switch" | "action", "key", "label", "hint",
     "value", ("low", "high", "step" for a slider)}]. change(key, step) applies a choice, slider or
     switch (step -1 / +1, or 0 for OK). Returns (an action's key, the row it was on), ("drop", a
     file dropped on the window), ("more", key) (Square / X / S on a row), or None (back). The same
     screen lists other things than options: title and note say what. status() -> what just
-    happened, shown above the selected row's explanation."""
+    happened, shown above the selected row's explanation. pages: each heading is a page of its own,
+    turned with L1 / R1 or Q / E (issue 253)."""
     t, s, first = m.theme, m.s, 0
     table = rows()
 
+    def heading(row):
+        return row["label"] if row["kind"] == "head" else None
+
+    def shown_rows():
+        """(the rows on screen, as indices into table, the page names)"""
+        if not pages:
+            return list(range(len(table))), None
+        names, on = paged(table, heading)
+        return on[page % len(on)], names
+
+    page = 0
+    if pages and sel:
+        names_, on_ = paged(table, heading)
+        page = next((k for k, idx in enumerate(on_) if sel in idx), 0)
+    shown, names = shown_rows()
+
     def step_sel(k, by):
-        for _ in range(len(table)):
-            k = (k + by) % len(table)
-            if table[k]["kind"] != "head":
-                return k
+        at = shown.index(k) if k in shown else 0
+        for _ in range(len(shown)):
+            at = (at + by) % len(shown)
+            if table[shown[at]]["kind"] != "head":
+                return shown[at]
         return k
 
-    if table[sel]["kind"] == "head":
-        sel = step_sel(sel, 1)
+    if not shown:
+        shown = [0]
+    if sel not in shown or table[sel]["kind"] == "head":
+        sel = step_sel(shown[0], 1) if table[shown[0]]["kind"] == "head" else shown[0]
     while True:
         for a in m.poll(raw=True):
             if isinstance(a, tuple) and a[0] == "event":
@@ -40,6 +60,14 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
                 continue
             if a == "back":
                 return None
+            turn = page_step(a) if pages else 0
+            if turn:
+                page = (page + turn) % len(names)
+                shown, names = shown_rows()
+                first, sel = 0, shown[0]
+                if table[sel]["kind"] == "head":
+                    sel = step_sel(sel, 1)
+                continue
             row = table[sel]
             if a == "rules" and row["kind"] == "action":
                 return "more", row["key"]
@@ -58,7 +86,7 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
                     return row["key"], sel
                 if row["kind"] in ("choice", "switch"):
                     change(row["key"], 0)
-            elif isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], tuple):  # a slider's bar
+            elif isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], tuple) and a[1][0] == "bar":
                 k = a[1][1]
                 row, sel = table[k], k
                 at = m.ui.display.to_pixels(pygame.mouse.get_pos()) if hasattr(m.ui.display, "to_pixels") else None
@@ -68,21 +96,29 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
             elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and table[a[1]]["kind"] != "head":
                 sel = a[1]
         table = rows()
-        sel = min(sel, len(table) - 1)
+        shown, names = shown_rows()
+        if sel not in shown:
+            sel = shown[min(len(shown) - 1, max(0, len(shown) - 1))]
+        if table[sel]["kind"] == "head":
+            sel = step_sel(sel, 1)
+        at = shown.index(sel)
         fits = (LIST[3] - 12) // ROW
-        first = scroll(first, sel, fits, len(table))
-        if first and table[first - 1]["kind"] == "head" and sel - first < fits - 1:
+        first = scroll(first, at, fits, len(shown))
+        if first and table[shown[first - 1]]["kind"] == "head" and at - first < fits - 1:
             first -= 1
         said = status() if status else ""
         m.begin(title, said or table[sel].get("hint", ""))
         m.window(HEAD)
         t.text(s, title, HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text_right(s, note[:56 - len(title) - 2], HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
+        if pages and len(names) > 1:
+            m.tabs(names, page, HEAD[0] + HEAD[2] - 8, HEAD[1] + 7)
+        else:
+            t.text_right(s, note[:56 - len(title) - 2], HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, DIM)
         m.window(LIST)
         x, y0, w = LIST[0] + 4, LIST[1] + 6, LIST[2] - 8
         right = LIST[0] + LIST[2] - 12
-        for k in range(first, min(len(table), first + fits)):
-            row, y = table[k], y0 + (k - first) * ROW
+        for n, k in enumerate(shown[first:first + fits]):
+            row, y = table[k], y0 + n * ROW
             if row["kind"] == "head":
                 t.text(s, row["label"], x + 6, y + 3, GOLD)
                 continue
@@ -110,10 +146,13 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menus at 
             m.hit(k, (x, y, (BAR_X - x - 8) if kind == "slider" else w, ROW))
         if first:
             t.text(s, "{^}", LIST[0] + LIST[2] - 14, LIST[1] + 2)
-        if first + fits < len(table):
+        if first + fits < len(shown):
             t.text(s, "{v}", LIST[0] + LIST[2] - 14, LIST[1] + LIST[3] - 10)
         m.window(HINT)
         used = t.paragraph(s, said, HINT[0] + 8, HINT[1] + 6, 56, 2, INK) if said else 0
         t.paragraph(s, table[sel].get("hint", ""), HINT[0] + 8, HINT[1] + 6 + used * 10, 56, 3 - used, DIM)
-        m.footer(*(footer or ("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back")))
+        default = (("{<}{>} change   {x} select   L1 R1 page   {o} back", "Arrows: change   Enter: select   Q E: page   Esc: back")
+                   if pages and len(names) > 1 else
+                   ("{<}{>} change   {x} select   {o} back", "Left / right: change   Enter: select   Esc: back"))
+        m.footer(*(footer or default))
         m.show()

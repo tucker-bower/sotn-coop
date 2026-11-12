@@ -73,7 +73,7 @@ def discs(m, status, attach, first_run=False, said="", more=(), art=None):
         m.begin("Discs", said["text"])
         m.window(HEAD)
         t.text(s, "Your discs", HEAD[0] + 8, HEAD[1] + 7, GOLD)
-        t.text(s, "PlayStation: needed. PSP and Saturn: more characters.", HEAD[0] + 8, HEAD[1] + 19, DIM)
+        t.text(s, "PlayStation: required. PSP and Saturn add characters.", HEAD[0] + 8, HEAD[1] + 19, DIM)
         for k, (key, title, system, need, unlocks) in enumerate(SLOTS):
             x = 8 + k * (SLOT_W + 7)
             box = (x, SLOT_Y, SLOT_W, SLOT_H)

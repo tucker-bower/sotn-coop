@@ -94,6 +94,22 @@ class Menus:
         if right:
             self.theme.text_right(self.s, right, 472, 244, DIM)
 
+    def tabs(self, names, page, right, y):
+        """The page's name between L1 and R1 (Q and E on the keyboard), right-aligned at right, with
+        its number: the arrows are clickable as ("page", -1) and ("page", 1)."""
+        t, s = self.theme, self.s
+        prev, nxt = ("L1", "R1") if self.device == "pad" else ("Q", "E")
+        label = f"{names[page]} {page + 1}/{len(names)}"
+        tail = f" {{>}} {nxt}"
+        x1 = right - width(tail)
+        t.text(s, tail, x1, y, INK)
+        t.text_right(s, label, x1, y, GOLD)
+        x0 = x1 - width(label) - width(f"{prev} {{<}} ")
+        t.text(s, f"{prev} {{<}} ", x0, y, INK)
+        self.hit(("page", -1), (x0 - 2, y - 3, width(f"{prev} {{<}}") + 4, GLYPH + 6))
+        self.hit(("page", 1), (x1, y - 3, width(tail) + 2, GLYPH + 6))
+        return x0
+
     def link(self, key, text, x, y, hover, right=False):
         """Text only the mouse can use: never part of a controller's or the keyboard's way round."""
         if right:
@@ -121,3 +137,35 @@ def scroll(first, sel, fits, count):
     elif sel >= first + fits:
         first = sel - fits + 1
     return max(0, min(first, count - fits))
+
+
+def paged(rows, heading):
+    """A list with headings as pages: (the page names, [the rows' indices on each page]). heading(row)
+    -> its page name, or None for a row. Rows before the first heading go on the first page."""
+    names, pages = [], []
+    for k, row in enumerate(rows):
+        name = heading(row)
+        if name is not None:
+            names.append(name)
+            pages.append([])
+        else:
+            if not pages:
+                names.append(None)
+                pages.append([])
+            pages[-1].append(k)
+    if len(names) > 1 and names[0] is None:
+        lead = pages.pop(0)
+        pages[0][:0] = lead
+        names.pop(0)
+    return [n or "" for n in names] or [""], [p for p in pages] or [[]]
+
+
+def page_step(action):
+    """-1 / +1 for a page change (L1 / R1, Q / E, or a click on a page arrow), else 0."""
+    if action == "page_prev":
+        return -1
+    if action == "page_next":
+        return 1
+    if isinstance(action, tuple) and action[0] == "click" and isinstance(action[1], tuple) and action[1][0] == "page":
+        return action[1][1]
+    return 0

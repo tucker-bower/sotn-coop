@@ -466,6 +466,13 @@ def arena_fling(run, g, x, from_left):
     (DAMAGEKIND_5: the fling). Returns (it was flung, frames until it was out of the hit, x then)."""
     g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)                       # HP: the hit can't kill
     p0 = g.entity(0)
+    g.write(PAUSE_ENEMIES, 1)  # the boss holds still, and a hit of his already under way ends first:
+    for _ in range(300):       # (issue 248: B was still in his tackle's hit, which isn't the fling)
+        if g.read(p0, "<H", 0x2C) == 0:  # standing
+            break
+        run.step(1)
+        g.write(PAUSE_ENEMIES, 1)
+        g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
     g.write(p0, x, "<h", 2)
     g.write("g_PlayerX", x + g.read("g_Tilemap", "<h", 0xA), "<i")
     g.write(p0, 1, "<H", 0x14)

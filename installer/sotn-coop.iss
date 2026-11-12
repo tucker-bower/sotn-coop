@@ -7,15 +7,20 @@
 #ifndef Version
   #define Version "0.0.0"
 #endif
+; (scripts/test_installer.py installs a copy under another name, beside the player's own)
+#ifndef AppId
+  #define AppId "SOTN Co-op"
+#endif
 
 [Setup]
+AppId={#AppId}
 AppName=SOTN Co-op
 AppVersion={#Version}
 AppPublisher=SOTN Co-op contributors
 AppPublisherURL=https://github.com/tucker-bower/sotn-coop
 ; (an update goes to the folder installed to before: UsePreviousAppDir, Inno's default)
 DefaultDirName={sd}\Games\sotn-coop
-DefaultGroupName=SOTN Co-op
+DefaultGroupName={#AppId}
 PrivilegesRequired=lowest
 OutputDir={#Out}
 OutputBaseFilename=SOTN-Coop-setup-{#Version}
@@ -28,8 +33,9 @@ UninstallDisplayIcon={app}\app\launcher\assets\icon.ico
 SetupIconFile={#Stage}\app\launcher\assets\icon.ico
 InfoBeforeFile={#Stage}\app\LICENSES\README.txt
 ; As few pages as possible (design/M7b-polish.md): what this is, where, a desktop shortcut, done.
-; The folder page only on a first install.
-DisableDirPage=auto
+; The folder page every time, filled in with the folder it's in now: another folder moves it there
+; (issue 249). The launcher's own updates run silently, into the same folder.
+DisableDirPage=no
 DisableReadyPage=yes
 
 [Files]
@@ -78,6 +84,51 @@ begin
     else
       DeleteFile(Probe);
   end;
+end;
+
+// Installed to another folder than before (issue 249): the player's data\ moves to the new one,
+// copied first and deleted only once the copy is whole, and the old program goes.
+function MoveFrom(Old, New: String): Boolean;
+var
+  Code: Integer;
+begin
+  Result := True;
+  if not DirExists(Old + '\data') or DirExists(New + '\data') then
+    exit;
+  WizardForm.StatusLabel.Caption := 'Moving your castles, saves and discs to ' + New + '...';
+  // robocopy: 0-7 is success (8 and up: something wasn't copied)
+  if not Exec(ExpandConstant('{sys}\robocopy.exe'), '"' + Old + '\data" "' + New + '\data" /E /R:1 /W:1 /NP /NFL /NDL /NJH /NJS',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code >= 8) then
+  begin
+    Result := False;
+    exit;
+  end;
+  DelTree(Old + '\data', True, True, True);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Old, New: String;
+begin
+  if CurStep <> ssPostInstall then
+    exit;
+  Old := RemoveBackslashUnlessRoot(WizardForm.PrevAppDir);
+  New := RemoveBackslashUnlessRoot(ExpandConstant('{app}'));
+  if (Old = '') or (CompareText(Old, New) = 0) or not DirExists(Old) then
+    exit;
+  if not MoveFrom(Old, New) then
+  begin
+    if not WizardSilent then
+      MsgBox('Your castles, saves and discs couldn''t all be copied to ' + New + '. They''re still in ' + Old +
+             '\data: copy that folder into ' + New + ' yourself.', mbError, MB_OK);
+    exit;
+  end;
+  DelTree(Old + '\app', True, True, True);
+  DelTree(Old + '\python', True, True, True);
+  DeleteFile(Old + '\SOTN Co-op.lnk');
+  DeleteFile(Old + '\unins000.exe');
+  DeleteFile(Old + '\unins000.dat');
+  RemoveDir(Old);
 end;
 
 // Uninstalling asks before deleting the player's castles, saves and discs (data\): No is the default.

@@ -119,13 +119,21 @@ def main():
         rows = app.Launcher.option_rows(types.SimpleNamespace(settings={"netsim": "transatlantic"}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES,
                                                               bios=lambda: Path("C:/a/very/long/path/to/someones-own-console-bios-scph5501.bin")))
         screen("options", lambda m: options(m, lambda: rows, lambda *a: None), frames=[()] + [("down",)] * len(rows) + [("back",)])
+        screen("options (pages)", lambda m: options(m, lambda: rows, lambda *a: None, pages=True),
+               frames=[()] + [("page_next",)] * 8 + [("down",)] * 12 + [("back",)])
         fake = types.SimpleNamespace(settings={"spells": [[2, 5, 3, 0], [None, 7, 1, 2]]}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES,
                                      bios=lambda: Path("C:/x/bios.bin"), shortcuts=lambda seat: seat == 0)
         fake.spells = lambda seat: fake.settings["spells"][seat]
         fake.option_rows = lambda: app.Launcher.option_rows(fake)
+        import gameview
+        fake.pads = types.SimpleNamespace(pad_maps=[gameview.pad_map({"cross": "dpright"}), gameview.pad_map()],
+                                          key_maps=[gameview.key_map(0, {"cross": "right shift"}), gameview.key_map(1)])
+        fake.button_rows = lambda seat: app.Launcher.button_rows(fake, seat)
         prow = app.Launcher.player_rows(fake)
         screen("your settings", lambda m: options(m, lambda: prow, lambda *a: None, title="Your settings", note="Only yours: not the castle's"),
                frames=[()] + [("down",)] * len(prow) + [("back",)])
+        screen("your settings (pages)", lambda m: options(m, lambda: prow, lambda *a: None, title="Your settings", pages=True),
+               frames=[()] + sum(([("page_next",)] + [("down",)] * 16 for _ in range(5)), []) + [("back",)])
         import library
         presets_ = library.rando_presets()
         import randomizer_tool
@@ -139,15 +147,16 @@ def main():
                frames=[()] + [("down",)] * len(hrows) + [("back",)])
         screen("update", lambda m: update_prompt(m, "0.19.0", "0.18.1", ["A much longer changelog item than usual, to see it wrap well"] * 8))
         card = {"title": "Player 2", "joined": True, "device": "DualSense Wireless Controller", "ready": False, "character": 5,
-                "name": "Ultimate Richter", "playable": False, "note": "From SOTN Ultimate: the Saturn coat",
+                "name": "Richter", "version": "Saturn", "versions": 2, "neighbours": [(0, True), (2, False)],
+                "playable": False, "note": "His Saturn coat, every move",
                 "needs": "Attach your Saturn disc (Japan) to unlock him.", "controls": "L2 high jump, R2 dash", "shortcuts": True}
-        ready = dict(card, title="Player 1", character=4, name="Saturn Maria", playable=True, ready=True, note="From SOTN Ultimate: Saturn Maria")
+        ready = dict(card, title="Player 1", character=4, name="Maria", version="Saturn", playable=True, ready=True, note="Her Saturn moves")
         for name, cards, partner in (("lobby: couch", [ready, card], None),
                                      ("lobby: host", [ready], (["It's on your clipboard:", "send it to them.", "",
                                                                "Waiting for your partner's game: 4:52 left"], False, "BAT-7K2Q")),
                                      ("lobby: joined", [card], (["Connected!", "ping 142 ms"], True, None))):
             screen(name, lambda m, c=cards, p=partner: draw_lobby(m, "Who's playing?", "Player 1: left screen. 2: right.", c, p,
-                                                                   ("{<}{>} character   {t} shortcuts   {x} ready   {o} leave", "keys")),
+                                                                   ("{<}{>} character   {^}{v} version   {t} shortcuts   {x} ready", "keys")),
                    frames=())
         seen = set()
         cut = [c for c in cut if not ((c[0], c[1]) in seen or seen.add((c[0], c[1])))]  # (each once)

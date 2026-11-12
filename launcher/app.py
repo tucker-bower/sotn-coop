@@ -45,6 +45,8 @@ if sys.stderr is None:  # pythonw (the Start menu shortcut): no console. Errors 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
 
+# Controllers by position: the bottom face button is Cross on every pad (issue 250; also gameview.py)
+os.environ.setdefault("SDL_GAMECONTROLLER_USE_BUTTON_LABELS", "0")
 import pygame  # noqa: E402
 
 from display import CANVAS, LAYOUT_NAMES, Display  # noqa: E402
@@ -81,6 +83,26 @@ CHARACTERS = ("Alucard", "Richter", "Maria (PSP)", "Maria (PSP, Ultimate)", "Mar
 LOBBY = (0, 1, 2, 4, 5)
 # Under the name in the lobby: a few words, only where it helps
 CHARACTER_NOTES = ("", "", "", "", "Her Saturn moves", "His Saturn coat, every move")
+# The lobby's characters (issue 251): left / right picks one, up / down their version
+FAMILIES = (("Alucard", (0,)), ("Richter", (1, 5)), ("Maria", (2, 4)))
+VERSIONS = {1: "PlayStation", 5: "Saturn", 2: "PSP", 4: "Saturn"}
+
+
+def family_of(char):
+    return next((k for k, (_, chars) in enumerate(FAMILIES) if char in chars), 0)
+
+
+def lobby_step(char, key, last=None):
+    """The character after a left, right, up or down in the lobby. last: {family: the version
+    last chosen in it}, kept so going back to a character finds the same version."""
+    f = family_of(char)
+    chars = FAMILIES[f][1]
+    if key in ("up", "down"):
+        return chars[(chars.index(char) + (1 if key == "down" else -1)) % len(chars)] if char in chars else chars[0]
+    if last is not None:
+        last[f] = char
+    f = (f + (1 if key == "right" else -1)) % len(FAMILIES)
+    return (last or {}).get(f, FAMILIES[f][1][0])
 MARIAS = (2, 3)  # made from the player's DXC disc (characters.py)
 SATURN_MARIA = 4  # made from the player's Saturn disc (characters.py)
 ULTIMATE_RICHTER = 5  # ...and so is he
@@ -94,48 +116,41 @@ STICK = ("↑", "→", "↓", "←")
 
 log = logging.getLogger("launcher")
 
-HELP_PLAY = """Each of you plays your own game, on your own half of the window.
-Whatever one of you finds (relics, items, gold, the map) the other gets too, at once.
-An item an enemy drops is for whoever picks it up.
-Meet in the same room to fight the same enemies. Bosses pull you both in.
+HELP_PLAY = """Each player runs their own game. What one of you finds (relics, items, gold, the map),
+the other gets too. Items dropped by enemies go to whoever picks them up.
+Be in the same room to fight the same enemies. Boss fights pull in both players.
 
-Controls: your controller, as on a PlayStation. Keyboard: Controllers › Keyboard keys.
-Your partner's map cursor is blue. On the map, press Cross to teleport to your partner.
-Save at a coffin: it saves both games. Continue loads both.
+Controls: as on a PlayStation controller. Change your buttons and keys in Options › Your settings.
+Your partner is the blue dot on the map. Press Cross on the map to teleport to them.
+Saving at a coffin saves both games.
 
-Castles: every game is a castle, with the name you give it when you start it (or the name you type
-in the game) and when it began (Tucker_2026-10-25-21:40). Play any castle solo, on the couch, or host it online with anyone.
-Whoever joins you online keeps a copy of your castle, to play solo or host later.
-Level is shared: a kill's XP goes to both of you, at half (solo: all of it). Solo bosses have
-their normal HP.
-Castle settings: each castle has its own, set when you start it and in Options › Open settings (Esc: Castle
-rules, on a controller or phone): a difficulty (Easy to Nightmare: enemy HP, damage taken, XP), and
-everything co-op changes about the game. The host's go for both of you. A new castle can be a boss rush.
+Castles: each playthrough is a castle. Play it solo, on the couch, or host it online.
+Whoever joins keeps a copy of your castle.
+Castle settings: the difficulty (Easy to Nightmare) and every co-op option. Set them when you start
+a castle, or from the pause menu. The host's settings apply to both players.
 
-Characters: Alucard, Richter, Maria (PSP: needs your Dracula X Chronicles disc), and Maria and
-Richter (Saturn: need your Saturn disc, Japan). Richter and Maria (PSP) learn their moves from
-Alucard's relics: Leap Stone for the second jump, Gravity Boots for the high jump, Soul of Wolf for
-the slide, Form of Mist to pass through grates (keep walking into them), Echo of Bat for item
-crashes. They level up and wear Alucard's armor (Start: the equipment menu): each is a castle rule.
-Maria (Saturn) has her own kicks, dives, backdash and Holy Beasts; Richter (Saturn) is the PS1
-Richter with every move from the start, in the Saturn's long coat.
-Shortcuts (each player's own, Triangle / Y on your lobby card): Richter and Maria high-jump with
-L2 and blade-dash with R2. Alucard casts the spells he knows with the right stick
-(Options › Controls picks which).
+Characters: Alucard and Richter. Maria needs your Dracula X Chronicles disc (PSP). The Saturn
+versions of Maria and Richter need your Saturn disc (Japan). On the character screen, left and
+right pick a character, up and down their version.
+Richter and Maria learn moves from Alucard's relics: Leap Stone (double jump), Gravity Boots (high
+jump), Soul of Wolf (slide), Form of Mist (through grates), Echo of Bat (item crashes).
+They level up and wear Alucard's gear (Start: the equipment menu).
 
-Esc (or the Game menu) pauses. F9 saves a bug report: please send it to us."""
+Shortcuts (Triangle on the character screen): Richter and Maria high-jump with L2 and dash with
+R2. Alucard casts spells with the right stick.
 
-HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Read it to your partner, or paste it to them.
-Joining: type your partner's room code. Both of you need the same version of SOTN Co-op.
+Esc pauses. F9 saves a bug report: please send it to us."""
 
-If it can't connect (only one of you needs to fix it):
-·  Windows may ask whether to allow SOTN Co-op through its firewall: choose Allow.
-·  Turn on UPnP in your router's settings (most routers have it on already). The game then opens
-   its own port.
-·  A phone hotspot, or some internet providers, can't connect directly. Try another network.
+HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Send it to your partner.
+Joining: type your partner's room code. You both need the same version of SOTN Co-op.
+
+Can't connect? Only one of you needs to fix it:
+·  If Windows asks about its firewall, choose Allow.
+·  Turn on UPnP in your router's settings (most routers have it on already).
+·  Phone hotspots and some internet providers can't connect directly. Try another network.
 ·  Or forward UDP port 47811 on your router to your PC or phone.
-·  Still stuck? Forward the port on the host's router; the joiner then types the host's address as
-   ip:port instead of the room code (Help › About shows the port while hosting).
+·  Still stuck? Forward the port on the host's router. The joiner then types the host's address
+   (ip:port) instead of the room code. Help › About shows the port while hosting.
 The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
 
 KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
@@ -178,7 +193,7 @@ class UI:
 
     def events(self, raw=False, pixel=False):
         """Menu actions this frame: "up", "down", "left", "right", "ok", "back", "quit", "rules"
-        (Square / X, S, or a right click on a row), ("pad", id), ("device", "keys"), ("click", key)
+        (Square / X, S, or a right click on a row), "page_prev" / "page_next" (L1 / R1, Q / E), ("pad", id), ("device", "keys"), ("click", key)
         and ("hover", key). raw: also ("event", ev) for each. pixel: the mouse is on the pixel
         canvas (the screens in the game's style, launcher/ui)."""
         out = []
@@ -198,7 +213,7 @@ class UI:
             elif ev.type == pygame.KEYDOWN:
                 a = {pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
                      pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back",
-                     pygame.K_s: "rules"}.get(ev.key)
+                     pygame.K_s: "rules", pygame.K_q: "page_prev", pygame.K_e: "page_next"}.get(ev.key)
                 out.append(("device", "keys"))
                 if a:
                     out.append(a)
@@ -206,7 +221,9 @@ class UI:
                 a = {pygame.CONTROLLER_BUTTON_DPAD_UP: "up", pygame.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                      pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left", pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
                      pygame.CONTROLLER_BUTTON_A: "ok", pygame.CONTROLLER_BUTTON_START: "ok",
-                     pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_X: "rules"}.get(ev.button)
+                     pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_X: "rules",
+                     pygame.CONTROLLER_BUTTON_LEFTSHOULDER: "page_prev",
+                     pygame.CONTROLLER_BUTTON_RIGHTSHOULDER: "page_next"}.get(ev.button)
                 out.append(("pad", ev.instance_id))
                 if a:
                     out.append(a)
@@ -524,6 +541,7 @@ class Launcher:
         from gameview import Pads
         self.pads = Pads((None, None))
         self.ui.pads = self.pads
+        self.apply_buttons()
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
         self.new_castle_start = False  # the next game view starts a new game (issue 109)
@@ -996,6 +1014,76 @@ class Launcher:
                 except Exception:  # noqa: BLE001 - next load has them anyway
                     log.exception("player options")
 
+    def buttons(self, seat):
+        """A player's own buttons (issue 250): {"pad": {button: SDL name}, "keys": {button: key name}},
+        only where they differ from the defaults."""
+        v = (list(self.settings.get("buttons") or []) + [{}, {}])[seat]
+        return {"pad": dict(v.get("pad") or {}), "keys": dict(v.get("keys") or {})}
+
+    def set_buttons(self, seat, value):
+        v = (list(self.settings.get("buttons") or []) + [{}, {}])[:2]
+        v[seat] = value
+        self.settings["buttons"] = v
+        save_settings(self.settings)
+        self.apply_buttons()
+
+    def apply_buttons(self):
+        for seat in (0, 1):
+            b = self.buttons(seat)
+            self.pads.set_buttons(seat, b["pad"], b["keys"])
+
+    def button_rows(self, seat):
+        from gameview import BINDABLE, BUTTON_LABELS, PAD_SHOWN
+        pads, keys = self.pads.pad_maps[seat], self.pads.key_maps[seat]
+        rows = []
+        for b in BINDABLE:
+            key = next((k for k, v in keys.items() if v == b), None)
+            shown = PAD_SHOWN.get(pads.get(b), "-") + " / " + (pygame.key.name(key).title() if key is not None else "-")
+            rows.append({"kind": "action", "key": f"button:{seat}:{b}", "label": BUTTON_LABELS[b], "value": shown, "colour": (255, 255, 255),
+                         "hint": "Select, then press a controller button or a key."})
+        rows.append({"kind": "action", "key": f"buttons_default:{seat}", "label": "Back to the defaults", "value": "",
+                     "hint": "The standard buttons and keys."})
+        return rows
+
+    def capture_button(self, seat, button):
+        """Waits for a controller button or a key for button (Esc or 5 s: nothing changes)."""
+        from gameview import BUTTON_LABELS, DEFAULT_PAD, KEYS, PAD_NAMES, TRIGGERS, bind
+        from ui.theme import DIM, GOLD, INK
+        m, t = self.menus, self.menus.theme
+        names = {v: k for k, v in PAD_NAMES.items()}
+        axes = {v: k for k, v in TRIGGERS.items()}
+        until = time.monotonic() + 5
+        b = self.buttons(seat)
+        while time.monotonic() < until:
+            for a in m.ui.events(raw=True):
+                if not (isinstance(a, tuple) and a[0] == "event"):
+                    continue
+                ev = a[1]
+                got = None
+                if ev.type == pygame.KEYDOWN:
+                    if ev.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
+                        return
+                    defaults = {v: pygame.key.name(k) for k, v in KEYS[seat].items()}
+                    b["keys"] = bind(b["keys"], button, pygame.key.name(ev.key), defaults)
+                    got = True
+                elif ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button in names:
+                    b["pad"] = bind(b["pad"], button, names[ev.button], DEFAULT_PAD)
+                    got = True
+                elif ev.type == pygame.CONTROLLERAXISMOTION and ev.axis in axes and ev.value > 16000:
+                    b["pad"] = bind(b["pad"], button, axes[ev.axis], DEFAULT_PAD)
+                    got = True
+                if got:
+                    if self.sound:
+                        self.sound.play("confirm")
+                    self.set_buttons(seat, b)
+                    return
+            m.begin("Press a button", BUTTON_LABELS[button])
+            m.window((88, 90, 304, 64))
+            t.text_centre(m.s, f"Player {seat + 1}: {BUTTON_LABELS[button]}", 240, 102, GOLD)
+            t.text_centre(m.s, "Press a controller button or a key", 240, 120, INK)
+            t.text_centre(m.s, f"Esc: cancel ({max(0, int(until - time.monotonic()) + 1)})", 240, 136, DIM)
+            m.show()
+
     def player_rows(self):
         """Your settings: what's each player's own (not the castle's), in the game's style (issue 232)."""
         from link.mailbox import SPELLS
@@ -1003,12 +1091,15 @@ class Launcher:
         rows.insert(0, {"kind": "head", "key": None, "label": "While you play"})
         names = {None: "Nothing", **{k: n for k, n in enumerate(SPELLS) if n}}
         for seat in (0, 1) if not ANDROID else (0,):
-            rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}'s controls" if not ANDROID else "Controls"})
+            rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}" if not ANDROID else "Controls"})
             rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
                          "hint": "Richter and Maria: L2 high jump, R2 dash. Alucard: right-stick spells."})
             for d, spell in enumerate(self.spells(seat)):
                 rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
                              "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows it and has the MP."})
+        for seat in (0, 1) if not ANDROID else (0,):
+            rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1} buttons" if not ANDROID else "Buttons"})
+            rows += self.button_rows(seat)
         return rows
 
     def change_player(self, key, step):
@@ -1032,7 +1123,20 @@ class Launcher:
         from ui.screens.options import options
         if not self.menus:
             return self.controls_menu()
-        options(self.menus, self.player_rows, self.change_player, title="Your settings", note="Only yours: not the castle's")
+        sel = 0
+        while True:
+            got = options(self.menus, self.player_rows, self.change_player, sel, title="Your settings",
+                          note="Only yours: not the castle's", pages=True)
+            if got is None or got[0] in ("drop", "more"):
+                if got is None:
+                    return
+                continue
+            key, sel = got
+            if key.startswith("button:"):
+                _, seat, button = key.split(":")
+                self.capture_button(int(seat), button)
+            elif key.startswith("buttons_default:"):
+                self.set_buttons(int(key.split(":")[1]), {})
 
     def controls_menu(self):
         """Settings › Controls: each player's shortcuts, and Alucard's spells on the right stick."""
@@ -1361,7 +1465,7 @@ class Launcher:
             self.prepare_art()
             if self.menus and getattr(self, "_plain", None):  # the screen on show: the game's style from now on
                 self._plain.theme, self._plain.sound = self.menus.theme, self.menus.sound
-            return "ps1", moved + "Symphony of the Night is attached: co-op is ready.", True
+            return "ps1", moved + "Disc added. Ready to play.", True
         if slot == "psp":
             try:
                 self.ui_wait("Adding Maria", f"From {path.name}. This takes a few seconds.",
@@ -1591,6 +1695,7 @@ class Launcher:
         joined = [None] * slots   # each player's device
         ready = [False] * slots
         char = list(self.characters[:slots])
+        last = [{} for _ in range(slots)]  # each player's version of each character, as last chosen
         names = {}
         while True:
             for a in ui.events(raw=True):
@@ -1603,12 +1708,14 @@ class Launcher:
                     dev = ev.instance_id
                     key = {pygame.CONTROLLER_BUTTON_A: "ok", pygame.CONTROLLER_BUTTON_START: "ok",
                            pygame.CONTROLLER_BUTTON_B: "back", pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left",
-                           pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
+                           pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right", pygame.CONTROLLER_BUTTON_DPAD_UP: "up",
+                           pygame.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                            pygame.CONTROLLER_BUTTON_Y: "shortcuts"}.get(ev.button, "any")
                 elif ev.type == pygame.KEYDOWN and not ev.mod & pygame.KMOD_ALT:
                     dev = "kb"
                     key = {pygame.K_RETURN: "ok", pygame.K_SPACE: "ok", pygame.K_ESCAPE: "back", pygame.K_AC_BACK: "back",
-                           pygame.K_LEFT: "left", pygame.K_RIGHT: "right", pygame.K_s: "shortcuts"}.get(ev.key)
+                           pygame.K_LEFT: "left", pygame.K_RIGHT: "right", pygame.K_UP: "up", pygame.K_DOWN: "down",
+                           pygame.K_s: "shortcuts"}.get(ev.key)
                     if key is None:
                         continue
                 elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3 and joined.count(None) == slots:
@@ -1618,7 +1725,7 @@ class Launcher:
                 if dev != "kb" and dev not in names:
                     self.pads.refresh()
                     names[dev] = self.pads.name(dev)
-                if self.sound and key in ("ok", "back", "left", "right"):
+                if self.sound and key in ("ok", "back", "left", "right", "up", "down"):
                     self.sound.play({"ok": "confirm", "back": "back"}.get(key, "move"))
                 if self.menus:
                     self.menus.device = "keys" if dev == "kb" else "pad"
@@ -1645,9 +1752,8 @@ class Launcher:
                         joined[i] = None
                 elif key == "shortcuts" and not ready[i]:
                     self.set_shortcuts(i, not self.shortcuts(i))
-                elif key in ("left", "right") and not ready[i]:
-                    at = LOBBY.index(char[i]) if char[i] in LOBBY else 0
-                    char[i] = LOBBY[(at + (1 if key == "right" else -1)) % len(LOBBY)]
+                elif key in ("left", "right", "up", "down") and not ready[i]:
+                    char[i] = lobby_step(char[i], key, last[i])
             partner = online() if online else None
             if None not in joined and all(ready) and (partner is None or partner[1]):
                 self.pads.assign = list(joined) + [None] * (2 - slots)
@@ -1695,7 +1801,10 @@ class Launcher:
             dev = joined[k]
             cards.append({"title": "You" if online else f"Player {k + 1}", "joined": dev is not None,
                           "device": "Keyboard" if dev == "kb" else names.get(dev, "Controller"), "ready": ready[k],
-                          "character": char[k], "name": CHARACTERS[char[k]], "playable": self.playable(char[k]),
+                          "character": char[k], "name": FAMILIES[family_of(char[k])][0], "playable": self.playable(char[k]),
+                          "version": VERSIONS.get(char[k], ""), "versions": len(FAMILIES[family_of(char[k])][1]),
+                          "neighbours": [(c, self.playable(c)) for c in (
+                              FAMILIES[(family_of(char[k]) + d) % len(FAMILIES)][1][0] for d in (-1, 1))],
                           "note": CHARACTER_NOTES[char[k]], "needs": needs.get(char[k], ""),
                           "controls": self.controls_line(char[k], self.shortcuts(k)), "shortcuts": self.shortcuts(k)})
         card_partner = None
@@ -1707,7 +1816,7 @@ class Launcher:
                 code, lines = lines[1], lines[2:]
             card_partner = (lines, connected, code)
         anyone = joined.count(None) < slots
-        footer = (("{<}{>} character   {t} shortcuts   {x} ready   {o} leave", "Left / right: character   S: shortcuts   Enter: ready   Esc: leave")
+        footer = (("{<}{>} character   {^}{v} version   {t} shortcuts   {x} ready", "Arrows: character   S: shortcuts   Enter: ready   Esc: leave")
                   if anyone else ("Any button: join   {o} back", "Enter: play with the keyboard   Esc: back"))
         draw_lobby(self.menus, "Who's playing?", subtitle, cards, card_partner, footer)
 
@@ -1786,20 +1895,20 @@ class Launcher:
             castles = Castle.all()
             portrait = ("alucard", "richter", "maria", "maria", "maria", "richter")[self.characters[0]]
             if not castles:
-                return {"lines": ["No castles yet: this starts your first."], "portrait": portrait}
+                return {"lines": ["Start your first castle."], "portrait": portrait}
             return {"lines": ["Your last castle"], "castle": castles[0], "portrait": portrait}
         if key == "discs":
             return {"lines": ["PlayStation: attached",
-                              "PSP: " + ("attached" if self.maria_ready() else "not attached (Maria)"),
-                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not attached (Saturn Maria and Richter)")]}
+                              "PSP: " + ("attached" if self.maria_ready() else "not added (unlocks Maria)"),
+                              "Saturn: " + ("attached" if self.saturn_maria_ready() else "not added (unlocks Saturn Maria and Richter)")]}
         if key == "settings":
             return {"lines": ["Layout, sound, controls, and each castle's rules.",
-                              "Also in the menus at the top of the window."]}
+                              "Also in the window's menu bar."]}
         if key == "mods":
             import library
             names = [library.name(g) for g in library.discs(self.settings)]
             return {"lines": ["Your mod presets: " + (", ".join(names[:4]) + (" and more" if len(names) > 4 else "") if names else "none yet"),
-                              "A new castle picks one. Your partner needs the same."]}
+                              "New castles can use one. Online, both players need the same preset."]}
         return {}
 
     def home_new(self):
@@ -2680,9 +2789,9 @@ class Launcher:
                 switch("alucard_hud", "Alucard's health bar", "Richter and Maria get Alucard's display."),
                 switch("show_ping", "Show ping", "Online: your partner's ping, top right."),
                 head("Controls"),
-                action("controls", "Your settings", "Shortcuts, spells, displays. Also in the pause menu."),
+                action("controls", "Your settings", "Each player's buttons, shortcuts and spells. Also in the pause menu."),
                 action("controllers", "Who plays with which controller", "Give each controller a player."),
-                action("keys", "Keyboard keys", "Both players' keys."),
+                action("keys", "Default keys", "The keyboard's standard keys. Change them in Your settings."),
                 head("PlayStation"),
                 action("bios", "BIOS", "Built-in OpenBIOS, or your console's own.",
                        "OpenBIOS" if self.bios() == BUNDLED_BIOS else Path(self.bios()).name),
@@ -2737,7 +2846,7 @@ class Launcher:
         from ui.screens.options import options
         sel = 0
         while True:
-            got = options(self.menus, self.option_rows, self.change_option, sel)
+            got = options(self.menus, self.option_rows, self.change_option, sel, pages=True)
             if got is None:
                 return
             key, sel = got
