@@ -220,6 +220,67 @@ def mist_step(run, ch):
             run.expect(min(xs) > 760, "without it, the bars stop them", x=min(xs))
 
 
+# Mist grates to step through: (where to arrive, the way in, the grate's x span). The Lesser Demon's
+# bars (mist_step), and the Long Library's lower grate from issue 211's report (room 0, y 936).
+GRATES = (((LIB, 0, 1100, 700), "left", (700, 760)), ((LIB, 0, 700, 936), "right", (762, 900)))
+JUMPS = ((8, 30), (20, 45), (26, 50), (30, 70), (12, 33))  # jumps into the grate: ✕ held h of every n frames
+# What the player pressed at the lower grate in the last 500 frames before issue 211's report
+# (pad, frames): jumping and dashing into it, then trying to walk back.
+REPORT_211 = (("", 1), ("right", 14), ("cross+right", 6), ("right", 45), ("cross+right", 21), ("cross+right+square", 11),
+              ("cross+right", 3), ("right", 19), ("", 8), ("left", 9), ("", 1), ("cross+up", 1), ("cross+right", 8),
+              ("right", 55), ("right+square", 12), ("right", 19), ("right+square", 7), ("right", 18), ("", 16),
+              ("cross", 3), ("cross+right", 21), ("cross+l1+r1+right", 14), ("cross+right", 2), ("right", 16),
+              ("cross+right", 26), ("cross+r1+right", 13), ("cross+right", 10), ("right", 25), ("cross+right", 25),
+              ("right", 32), ("", 15), ("cross", 9), ("cross+left", 12), ("cross+l1+left", 3))
+
+
+@per_character
+def mist_step_never_stuck(run, ch):
+    """Issue 211: Maria got stuck at a grate: unseen and deaf to the pad, for what looked like for
+    good. Every way into a grate: they always end on one side of it, able to walk away soon after."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(STATUS, RELIC_ON, "<B", FORM_OF_MIST)
+    x = lambda: mb.self_presence().x
+    for spot, way, span in GRATES:
+        mb.command(CMD_ARRIVE, *spot)
+        wait(run, lambda: (lambda p: p.stage == LIB and p.flags & IN_PLAY and not p.flags & BUSY)(
+            mb.self_presence()), 900, "arrived in the Long Library")
+        run.step(60)
+        start = e.save_state()
+        back = "right" if way == "left" else "left"
+
+        def into(i, how):  # the inputs at frame i of going in
+            return {"walk": way, "dash": f"{way}+r1" if i % 20 < 4 else way,
+                    "dash_only": "r1" if i % 20 < 4 else "", "jump": f"{way}+cross" if i % 40 < 15 else way,
+                    "attack": f"{way}+square" if i % 10 < 3 else way, "crouch": f"{way}+down" if i > 25 else way,
+                    "mash": (way, f"{way}+l1", f"{way}+r1", f"{way}+square", f"{way}+cross", f"{way}+l1+r1")[i % 6],
+                    "back_off": way if i < 38 else back,
+                    **{f"jump_{h}_{n}": f"{way}+cross" if i % n < h else way for h, n in JUMPS}}[how]
+
+        hows = ("walk", "dash", "dash_only", "jump", "attack", "crouch", "mash", "back_off") + tuple(
+            f"jump_{h}_{n}" for h, n in JUMPS)
+        for how in hows + (("report",) if way == "right" else ()):
+            e.load_state(start)
+            xs = []
+            pads = ([way] * 120 + [p for p, n in REPORT_211 for _ in range(n)] if how == "report"
+                    else [into(i, how) for i in range(400)])
+            for pad in pads:
+                route.heal(e)
+                run.step(1, pad)
+                xs.append(x())
+            run.step(60)
+            end, after = x(), e.save_state()
+            moved = 0
+            for go in ("left", "right"):  # (one way may be a wall)
+                e.load_state(after)
+                run.step(90, go)
+                moved = max(moved, abs(x() - end))
+            what = f"{way} at y {spot[3]}, {how}"
+            run.expect(not span[0] <= end <= span[1], f"{what}: not left inside the grate", x=end, xs=xs[::40])
+            run.expect(moved > 16, f"{what}: can walk away soon after", x=end, moved=moved, xs=xs[::40])
+
+
 SPELLS_LEARNT, MP, MP_MAX = 0x80097B9C, 0x80097BB0, 0x80097BB4
 SERVANT, FAM_ACTIVE_SWORD = 0x8006CBC4, 5  # g_Servant (include/game.h)
 

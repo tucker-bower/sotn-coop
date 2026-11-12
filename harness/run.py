@@ -54,6 +54,7 @@ import scenarios_widescreen  # noqa: F401
 import session_m15  # noqa: F401
 import session_rules  # noqa: F401
 import session_carry  # noqa: F401
+import session_endings  # noqa: F401
 import session_inverted  # noqa: F401
 import session_inverted_rooms  # noqa: F401
 import session_crawl  # noqa: F401

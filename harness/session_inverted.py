@@ -139,3 +139,86 @@ def boss_shaft(run):
     arrive(run, b, RCEN, LIFT_ROOM, 128, 279)
     arrive(run, a, RCEN, SHAFT_ROOM, 440, 400)  # the platform under the orb (y 455), right of it
     boss_flow(run, dict(name="Shaft", area="Reverse Center", walk="left", inverted=True, event=None))
+
+
+
+TRIO_FALLEN = 0x801806B4  # RBO0's D_us_801806B4: the fakes fallen; at 3 the fight ends (e_boss.c)
+
+
+def _kill(g, slot):
+    from session_m12 import FLAG_DEAD
+    g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
+    g.write("g_Entities", g.read("g_Entities", "<I", slot * 0xBC + 0x34) | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
+
+
+def _authority_changes(name, test_name, full):
+    """Issue 248: a boss fight whose state is in its overlay's .data (a variable given a starting
+    value), which a shared room's guest didn't get from the authority: the fake trio's count of
+    fallen fakes (at 3 the fight ends), Karasuman's and Darkwing Bat's door lock. The fight starts
+    in one game's room; part of it is won there (one fake falls, or the boss is worn down); then
+    that player steps out of the arena and back, so the room passes to the other game, where the
+    rest falls. The fight ends in both games (the inverted castle's: with its record)."""
+    def test(run):
+        import bossstarts
+        from link.mailbox import BOSS, CMD_ARRIVE, ROLE_AUTHORITY
+        from session_m12 import SceneWatch, enemies
+        a, b = run.s.a, run.s.b
+        row = next(r for r in bossstarts.B if r["name"] == name)
+        walk, stage = row["walk"], bossstarts.STAGES[row["stage"]]
+        trio = name.startswith("Fake")
+        w = SceneWatch(run)
+        boss = lambda g: g.mailbox("self_presence").flags & BOSS
+        auth = lambda: next((g for g in (a, b) if g.mailbox("self_presence").role == ROLE_AUTHORITY), None)
+
+        def alive(*_):
+            for g in (a, b):
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            return ("", "")
+        event = bossstarts.EVENTS.get(row.get("event")) if row.get("inverted") else None
+        w.until(lambda: boss(a), 4000, lambda i: (walk + ("+cross" if i % 90 < 12 else ""), ""))
+        w.until(lambda: boss(b), 3000, ("", walk))
+        if event is not None:
+            w.until(lambda: a.read("g_Settings", "<I", 0x108) & (1 << event), 600, (walk, ""))
+        run.expect(boss(a) and boss(b), "both are in the fight", a=a.snapshot(), b=b.snapshot())
+        w.step(300, alive)
+        w.until(lambda: auth() is not None, 1200, alive)  # (after the boss's entrance scene)
+        first = auth()
+        run.expect(first is not None, "one game runs the room")
+        foes = {s: v for s, v in enemies(first).items() if v[3] > 50}
+        run.expect(len(foes) >= (3 if trio else 1), "the boss is there", foes=enemies(first))
+        if trio:
+            _kill(first, min(foes))
+            w.until(lambda: first.read(TRIO_FALLEN, "<i") >= 1, 600, alive)
+            run.expect(first.read(TRIO_FALLEN, "<i") == 1, "one fake falls in the authority's game")
+        else:
+            for s in foes:
+                first.write("g_Entities", 8, "<h", s * 0xBC + 0x3E)  # worn down
+            w.step(60, alive)
+        other = b if first is a else a
+        first.mailbox("command", CMD_ARRIVE, stage, *row["arrive"])  # out of the arena...
+        w.until(lambda: other.mailbox("self_presence").role == ROLE_AUTHORITY, 600, alive)
+        w.step(120, alive)
+        pads = (walk, "") if first is a else ("", walk)
+        w.until(lambda: boss(first), 900, lambda i: (alive(), pads)[1])  # ...and back in
+        w.step(120, alive)
+        run.expect(auth() is other, "the room passed to the other game",
+                   roles=[g.mailbox("self_presence").role for g in (a, b)])
+        for s in sorted(s for s, v in enemies(other).items() if v[3] > 0):
+            _kill(other, s)
+        done = lambda: not boss(a) and not boss(b)
+        k = bossstarts.RECORDS + 4 * event if event is not None else None
+        if k is not None:
+            done = lambda: all(g.read("g_Settings", "<i", k) for g in (a, b))
+        w.until(done, 1800, alive)
+        run.expect(done(), "the fight ends in both games" + (", with its record" if k is not None else ""),
+                   fallen=[g.read(TRIO_FALLEN, "<i") for g in (a, b)] if trio else None,
+                   boss=[bool(boss(g)) for g in (a, b)], left=[sorted(enemies(g).values())[:4] for g in (a, b)],
+                   records=[g.read("g_Settings", "<i", k) for g in (a, b)] if k is not None else None)
+    test.__name__ = test_name
+    test.__doc__ = _authority_changes.__doc__
+    session_scenario(starts=(str(STARTS / f"Boss - {name.replace(' & ', ' and ')}.state"),) * 2, full=full)(test)
+
+
+_authority_changes("Fake Trevor, Grant & Sypha", "boss_trio_authority_changes", False)
+_authority_changes("Darkwing Bat", "boss_darkwing_bat_authority_changes", False)
+_authority_changes("Karasuman", "boss_karasuman_authority_changes", True)
