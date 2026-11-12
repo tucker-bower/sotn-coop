@@ -147,7 +147,7 @@ static void CapturePresence(CoopPresence* p) {
     if (BossHere()) {
         p->flags |= PRESENCE_BOSS;
     }
-    p->aggroSwitches = BossSwitches();
+    p->aggroSwitches = (BossSwitches() & 0x3FFF) | (WidescreenShape() << 14);
     if (ArriveSharedScene()) {
         p->flags |= PRESENCE_CUTSCENE;
     }
@@ -230,6 +230,7 @@ u16 g_CoopStage;
 
 static bool __attribute__((used)) UpdateHook(void) {
     g_CoopLink.heartbeat++;
+    WidescreenFrame();
     if (g_GameState != Game_Play || g_GameEngineStep == Engine_Init) {
         g_CoopStage = g_StageId;
     }
@@ -268,6 +269,7 @@ static void __attribute__((used)) RenderPrimitivesHook(void) {
     RenderPrimitives();
     FamiliarOwnPrimsBack();
     PartnerAfterPrims(gt4, gt3);
+    WidescreenAfterPrims();
 }
 
 // The save room's StoreSaveData (src/dra/62DEC.c): the game saved, so post the save.

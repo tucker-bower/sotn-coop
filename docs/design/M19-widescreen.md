@@ -1,42 +1,39 @@
 # M19 design: widescreen
 
-**Status:** approved by Tucker (2026-10-27). Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it. Depends on M13's VRAM layout.
+**Status:** approved by Tucker (2026-10-27) as "spike, then stage by stage"; 21:9 and 32:9 added (Tucker, 2026-11-11), with the questions below taken as recommended (D201). In progress on `coop-widescreen-spike`. Updates `M10-widescreen-spike.md` (2026-10-20), which recommended dropping it.
 
 ## Goal
-True widescreen: a wider view of the castle (about 352 px, 16:9), not a stretch (D76). Optional, in Settings.
+A wider view of the castle, not a stretch (D76), optional and off by default: 16:9 and 21:9, mostly for players filling a monitor in online co-op. The game's pixels keep the shape they have at 4:3 (1.25 times as wide as tall), and only the 207 lines the game draws its stage in are shown (it letterboxes itself), so the picture fills the screen exactly.
 
-## What changed since the spike
-The spike's blocker was VRAM: two 384-wide framebuffers need a 768×240 strip, and the PS1's 1 MB is full, so every stage's layout would have moved (3–6 weeks, high risk). M13 gives our SwanStation build more VRAM. The framebuffers move into the new space, and **every stage's layout stays where it is**. M13's spike lays out VRAM for both (the partner banks of M17 and these framebuffers).
+| Shape | View (px) | Shown |
+|---|---|---|
+| 4:3 (the default) | 256 | the game's whole 240 lines, as ever |
+| 16:9 | 294 | 294 × 207: 1.775, a 1920×1080 screen |
+| 21:9 | 392 | 392 × 207: 2.37, a 2560×1080 screen |
+| 32:9 | later | needs a third VRAM bank |
 
-## What's still needed
-| What | Size |
-|---|---|
-| Framebuffers in the new VRAM: draw and display settings (DRA constants, size-neutral, D33), and the core's draw-area and display coordinates past line 511 | Small, after M13 |
-| Display width (`DISP_STAGE_W`, 17 uses) | Small |
-| The tilemap drawn wider (`RenderTilemap`, the 17-column loops) | Medium |
-| **Enemies despawning and freezing at the screen edges:** stage code checks for "on screen" against a 256-wide view (about 183 checks in 93 stage files) | **Large: the long tail**, per stage, through our overlay patching |
-| The spawner window (`scrollX + 320`) | Small |
-| Rooms narrower than the view: black bars at the room's edges | Medium |
-| Effects that copy the screen (room transitions, some spells) | Unknown until the spike |
-| HUD: left-anchored | Small |
-| Co-op: everyone in a shared room uses the same width (it changes what spawns) | Small: the host's setting |
+## Not doing
+Zoom of any kind (fitting the view to each room, a camera that zooms in and out): it would rescale the pixel art. Tucker, 2026-11-11 (D201).
 
-## Options
-| Option | Verdict |
-|---|---|
-| **A. Spike, then stage by stage (recommended)** | ✅ A 1–2 window spike: the entrance and three stages at 352, count the edge problems and check the screen-copy effects. Then fix stage by stage, shipping widescreen as "experimental" per stage that passes |
-| B. All stages at once | ❌ A big-bang change with bugs anywhere |
-| C. Side bars with co-op information (the spike's fallback) | Kept as the fallback if the spike says the tail is too long |
+## How it works
+- **Framebuffers in the second bank.** Our core (`patches/swanstation.patch`) takes a display width (GP1 0x2F) and the lines to show (GP1 0x2E). While the width is set, drawing, fills, screen copies and read-backs in the area of the two wide framebuffers (the top band, left of twice the width) go to VRAM's second bank, so no stage texture moves. A copy of a whole wide screen gets its middle 256 (the game copying "the screen" for the Game Over). Turning it off copies the middle of the last picture into the game's own framebuffers.
+- **The game's camera is unchanged** (D201). It keeps its 256-wide view; the wide window is centred on it and slides to stay inside the room, so entering a room you see what's ahead, and it follows once you pass the middle. A room narrower than the view sits in the middle with its background around it. Everything moves by the slide through the drawing offset (`module/widescreen.c`).
+- **Screen things stay on the screen:** offset commands in the ordering table draw the HUD (layer 0x1EE) without the slide, and dialogue, message boxes and the fade (0x1F1 up) centred on the view. The fade's tiles are made as wide as the view.
+- **The tilemap is the module's** while wide (`module/widescreen_tilemap.c`: the game's `RenderTilemap` with as many columns as needed, from a pool of 2,048 tiles per framebuffer; the game's holds 640).
+- **Entity windows:** each stage's `Update` and spawner bounds are widened by the extra width at each stage load (`module/widescreen_stage.c`), for the wider of the two players' views in co-op. Each player's shape travels in presence (`aggroSwitches`' top bits).
+- **Only in normal play:** the title, menus, the map's own screens and the Game Over are drawn as the game draws them.
+- **The app:** "Screen shape" in Options and Your settings (two bits of the player's options), each picture fitted to its shape, and fullscreen gives the games the whole screen (the status line over them for a few seconds when it changes).
+
+## Not done
+- **32:9** needs a third VRAM bank (two 688-wide framebuffers don't fit in one), and the partner's textures moving there.
+- **The per-stage tail:** `harness/widescreen_edges.py` over the 37 debug starts: at 16:9, 4 pop-ins and 2 vanishes in the extra width; at 21:9, 46 and 20 (60 and 29 without the stage windows), most in boss fights (their projectiles and particles near the edge). Some rooms park things just off the 4:3 screen that a wide view shows (a red block in the Castle Keep's scene at 21:9).
+- **The Game Over's picture** is partly garbled in wide mode: it copies a frame the game draws after the state changes.
+- **Summon Spirit's** ripple copies its patch of screen from slightly the wrong place while the window is slid.
 
 ## Acceptance criteria
-1. The spike: framebuffers in the new VRAM, the entrance at 352 wide with no visual errors, and the count of edge problems in three stages.
-2. Per stage: no enemy despawns, freezes or pops in inside the wider view (an automatic check: entities alive and updating across the full view width), and no garbage at the edges (contact sheets reviewed).
-3. The whole suite passes at 4:3 (widescreen off is unchanged).
-4. Couch and online: a shared room plays the same at 16:9 in both games.
-
-## Risks
-- **The per-stage tail** (about 3–6 weeks of the old estimate was the relayout; what's left is this). It ships as experimental until every stage passes.
-- **Speedruns and balance:** seeing farther makes the game easier. It's optional.
-
-## Budget
-About 8–14 usage windows: the spike 1–2, the engine parts 2–3, the stages 5–9.
+1. Off (the default), the game is unchanged: the gate passes with the new core, and the core shows 256 × 240. ✅
+2. Each shape shows its width and the 207 lines; the pause menu as the game draws it; off again in play: `widescreen_shape_option`. ✅
+3. The fade covers the whole view: `widescreen_fade`. ✅
+4. Co-op: each player's own shape, and enemies alive across the wider view: `widescreen_partner_wider`. ✅
+5. Edges: measured, not zero (above). Shipped as experimental.
+6. Windows and Android cores built with the patch. ✅

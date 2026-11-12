@@ -157,7 +157,8 @@ typedef struct {
     /* 0x26 */ s16 scrollY;
     /* 0x28 */ u8 role;        // ROLE_* (design/M4)
     /* 0x29 */ u8 standSlot;   // a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
-    /* 0x2A */ u16 aggroSwitches; // bosses switching to/from the partner so far (tests)
+    /* 0x2A */ u16 aggroSwitches; // bits 0-13: bosses switching to/from the partner so far (tests);
+                                  // 14-15: the player's screen shape (OPT_WIDE_*, widescreen.c)
 } CoopPresence; // size = 0x2C
 
 #define ROLE_NONE 0      // my own world
@@ -299,6 +300,10 @@ typedef struct {
 #define OPT_NO_AIR_JUMPS 0x04000000   // Richter and Maria: their own jumps only (D122 off)
 #define OPT_NO_ALUCARD_STATS 0x08000000 // Richter and Maria: their own damage, given and taken (#160)
 #define OPT_NO_GEAR_EFFECTS 0x10000000  // to the overlays only: RULE_NO_GEAR_EFFECTS, for their sub-weapons (#202)
+void WidescreenFrame(void); // widescreen.c (design/M19)
+void WidescreenAfterPrims(void);
+u16 WidescreenShape(void);
+extern u16 g_CoopWideWidth;
 extern u16 g_CoopStage; // the stage that's loaded, for anything about the partner (coop.c, #179)
 #define RULE_OFF(bit) (g_CoopLink.rulesOff & (bit))
 #define RULE_PCT(field, otherwise) (g_CoopLink.field ? (s32)g_CoopLink.field : (otherwise))
@@ -319,6 +324,8 @@ extern u16 g_CoopStage; // the stage that's loaded, for anything about the partn
 #define OPT_PARTNER_SIM 2 // M13 spike: the partner simulated by the game's own player code (partner.c)
 // Alucard's spell on each right-stick direction (up, right, down, left): 4 bits each from this
 // bit, SpellIds + 1 (0: none).
+#define OPT_WIDE_SHIFT 3   // options: the screen's shape, 0 4:3, 1 16:9, 2 21:9 (widescreen.c)
+#define OPT_WIDE_MASK 0x18
 #define OPT_SPELL_SHIFT 8
 // CoopLink.padExtra: what a modern pad has and a PlayStation pad doesn't.
 #define PADX_RS_UP 1

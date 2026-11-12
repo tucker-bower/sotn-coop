@@ -1,5 +1,5 @@
 diff --git a/src/core/gpu.cpp b/src/core/gpu.cpp
-index bd443b7..0dc77d3 100644
+index bd443b7..9edcec3 100644
 --- a/src/core/gpu.cpp
 +++ b/src/core/gpu.cpp
 @@ -246,7 +246,7 @@ bool GPU::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool upda
@@ -30,19 +30,108 @@ index bd443b7..0dc77d3 100644
      }
    }
  
+@@ -512,6 +519,9 @@ float GPU::ComputeVerticalFrequency() const
+ 
+ float GPU::GetDisplayAspectRatio() const
+ {
++  if (CoopWide()) // the game's pixels, as wide as at 4:3 (1.25 times as wide as tall), for a wider view
++    return 1.25f * static_cast<float>(m_coop_wide_width) /
++           static_cast<float>(m_coop_wide_height ? m_coop_wide_height : 240);
+   if (g_settings.display_force_4_3_for_24bit && m_GPUSTAT.display_area_color_depth_24)
+   {
+     return 4.0f / 3.0f;
+@@ -778,6 +788,19 @@ void GPU::UpdateCRTCDisplayParameters()
+ 
+   cs.display_origin_top = std::min<uint16_t>(cs.display_origin_top, cs.display_height);
+   cs.display_vram_height = std::min<uint16_t>(cs.display_vram_height, cs.display_height - cs.display_origin_top);
++
++  if (CoopWide()) // co-op widescreen: the framebuffer's game lines, at the width the game draws
++  {
++    cs.display_width = cs.display_vram_width = m_coop_wide_width;
++    cs.display_origin_left = 0;
++    cs.display_vram_left = cs.regs.X;
++    if (m_coop_wide_height)
++    {
++      cs.display_height = cs.display_vram_height = m_coop_wide_height;
++      cs.display_origin_top = 0;
++      cs.display_vram_top = cs.regs.Y + m_coop_wide_top;
++    }
++  }
+ }
+ 
+ TickCount GPU::GetPendingCRTCTicks() const
+@@ -1028,7 +1051,8 @@ uint32_t GPU::ReadGPUREAD()
+   {
+     // Read with correct wrap-around behavior.
+     const uint16_t read_x = (m_vram_transfer.x + m_vram_transfer.col) % VRAM_WIDTH;
+-    const uint16_t read_y = (m_vram_transfer.y + m_vram_transfer.row) % VRAM_HEIGHT;
++    const uint32_t read_y = ((m_vram_transfer.y & VRAM_BANK_FLAG) ? VRAM_BANK_LINES : 0u) + // co-op: its bank
++                            ((m_vram_transfer.y & VRAM_HEIGHT_MASK) + m_vram_transfer.row) % VRAM_HEIGHT;
+     value |= static_cast<uint32_t>(m_vram_ptr[read_y * VRAM_WIDTH + read_x]) << (i * 16);
+ 
+     if (++m_vram_transfer.col == m_vram_transfer.width)
+@@ -1198,6 +1222,36 @@ void GPU::WriteGP1(uint32_t value)
+     }
+     break;
+ 
++    case 0x2F: // co-op widescreen: the display width, 0 = off
++    {
++      m_command_tick_event->InvokeEarly();
++      SynchronizeCRTC();
++      const uint16_t was = m_coop_wide_width;
++      m_coop_wide_width = static_cast<uint16_t>(std::min<uint32_t>(param & 0x3FF, GPU_MAX_DISPLAY_WIDTH));
++      if (was > 256 && !m_coop_wide_width)
++      {
++        // Handed back: the middle of the last wide picture, into the game's own two framebuffers,
++        // so whatever reads the screen next (the Game Over's picture) finds it where it looks.
++        const uint32_t src_x = (m_crtc_state.regs.X + (was - 256u) / 2u) % VRAM_WIDTH;
++        const uint32_t src_y = (m_crtc_state.regs.Y & VRAM_HEIGHT_MASK) | VRAM_BANK_FLAG;
++        CopyVRAM(src_x, src_y, 0, 0, 256, 240);
++        CopyVRAM(src_x, src_y, 256, 0, 256, 240);
++      }
++      m_drawing_area_changed = true;
++      UpdateCRTCDisplayParameters();
++    }
++    break;
++
++    case 0x2E: // co-op widescreen: the framebuffer's lines shown (bits 0-8 the first, 9-17 how many)
++    {
++      m_command_tick_event->InvokeEarly();
++      SynchronizeCRTC();
++      m_coop_wide_top = static_cast<uint16_t>(param & 0x1FF);
++      m_coop_wide_height = static_cast<uint16_t>((param >> 9) & 0x1FF);
++      UpdateCRTCDisplayParameters();
++    }
++    break;
++
+     case 0x09: // Allow texture disable
+     {
+       m_set_texture_disable_mask = static_cast<bool>(param & 0x01);
 diff --git a/src/core/gpu.h b/src/core/gpu.h
-index 0a0959f..a4c31bc 100644
+index 0a0959f..bd99b34 100644
 --- a/src/core/gpu.h
 +++ b/src/core/gpu.h
-@@ -22,6 +22,7 @@ class Timers;
+@@ -22,6 +22,19 @@ class Timers;
  class GPU
  {
  public:
 +  uint16_t* GetVRAMPointer() const { return m_vram_ptr; } // co-op: both banks (libretro VIDEO_RAM, tests)
++  // co-op widescreen (design/M19): GP1(0x2F) sets a display width; while it's set, drawing, fills and
++  // the display in VRAM's top band (lines 0-255, the game's framebuffers) go to the second bank, and
++  // the display shows that width whatever the video timing says.
++  uint16_t m_coop_wide_width = 0;
++  uint16_t m_coop_wide_top = 0, m_coop_wide_height = 0; // GP1(0x2E): the lines shown, in the framebuffer
++  bool CoopWide() const { return m_coop_wide_width != 0; }
++  // In the wide framebuffers (two of the width, side by side in the top band): in the second bank.
++  bool CoopInFramebuffers(uint32_t x, uint32_t y) const
++  {
++    return CoopWide() && y < COOP_WIDE_BAND && x < 2u * m_coop_wide_width;
++  }
++  static constexpr uint32_t COOP_WIDE_BAND = 256;
    enum class BlitterState : uint8_t
    {
      Idle,
-@@ -349,7 +350,7 @@ protected:
+@@ -349,7 +362,7 @@ protected:
  
    struct DrawMode
    {
@@ -51,20 +140,46 @@ index 0a0959f..a4c31bc 100644
      static constexpr uint32_t TEXTURE_WINDOW_MASK = UINT32_C(0b11111111111111111111);
  
      // original values
+diff --git a/src/core/gpu_backend.cpp b/src/core/gpu_backend.cpp
+index 711a13c..1dc0af8 100644
+--- a/src/core/gpu_backend.cpp
++++ b/src/core/gpu_backend.cpp
+@@ -396,6 +396,7 @@ void GPUBackend::HandleCommand(const GPUBackendCommand* cmd)
+     {
+       FlushRender();
+       m_drawing_area = static_cast<const GPUBackendSetDrawingAreaCommand*>(cmd)->new_area;
++      m_coop_rows = static_cast<const GPUBackendSetDrawingAreaCommand*>(cmd)->coop_rows;
+     }
+     break;
+ 
+diff --git a/src/core/gpu_backend.h b/src/core/gpu_backend.h
+index a3a7346..d3e8817 100644
+--- a/src/core/gpu_backend.h
++++ b/src/core/gpu_backend.h
+@@ -42,6 +42,7 @@ protected:
+   uint16_t* m_vram_ptr = nullptr;
+ 
+   Common::Rectangle<uint32_t> m_drawing_area{};
++  uint32_t m_coop_rows = 0; // co-op widescreen: drawing's line offset (GPUBackendSetDrawingAreaCommand)
+ 
+   bool m_use_gpu_thread = false;
+ 
 diff --git a/src/core/gpu_commands.cpp b/src/core/gpu_commands.cpp
-index 3e2732a..da95365 100644
+index 3e2732a..040bb57 100644
 --- a/src/core/gpu_commands.cpp
 +++ b/src/core/gpu_commands.cpp
-@@ -448,7 +448,7 @@ bool GPU::HandleFillRectangleCommand()
+@@ -448,7 +448,9 @@ bool GPU::HandleFillRectangleCommand()
  
    const uint32_t color = FifoPop() & 0x00FFFFFF;
    const uint32_t dst_x = FifoPeek() & 0x3F0;
 -  const uint32_t dst_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
-+  const uint32_t dst_y = (FifoPop() >> 16) & (VRAM_HEIGHT_MASK | VRAM_BANK_FLAG); // co-op: bit 9, the bank
++  uint32_t dst_y = (FifoPop() >> 16) & (VRAM_HEIGHT_MASK | VRAM_BANK_FLAG); // co-op: bit 9, the bank
++  if (CoopInFramebuffers(dst_x, dst_y))
++    dst_y |= VRAM_BANK_FLAG; // co-op widescreen: the framebuffers are in the second bank
    const uint32_t width = ((FifoPeek() & VRAM_WIDTH_MASK) + 0xF) & ~0xF;
    const uint32_t height = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
  
-@@ -466,7 +466,7 @@ bool GPU::HandleCopyRectangleCPUToVRAMCommand()
+@@ -466,7 +468,7 @@ bool GPU::HandleCopyRectangleCPUToVRAMCommand()
    m_fifo.RemoveOne();
  
    const uint32_t dst_x = FifoPeek() & VRAM_WIDTH_MASK;
@@ -73,8 +188,77 @@ index 3e2732a..da95365 100644
    const uint32_t copy_width = ReplaceZero(FifoPeek() & VRAM_WIDTH_MASK, 0x400);
    const uint32_t copy_height = ReplaceZero((FifoPop() >> 16) & VRAM_HEIGHT_MASK, 0x200);
    const uint32_t num_pixels = copy_width * copy_height;
+@@ -530,6 +532,8 @@ bool GPU::HandleCopyRectangleVRAMToCPUCommand()
+ 
+   m_vram_transfer.x = static_cast<uint16_t>(FifoPeek() & VRAM_WIDTH_MASK);
+   m_vram_transfer.y = static_cast<uint16_t>((FifoPop() >> 16) & VRAM_HEIGHT_MASK);
++  if (CoopInFramebuffers(m_vram_transfer.x, m_vram_transfer.y))
++    m_vram_transfer.y |= VRAM_BANK_FLAG; // co-op widescreen: reading a framebuffer back
+   m_vram_transfer.width = ((static_cast<uint16_t>(FifoPeek()) - 1) & VRAM_WIDTH_MASK) + 1;
+   m_vram_transfer.height = ((static_cast<uint16_t>(FifoPop() >> 16) - 1) & VRAM_HEIGHT_MASK) + 1;
+ 
+@@ -550,12 +554,23 @@ bool GPU::HandleCopyRectangleVRAMToVRAMCommand()
+   CHECK_COMMAND_SIZE(4);
+   m_fifo.RemoveOne();
+ 
+-  const uint32_t src_x = FifoPeek() & VRAM_WIDTH_MASK;
+-  const uint32_t src_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
++  uint32_t src_x = FifoPeek() & VRAM_WIDTH_MASK;
++  uint32_t src_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
+   const uint32_t dst_x = FifoPeek() & VRAM_WIDTH_MASK;
+-  const uint32_t dst_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
+-  const uint32_t width = ReplaceZero(FifoPeek() & VRAM_WIDTH_MASK, 0x400);
++  uint32_t dst_y = (FifoPop() >> 16) & VRAM_HEIGHT_MASK;
++  // co-op widescreen: a copy of the screen (the Game Over's picture, Summon Spirit) reads the wide
++  // framebuffers in the second bank, and writes where it says, a texture of the game's
++  if (CoopInFramebuffers(src_x, src_y))
++    src_y |= VRAM_BANK_FLAG;
++  uint32_t width = ReplaceZero(FifoPeek() & VRAM_WIDTH_MASK, 0x400);
+   const uint32_t height = ReplaceZero((FifoPop() >> 16) & VRAM_HEIGHT_MASK, 0x200);
++  if ((src_y & VRAM_BANK_FLAG) && width == m_coop_wide_width && width > 256u)
++  {
++    // The game copying "the screen" (the Game Over's picture): it was written for 256 wide, so it
++    // gets the middle 256 of the wide one.
++    src_x = (src_x + (width - 256u) / 2u) % VRAM_WIDTH;
++    width = 256u;
++  }
+   // Some VRAM copies aren't going to do anything. Most games seem to send a 2x2 VRAM copy at the end of a frame.
+   const bool skip_copy =
+     width == 0 || height == 0 || (src_x == dst_x && src_y == dst_y && !m_GPUSTAT.set_mask_while_drawing);
+diff --git a/src/core/gpu_sw.cpp b/src/core/gpu_sw.cpp
+index b3e2428..3dcff05 100644
+--- a/src/core/gpu_sw.cpp
++++ b/src/core/gpu_sw.cpp
+@@ -345,7 +345,7 @@ void GPU_SW::CopyOut15Bit(uint32_t src_x, uint32_t src_y, uint32_t width, uint32
+   const uint8_t interleaved_shift = static_cast<uint8_t>(interleaved);
+ 
+   // Fast path when not wrapping around.
+-  if ((src_x + width) <= VRAM_WIDTH && (src_y + height) <= VRAM_HEIGHT)
++  if ((src_x + width) <= VRAM_WIDTH && (src_y + height) <= VRAM_STORAGE_HEIGHT) // co-op: either bank
+   {
+     const uint32_t rows = height >> interlaced_shift;
+     dst_stride <<= interlaced_shift;
+@@ -589,7 +589,9 @@ void GPU_SW::UpdateDisplay()
+       return;
+     }
+ 
+-    const uint32_t vram_offset_y = m_crtc_state.display_vram_top;
++    const uint32_t vram_offset_y =
++      m_crtc_state.display_vram_top +
++      (CoopInFramebuffers(m_crtc_state.display_vram_left, m_crtc_state.display_vram_top) ? VRAM_BANK_LINES : 0u);
+     const uint32_t display_width = m_crtc_state.display_vram_width;
+     const uint32_t display_height = m_crtc_state.display_vram_height;
+ 
+@@ -649,6 +651,7 @@ void GPU_SW::DispatchRenderCommand()
+   {
+     GPUBackendSetDrawingAreaCommand* cmd = m_backend.NewSetDrawingAreaCommand();
+     cmd->new_area = m_drawing_area;
++    cmd->coop_rows = CoopInFramebuffers(m_drawing_area.left, m_drawing_area.top) ? VRAM_BANK_LINES : 0u;
+     m_backend.PushCommand(cmd);
+     m_drawing_area_changed = false;
+   }
 diff --git a/src/core/gpu_sw_backend.cpp b/src/core/gpu_sw_backend.cpp
-index 8d35ce3..066b694 100644
+index 8d35ce3..c84a6b6 100644
 --- a/src/core/gpu_sw_backend.cpp
 +++ b/src/core/gpu_sw_backend.cpp
 @@ -94,7 +94,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
@@ -104,6 +288,24 @@ index 8d35ce3..066b694 100644
        }
        break;
      }
+@@ -150,7 +150,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
+                  (static_cast<uint16_t>(s_dither_lut[dither_y][dither_x][color_b]) << 10) | (transparency_enable ? 0x8000u : 0);
+   }
+ 
+-  const VRAMPixel bg_color{GetPixel(static_cast<uint32_t>(x), static_cast<uint32_t>(y))};
++  const VRAMPixel bg_color{GetPixel(static_cast<uint32_t>(x), static_cast<uint32_t>(y) + m_coop_rows)};
+   if constexpr (transparency_enable)
+   {
+     if (color.bits & 0x8000u || !texture_enable)
+@@ -213,7 +213,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
+   if ((bg_color.bits & mask_and) != 0)
+     return;
+ 
+-  SetPixel(static_cast<uint32_t>(x), static_cast<uint32_t>(y), color.bits | cmd->params.GetMaskOR());
++  SetPixel(static_cast<uint32_t>(x), static_cast<uint32_t>(y) + m_coop_rows, color.bits | cmd->params.GetMaskOR());
+ }
+ 
+ template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
 @@ -711,11 +711,14 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
  void GPU_SW_Backend::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color, GPUBackendCommandParameters params)
  {
@@ -166,6 +368,49 @@ index 8d35ce3..066b694 100644
        for (uint32_t col = 0; col < width;)
        {
          // TODO: Handle unaligned reads...
+@@ -791,6 +798,11 @@ void GPU_SW_Backend::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t
+ void GPU_SW_Backend::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height,
+                               GPUBackendCommandParameters params)
+ {
++  // Co-op: bit 9 of either y picks its bank (as uploads); rows wrap within it.
++  const uint32_t src_flag = src_y & VRAM_BANK_FLAG, dst_flag = dst_y & VRAM_BANK_FLAG;
++  const uint32_t src_bank = src_flag ? VRAM_BANK_LINES : 0u, dst_bank = dst_flag ? VRAM_BANK_LINES : 0u;
++  src_y &= VRAM_HEIGHT_MASK;
++  dst_y &= VRAM_HEIGHT_MASK;
+   // Break up oversized copies. This behavior has not been verified on console.
+   if ((src_x + width) > VRAM_WIDTH || (dst_x + width) > VRAM_WIDTH)
+   {
+@@ -809,7 +821,7 @@ void GPU_SW_Backend::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, ui
+       {
+         const uint32_t columns_to_copy =
+           std::min<uint32_t>(remaining_columns, std::min<uint32_t>(VRAM_WIDTH - current_src_x, VRAM_WIDTH - current_dst_x));
+-        CopyVRAM(current_src_x, current_src_y, current_dst_x, current_dst_y, columns_to_copy, rows_to_copy, params);
++        CopyVRAM(current_src_x, current_src_y | src_flag, current_dst_x, current_dst_y | dst_flag, columns_to_copy, rows_to_copy, params);
+         current_src_x = (current_src_x + columns_to_copy) % VRAM_WIDTH;
+         current_dst_x = (current_dst_x + columns_to_copy) % VRAM_WIDTH;
+         remaining_columns -= columns_to_copy;
+@@ -832,8 +844,8 @@ void GPU_SW_Backend::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, ui
+   {
+     for (uint32_t row = 0; row < height; row++)
+     {
+-      const uint16_t* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+-      uint16_t* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
++      const uint16_t* src_row_ptr = &m_vram_ptr[(src_bank + (src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
++      uint16_t* dst_row_ptr = &m_vram_ptr[(dst_bank + (dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+ 
+       for (int32_t col = static_cast<int32_t>(width - 1); col >= 0; col--)
+       {
+@@ -848,8 +860,8 @@ void GPU_SW_Backend::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, ui
+   {
+     for (uint32_t row = 0; row < height; row++)
+     {
+-      const uint16_t* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+-      uint16_t* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
++      const uint16_t* src_row_ptr = &m_vram_ptr[(src_bank + (src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
++      uint16_t* dst_row_ptr = &m_vram_ptr[(dst_bank + (dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+ 
+       for (uint32_t col = 0; col < width; col++)
+       {
 diff --git a/src/core/gpu_sw_backend.h b/src/core/gpu_sw_backend.h
 index 5c3d8da..2bd14b0 100644
 --- a/src/core/gpu_sw_backend.h
@@ -178,7 +423,7 @@ index 5c3d8da..2bd14b0 100644
 +  std::array<uint16_t, VRAM_WIDTH * VRAM_STORAGE_HEIGHT> m_vram; // both banks (co-op)
  };
 diff --git a/src/core/gpu_types.h b/src/core/gpu_types.h
-index b7f6643..948a542 100644
+index b7f6643..53c550b 100644
 --- a/src/core/gpu_types.h
 +++ b/src/core/gpu_types.h
 @@ -4,6 +4,12 @@
@@ -235,6 +480,14 @@ index b7f6643..948a542 100644
  
    ALWAYS_INLINE uint32_t GetXBase() const { return static_cast<uint32_t>(x) * 16u; }
    ALWAYS_INLINE uint32_t GetYBase() const { return static_cast<uint32_t>(y); }
+@@ -297,6 +306,7 @@ struct GPUBackendCopyVRAMCommand : public GPUBackendCommand
+ struct GPUBackendSetDrawingAreaCommand : public GPUBackendCommand
+ {
+   Common::Rectangle<uint32_t> new_area;
++  uint32_t coop_rows; // co-op widescreen: drawing goes this many lines down (the second bank)
+ };
+ 
+ struct GPUBackendDrawCommand : public GPUBackendCommand
 diff --git a/src/core/save_state_version.h b/src/core/save_state_version.h
 index 027db06..0b91ba2 100644
 --- a/src/core/save_state_version.h

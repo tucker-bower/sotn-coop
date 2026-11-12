@@ -59,6 +59,10 @@ OPT_ALUCARD_HUD = 4  # options: Richter and Maria use Alucard's health bar (modu
 OPT_NO_TINT = 0x20000000  # options: two of a kind aren't told apart by a tint (module/partner.c)
 OPT_SPELL_TRIGGERS = 0x40000000  # options: spells on R2 or L2 and a face button (module/spells.c)
 OPT_PARTNER_HP = 0x80000000  # options: the partner's health under this player's (issue 106)
+OPT_WIDE_SHIFT, OPT_WIDE_MASK = 3, 0x18  # options: the screen's shape, 0-2 (WIDE_SHAPES): module/widescreen.c
+WIDE_SHAPES = ("4:3", "16:9", "21:9")
+WIDE_WIDTHS = (256, 294, 392)  # the game's view, in its pixels, for each: 207 lines of it shown wide (design/M19-widescreen.md)
+WIDE_LINES = 207
 OPT_SPELL_SHIFT = 8  # options: Alucard's spell per right-stick direction (up, right, down, left), 4 bits each: SpellIds + 1
 SPELLS = ("Dark Metamorphosis", "Summon Spirit", "Hellfire", "Tetra Spirit", None, "Soul Steal", None, "Sword Brothers")
 
@@ -116,7 +120,7 @@ class Presence:
     scroll_y: int = 0
     role: int = 0
     stand_slot: int = 0  # a guest: 1 + the stage slot of the solid it stands on, or 0 (issue 98)
-    aggro_switches: int = 0  # bosses switching to/from the partner so far (tests)
+    aggro_switches: int = 0  # bosses switching to/from the partner so far (tests); bits 14-15: wide
     pad: int = 0  # M13: the player's buttons this frame (CoopLink.selfPad), sent beside the struct
 
     SIZE = _PRESENCE.size
@@ -131,6 +135,11 @@ class Presence:
     @property
     def room(self):
         return self.stage, self.room_left, self.room_top
+
+    @property
+    def wide(self):
+        """The player's screen shape (WIDE_SHAPES), in aggro_switches' top two bits."""
+        return self.aggro_switches >> 14
 
 
 class Mailbox:

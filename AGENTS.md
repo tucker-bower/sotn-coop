@@ -85,7 +85,7 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 | Opening or updating a PR with code changes | The gate: `run.py` | 5 minutes |
 | A release, playtest betas included | `--full`, then `scripts/redux_check.sh` | 30 minutes |
 
-The categories are richter, maria, alucard, combat, bosses, cutscenes, progression, traversal, rooms, network, rules, pvp, launcher, mods and inverted. `harness/categories.py` lists what each covers, and which source files touch which categories. Example: a change to Richter's defense is `-c richter`, not the gate.
+The categories are richter, maria, alucard, combat, bosses, cutscenes, progression, traversal, rooms, network, rules, pvp, launcher, mods, inverted and widescreen. `harness/categories.py` lists what each covers, and which source files touch which categories. Example: a change to Richter's defense is `-c richter`, not the gate.
 
 **Habits to break:**
 - **Never rerun a test that passed on the same build.** The runner skips them itself; `--again` is only for a test you suspect is flaky. `--full` after the gate runs only the rest.

@@ -15,6 +15,7 @@ to fill:
 The window remembers its size; F11 or Alt+Enter toggles fullscreen."""
 
 import os
+import time
 
 import pygame
 from pygame._sdl2.video import Renderer, Texture, Window
@@ -37,10 +38,20 @@ def _on_a_monitor(pos):
 CANVAS = (1032, 532)
 PIXELS = (480, 270)    # the menus in the game's own style: drawn in the game's pixels, shown at a whole multiple
 BAR = 26               # the status bar under the games (window pixels)
+BAR_SHOWN = 4          # seconds the status line shows over the games in fullscreen, after it changes
 GAP = 8
 LAYOUTS = ("auto", "side", "stacked", "p1", "p2", "windows")
 LAYOUT_NAMES = {"auto": "Automatic", "side": "Side by side", "stacked": "Stacked (vertical monitor)", "p1": "Player 1 only",
                 "p2": "Player 2 only", "windows": "Player 2 in its own window"}
+
+
+WIDE_LINES = 207  # a widescreen view shows the game's 207 lines (link/mailbox.py, design/M19)
+
+
+def aspect_of(size):
+    """A game frame's shape on screen: 4:3, or for a widescreen view its width in the game's pixels,
+    each 1.25 times as wide as tall (as at 4:3)."""
+    return 1.25 * size[0] / size[1] if size and size[1] == WIDE_LINES else 4 / 3
 
 
 def fit(area, aspect=4 / 3):
@@ -55,25 +66,27 @@ def fit(area, aspect=4 / 3):
     return pygame.Rect(x + (w - nw) // 2, y + (h - nh) // 2, nw, nh)
 
 
-def cells(layout, size, players):
-    """Where each game goes in the main window: [rect or None per game]."""
+def cells(layout, size, players, aspects=(4 / 3, 4 / 3), bar=BAR):
+    """Where each game goes in the main window: [rect or None per game]. aspects: each game's
+    picture's shape (aspect_of). bar: the status bar's height under them (0 in fullscreen)."""
     w, h = size
-    h -= BAR
+    h -= bar
+    a0, a1 = (list(aspects) + [4 / 3, 4 / 3])[:2]
     if layout == "auto":  # whichever gives each game the bigger picture
-        side = min((w - GAP) / 2 * 3 / 4, h)
-        stacked = min(w * 3 / 4, (h - GAP) / 2)
+        side = min((w - GAP) / 2 / max(a0, a1), h)
+        stacked = min(w / max(a0, a1), (h - GAP) / 2)
         layout = "side" if side >= stacked else "stacked"
     if players == 1:
-        return [fit((0, 0, w, h))]
+        return [fit((0, 0, w, h), a0)]
     if layout == "stacked":
         half = (h - GAP) // 2
-        return [fit((0, 0, w, half)), fit((0, half + GAP, w, half))]
+        return [fit((0, 0, w, half), a0), fit((0, half + GAP, w, half), a1)]
     if layout == "p1":
-        return [fit((0, 0, w, h)), None]
+        return [fit((0, 0, w, h), a0), None]
     if layout in ("p2", "windows"):
-        return [None, fit((0, 0, w, h))] if layout == "p2" else [fit((0, 0, w, h)), None]
+        return [None, fit((0, 0, w, h), a1)] if layout == "p2" else [fit((0, 0, w, h), a0), None]
     half = (w - GAP) // 2
-    return [fit((0, 0, half, h)), fit((half + GAP, 0, half, h))]
+    return [fit((0, 0, half, h), a0), fit((half + GAP, 0, half, h), a1)]
 
 
 def texture(renderer, size, linear, **kw):
@@ -308,7 +321,8 @@ class Display:
             self.second = None
 
     def _draw_games(self):
-        rects = cells(self.layout, self.window.size, len(self.games))
+        rects = cells(self.layout, self.window.size, len(self.games), [aspect_of(g.size) for g in self.games],
+                      0 if self.fullscreen else BAR)
         for g, rect in zip(self.games, rects):
             g.draw(rect)
 
@@ -328,7 +342,7 @@ class Display:
             win, ren, tex = self.second
             ren.draw_color = (0, 0, 0, 255)
             ren.clear()
-            tex.draw(fit((0, 0, *win.size)))
+            tex.draw(fit((0, 0, *win.size), aspect_of(tex.size)))
             ren.present()
 
     def _draw_corner(self):
@@ -342,8 +356,15 @@ class Display:
         self._corner_tex.draw(dstrect=(w - tw - 6, 4, tw, th))
 
     def _draw_bar(self, lines, color):
+        """Under the games; in fullscreen, where the games fill the screen, over them, only for
+        BAR_SHOWN seconds after its text changes."""
         w, h = self.window.size
         key = (tuple(lines), color, w)
+        if self.fullscreen:
+            if key[:2] != getattr(self, "_bar_text", None):
+                self._bar_text, self._bar_since = key[:2], time.monotonic()
+            if time.monotonic() - self._bar_since > BAR_SHOWN:
+                return
         if key != self._bar_key:
             surf = pygame.Surface((w, BAR))
             surf.fill((16, 16, 24))

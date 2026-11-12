@@ -36,6 +36,7 @@ import session_progress  # noqa: F401
 import session_travel  # noqa: F401
 import session_saverooms  # noqa: F401
 import session_shared  # noqa: F401
+import session_widescreen  # noqa: F401
 import session_m4b  # noqa: F401
 import session_m5  # noqa: F401
 import session_m8  # noqa: F401
@@ -49,6 +50,7 @@ import scenarios_relics  # noqa: F401
 import scenarios_movement  # noqa: F401
 import scenarios_m13  # noqa: F401
 import scenarios_ultimate  # noqa: F401
+import scenarios_widescreen  # noqa: F401
 import session_m15  # noqa: F401
 import session_rules  # noqa: F401
 import session_carry  # noqa: F401
