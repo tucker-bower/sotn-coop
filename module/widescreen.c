@@ -18,6 +18,7 @@ u16 g_CoopWideWidth; // tests: the view's width in pixels, over the player's set
 void FlushCache(void); // main.exe
 void WideTilemap(s32 columns); // widescreen_tilemap.c
 void WidescreenStage(s32 extra); // widescreen_stage.c
+bool WidescreenStagePatched(void);
 void SetStageDisplayBuffer(void); // DRA
 
 // The game's camera is left as it is: it keeps its 256-wide view of the room ("the game's view"),
@@ -151,10 +152,20 @@ void WidescreenFrame(void) {
     s32 stage = (d0->clip.w == DISP_STAGE_W || d0->clip.w == s_Applied) && d0->clip.h == STAGE_CLIP_H &&
                 d1->clip.y == STAGE_CLIP_Y; // not the CGI's layout, whose second buffer is lower
 
+    static bool s_Off; // off, and everything put back: nothing to do each frame
+    static u8 s_Remind;
+
     if (w > 512) {
         w = 512; // two side by side in the bank's 1024 columns
     }
     windows = g_CoopWideWindows = WindowsWidth(w);
+    if (s_Off && !windows) { // (the default: as little as possible, the game's frame is tight)
+        if (!(++s_Remind & 63)) {
+            GP1(GP1_COOP_WIDE); // in case a state load left the core wide
+        }
+        return;
+    }
+    s_Off = false;
     if (g_GameState == Game_Play) {
         WidescreenStage(windows && !g_CoopWideStageOff ? windows - DISP_STAGE_W : 0);
     }
@@ -168,6 +179,7 @@ void WidescreenFrame(void) {
             FadeWidth(0, s_Wide);
         }
         g_CoopWideSlide = s_Wide = 0;
+        s_Off = !windows && !WidescreenStagePatched() && !(stage && d0->clip.w != DISP_STAGE_W);
         return;
     }
     s_Columns = (w + 15) / 16 + 2;

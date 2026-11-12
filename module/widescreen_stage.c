@@ -113,3 +113,5 @@ void WidescreenStage(s32 extra) {
     }
     FlushCache();
 }
+
+bool WidescreenStagePatched(void) { return s_Count != 0; }
