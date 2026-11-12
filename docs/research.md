@@ -274,3 +274,6 @@ A variable the decomp defines with a starting value (`s32 g_BossMgrState = 0;`, 
 
 ## The ending's dialogue waits for the music to stop
 SEL's ending cutscene waits before each line for `func_80131F68()` to say no sound is playing: `D_8013B61C` or `g_PlayingXaBgmId != 0` (op 0x11). A death scene's fade stops the stage music with `SET_STOP_MUSIC` (`CdFadeOut2`, which zeroes the id once the CD is paused). A game sent into `Game_Ending` without that keeps its old id for good, since the ending's own CD reads end the stream without clearing it, and waits at the first line forever (#257). Anything that starts the ending by hand must stop the music first.
+
+## Stage entities live in slots 64 to 255
+`g_Entities` has 256 slots, and the stage's are 64 to 255 (`STAGE_ENTITY_START`, `TOTAL_ENTITY_COUNT`). The spawner puts most of a room's objects at 192 and up, so a scan of 64 to 191 sees almost nothing (`widescreen_edges.py` did, until #260). The same windows are written two ways in the stages' Update: signed (`slti 321`, with an `addiu -64` nearby) and, in most stages, unsigned (`(u16)(x + 64) < 385`: `addiu 64; sltiu 385`, and `addiu 128; sltiu 513` for -128..384). The y windows use the same offsets and end at 353 and 481.

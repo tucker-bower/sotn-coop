@@ -552,3 +552,89 @@ def _arena_test(name, characters, full):
 
 _arena_test("boss_arena_edge_richter_and_maria", (1, 2), False)
 _arena_test("boss_arena_edge_alucard_and_richter", (0, 1), True)
+
+
+# --- #259: in the real fight, the possessed Richter's Blade Dash knocked a player back for good ----
+LONGEST_HIT = 240  # frames: a fling crosses the arena in well under this
+
+
+def knockback_lands(run, wide=0, mode="corners"):
+    """Both players in the possessed Richter's fight for some 100 s of his attacks, never dying: in
+    mode "corners" each stands in a corner of his arena (where the report's player was stuck), in
+    "fight" each walks at him and attacks. Each time either is hit, they're out of the hit within
+    LONGEST_HIT frames."""
+    from session_m12 import SceneWatch
+    from link.mailbox import OPT_WIDE_SHIFT
+    a, b = run.s.a, run.s.b
+    if wide:
+        for g in (a, b):
+            g.host("set_player", options=wide << OPT_WIDE_SHIFT)
+    w = SceneWatch(run)
+    boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    w.until(lambda: boss(a), 4000, lambda i: ("left" + ("+cross" if i % 90 < 12 else ""),
+                                              "left" if b.read("g_CutsceneHasControl") else ""))
+    run.expect(boss(a), "A walks into Richter's arena", at=a.snapshot())
+    w.until(lambda: boss(b), 3000, ("", "left"))
+    run.expect(boss(b), "B is pulled into the fight", b=b.snapshot())
+    hit, longest, hits, trail = [0, 0], [(0, None), (0, None)], [0, 0], [[], []]
+    for t in range(6000):
+        free = not a.read("g_CutsceneHasControl")
+        # A to the left corner, B to the right, then they stand there (a jump now and then)
+        pads = [("left" if t % 240 < 60 else "") + ("+cross" if t % 400 == 300 else ""),
+                ("right" if t % 240 < 60 else "") + ("+cross" if t % 400 == 100 else "")]
+        if mode == "fight":  # each walks at him and attacks, jumping now and then, as a player would
+            pads = []
+            for k, g in enumerate((a, b)):
+                foes = [g.read(g.entity(s_), "<h", 2) for s_ in range(64, 96)
+                        if g.read(g.entity(s_), "<I", 0x28) and g.read(g.entity(s_), "<h", 0x3E) > 0]
+                x = g.read(g.entity(0), "<h", 2)
+                d = ("left" if foes and min(foes, key=lambda f: abs(f - x)) < x else "right") if foes else ""
+                d = d if not foes or abs(min(foes, key=lambda f: abs(f - x)) - x) > 40 else ""
+                pads.append("+".join(p for p in (d, "square" if (t + 7 * k) % 16 < 2 else "",
+                                                   "cross" if (t + 50 * k) % 150 < 10 else "") if p))
+        run.step(1, (pads[0].strip("+"), pads[1].strip("+")))
+        for k, g in enumerate((a, b)):
+            if t % 20 == 0:
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            p0 = g.entity(0)
+            step, step_s, x = g.read(p0, "<H", 0x2C), g.read(p0, "<H", 0x2E), g.read(p0, "<h", 2)
+            if not trail[k] or trail[k][-1][1:3] != (step, step_s):
+                trail[k] = (trail[k] + [(t, step, step_s, x, g.read(p0, "<h", 6))])[-12:]
+            if step == HIT_STEP and free:
+                hits[k] += hit[k] == 0
+                hit[k] += 1
+                if hit[k] > longest[k][0]:
+                    longest[k] = (hit[k], list(trail[k]))
+            else:
+                hit[k] = 0
+        if max(h for h, _ in longest) > LONGEST_HIT:
+            break
+    run.capture()
+    run.expect(sum(hits) > 0, "his attacks hit the players", hits=hits)
+    for k, who in enumerate("AB"):
+        run.expect(longest[k][0] <= LONGEST_HIT, f"{who} is out of every hit within {LONGEST_HIT} frames",
+                   hits=hits[k], longest=longest[k][0], trail=longest[k][1], at=(a, b)[k].snapshot())
+
+
+def _knockback_test(name, characters, wide, full, mode="corners"):
+    from session_m12 import STARTS as BOSS_STARTS
+
+    def test(run):
+        knockback_lands(run, wide, mode)
+    test.__name__ = name
+    test.__doc__ = ("Issue 259 (1.0.0): in the Castle Keep, the possessed Richter's Blade Dash knocked a player "
+                    "back forever, stuck in a corner. Two players in his corners through 100 s of his attacks: "
+                    "every hit ends.")
+    start = str(BOSS_STARTS / "Boss - Richter.state")
+    session_scenario(starts=(start, start), characters=characters, full=full)(test)
+
+
+_knockback_test("boss_richter_knockback_lands_alucard_and_richter", (0, 1), 0, False)
+_knockback_test("boss_richter_knockback_lands_richter_and_maria", (1, 2), 0, True)
+_knockback_test("boss_richter_knockback_lands_alucard_and_alucard", (0, 0), 0, True)
+_knockback_test("boss_richter_knockback_lands_alucard_and_maria_21_9", (0, 2), 2, True)
+for _c in ((0, 0), (1, 1), (2, 2), (1, 0), (2, 1), (0, 2)):  # players who fight him, as a player would
+    for _w in (0, 2):
+        _n = "_and_".join(("alucard", "richter", "maria")[c] for c in _c) + ("_21_9" if _w else "")
+        _knockback_test(f"boss_richter_knockback_fighting_{_n}", _c, _w, True, "fight")
+

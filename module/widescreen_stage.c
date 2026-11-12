@@ -8,6 +8,12 @@
 // are moved out by the view's extra width: the immediates in those three functions, found by
 // their values (each upper bound with the nearest matching lower bound, so the y bounds, which use
 // the same lower values, stay), and put back when the view isn't wide.
+//
+// Most stages' Update compiles its windows unsigned instead (#260): `(u16)(x + 64) < 385` is
+// `addiu 64; sltiu 385` (-64..320), and `addiu 128; sltiu 513` (-128..384). Only the spawner's
+// windows were widened there, so a door or an enemy spawned in the extra width was destroyed the
+// next frame and never came back (the spawner had passed it): no red door to walk through at
+// 21:9. Their x windows (the y ones end at 353 and 481) get the offset and the width widened.
 #define COOP_MODULE
 #include <game.h>
 #include "link.h"
@@ -22,7 +28,8 @@ void FlushCache(void); // main.exe
 #define IMM(ins) ((s16)((ins) & 0xFFFF))
 #define OP_ADDIU 0x09
 #define OP_SLTI 0x0A
-#define MAX_PATCHES 32
+#define OP_SLTIU 0x0B
+#define MAX_PATCHES 64
 
 typedef struct {
     u32* at;
@@ -51,10 +58,25 @@ static void Set(u32* at, s32 value) {
 // with -64, and 385 with -128.
 static s32 Lower(s32 upper) { return upper == 385 ? -128 : upper == 320 || upper == 321 ? -64 : 0; }
 
+// An unsigned x window's size + 1 (sltiu), and its offset (the addiu just before it).
+static s32 Offset(u32 ins) {
+    return OP(ins) != OP_SLTIU ? 0 : IMM(ins) == 385 ? 64 : IMM(ins) == 513 ? 128 : 0;
+}
+
 static void Widen(u32* fn, s32 extra) {
-    s32 i, j, lower, best;
+    s32 i, j, lower, best, offset;
 
     for (i = 0; i < SCAN_MAX && fn[i] != JR_RA; i++) {
+        if ((offset = Offset(fn[i]))) {
+            for (j = i - 1; j >= 0 && j >= i - NEAR; j--) {
+                if (OP(fn[j]) == OP_ADDIU && IMM(fn[j]) == offset) {
+                    Set(&fn[j], offset + extra);
+                    Set(&fn[i], IMM(fn[i]) + 2 * extra);
+                    break;
+                }
+            }
+            continue;
+        }
         if (!Imm(fn[i]) || !(lower = Lower(IMM(fn[i])))) {
             continue;
         }

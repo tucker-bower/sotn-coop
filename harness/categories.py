@@ -94,6 +94,7 @@ PATHS = {
 # The PR gate (run.py with no tests named), by category. The first of each group caught a bug
 # (run.py --history); "+" marks the quick ones kept so every category has a check.
 EVERYDAY = {
+    "widescreen_red_door_comes_back", "widescreen_stage_windows_every_stage", "richter_backflips_turn",  # #260 #198
     # caught a bug when written (2026-11-12): a fight changing hands (#248), a stranded Mist Step
     # (#211), the partner's ending (#257)
     "boss_trio_authority_changes", "mist_step_never_stuck_maria", "ending_richter_alucard_and_richter",
