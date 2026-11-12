@@ -24,4 +24,5 @@ Option 1, because each game keeps its own player, and the rest reuses what exist
 - [x] Jump, a hit, landing and a form change each release the partner safely: `bat_carry_*_drops_off`.
 - [x] A door while carried leaves both players in the same room: `bat_carry_through_a_door`.
 - [x] With the rule off (the default), nothing changes: `bat_carry_off_by_default`.
+- [x] Each game draws the other right: the bat's game draws the rider hanging under it (its copy of the rider is held where the rider's game holds them), and after a door the rider's game still draws a bat (a copy made on foot gets the partner's form button): `bat_carry_rider_hangs_in_the_bats_game`, `bat_carry_through_a_door_still_a_bat` (#262).
 - [ ] Progress gates aren't tested, and only the entrance hall's door is. Sequence breaks are a question for playtests.

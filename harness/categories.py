@@ -129,6 +129,7 @@ EVERYDAY = {
     "bat_carry_alucard", "bat_carry_richter", "bat_carry_through_a_door", "bat_carry_is_slower",
     "bat_carry_jump_drops_off", "bat_carry_landing_drops_off", "bat_carry_a_hit_drops_off",
     "bat_carry_form_change_drops_off", "camera_limit_follows_the_guest", "edges_both_through_one_door_into_enemies",
+    "bat_carry_rider_hangs_in_the_bats_game", "bat_carry_through_a_door_still_a_bat",  # +
     "teleport_partner_busy", "respawn_at_partner", "inverted_teleport_into", "walk_entrance_rooms",  # +
     "loader_in_game",  # +
     # rooms
