@@ -24,7 +24,7 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | M9 | Android | Done | `M9-android` |
 | M10 | Thor dual screen: moved to the backlog; widescreen is M19 (D111) | Moved | `M10-widescreen-spike` |
 | M11 | Castles: drop-in saves, solo, shared level | Done | `M11-castles` |
-| M12 | Coverage, then v1.0 | Beta released. The rest: #46 | `M12-coverage`, `M12-v1-release`, `M12b-offhand-like-alucard` |
+| M12 | Coverage, then v1.0 | 1.0.0 drafted (2026-11-11) for Tucker to publish: #46 | `M12-coverage`, `M12-v1-release`, `M12b-offhand-like-alucard` |
 | M13 | The partner as a real second player | Done | `M13-partner-player` |
 | M14 | Connect the way Slippi does (cut down, D123) | Done | `M14-relay` |
 | M15 | PvP, the host's option | Done | `M15-pvp` |
