@@ -69,6 +69,9 @@ A **joint save** (`link/jointsave.py`) holds both games' memory cards in one fil
 ## Distribution: no game data, ever
 Players bring their own disc (USA, SLUS-00067). The release ships a **BPS patch** of only our changes (`patcher/`), which the launcher applies to the player's image (D9, D71). The patch must never carry retail data: `patcher/test_patcher.py` checks every stored 64-byte run against every retail sector, and checks that no sector checksums are stored (D90). The test castles shipped in the app are save files with the memory card's icon header blanked: progress only (D136).
 
+## Widescreen
+An optional wider view, off by default (D201, `design/M19-widescreen.md`): 16:9 or 21:9, the game's pixels unchanged, only its 207 stage lines shown so the picture fills the screen. Our core keeps the wider framebuffers in VRAM's second bank (GP1 0x2F and 0x2E), so no stage texture moves. The game's camera is untouched: the module slides a wider window over its 256 view, keeps the HUD and dialogue on the screen, draws the tilemap wide from its own pool, and widens each stage's entity windows for the wider of the two players' views. Each player's shape travels in presence.
+
 ## The randomizer
 **Mod presets (D197).** The main menu's Mods makes *mod presets*, game discs the player names; a new castle picks one. A randomized castle is rolled on the player's PC by the randomizer and Node.js, downloaded on first use (`launcher/randomizer_tool.py`).
 

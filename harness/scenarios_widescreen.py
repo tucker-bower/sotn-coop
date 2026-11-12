@@ -37,3 +37,31 @@ def widescreen_shape_option(run):
     mb.set_options(0)
     run.step(10)
     run.expect(e.screenshot().size == (256, 240), "4:3 again in play: the game's own view", size=e.screenshot().size)
+
+
+@scenario(start="nz0", disc=COOP_DISC)
+def widescreen_fade(run):
+    """The screen fade (going to another stage) darkens the whole wide view, not only the game's
+    256 in its middle: while the middle is dark, the edges are too."""
+    from PIL import ImageStat
+    from link.mailbox import CMD_ARRIVE
+    e = run.emu
+    mb = Mailbox(HarnessAdapter(e), symbols()["g_CoopLink"])
+    mb.set_options(2 << OPT_WIDE_SHIFT)
+    run.step(10)
+    room, worst = e.snapshot()["room"], None
+    mb.command(CMD_ARRIVE, 0x00, 0, 128, 136)  # the Marble Gallery
+    for i in range(900):
+        run.step(1)
+        img = e.screenshot()
+        if img.size[0] != WIDE_WIDTHS[2]:
+            continue
+        w = img.size[0]
+        middle = ImageStat.Stat(img.crop((w // 2 - 64, 0, w // 2 + 64, img.size[1])).convert("L")).mean[0]
+        edges = max(ImageStat.Stat(img.crop(box).convert("L")).mean[0] for box in ((0, 0, 40, img.size[1]), (w - 40, 0, w, img.size[1])))
+        if middle < 4:  # faded out
+            worst = edges if worst is None else max(worst, edges)
+        if e.snapshot()["room"] != room and worst is not None:
+            break
+    run.expect(worst is not None, "a room change faded the view")
+    run.expect(worst < 8, "the edges faded with the middle", brightest_edge=worst)

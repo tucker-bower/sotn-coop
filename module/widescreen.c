@@ -78,19 +78,49 @@ static s32 Slide(s32 w) {
 // belong to the screen, not the castle: an offset command at the head of that layer of the ordering
 // table takes the slide back off for them.
 #define HUD_LAYER 0x1EE
-static DR_OFFSET s_HudOffset[2];
+// Over the HUD, from 0x1F1: dialogue, message boxes, the screen fade (0x1F8-0x1FF). They belong to
+// the screen too, but in its middle: drawn centred on the wide view.
+#define CENTRED_LAYER 0x1F1
+static DR_OFFSET s_LayerOffset[2][2];
+static s32 s_Wide; // the view's width this frame, while wide
+
+static void Offset(DR_OFFSET* p, u32* slot, s32 x, s32 y) {
+    p->code[0] = 0xE5000000 | ((y & 0x7FF) << 11) | (x & 0x7FF);
+    p->tag = (1u << 24) | (*slot & 0xFFFFFF);
+    *slot = (*slot & 0xFF000000) | ((u32)p & 0xFFFFFF);
+}
 
 void WidescreenAfterPrims(void) {
     DRAWENV* d = &g_CurrentBuffer->draw;
-    DR_OFFSET* p = &s_HudOffset[g_CurrentBuffer == &g_GpuBuffers[1]];
-    u32* slot = (u32*)&g_CurrentBuffer->ot[HUD_LAYER];
+    DR_OFFSET* p = s_LayerOffset[g_CurrentBuffer == &g_GpuBuffers[1]];
 
-    if (!g_CoopWideSlide) {
+    if (!s_Wide) {
         return;
     }
-    p->code[0] = 0xE5000000 | ((d->ofs[1] & 0x7FF) << 11) | (d->clip.x & 0x7FF);
-    p->tag = (1u << 24) | (*slot & 0xFFFFFF);
-    *slot = (*slot & 0xFF000000) | ((u32)p & 0xFFFFFF);
+    Offset(&p[0], (u32*)&g_CurrentBuffer->ot[HUD_LAYER], d->clip.x, d->ofs[1]);
+    Offset(&p[1], (u32*)&g_CurrentBuffer->ot[CENTRED_LAYER], d->clip.x + (s_Wide - DISP_STAGE_W) / 2, d->ofs[1]);
+}
+
+// The screen fade (InitFade, src/dra/624DC.c): four tiles, two side by side, 128 wide each, at the
+// fade's layer. While wide they're as wide as the view (drawn centred, as above).
+#define FADE_PRIM (*(s32*)0x8013799C) // fade.fadePrim
+#define FADE_HALF 128
+
+// w: the view's width, or 0 to put them back (only if they're still as we left them: was).
+static void FadeWidth(s32 w, s32 was) {
+    Primitive* prim;
+    s32 i, half = w ? w / 2 : FADE_HALF, left = w ? -(w - DISP_STAGE_W) / 2 : 0;
+
+    if (FADE_PRIM <= 0 || FADE_PRIM >= MAX_PRIM_COUNT) {
+        return;
+    }
+    for (i = 0, prim = &g_PrimBuf[FADE_PRIM]; prim && i < 4; i++, prim = prim->next) {
+        if (prim->type != PRIM_TILE || prim->v0 != 0xF0 || (!w && prim->u0 != was / 2)) {
+            return; // not the fade's, or the game has set them since (the menu's SetFadeWidth): leave them
+        }
+        prim->x0 = left + half * (i & 1);
+        prim->u0 = half;
+    }
 }
 
 #define STAGE_CLIP_Y 0x14 // func_800E34DC (src/dra/42398.c): the stage view is drawn in lines 20-226
@@ -134,7 +164,10 @@ void WidescreenFrame(void) {
         }
         GP1(GP1_COOP_WIDE);
         TilemapCall(false);
-        g_CoopWideSlide = 0;
+        if (s_Wide) {
+            FadeWidth(0, s_Wide);
+        }
+        g_CoopWideSlide = s_Wide = 0;
         return;
     }
     s_Columns = (w + 15) / 16 + 2;
@@ -150,6 +183,7 @@ void WidescreenFrame(void) {
         p->disp.x = (1 - i) * w; // shown while the other is drawn
         p->disp.w = w;
     }
-    s_Applied = w;
+    s_Applied = s_Wide = w;
+    FadeWidth(w, 0);
     GP1(GP1_COOP_WIDE | w);
 }
