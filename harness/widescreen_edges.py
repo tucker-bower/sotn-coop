@@ -27,7 +27,7 @@ from emu import Emu
 from module import COOP_DISC, symbols
 
 STARTS = TOOLS["out"].parent / "fixtures" / "debug-starts"
-ENTITY, FIRST, LAST = 0xBC, 64, 192  # g_Entities: size, STAGE_ENTITY_START, TOTAL_ENTITY_COUNT
+ENTITY, FIRST, LAST = 0xBC, 64, 256  # g_Entities: size, STAGE_ENTITY_START, TOTAL_ENTITY_COUNT
 INSIDE = 24     # px from the view's edges: "well inside"
 FROZEN = 90     # frames unchanged
 DEAD = 0x100    # FLAG_DEAD

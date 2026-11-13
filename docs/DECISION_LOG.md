@@ -969,3 +969,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D203: 2.0 is the inverted castle** (2026-11-12, Tucker; replaces D114's "v1.1")
 - 1.0 is the first castle with any two characters. 2.0 is the inverted castle with any pairing of characters, every ending working for both players, and no soft locks (#47). The work toward it is resilience first: tests that fail, then fixes.
+
+**D204: Richter's chained backflips go the way the player holds** (Tucker, 2026-11-12, #198, #199; the details are agent-default)
+- With Soul of Bat, each backflip after the first turns his back to the held direction, so it carries him that way and he can climb toward a ledge on either side (the Gravity Boots' way in). With nothing held he flips backwards, as ever. The first backflip still needs a standing jump, as in his own game: a jump with a direction held is a forward jump, and Cross again is the Leap Stone's double jump.
+- Options considered: facing the held direction (the flip then goes away from it: backwards to what the player asked for); steering through the whole flip (changes his air control, which no relic gives him).

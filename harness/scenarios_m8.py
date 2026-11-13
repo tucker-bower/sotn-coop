@@ -1157,3 +1157,43 @@ def richter_blade_dash_damage(run):
             run.expect(whip == want, f"{what}: the whip is 20% of 32 plus STR", whip=whip, str=strength)
             run.expect(dash == want * 80 // 32, f"{what}: Blade Dash is 80/32 of that", dash=dash, want=want * 80 // 32)
 
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def richter_backflips_turn(run):
+    """#198 and #199: with Soul of Bat, Richter's chained backflips go the way the player holds,
+    so he climbs toward a ledge on either side (the Gravity Boots' way in). From a standing jump
+    and its backflip, more backflips holding right take him up and right, and holding left up and
+    left, from either facing; with nothing held, each goes backwards, as ever."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_RICHTER)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 700, 200)  # room to jump: the zombie hall
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    run.step(90)
+    for r in (LEAP_STONE, SOUL_OF_BAT):
+        e.write(STATUS, RELIC_ON, "<B", r)
+    start = e.save_state()
+    got = {}
+    for facing in ("left", "right"):
+        for held in ("left", "right", ""):
+            e.load_state(start)
+            run.step(2, facing)
+            run.step(10)
+            x0, y0 = e.snapshot()["world_x"], e.snapshot()["world_y"]
+            top = 0
+            for i in range(30):  # a standing jump and its backflip, then again near the top of each
+                hold = held if i >= 2 else ""
+                run.step(2, "+".join(p for p in (hold, "cross") if p))
+                run.step(2, hold)
+                top = max(top, y0 - e.snapshot()["world_y"])
+            got[f"{facing}/{held or '-'}"] = (e.snapshot()["world_x"] - x0, top)
+            run.step(60)
+    for key, (dx, top) in got.items():
+        facing, held = key.split("/")
+        if held == "-":
+            held, what = ("right" if facing == "left" else "left"), "nothing held: backwards, as ever"
+        else:
+            what = f"holding {held}: the backflips take him {held}"
+        run.expect(top > 80 and (dx > 48 if held == "right" else dx < -48), f"facing {facing}, {what}, and up",
+                   dx=dx, rise=top, all=got)

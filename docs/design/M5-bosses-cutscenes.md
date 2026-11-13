@@ -12,7 +12,7 @@
 ## Part 1: noticing a boss fight
 - Boss rooms are listed in DRA's `g_RoomBossTeleports`, right after the stage teleport table. A boss fight runs its own overlay (`BO*`/`RBO*`) once you're inside.
 - Presence gains a **BOSS** flag: the stage is a boss overlay, or the room is a boss-teleport room.
-- **Pull-in:** when the partner sees BOSS, it Arrives at the boss-entering player's spot (M3's Arrive). The guest of a shared room becomes the guest of the boss room.
+- **Pull-in:** when the partner sees BOSS, it Arrives at the boss-entering player's spot (M3's Arrive). The guest of a shared room becomes the guest of the boss room. A player already in a boss fight of their own is never pulled. A partner shut outside an arena's closed door (in the same room, a wall between them and the boss but not between the other player and it, for 5 s) is put on the other player's ground spot (#248, `boss_trio_partner_locked_out`).
 - **Not available:** inside a boss room, ✕ on the map can't leave, and the partner can't be teleported elsewhere.
 
 ## Part 2: one boss, both players

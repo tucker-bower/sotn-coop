@@ -394,4 +394,24 @@ void BossUpdate(void) {
 
 bool BossHere(void) { return s_BossHere; }
 
+const Entity* BossNearest(s32 x) {
+    const Entity* best = NULL;
+    const Entity* e;
+    s32 i, d, bestD = 0x7FFFFFFF;
+
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        e = &g_Entities[STAGE_ENTITY_START + i];
+        if (e->entityId && e->pfnUpdate && IsBossEnemy(e->enemyId) && e->hitPoints > 0 &&
+            !(e->flags & FLAG_DEAD)) {
+            d = e->posX.i.hi - x;
+            d = d < 0 ? -d : d;
+            if (d < bestD) {
+                bestD = d;
+                best = e;
+            }
+        }
+    }
+    return best;
+}
+
 u16 BossSwitches(void) { return s_Switches; }

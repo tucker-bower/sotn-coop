@@ -4,6 +4,7 @@
 void BossUpdate(void); // per frame, before the game's update
 bool BossHere(void);   // a living boss is in this room
 bool IsBossEnemy(u16 enemyId);
+const Entity* BossNearest(s32 x); // the living boss nearest screen x, or NULL
 u16 BossSwitches(void); // aggro target switches so far
 PfnEntityUpdate BossRealUpdate(const Entity* e); // the boss's own update, under the aggro wrapper
 void BossKilled(u16 enemyId, u32 ending); // EV_KILLED: the partner's boss died (ending: its game entered the ending)

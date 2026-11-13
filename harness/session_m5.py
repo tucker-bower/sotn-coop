@@ -461,35 +461,45 @@ BO6, BO6_ARRIVE = 0x18, (0, 128, 179)  # launcher/bossstarts.py: Richter's arena
 PAUSE_ENEMIES = 0x80097400  # g_unkGraphicsStruct.pauseEnemies: his scenes hold him with it
 
 
-def arena_fling(run, g, x, from_left):
+def arena_fling(run, g, x, from_left, before=()):
     """g, at x in its arena, hit from that side, takes a hit like the possessed Richter's tackle
-    (DAMAGEKIND_5: the fling). Returns (it was flung, frames until it was out of the hit, x then)."""
-    g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)                       # HP: the hit can't kill
+    (DAMAGEKIND_5: the fling), after playing the pads `before` (a jump: hit in the air). Returns
+    (it was flung, frames until it was out of the hit, x then)."""
+    def hold():  # in both games: the boss holds still, harmless, and nobody's HP runs out
+        for h in (run.s.a, run.s.b):
+            h.write(PAUSE_ENEMIES, 1)
+            h.write("g_Status", h.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            raw = h.read_bytes("g_Entities", 0xBC * 256)
+            for slot in range(64, 256):  # hitboxState: only the test's hit lands
+                if raw[slot * 0xBC + 0x3C] or raw[slot * 0xBC + 0x3D]:
+                    h.write(h.entity(slot), 0, "<H", 0x3C)
+    hold()
     p0 = g.entity(0)
-    g.write(PAUSE_ENEMIES, 1)  # the boss holds still, and a hit of his already under way ends first:
+    hold()  # the boss holds still, and a hit of his already under way ends first:
     for _ in range(300):       # (issue 248: B was still in his tackle's hit, which isn't the fling)
         if g.read(p0, "<H", 0x2C) == 0:  # standing
             break
         run.step(1)
-        g.write(PAUSE_ENEMIES, 1)
-        g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+        hold()
     g.write(p0, x, "<h", 2)
     g.write("g_PlayerX", x + g.read("g_Tilemap", "<h", 0xA), "<i")
     g.write(p0, 1, "<H", 0x14)
+    for pad in before:
+        run.step(1, (pad, "") if g is run.s.a else ("", pad))
+        hold()
     # the hit's direction comes from the last hitter (RicStepHit's func_80159C04: PLAYER.unkB8), his
     # Richter: he stands on the side it comes from, as for his tackle
     hitter = g.read(p0, "<I", 0xB8)
-    if 0x80000000 <= hitter < 0x80200000:
-        g.write(hitter, x + (-100 if from_left else 100), "<h", 2)  # well clear of the player
-    g.write(PAUSE_ENEMIES, 1)                                    # the boss holds still: only this hit lands
+    if 0x80000000 <= hitter < 0x80200000:  # well clear of the player
+        g.write(hitter, g.read(p0, "<h", 2) + (-100 if from_left else 100), "<h", 2)
+    hold()                                    # the boss holds still: only this hit lands
     g.write_bytes("g_Player", bytes(32), 0x330)                  # g_Player.timers: no i-frames
     g.write(p0, 10, "<h", 0x3E)                                  # PLAYER.hitPoints
     g.write(p0, FLING_HIT, "<H", 0x44)                           # PLAYER.hitParams
     flung, seen = None, []
     for t in range(600):
         run.step(1)
-        g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-        g.write(PAUSE_ENEMIES, 1)
+        hold()
         step, step_s = g.read(p0, "<H", 0x2C), g.read(p0, "<H", 0x2E)
         if step == HIT_STEP:
             g.write(p0, 0, "<H", 0x44)  # taken: hit detection would clear it, but it's paused
@@ -499,9 +509,9 @@ def arena_fling(run, g, x, from_left):
         if step == HIT_STEP and step_s in FLUNG:
             flung = t
         elif flung is not None and step != HIT_STEP:
-            g.write(PAUSE_ENEMIES, 0)
+            [h.write(PAUSE_ENEMIES, 0) for h in (run.s.a, run.s.b)]
             return True, t, g.read(p0, "<h", 2)
-    g.write(PAUSE_ENEMIES, 0)
+    [h.write(PAUSE_ENEMIES, 0) for h in (run.s.a, run.s.b)]
     return flung is not None, None, g.read(p0, "<h", 2)
 
 
@@ -552,3 +562,221 @@ def _arena_test(name, characters, full):
 
 _arena_test("boss_arena_edge_richter_and_maria", (1, 2), False)
 _arena_test("boss_arena_edge_alucard_and_richter", (0, 1), True)
+_arena_test("boss_arena_edge_saturn_maria_and_saturn_richter", (4, 5), False)  # #259: their own player code
+
+
+# --- #259: in the real fight, the possessed Richter's Blade Dash knocked a player back for good ----
+LONGEST_HIT = 240  # frames: a fling crosses the arena in well under this
+
+
+def knockback_lands(run, wide=0, mode="corners"):
+    """Both players in the possessed Richter's fight for some 100 s of his attacks, never dying: in
+    mode "corners" each stands in a corner of his arena (where the report's player was stuck), in
+    "fight" each walks at him and attacks. Each time either is hit, they're out of the hit within
+    LONGEST_HIT frames."""
+    from session_m12 import SceneWatch
+    from link.mailbox import OPT_WIDE_SHIFT
+    a, b = run.s.a, run.s.b
+    if wide:
+        for g in (a, b):
+            g.host("set_player", options=wide << OPT_WIDE_SHIFT)
+    w = SceneWatch(run)
+    boss = lambda g: g.mailbox("self_presence").flags & BOSS
+    w.until(lambda: boss(a), 4000, lambda i: ("left" + ("+cross" if i % 90 < 12 else ""),
+                                              "left" if b.read("g_CutsceneHasControl") else ""))
+    run.expect(boss(a), "A walks into Richter's arena", at=a.snapshot())
+    w.until(lambda: boss(b), 3000, ("", "left"))
+    run.expect(boss(b), "B is pulled into the fight", b=b.snapshot())
+    hit, longest, hits, trail = [0, 0], [(0, None), (0, None)], [0, 0], [[], []]
+    for t in range(6000):
+        free = not a.read("g_CutsceneHasControl")
+        # A to the left corner, B to the right, then they stand there (a jump now and then)
+        pads = [("left" if t % 240 < 60 else "") + ("+cross" if t % 400 == 300 else ""),
+                ("right" if t % 240 < 60 else "") + ("+cross" if t % 400 == 100 else "")]
+        if mode == "fight":  # each walks at him and attacks, jumping now and then, as a player would
+            pads = []
+            for k, g in enumerate((a, b)):
+                foes = [g.read(g.entity(s_), "<h", 2) for s_ in range(64, 96)
+                        if g.read(g.entity(s_), "<I", 0x28) and g.read(g.entity(s_), "<h", 0x3E) > 0]
+                x = g.read(g.entity(0), "<h", 2)
+                d = ("left" if foes and min(foes, key=lambda f: abs(f - x)) < x else "right") if foes else ""
+                d = d if not foes or abs(min(foes, key=lambda f: abs(f - x)) - x) > 40 else ""
+                pads.append("+".join(p for p in (d, "square" if (t + 7 * k) % 16 < 2 else "",
+                                                   "cross" if (t + 50 * k) % 150 < 10 else "") if p))
+        run.step(1, (pads[0].strip("+"), pads[1].strip("+")))
+        for k, g in enumerate((a, b)):
+            if t % 20 == 0:
+                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+            p0 = g.entity(0)
+            step, step_s, x = g.read(p0, "<H", 0x2C), g.read(p0, "<H", 0x2E), g.read(p0, "<h", 2)
+            if not trail[k] or trail[k][-1][1:3] != (step, step_s):
+                trail[k] = (trail[k] + [(t, step, step_s, x, g.read(p0, "<h", 6))])[-12:]
+            if step == HIT_STEP and free:
+                hits[k] += hit[k] == 0
+                hit[k] += 1
+                if hit[k] > longest[k][0]:
+                    longest[k] = (hit[k], list(trail[k]))
+            else:
+                hit[k] = 0
+        if max(h for h, _ in longest) > LONGEST_HIT:
+            break
+    run.capture()
+    run.expect(sum(hits) > 0, "his attacks hit the players", hits=hits)
+    for k, who in enumerate("AB"):
+        run.expect(longest[k][0] <= LONGEST_HIT, f"{who} is out of every hit within {LONGEST_HIT} frames",
+                   hits=hits[k], longest=longest[k][0], trail=longest[k][1], at=(a, b)[k].snapshot())
+
+
+def _knockback_test(name, characters, wide, full, mode="corners"):
+    from session_m12 import STARTS as BOSS_STARTS
+
+    def test(run):
+        knockback_lands(run, wide, mode)
+    test.__name__ = name
+    test.__doc__ = ("Issue 259 (1.0.0): in the Castle Keep, the possessed Richter's Blade Dash knocked a player "
+                    "back forever, stuck in a corner. Two players in his corners through 100 s of his attacks: "
+                    "every hit ends.")
+    start = str(BOSS_STARTS / "Boss - Richter.state")
+    session_scenario(starts=(start, start), characters=characters, full=full)(test)
+
+
+_knockback_test("boss_richter_knockback_lands_alucard_and_richter", (0, 1), 0, False)
+_knockback_test("boss_richter_knockback_lands_richter_and_maria", (1, 2), 0, True)
+_knockback_test("boss_richter_knockback_lands_alucard_and_alucard", (0, 0), 0, True)
+_knockback_test("boss_richter_knockback_lands_alucard_and_maria_21_9", (0, 2), 2, True)
+for _c in ((0, 0), (1, 1), (2, 2), (1, 0), (2, 1), (0, 2)):  # players who fight him, as a player would
+    for _w in (0, 2):
+        _n = "_and_".join(("alucard", "richter", "maria")[c] for c in _c) + ("_21_9" if _w else "")
+        _knockback_test(f"boss_richter_knockback_fighting_{_n}", _c, _w, True, "fight")
+
+
+
+# How a player is when his tackle lands: standing, crouched, at points of a jump, near either edge
+FLING_POSES = {"standing": (), "crouched": ("down",) * 8, "jump rising": ("cross",) * 6,
+               "jump top": ("cross",) * 16 + ("",) * 8, "jump falling": ("cross",) * 16 + ("",) * 22,
+               "walking": ("right",) * 6, "attacking": ("square",) * 2 + ("",) * 4}
+
+
+def arena_fling_poses(run):
+    """#259: each player, in each pose, near each edge of Richter's arena and in its middle, flung
+    toward and away from the edge: each gets up."""
+    from link.mailbox import CMD_ARRIVE
+    from session_m15 import load_characters
+    a, b = run.s.a, run.s.b
+    load_characters(run)
+    for g in (a, b):
+        g.mailbox("command", CMD_ARRIVE, BO6, *BO6_ARRIVE)
+    in_arena = lambda g: (lambda p: p.stage == BO6 and p.flags & IN_PLAY and not p.flags & BUSY)(
+        g.mailbox("self_presence"))
+    for t in range(6000):
+        run.step(1, p1=("left", "left"))
+        for g in (a, b):
+            g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
+        if all(in_arena(g) and not g.read("g_CutsceneHasControl") for g in (a, b)):
+            break
+    run.expect(all(in_arena(g) for g in (a, b)), "both are in Richter's arena, in play")
+    run.step(120)
+    for h in (a, b):
+        run.expect(h.read(h.entity(0), "<H", 0x2C) != 16, "alive in the arena", at=h.snapshot())
+    bad, tried, flings = [], 0, 0
+    for g, who in ((a, "A"), (b, "B")):
+        for pose, before in FLING_POSES.items():
+            for x in (12, 128, 244):
+                for from_left in (True, False):
+                    flung, frames, x_after = arena_fling(run, g, x, from_left, before)
+                    tried, flings = tried + 1, flings + bool(flung)
+                    # (a hit already under way, or a character whose code takes it as a plain
+                    # knockback, isn't a fling: counted, not a failure)
+                    if flung and (frames is None or not 8 <= x_after <= 0xF8):
+                        bad.append((who, pose, x, "from left" if from_left else "from right", flung, frames,
+                                    x_after, arena_fling.seen[-4:]))
+                    for _ in range(30):  # settle, the boss still held and both kept alive
+                        run.step(1)
+                        for h in (a, b):
+                            h.write(PAUSE_ENEMIES, 1)
+                            h.write("g_Status", h.read("g_Status", "<i", 0x240), "<i", 0x23C)
+    run.expect(flings >= tried * 3 // 4, "most of the hits fling", flings=flings, tried=tried)
+    run.expect(not bad, "every fling ends with the player up, inside the arena", count=len(bad), bad=bad[:8])
+
+
+def _poses_test(name, characters, full):
+    def test(run):
+        arena_fling_poses(run)
+    test.__name__ = name
+    test.__doc__ = ("Issue 259: the possessed Richter's tackle and Blade Dash fling a player until a wall. A "
+                    "player hit in the air, crouched, walking or attacking, near either edge or in the middle, "
+                    "flung either way, gets up inside the arena.")
+    session_scenario(starts=("entrance", "entrance"), characters=characters, full=full)(test)
+
+
+_poses_test("boss_arena_fling_poses_alucard_and_richter", (0, 1), True)
+_poses_test("boss_arena_fling_poses_maria_and_alucard", (2, 0), True)
+_poses_test("boss_arena_fling_poses_saturn_maria_and_saturn_richter", (4, 5), True)
+
+
+# --- #259 again: pinned in a corner. He walks onto a player in a corner and stands there (his own
+# AI: alone too), hitting them each time their invincibility ends. A player gets out from under him.
+PINNED_NEAR = 20     # px: he's on the player
+ESCAPE_FRAMES = 600  # to get 64 px out of the corner
+
+
+def corner_escape(run, who):
+    """Both in the possessed Richter's fight, `who` (0: A, 1: B) in the left corner and the other in
+    the right, until he stands on `who` there and hits them; then `who` plays as someone escaping
+    would: away from the wall, jumping whenever they can. They're out within ESCAPE_FRAMES."""
+    from session_m12 import SceneWatch
+    a, b = run.s.a, run.s.b
+    g = (a, b)[who]
+    w = SceneWatch(run)
+    boss = lambda h: h.mailbox("self_presence").flags & BOSS
+    w.until(lambda: boss(a), 4000, lambda i: ("left" + ("+cross" if i % 90 < 12 else ""),
+                                              "left" if b.read("g_CutsceneHasControl") else ""))
+    w.until(lambda: boss(b), 3000, ("", "left"))
+    run.expect(boss(a) and boss(b), "both are in Richter's fight", a=a.snapshot(), b=b.snapshot())
+    p0, rich = g.entity(0), g.entity(64)
+    pinned = None
+    for t in range(9000):
+        sides = ["left", "right"] if who == 0 else ["right", "left"]
+        run.step(1, tuple(sd if t % 240 < 60 else "" for sd in sides))
+        for h in (a, b):
+            if t % 20 == 0:
+                h.write("g_Status", h.read("g_Status", "<i", 0x240), "<i", 0x23C)
+        x, bx = g.read(p0, "<h", 2), g.read(rich, "<h", 2)
+        if x < 24 and abs(bx - x) < PINNED_NEAR and g.read(p0, "<H", 0x2C) == HIT_STEP:
+            pinned = t
+            break
+    run.expect(pinned is not None, "he pins the player in the corner", at=g.snapshot())
+    pads, trail, out = ["", ""], [], None
+    for t in range(ESCAPE_FRAMES):
+        step = g.read(p0, "<H", 0x2C)
+        pads[who] = "right" + ("+cross" if t % 24 < 12 else "")
+        run.step(1, tuple(pads))
+        for h in (a, b):
+            if t % 20 == 0:
+                h.write("g_Status", h.read("g_Status", "<i", 0x240), "<i", 0x23C)
+        x, y = g.read(p0, "<h", 2), g.read(p0, "<h", 6)
+        if not trail or trail[-1][1:3] != (step, g.read(p0, "<H", 0x2E)):
+            trail = (trail + [(t, step, g.read(p0, "<H", 0x2E), x, y, g.read(rich, "<h", 2), g.read(rich, "<H", 0x2C))])[-20:]
+        if x > 64:
+            out = t
+            break
+    run.capture()
+    run.expect(out is not None, f"out of the corner within {ESCAPE_FRAMES} frames ({out})", trail=trail, at=g.snapshot())
+
+
+def _escape_test(name, characters, who, full):
+    from session_m12 import STARTS as BOSS_STARTS
+
+    def test(run):
+        corner_escape(run, who)
+    test.__name__ = name
+    test.__doc__ = ("Issue 259: the possessed Richter stands on a player in a corner and hits them as soon as "
+                    "their invincibility ends. A player escaping (away, jumping) gets out of the corner.")
+    start = str(BOSS_STARTS / "Boss - Richter.state")
+    session_scenario(starts=(start, start), characters=characters, full=full)(test)
+
+
+_escape_test("boss_richter_corner_escape_alucard", (0, 1), 0, False)
+_escape_test("boss_richter_corner_escape_richter", (1, 0), 0, False)
+_escape_test("boss_richter_corner_escape_maria", (2, 0), 0, True)
+_escape_test("boss_richter_corner_escape_richter_partner", (0, 1), 1, True)
