@@ -1793,16 +1793,9 @@ class Launcher:
             pygame.time.wait(16)
 
     def controls_line(self, char, shortcuts):
-        """A character's controls, in a line for the lobby."""
-        if not shortcuts:
-            return "Shortcuts off ({t} / S)"
-        if char == 0:
-            return "Spells on the right stick"
-        if char in (3, SATURN_MARIA):
-            return "Her own controls"
-        if char == ULTIMATE_RICHTER:
-            return "His own controls"
-        return "L2 high jump, R2 dash"
+        """The lobby's line under a character: only that the player turned shortcuts off. No list of
+        each character's shortcuts: they're optional, and read as if they weren't (Tucker, 1.0.0)."""
+        return "" if shortcuts else "Shortcuts off ({t} / S)"
 
     def draw_lobby(self, slots, joined, ready, char, names, partner, online, subtitle):
         """A frame of the lobby, in the game's style (ui/screens/lobby.py)."""
@@ -1863,18 +1856,8 @@ class Launcher:
             for k, line in enumerate(NEEDS[char] + ("Cross / A: add it",)):
                 t = ui.small.render(line, True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
-        if playable:
-            if not shortcuts:
-                line = "Shortcuts off (Triangle / Y)"
-            elif char == 0:
-                line = "Spells on the right stick"
-            elif char in (3, SATURN_MARIA):
-                line = "Her own controls"
-            elif char == ULTIMATE_RICHTER:
-                line = "His own controls"
-            else:
-                line = "L2 high jump · R2 blade dash"
-            t = ui.small.render(line, True, INK if shortcuts else DIM)
+        if playable and not shortcuts:  # (no list of the character's shortcuts: they're optional)
+            t = ui.small.render("Shortcuts off (Triangle / Y)", True, DIM)
             s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 162)))
         if ready:
             t = ui.big.render("Ready!", True, OK_GREEN)

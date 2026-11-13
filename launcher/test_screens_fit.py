@@ -150,7 +150,7 @@ def main():
         card = {"title": "Player 2", "joined": True, "device": "DualSense Wireless Controller", "ready": False, "character": 5,
                 "name": "Richter", "version": "Saturn", "versions": 2, "neighbours": [(0, True), (2, False)],
                 "playable": False, "note": "His Saturn coat, every move",
-                "needs": "Attach your Saturn disc (Japan) to unlock him.", "controls": "L2 high jump, R2 dash", "shortcuts": True}
+                "needs": "Attach your Saturn disc (Japan) to unlock him.", "controls": "Shortcuts off ({t} / S)", "shortcuts": False}
         ready = dict(card, title="Player 1", character=4, name="Maria", version="Saturn", playable=True, ready=True, note="Her Saturn moves")
         for name, cards, partner in (("lobby: couch", [ready, card], None),
                                      ("lobby: host", [ready], (["It's on your clipboard:", "send it to them.", "",

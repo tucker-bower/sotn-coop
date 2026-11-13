@@ -50,6 +50,8 @@ def main():
         check(app.Launcher.options(f, 1) & stick == 0 and app.Launcher.options(f, 0) & stick == stick
               and paths.load_settings().get("stick_spells") == [True, False],
               "player 2 turns theirs off: their game gets none, player 1's is unchanged, and it's saved")
+        check(all(app.Launcher.controls_line(f, c, True) == "" for c in range(6)) and app.Launcher.controls_line(f, 0, False),
+              "character select lists no character's shortcuts (they're optional); it only says when they're off")
     import inspect
     import gameview
     src = inspect.getsource(gameview.GameView.set_rules)
