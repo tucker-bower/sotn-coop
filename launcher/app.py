@@ -1543,14 +1543,15 @@ class Launcher:
             paths.open_url(release.page)
             return
         try:
-            path = self.ui_wait(f"Downloading version {release.name}", "From the release on GitHub.",
-                                lambda progress: update.download(release, paths.data_dir() / "updates", progress))
+            from ui.screens.progress import progress
+            # the prompt's style (plain before the disc's art is read), and then straight to the installer
+            path = progress(self.plain_menus(), f"Downloading version {release.name}",
+                            "Then it restarts by itself. If Windows asks, choose Run anyway.",
+                            lambda report: update.download(release, paths.data_dir() / "updates", report))
         except OSError as e:
             self.ui.message("The update didn't download", str(e))
             return
-        self.ui.message("Updating", "SOTN Co-op closes now, updates, and starts again by itself.\n"
-                        "Windows may ask whether to let the installer run: choose Yes or Run anyway.", button="Update")
-        update.install(path)
+        update.install(path)  # at once: Update now was the player's yes
         raise SystemExit
 
     def check_updates(self):
@@ -2329,9 +2330,9 @@ class Launcher:
             from ui.screens.text_entry import text_entry
             pad, keys = ("{x} done   {s} paste   {o} back", "Type   Ctrl+V: paste   Enter: done   Esc: back") if paste else ("", "")
             return text_entry(self.menus, heading, subtitle, initial, paste, limit, pad, keys)
-        text = initial
-        pygame.key.start_text_input()
-        try:
+        from ui.textline import TextLine, draw_caret, typing
+        line = TextLine(initial, limit)
+        with typing():
             while True:
                 for ev in pygame.event.get():
                     if self.display.handle(ev):
@@ -2340,40 +2341,35 @@ class Launcher:
                         raise SystemExit
                     if ev.type == MENU_EVENT and self.action(ev.action) is False:
                         raise Navigate(ev.action)
+                    if line.handle(ev):
+                        continue
                     if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
-                            return text.strip()
+                            return line.text.strip()
                         if ev.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                             return None
-                        if ev.key == pygame.K_BACKSPACE:
-                            text = text[:-1]
-                        elif ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL) and paste:
-                            text = paste()[:limit] or text
-                    elif ev.type == pygame.TEXTINPUT and len(text) < limit:
-                        if not (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                            text += ev.text[:limit - len(text)]
+                        if ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL) and paste:
+                            line.set(paste() or line.text)
                     elif ev.type == pygame.CONTROLLERBUTTONDOWN:
                         if ev.button == pygame.CONTROLLER_BUTTON_B:
                             return None
                         if ev.button == pygame.CONTROLLER_BUTTON_X and paste:
-                            text = paste()[:limit] or text
+                            line.set(paste() or line.text)
                         elif ev.button in (pygame.CONTROLLER_BUTTON_A, pygame.CONTROLLER_BUTTON_START):
-                            if not text and paste:
-                                text = paste()[:limit]
+                            if not line.text and paste:
+                                line.set(paste())
                             else:
-                                return text.strip()
+                                return line.text.strip()
                 self.ui.frame(heading, subtitle)
                 box = pygame.Rect(SIZE[0] // 2 - 260, 230, 520, 52)
                 pygame.draw.rect(self.screen, (30, 18, 26), box, border_radius=6)
                 pygame.draw.rect(self.screen, GOLD, box, 2, border_radius=6)
-                shown = text + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
-                t = self.ui.big.render(shown, True, INK)
-                self.screen.blit(t, (box.x + 16, box.y + 10))
+                self.screen.blit(self.ui.big.render(line.text, True, INK), (box.x + 16, box.y + 10))
+                draw_caret(self.screen, box.x + 16 + self.ui.big.size(line.text[:line.caret])[0], box.y + 12,
+                           self.ui.big.get_height() - 4, INK)
                 self.ui.footer(footer)
                 self.ui.flip()
                 pygame.time.wait(16)
-        finally:
-            pygame.key.stop_text_input()
 
     def online_menu(self):
         if self.menus:  # Host or Join, in the game's style
