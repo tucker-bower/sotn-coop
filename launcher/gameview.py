@@ -501,7 +501,7 @@ class GameView:
 
     # --- overlays: drawn on the canvas, over the paused games
 
-    def overlay(self, title, lines, items=(), sel=0, box_text=None):
+    def overlay(self, title, lines, items=(), sel=0, box_text=None, box_caret=None):
         c = self.canvas
         c.fill((0, 0, 0, 175))
         cx = c.get_width() // 2
@@ -522,6 +522,10 @@ class GameView:
             pygame.draw.rect(c, (30, 30, 40), box)
             pygame.draw.rect(c, (220, 200, 160), box, 1)
             c.blit(self.font.render(box_text, True, (240, 240, 240)), (box.x + 8, box.y + 11))
+            if box_caret is not None:
+                from ui.textline import draw_caret
+                draw_caret(c, box.x + 8 + self.font.size(box_text[:box_caret])[0], box.y + 9,
+                           self.font.get_height() + 4, (240, 240, 240))
         self.display.present(over_games=True)
         return rects
 
@@ -554,35 +558,31 @@ class GameView:
 
     def ask_note(self):
         """"What happened?" Typed text, or "" (Enter on nothing, or Esc)."""
-        text = ""
-        pygame.key.start_text_input()
-        try:
+        from ui.textline import TextLine, typing
+        line = TextLine("", 300)
+        with typing():
             while True:
                 for ev in pygame.event.get():
                     if self.display.handle(ev):
                         continue
                     if ev.type in (pygame.QUIT, pygame.WINDOWCLOSE):
-                        return text
-                    if ev.type == pygame.TEXTINPUT and len(text) < 300:
-                        text += ev.text
-                    elif ev.type == pygame.KEYDOWN:
+                        return line.text
+                    if line.handle(ev):
+                        continue
+                    if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_RETURN:
-                            return text
+                            return line.text
                         if ev.key in BACK_KEYS:
                             return ""
-                        if ev.key == pygame.K_BACKSPACE:
-                            text = text[:-1]
                     elif ev.type == pygame.CONTROLLERBUTTONDOWN and ev.button in (pygame.CONTROLLER_BUTTON_A,
                                                                                     pygame.CONTROLLER_BUTTON_START):
-                        return text
-                shown = text[-80:] + ("_" if pygame.time.get_ticks() // 400 % 2 else " ")
+                        return line.text
+                shown, at = line.window(80)
                 self.overlay("Report a problem: what happened? (optional)",
                              ["Type, then Enter to save the report (or press Cross / A: no note). Esc: no note."],
-                             box_text=shown)
+                             box_text=shown, box_caret=at)
                 self.keep_playing()
                 pygame.time.wait(16)
-        finally:
-            pygame.key.stop_text_input()
 
     def open_crash_window(self, path):
         """Android has one window: the same questions, on its screen. Elsewhere, a process of its
