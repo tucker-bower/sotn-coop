@@ -984,16 +984,20 @@ class Launcher:
         self.settings["shortcuts"] = v
         save_settings(self.settings)
 
+    def stick_spells(self, seat):
+        """Alucard's spells on the right stick, for that player: theirs to turn off (Your settings),
+        once a castle rule (a castle's old stick_spells is ignored)."""
+        return bool((self.settings.get("stick_spells") or [True, True])[seat])
+
     def spells(self, seat):
         v = (self.settings.get("spells") or [DEFAULT_SPELLS, DEFAULT_SPELLS])[seat]
         return list(v) if len(v) == 4 else list(DEFAULT_SPELLS)
 
     def options(self, seat):
         """The OPT_* bits for that seat's game (link/mailbox.py). The right stick's spells are the
-        player's, if the castle has them on (its rules: launcher/rules.py stick_spells)."""
+        player's, if they have them on (Your settings)."""
         from link.mailbox import OPT_ALUCARD_HUD, OPT_NO_TINT, OPT_PARTNER_HP, OPT_SHORTCUTS, OPT_SPELL_TRIGGERS, OPT_WIDE_SHIFT, spell_options
-        rules = getattr(self, "current_rules", None) or {}
-        spells = self.spells(seat) if rules.get("stick_spells", True) else [None] * 4
+        spells = self.spells(seat) if self.stick_spells(seat) else [None] * 4
         return ((OPT_SHORTCUTS if self.shortcuts(seat) else 0) | spell_options(spells) |
                 (OPT_PARTNER_HP if self.settings.get("partner_hp", True) else 0) |
                 (OPT_SPELL_TRIGGERS if self.settings.get("spell_triggers") else 0) |
@@ -1094,6 +1098,8 @@ class Launcher:
             rows.append({"kind": "head", "key": None, "label": f"Player {seat + 1}" if not ANDROID else "Controls"})
             rows.append({"kind": "switch", "key": f"shortcuts:{seat}", "label": "Shortcuts", "value": self.shortcuts(seat),
                          "hint": "Richter and Maria: L2 high jump, R2 dash. Alucard: right-stick spells."})
+            rows.append({"kind": "switch", "key": f"stick_spells:{seat}", "label": "Alucard's spells on the right stick",
+                         "value": self.stick_spells(seat), "hint": "The right stick casts the spells below."})
             for d, spell in enumerate(self.spells(seat)):
                 rows.append({"kind": "choice", "key": f"spell:{seat}:{d}", "label": f"Right stick {'up right down left'.split()[d]}",
                              "value": names.get(spell, "Nothing"), "hint": "Alucard casts it if he knows it and has the MP."})
@@ -1106,6 +1112,12 @@ class Launcher:
         if key.startswith("shortcuts:"):
             seat = int(key.split(":")[1])
             self.set_shortcuts(seat, (not self.shortcuts(seat)) if step == 0 else step > 0)
+        elif key.startswith("stick_spells:"):
+            seat = int(key.split(":")[1])
+            v = [self.stick_spells(0), self.stick_spells(1)]
+            v[seat] = (not v[seat]) if step == 0 else step > 0
+            self.settings["stick_spells"] = v
+            save_settings(self.settings)
         elif key.startswith("spell:"):
             _, seat, d = key.split(":")
             spells = [list(self.spells(0)), list(self.spells(1))]
@@ -2632,7 +2644,6 @@ class Launcher:
                 if view.playthrough:
                     view.playthrough.set_rules(view.rules)
                 self.current_rules = view.rules
-                self.refresh_players()  # (the right stick's spells are a rule)
             self.rules_menu(view.playthrough.name if view.playthrough else "This session", dict(view.rules), apply, view.joiner)
             return
         while True:

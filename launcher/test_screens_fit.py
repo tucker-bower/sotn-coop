@@ -124,6 +124,7 @@ def main():
         fake = types.SimpleNamespace(settings={"spells": [[2, 5, 3, 0], [None, 7, 1, 2]]}, NETSIM_NAMES=app.Launcher.NETSIM_NAMES,
                                      bios=lambda: Path("C:/x/bios.bin"), shortcuts=lambda seat: seat == 0)
         fake.spells = lambda seat: fake.settings["spells"][seat]
+        fake.stick_spells = lambda seat: True
         fake.option_rows = lambda: app.Launcher.option_rows(fake)
         import gameview
         fake.pads = types.SimpleNamespace(pad_maps=[gameview.pad_map({"cross": "dpright"}), gameview.pad_map()],

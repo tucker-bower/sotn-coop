@@ -45,7 +45,6 @@ TOGGLES = (
     ("offhand", "Off-hand weapons", "Circle uses the item in the other hand.", True, RULE_NO_OFFHAND),
     ("familiars", "Familiars for Richter and Maria", "Familiar cards work for them.", True, RULE_NO_FAMILIARS),
     ("gear_effects", "Gear effects for Richter and Maria", "Healing Mail, Blood Cloak and similar gear work for them.", True, RULE_NO_GEAR_EFFECTS),
-    ("stick_spells", "Alucard's spells on the right stick", "Each player picks which in Your settings.", True, 0),
     ("bat_carry", "Hang onto the bat", "Up beside bat Alucard to hang on. Cross lets go.", False, 0),
     ("pvp", "PvP", "Your attacks hurt each other.", False, 0),
     ("remap", "Button remap", "Swap buttons for both players.", False, 0),
@@ -71,7 +70,6 @@ GROUPS = (
     ("Sharing", ("shared_level", "shared_gold")),
     ("Falling and reviving", ("revive", "faerie_revive")),
     ("Staying together", ("boss_pull", "scene_pull", "map_teleport", "near_target")),
-    ("Alucard", ("stick_spells",)),
     ("Richter and Maria", ("growth", "alucard_stats", "relic_moves", "air_jumps", "offhand", "familiars", "gear_effects")),
     ("Extras", ("bat_carry", "pvp", "remap")),
 )

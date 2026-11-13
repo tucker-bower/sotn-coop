@@ -30,6 +30,26 @@ def main():
         s["music"] = "left"
         paths.save_settings(s)
         check(paths.load_settings()["music"] == "left", "a setting stays as it's set")
+
+        # Alucard's spells on the right stick: each player's own switch, in Your settings
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        import types
+        import app
+        from link.mailbox import spell_options
+        f = types.SimpleNamespace(settings={}, refresh_players=lambda: None, wide_shape=lambda: 0, bios=lambda: Path("bios.bin"),
+                                  NETSIM_NAMES=app.Launcher.NETSIM_NAMES)
+        for name in ("stick_spells", "spells", "shortcuts", "option_rows", "button_rows", "change_option"):
+            setattr(f, name, getattr(app.Launcher, name).__get__(f))
+        f.button_rows = lambda seat: []
+        keys = [r["key"] for r in app.Launcher.player_rows(f)]
+        check("stick_spells:0" in keys and "stick_spells:1" in keys and keys.index("stick_spells:0") < keys.index("spell:0:0"),
+              "Your settings: each player's switch, just above their four spells")
+        stick = spell_options(app.DEFAULT_SPELLS)
+        check(app.Launcher.options(f, 0) & stick == stick, "on to start with: the game gets the player's spells")
+        app.Launcher.change_player(f, "stick_spells:1", 0)
+        check(app.Launcher.options(f, 1) & stick == 0 and app.Launcher.options(f, 0) & stick == stick
+              and paths.load_settings().get("stick_spells") == [True, False],
+              "player 2 turns theirs off: their game gets none, player 1's is unchanged, and it's saved")
     import inspect
     import gameview
     src = inspect.getsource(gameview.GameView.set_rules)
