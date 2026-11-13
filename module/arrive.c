@@ -22,10 +22,7 @@ void HideMap(void);
 s32 ApplySaveData(SaveData* save);
 void StoreSaveData(SaveData* save, s32 block, s32 cardIcon);
 void SetGameState(GameState gameState);
-void ClearBackbuffer(void);        // DRA
-void SetStageDisplayBuffer(void);  // DRA
 void PlaySfx(s32 sfxId);
-void MuteSound(void); // DRA
 void SetFadeMode(FadeModes fadeMode);
 void UpdateFade(bool skipFollowup);
 s32 func_801025F4(void); // the fade's progress: nonzero once a fade to black is complete
@@ -710,25 +707,22 @@ static bool CutsceneHold(void) {
 
 // --- commands from the host
 
+void func_800E4970(void); // DRA: into Now Loading from a memory card's save (src/dra/game_handlers.c)
+
 static void LoadSave(void) {
-    // The music stops first, as at the game's own stage change (Play_PrepareNextStage). Playing on,
-    // its loop came due during the load: the stream's restart took the drive, and the stage's code
-    // was read from the music's sectors (char_select_session; any load at the wrong moment).
-    PlaySfx(SET_UNK_12);
-    PlaySfx(SET_UNK_0B);
-    MuteSound();
+    // The game's own way into a memory card save's load. It stops the music first: playing on, its
+    // loop came due during the load, the stream's restart took the drive, and the stage's code was
+    // read from the music's sectors (char_select_session). It sets the play display: from the
+    // title, its 512-wide buffers stayed and the game squeezed into the left half (Tucker's 0.12.0
+    // test). And it clears what was on screen: the title's logo (primitives) stayed under "Now
+    // Loading", and the old tilemap drew the new stage's tiles as garbage around it (Tucker, 1.0.0).
+    // It goes to step 2, which skips step 0 (Play_Reset): that would clear D_8003C730.
+    func_800E4970();
     ApplySaveData((SaveData*)g_CoopLink.saveIn);
     g_PlayableCharacter = PLAYER_ALUCARD; // the world is Alucard's, whoever saved (design/M8)
     CharacterApply();
     D_8003C730 = 1; // as after loading a memory card save: keep the saved status
     g_GameEngineStep = Engine_Init;
-    SetGameState(Game_NowLoading);
-    // Step 2 skips step 0 (Play_Reset), which would clear D_8003C730, and also sets the play
-    // display. From the title, its 512-wide buffers stayed: the game squeezed into the left half,
-    // and drawing over the partner's sprites in VRAM (Tucker's 0.12.0 test, 2026-10-28).
-    ClearBackbuffer();
-    SetStageDisplayBuffer();
-    g_GameStep = 2;
     s_WaitingForHost = false;
     s_SaveLoaded = true;
 }
