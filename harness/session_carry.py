@@ -1,6 +1,7 @@
 """Hanging onto Bat Alucard (design/bat-carry.md): a castle rule, in two real games."""
 
 from link.mailbox import BUSY, CHAR_RICHTER, FLIP_BAT, FLIP_CARRIED, RULE_BAT_CARRY
+from module import symbols
 from session import session_scenario
 from session_m15 import load_characters
 from session_netplay import PROFILE, SEED
@@ -222,3 +223,51 @@ def bat_carry_form_change_drops_off(run):
     run.step(4, p1=("r1", ""))
     run.step(30)
     released(run, b, "the bat turning back lets go")
+
+
+
+# What each game draws of the other (#262): the partner's copy, its entity 0 first.
+BODY_X, BODY_Y, BODY_ANIM_SET = 2, 6, 0x54
+ANIM_SET_BAT = 13
+
+
+def body(g, field, fmt="<h"):
+    return g.read(symbols()["g_CoopSpikeBody"] + field, fmt)
+
+
+def both_have_the_bat(run):
+    """As in a real castle: a relic found by one is given to both (progress.c)."""
+    run.s.b.write(SOUL_OF_BAT, ACTIVE, "<B")
+
+
+@session_scenario(characters=(0, CHAR_RICHTER))
+def bat_carry_rider_hangs_in_the_bats_game(run):
+    """In the bat's game, the carried Richter is drawn hanging under the bat, where his own game has
+    him, not walking along the floor below it (zhika, 1.0.0)."""
+    a, b = run.s.a, run.s.b
+    both_have_the_bat(run)
+    setup(run)
+    grab(run, a, b)
+    worst = 0
+    for i in range(90):
+        run.step(1, p1=("right+up" if i < 30 else "right", ""))
+        p = a.mailbox("self_presence")
+        seen = (body(a, BODY_X) + p.scroll_x, body(a, BODY_Y) + p.scroll_y)
+        if i >= 10:
+            worst = max(worst, abs(seen[0] - place(b)[0]), abs(seen[1] - place(b)[1]))
+    run.expect(flips(b) & FLIP_CARRIED, "still carried")
+    run.expect(worst <= 8, "the bat's game draws him where he hangs", worst=worst, seen=seen, rider=place(b))
+
+
+@session_scenario(characters=(0, CHAR_RICHTER))
+def bat_carry_through_a_door_still_a_bat(run):
+    """Carried through a door, Richter's game still draws Alucard as a bat: the copy it makes of him
+    in the new room starts on foot, and takes his form (zhika, 1.0.0: Alucard mid-jump, torn)."""
+    a, b = run.s.a, run.s.b
+    both_have_the_bat(run)
+    carry_through_a_door(run)
+    run.step(30, p1=("up", ""))
+    run.expect(flips(a) & FLIP_BAT, "Alucard is still a bat", flip=flips(a))
+    run.expect(body(b, BODY_ANIM_SET) == ANIM_SET_BAT, "Richter's game draws him as a bat",
+               anim_set=body(b, BODY_ANIM_SET),
+               forms=b.read(symbols()["g_CoopBodyForms"], "<I") if "g_CoopBodyForms" in symbols() else None)

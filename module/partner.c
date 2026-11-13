@@ -860,6 +860,38 @@ static void KeepAfterimages(void) {
     g_CoopAfterimagesRepaired++;
 }
 
+// An Alucard partner's form (bat, wolf) as its presence draws it. A body made while the partner is
+// already a bat (through a door, or the room's first sight of them) starts on foot, and nothing
+// pressed the button that would change it: it fell, was pulled back to the bat, and drew as Alucard
+// mid-jump (zhika, 1.0.0). Apart this long, the body gets that form's button, as if the partner had
+// pressed it, and its own code changes it (DRA: R1 the bat, R2 the wolf, through the button map).
+#define FORM_FRAMES 20
+#define ANIMSET_BAT 13
+#define ANIMSET_WOLF 15
+#define BUTTON_WOLF 4 // g_Settings.buttonMask's index of PAD_R2 (D_800ACE00)
+#define BUTTON_BAT 6  // of PAD_R1
+static u8 s_FormApart;
+u32 g_CoopBodyForms; // form buttons given to the body (tests read it: coop.map)
+
+static u16 FormButton(const CoopPresence* p) {
+    s16 want = p->animSet, is = PLAYER.animSet;
+    s32 button;
+
+    if (s_Code || want == is) {
+        s_FormApart = 0;
+        return 0;
+    }
+    button = want == ANIMSET_BAT || is == ANIMSET_BAT     ? BUTTON_BAT
+             : want == ANIMSET_WOLF || is == ANIMSET_WOLF ? BUTTON_WOLF
+                                                          : -1;
+    if (button < 0 || ++s_FormApart < FORM_FRAMES) {
+        return 0;
+    }
+    s_FormApart = 0; // again after as long, if its code didn't take it
+    g_CoopBodyForms++;
+    return g_Settings.buttonMask[button];
+}
+
 // The partner's frame: its update and its drawing, in one swap. After player 1's RenderEntities.
 void PartnerFrame(void) {
     const CoopPresence* p = &g_CoopLink.partner;
@@ -952,6 +984,14 @@ void PartnerFrame(void) {
             PLAYER.posY.i.hi = y;
             PLAYER.velocityX = PLAYER.velocityY = 0;
         }
+    }
+    if (PartnerLive() && (p->flipX & FLIP_CARRIED)) { // hanging under a bat: where its own game holds it
+        PLAYER.posX.val = (p->x - g_Tilemap.scrollX.i.hi) << 16;
+        PLAYER.posY.val = (p->y - g_Tilemap.scrollY.i.hi) << 16;
+        PLAYER.velocityX = PLAYER.velocityY = 0;
+        pad = 0; // carry.c: its buttons are off while it hangs on
+    } else if (PartnerLive()) {
+        pad |= FormButton(p);
     }
     pad0 = g_pads[0];
     options = g_CoopOptions; // its one-button moves are on or off as the partner has them
