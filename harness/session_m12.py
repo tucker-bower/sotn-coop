@@ -795,6 +795,67 @@ def solo_continue_picture_width(run):
         run.expect(a.raw_frame()[0] == 256, "the picture is the game's width", width=a.raw_frame()[0])
 
 
+PICTURE = (60, 110, 240, 226)  # Now Loading's picture in the 256x240 frame, with a margin
+
+
+def now_loading_clean(run, start):
+    """Issue 268: a castle's save loads into a clean Now Loading screen, black around its picture:
+    no title logo under it and no old tilemap drawing the new stage's tiles as garbage."""
+    from link.mailbox import CMD_LOAD_SAVE, IN_PLAY
+    from session import Session
+    from module import COOP_DISC
+    save = (STARTS / "Scene - The Librarian.save").read_bytes()
+    out = TOOLS["out"] / run.name  # (game art: never in git)
+    with Session(COOP_DISC, starts=(start, None)) as s:
+        a = s.a
+        state = 1 if start is None else 2  # Game_Title, Game_Play
+        for _ in range(9000):
+            s.step(1)
+            if a.read("g_GameState") == state and (start or a.raw_frame()[0] == 512):
+                break
+        run.expect(a.read("g_GameState") == state, "the title" if start is None else "in play")
+        s.step(30)
+        a.mailbox("put_save", save)
+        a.mailbox("command", CMD_LOAD_SAVE)
+        out.mkdir(parents=True, exist_ok=True)
+        worst, shots = 0.0, 0
+        for i in range(3000):
+            s.step(1)
+            if a.read("g_GameState") == 4:  # Game_NowLoading
+                img = a.screenshot()
+                if img is not None and shots < 400:
+                    w, h = img.size
+                    px = img.convert("L").load()
+                    # outside Now Loading's picture (its words and the logo: x 65-234, y 115-221)
+                    border = [(x, y) for y in range(0, h, 2) for x in range(0, w, 2)
+                              if not (PICTURE[0] <= x <= PICTURE[2] and PICTURE[1] <= y <= PICTURE[3])]
+                    lit = sum(1 for x, y in border if px[x, y] > 24)
+                    if lit / len(border) > worst:
+                        worst = lit / len(border)
+                        img.save(out / "worst_now_loading.png")
+                    if shots % 30 == 0:
+                        img.save(out / f"now_loading_{shots:03}.png")
+                    shots += 1
+            p = a.mailbox("self_presence")
+            if p.flags & IN_PLAY and not p.flags & BUSY and shots:
+                break
+        run.expect(shots > 0, "Now Loading shows", frames=i)
+        run.expect(worst < 0.002, "it is black around its picture", lit=round(worst, 4), shots=shots)
+        run.expect(p.flags & IN_PLAY, "and play goes on in the save's castle", frames=i)
+
+
+@session_scenario(starts=(None, None))
+def solo_continue_now_loading_clean(run):
+    """Continue from the title: no logo or old tiles around Now Loading."""
+    now_loading_clean(run, None)
+
+
+@session_scenario(starts=(str(STARTS / "Scene - The Librarian.state"), None))
+def solo_continue_now_loading_clean_in_play(run):
+    """A castle's save loading in play: the old room's tiles don't draw around Now Loading."""
+    now_loading_clean(run, str(STARTS / "Scene - The Librarian.state"))
+
+
 CENTER_START = str(STARTS / "Scene - Maria in the Center - the Holy Glasses.state")
 MET_MARIA_IN_CEN = 0xD8
 
