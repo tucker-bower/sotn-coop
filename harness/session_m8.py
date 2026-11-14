@@ -377,14 +377,16 @@ def partner_graphics_stay_in_their_bank(run, ca, cb):
         if c != CHAR_ALUCARD:
             run.expect(reload_game(run, g), f"{'AB'[g is b]} loads as {NAMES[c]}")
     run.step(120)
-    sheet = lambda: a.vram_rect(512, 256, 512, 256)  # x 0x200-0x3FF, y 0x100-0x1FF: player 1's
+    # x 0x200-0x3FF of the first bank: the stage's and enemies' graphics (y 0-0xFF; her guardians
+    # went to x 0x300-0x3C0 there) and player 1's sheet and HUD (y 0x100-0x1FF)
+    sheet = lambda: a.vram_rect(512, 0, 512, 512)
     before = sheet()
     a.link(), b.link()
     run.step(300)
     run.expect(a.mailbox("partner_age") < 30 and a.mailbox("partner_presence").character == cb,
                f"B's {NAMES[cb]} is with A", age=a.mailbox("partner_age"))
     after = sheet()
-    changed = sum(1 for y in range(256) for x in range(512) if before[y][x] != after[y][x])
+    changed = sum(1 for y in range(512) for x in range(512) if before[y][x] != after[y][x])
     run.expect(changed < 200, f"A's own textures are untouched by B's {NAMES[cb]}", pixels_changed=changed)
 
 
