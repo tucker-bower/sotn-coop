@@ -126,7 +126,7 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
     """Leaves the emulator outside boss b with b's progress. Returns (ok, save): ok if a bot then
     reached the boss (for a scene start, b["scene"]: its scene started); save, a joint save of
     that progress (its room the one outside the boss: a test castle's)."""
-    from link.mailbox import BOSS, BUSY, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, IN_PLAY
+    from link.mailbox import BOSS, BUSY, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW, IN_PLAY
     from bots import walker
     import savestates as route
 
@@ -168,8 +168,12 @@ def _boss_start(e, mb, entrance, b, rooms, bossstarts):
         e.step(60)
     bot = walker(b["walk"], attack_every=0)
     ok = False
+    # A scene: the game's own flag. The co-op one (CUTSCENE) leaves out the Library's, which isn't
+    # shared (arrive.c's ArriveSharedScene), so the Librarian's never showed in it.
+    started = ((lambda: e.read("g_CutsceneHasControl")) if b.get("scene") else
+               (lambda: mb.self_presence().flags & BOSS))
     for i in range(7200):  # an arena may take a while to bring its boss in; Richter talks first
-        if mb.self_presence().flags & (CUTSCENE if b.get("scene") else BOSS):
+        if started():
             ok = True
             break
         e.step(1, bot(e.snapshot(), i))

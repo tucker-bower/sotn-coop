@@ -93,7 +93,8 @@ def card(m, box, c):
         for line in wrap(c["note"], (box.w - 12) // 8)[:1] if c["note"] else []:
             t.text_centre(s, line, cx, y, DIM)
             y += 10
-        t.text_centre(s, shorten(c["controls"], (box.w - 12) // 8), cx, box.bottom - 30, INK if c["shortcuts"] else DIM)
+        if c["controls"]:
+            t.text_centre(s, shorten(c["controls"], (box.w - 12) // 8), cx, box.bottom - 30, INK if c["shortcuts"] else DIM)
     else:
         for line in wrap(c["needs"], (box.w - 12) // 8)[:4]:
             t.text_centre(s, line, cx, y, DIM)

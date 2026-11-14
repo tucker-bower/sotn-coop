@@ -6,6 +6,7 @@ Release notes for the versions we've published.
 |---|---|
 | `v0.11.0.md` | Castles, solo play, Richter, Maria and Android. |
 | `v0.12.0.md` | The beta of 1.0: the whole first castle together. |
+| `v1.1.0.md` | Endings, boss arenas, bat carry and 21:9 fixed; typing with a cursor, one-press updates. **Draft.** |
 | `v1.0.0.md` | 1.0: your own controls, the new character select, settings in pages, choosing the install folder. |
 | `v0.19.0.md` | Widescreen (experimental), a fullscreen that fills the screen, Richter's and Maria's gear. |
 | `v0.18.0.md` | The new launcher, mods, updates, one folder. |
