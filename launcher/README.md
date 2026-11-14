@@ -14,6 +14,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `discs.py` | Which disc a file is (PlayStation, PSP or Saturn), by what's in it. |
 | `display.py` | The window: menus, games and their layout. |
 | `ui/` | The menus in the game's own style: the theme, the menu toolkit and one file per screen. |
+| `test_textline.py` | Checks typing in a box: the caret, Backspace and Delete around it, held keys repeating. |
 | `test_ui.py` | Checks the menus' font, lists and screens with a controller, the keyboard and the mouse, on made-up art. |
 | `gameart.py` | Reads the game's own art for the menus from the player's disc: font, logo, portraits, save icons. |
 | `gamesound.py` | Decodes the title music and menu sounds from the player's disc. |
@@ -37,7 +38,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_gamesound.py` | Checks the music's and sounds' decoding on made-up files, and on a dev checkout's disc. |
 | `test_library.py` | Checks game discs: names, removal, the old randomizer setting, the Alternate Scarlet Symphony download, images kept. |
 | `test_one_folder.py` | Checks the one install folder: relative paths, the move from Documents, a disc copied in. |
-| `test_update.py` | Checks updates against a fake GitHub: found, downloaded, checked, refused. |
+| `test_update.py` | Checks updates against a fake GitHub: found, downloaded, checked, refused, and installed on one press. |
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |
 | `test_audio.py` | Checks that uneven frames cost one short gap, not a crackle. |

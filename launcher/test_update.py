@@ -122,6 +122,33 @@ def main():
               "the installer is started silently, over the same folder")
         update.tidy(d)
         check(not path.exists(), "the next version's first start deletes the installer that brought it")
+
+        # The player's one press: Update now downloads and starts the installer, with no second
+        # screen to press Update on (playtest 1.0.0)
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+        os.environ["COOP_DATA"] = str(Path(d) / "data")
+        os.remove(os.environ["COOP_UPDATE_DRY"])
+        publish("v0.18.0")
+        import app
+        import test_ui
+        from ui import theme as th
+        from ui.widgets import Menus
+        (Path(d) / "art").mkdir()
+        test_ui.made_up_art(Path(d) / "art")
+        inputs = test_ui.Inputs([["ok"]] + [[]] * 100000)
+        menus = Menus(inputs, th.Theme(Path(d) / "art"), None)
+        said = []
+        fake = type("Fake", (), {"plain_menus": lambda self: menus, "ui_wait": lambda self, h, t, task: task(lambda *a: None),
+                                 "ui": type("UI", (), {"message": lambda self, *a, **k: said.append(a)})()})()
+        try:
+            app.Launcher.offer_update(fake, update.latest(base + "/latest"))
+            quit_ = False
+        except SystemExit:
+            quit_ = True
+        started = Path(os.environ["COOP_UPDATE_DRY"]).exists()
+        check(quit_ and started and not said and inputs.names[-1] == "Downloading version 0.18.0",
+              f"Update now: it downloads, starts the installer and quits, with nothing more to press: {inputs.names}, {said}")
     server.shutdown()
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
