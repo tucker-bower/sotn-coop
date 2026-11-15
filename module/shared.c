@@ -32,6 +32,7 @@ void FlushCache(void);                   // main.exe
 #define MAX_PRIMS_PER_ENTITY 64
 #define CAMERA_NEAR 256    // shared only while the cameras are within a screen of each other
 #define UI_PRIORITY 0x1E0  // primitives from here up are screen-space UI (message boxes, 0x1FC+)
+#define STAGE_CODE 0x80180000 // stage overlays load here (each starts with its Overlay table)
 
 typedef struct {
     u16 stage;
@@ -222,6 +223,27 @@ static void CopyWords(void* dst, const void* src, s32 bytes) {
 
 // --- roles
 
+// The walk to the warp after Richter's fight (TOP's func_us_801AD11C, post_richter_cutscene.c) steers
+// each player for a minute or more, longer than SceneAftermath's cooldown. A player who became the
+// guest on the way had the partner's walk instead of its own: the partner warped to the inverted
+// castle, and its copy was left at its last step, pressing Up far from the warp, with the player's
+// own buttons off for good (#285, playtest 2026-11-14). Each game walks its own player there.
+#define TOP_WARP_WALK 0x801AD11C
+
+static bool PostRichterWalk(void) {
+    s32 i;
+
+    if ((g_StageId & ~STAGE_INVERTEDCASTLE_FLAG) != STAGE_TOP && g_StageId != STAGE_TOP_ALT) {
+        return false;
+    }
+    for (i = STAGE_ENTITY_START; i < TOTAL_ENTITY_COUNT; i++) {
+        if (g_Entities[i].entityId && (u32)g_Entities[i].pfnUpdate == TOP_WARP_WALK) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool PartnerShareable(void) {
     const CoopPresence* p = &g_CoopLink.partner;
     s32 dx, dy;
@@ -240,7 +262,7 @@ static bool PartnerShareable(void) {
         return false;
     }
     // Nor forming one right after a scene while the game still steers the player (arrive.c).
-    if (SceneAftermath()) {
+    if (SceneAftermath() || PostRichterWalk()) {
         return false;
     }
     if (p->stage != g_CoopStage || p->roomLeft != g_Tilemap.left || p->roomTop != g_Tilemap.top) {
@@ -396,8 +418,10 @@ static void BecomeGuest(void) {
         s_TakenHere[i] = 0;
         s_HitHold[i] = 0;
     }
-    s_OrigUpdate = g_api.o.Update;
-    s_OrigSpawner = g_api.o.UpdateRoomPosition;
+    // (never the stubs themselves: put back, they'd stop the room for good)
+    s_OrigUpdate = g_api.o.Update != GuestUpdate ? g_api.o.Update : ((const Overlay*)STAGE_CODE)->Update;
+    s_OrigSpawner = g_api.o.UpdateRoomPosition != Stub ? g_api.o.UpdateRoomPosition
+                                                         : ((const Overlay*)STAGE_CODE)->UpdateRoomPosition;
     s_AppliedSeq = g_CoopLink.snapInSeq;
 }
 
@@ -413,7 +437,6 @@ static void BecomeGuest(void) {
 // so the cursors' addresses held the old stage's data. The walk back never met a list head and ran
 // down through memory until the emulator crashed (#142: a hand-over ending at a boss's door). A
 // load re-seats the cursors itself. The walks also stay inside the overlay, whatever they find.
-#define STAGE_CODE 0x80180000 // stage overlays load here
 #define IN_LAYOUT(ovl, p) ((u32)(p) >= STAGE_CODE && (u32)(p) < (ovl)->bssStart)
 static void ResyncSpawner(void) {
     const OverlayInfo* ovl = FindOverlay(g_StageId);
@@ -494,6 +517,28 @@ static void StopBeingGuest(void) {
     }
 }
 
+// Not the guest, the stage's own update and spawner run: if the stubs are still in, they're put
+// back from the stage overlay's own table (its header, which g_api.o is copied from at its load).
+// A guest's stubs left in after its role ended stopped every entity of the room for good, the
+// scene's walk to the warp too (#285).
+u32 g_CoopGuestStubsRepaired; // times that happened (tests read it: coop.map)
+
+static void RestoreOwnUpdate(void) {
+    const Overlay* own = (const Overlay*)STAGE_CODE;
+
+    if (g_GameStep != Play_Default) {
+        return; // mid-load: the header may be the next stage's
+    }
+    if (g_api.o.Update == GuestUpdate) {
+        g_api.o.Update = own->Update;
+        g_CoopGuestStubsRepaired++;
+    }
+    if (g_api.o.UpdateRoomPosition == Stub) {
+        g_api.o.UpdateRoomPosition = own->UpdateRoomPosition;
+        g_CoopGuestStubsRepaired++;
+    }
+}
+
 static void KeepStubbed(void) {
     if (g_api.o.Update != GuestUpdate) { // a fresh overlay load rewrote the table
         s_OrigUpdate = g_api.o.Update;
@@ -532,6 +577,8 @@ static void FreeMirrorPrims(s32 i) {
     }
 }
 
+u32 g_CoopStaleHelpersCleared; // drawn helpers with no id a guest cleared (tests read it: coop.map)
+
 static void ClearSlot(s32 i) {
     Entity* e = &g_Entities[STAGE_ENTITY_START + i];
 
@@ -542,8 +589,57 @@ static void ClearSlot(s32 i) {
         s_Mirrored[i] = false;
     } else if (e->entityId) {
         DestroyEntity(e); // something local (a hit spark): the snapshot decides what's here
+    } else if (e->animCurFrame || (e->flags & FLAG_HAS_PRIMS)) {
+        // A helper with no id of its own, drawn: Richter's afterimages (BO6's slots 65-67, set up by
+        // his code with no entityId) aren't in a snapshot, and a game that ran its own Richter (the
+        // partner paused) kept them, frozen where they were when it became the guest again (#284).
+        DestroyEntity(e);
+        g_CoopStaleHelpersCleared++;
     }
     s_Local[i] = false;
+}
+
+// Shaft's orb in Richter's fight (BO6's func_us_801C03E8, entity 0x40): the game shows it, and lets it be hit,
+// only to a player with the Holy Glasses on, checked every frame. A copy has the authority's
+// player's: the guest's own Glasses did nothing, also put on mid-fight, and one game could kill
+// Richter with the orb alive in its own eyes while the other freed him (#283). The guest's copy is
+// seen, and hit, by its own player's Glasses; a hit goes to the authority, whose orb takes it
+// whatever its own player wears (ApplyHits).
+#define BO6_ORB_ID 0x40 // (a copy has no update of its own: its id tells it)
+#define ORB_SEEN 0x8252   // PAL_FLAG(0x252)
+#define ORB_UNSEEN 0x810D // PAL_FLAG(PAL_PLAYER_HIDDEN)
+#define ITEM_HOLY_GLASSES 0x22
+u32 g_CoopOrbsOwned; // frames the guest showed a copied orb by its own Glasses (tests read it: coop.map)
+
+static void OwnOrb(void) {
+    s32 i, k;
+    bool glasses;
+    Entity* e;
+    Primitive* p;
+
+    if (g_StageId != STAGE_BO6) {
+        return;
+    }
+    glasses = g_api.CheckEquipmentItemCount(ITEM_HOLY_GLASSES, 1) != 0;
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        e = &g_Entities[STAGE_ENTITY_START + i];
+        if (!s_Mirrored[i] || e->entityId != BO6_ORB_ID || (e->palette != ORB_SEEN && e->palette != ORB_UNSEEN)) {
+            continue; // (its hit flash has a palette of its own: kept)
+        }
+        if (glasses && e->palette == ORB_UNSEEN) { // the authority's player has none: its hitbox is 0
+            e->hitboxState = e->ext.et_801C03E8.savedHitboxState;
+        } else if (!glasses) {
+            e->hitboxState = 0;
+        }
+        e->palette = glasses ? ORB_SEEN : ORB_UNSEEN;
+        if (!glasses && s_MirrorPrims[i] >= 0) { // its glow, drawn for the authority's Glasses
+            p = &g_PrimBuf[s_MirrorPrims[i]];
+            for (k = 0; k < s_MirrorCount[i] && p; k++, p = p->next) {
+                p->drawMode |= DRAW_HIDE;
+            }
+        }
+        g_CoopOrbsOwned++;
+    }
 }
 
 static void ApplySnapshot(void) {
@@ -737,6 +833,7 @@ static void ApplySnapshot(void) {
         s_Solid = (const SolidCall*)r;
         s_NSolid = h->nSolid;
     }
+    OwnOrb();
 }
 
 // --- authority
@@ -1277,6 +1374,8 @@ void SharedUpdate(void) {
     if (s_Role == ROLE_GUEST) {
         KeepStubbed();
         ApplySnapshot();
+    } else {
+        RestoreOwnUpdate();
     }
 }
 

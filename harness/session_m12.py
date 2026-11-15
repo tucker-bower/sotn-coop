@@ -710,6 +710,9 @@ def as_at_start(run, ca, cb):
     run.expect(played == [ca, cb], "the characters are in play", played=played, alucard=CHAR_ALUCARD)
 
 
+TOP_WARP_WALK = 0x801AD11C  # TOP's func_us_801AD11C: the walk to the warp after Richter's fight
+
+
 def keep_scene(run, ca, cb):
     """Issue 20: the scene after Richter's fight (top post_richter_cutscene.c). It steers each
     player left, holds Cross for a jump only Alucard makes, and only ends at the warp."""
@@ -718,17 +721,29 @@ def keep_scene(run, ca, cb):
     w = SceneWatch(run)
     w.until(lambda: w.starts[0] or w.starts[1], 900, ("right", "right"))
     run.expect(w.starts[0] or w.starts[1], "the scene starts", at=a.snapshot())
-    seen, done, free = [], [False, False], [0, 0]
+    seen, done, free, shared = [], [False, False], [0, 0], []
+    walking = lambda g: any(int.from_bytes(raw[s * 0xBC + 0x28:s * 0xBC + 0x2C], "little") == TOP_WARP_WALK and
+                            int.from_bytes(raw[s * 0xBC + 0x26:s * 0xBC + 0x28], "little")
+                            for raw in [g.read_bytes("g_Entities", 0xBC * 256)] for s in range(64, 256))
     for t in range(9000):
         w.step(1)
         if t % 300 == 0:
             seen.append([(g.snapshot()["world_x"], g.snapshot()["world_y"]) for g in (a, b)])
+        if t % 30 == 0:  # #285: a guest of the partner's walk was left at its last step for good
+            shared += [(t, who) for g, who in ((a, "A"), (b, "B")) if walking(g) and g.mailbox("self_presence").role]
         # With the Holy Glasses worn the script lets go at the first landing (step 5): free to walk.
         free = [0 if t < 2700 or g.read(DEMO_TIMER, "<i") else free[k] + 1 for k, g in enumerate((a, b))]
-        done = [g.read("g_StageId") != 0x0B or g.snapshot()["world_x"] < 0x200 or free[k] > 120 for k, g in enumerate((a, b))]
+        # Over the ledge isn't enough: a player stuck at x 387 was (#285). The walk ends at the warp.
+        done = [g.read("g_StageId") == 0x2B or free[k] > 120 for k, g in enumerate((a, b))]
         if all(done):
             break
-    run.expect(all(done), "both players get over the ledge, or are let go", frames=t, seen=seen, a=a.snapshot(), b=b.snapshot())
+    run.expect(all(done), "both players walk to the warp and into the inverted castle, or are let go", frames=t,
+               seen=seen, a=a.snapshot(), b=b.snapshot())
+    run.expect(not shared, "no shared room while a game walks its player to the warp", shared=shared[:8])
+    for g, who in ((a, "A"), (b, "B")):
+        if not g.mailbox("self_presence").role:
+            run.expect(g.read("g_api", "<I", 0) == g.read(0x80180000, "<I"), f"{who} runs its stage's own update",
+                       update=hex(g.read("g_api", "<I", 0)), own=hex(g.read(0x80180000, "<I")))
     for g, k in zip((a, b), free):
         if k > 120:
             x = g.snapshot()["world_x"]

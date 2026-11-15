@@ -243,6 +243,15 @@ In the Castle Keep fight with Richter (BO6), Shaft's orb (entity 0x40, `src/boss
 ## The keep warp between the castles (retail; found 2026-11-14, #277's report)
 Retail has a hidden warp between the two Castle Keeps, with no progress check: in the big keep room (TOP room 2, (30,5)-(37,12); RTOP room 2 is its mirror), stand still in front of the tall carved stone doorway and press up (`GetTeleportToOtherCastle`, `src/dra/692E8.c`: TOP at world (8000, 2127), RTOP at (8384, 14407), within 3 pixels). The screen flashes white, and teleport 0x25 or 0x26 (`D_800A245C`) moves you to the other keep: from RTOP you land at (320, 847) in TOP. So a player can reach the inverted castle before freeing Richter, and come back. Richter's door (`g_RoomBossTeleports`: TOP (0x21, 0x08)) loads his fight while `TIMEATTACK_EVENT_SAVE_RICHTER` has no record, so a castle that went this way meets Richter again, as retail does. In a report: a stage change from 0x2B to 0x0B with no load step, at (320, 847).
 
+## Telling a boss's entities apart in a shared room
+A guest's copies have no update function of their own (pfnUpdate 0: the guest's stage update is
+switched off), and in the authority the module wraps boss updates for aggro (boss.c), so a
+stage entity's pfnUpdate doesn't identify it in co-op. Use its entityId (and palette): Shaft's orb
+in BO6 is entity 0x40 (palette 0x8252 seen, 0x810D hidden), Richter is 0x16 in slot 64 (BO6's
+`RIC`). The guest's stage update and spawner are `GuestUpdate` and `Stub` while it's the guest;
+a stage overlay's own table is its header at 0x80180000 (the `Overlay` struct g_api.o is copied
+from), which is how a stub left in after a role ends is put back (#285).
+
 ## Arenas without side walls
 Richter's (BO6), Shaft's and Dracula's (RBO6) and the Succubus's (DRE) rooms have no wall tiles at their sides: the screen's edges are the walls. Alucard's `CheckWallRight`/`Left` (`src/dra/6BF64.c`) report a wall at x 248 and 8 in those stages; Richter's and Maria's (`RicCheckWallRight`, `MarCheckWallRight`) never had to. The possessed Richter's tackle and Blade Dash hit with `DAMAGEKIND_5`, which flings the player until they meet a wall (`RicStepHit` step_s 2). Past the edge, DRA's room code holds them at x 255 (`src/dra/5087C.c`, no room to load), where no wall is ever met (#188). In a report, step 10, step_s 2 at x 255 is this. Note that Richter's and Maria's `CalcPlayerDamage` (the short one at the top of `5D5BC.c`) never makes kind 4 or 5 from a hit's size: only the attack's own `hitParams` can.
 
