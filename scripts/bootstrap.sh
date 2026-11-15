@@ -87,7 +87,7 @@ step_python() {
 }
 
 step_swanstation() {
-    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10} (+ patches/swanstation.patch: VRAM's second bank)"
+    log "SwanStation libretro core @ ${SWANSTATION_REV:0:10} (+ patches/swanstation.patch: VRAM's extra banks)"
     local src="$ENV_DIR/src/swanstation"
     checkout "$SWANSTATION_REPO" "$SWANSTATION_REV" "$src"
     if git -C "$src" apply --check "$COOP/patches/swanstation.patch" 2>/dev/null; then

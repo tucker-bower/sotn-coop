@@ -676,3 +676,72 @@ def body_drop_keeps_player_afterimages(run):
             if not flagged:
                 break
         run.expect(flagged, f"and while the body is out ({i + 1})", frame=f, types=types)
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def partner_vram_banks_draw(run):
+    """M17 step 1 (design/M17-more-players.md): the core's four VRAM banks. One of the HUD's sprites is
+    pointed at bank 1, 2 and 3 in turn, through its texpage (bits 14-15) and then its palette (CLUT
+    bit 15, x bits 4-5), with each bank holding something the first doesn't: it draws from that
+    bank. Bank 1's encoding is the two-player one, unchanged."""
+    import libretro
+    e = run.emu
+    run.step(30)
+    mem = e._session.core.get_memory(libretro.RETRO_MEMORY_VIDEO_RAM)
+    run.expect(len(mem) == 1024 * 2048 * 2, "VRAM holds four banks", size=len(mem))
+    if len(mem) != 1024 * 2048 * 2:
+        return
+    buf = e.addr("g_PrimBuf")
+    p = buf + e.read(0x80137970, "<i") * 0x34  # g_PlayerHud.primIndex1: the HUD's sprites
+    while p and (e.read_bytes(p + 7, 1)[0] != 4 or e.read(p, "<H", 0x32) & 8):  # a GT4, not hidden
+        p = e.read(p)
+    tpage, clut = e.read(p, "<H", 0x1A), e.read(p, "<H", 0x0E)
+    x0, y0, x3, y3 = (e.read(p, "<h", o) for o in (0x08, 0x0A, 0x2C, 0x2E))
+    run.expect(p and not tpage & 0xC000 and not clut & 0x8000,
+               "a HUD sprite: a GT4 in bank 0, drawn", tpage=hex(tpage), clut=hex(clut))
+    page_x, page_y = (tpage & 0xF) * 64, (tpage >> 4 & 1) * 256
+    pal_x, pal_y = 0, 0xF0  # where banked palettes are (partner.c BankClut): the test's own row
+    base = bytes(mem[:1024 * 512 * 2])
+
+    def bank(b, texture=None, palette=None):  # bank b: a copy of bank 0, its page or palette changed
+        img = bytearray(base)
+        if texture is not None:
+            for row in range(page_y, page_y + 256):
+                img[(row * 1024 + page_x) * 2:(row * 1024 + page_x + 64) * 2] = struct.pack("<H", texture) * 64
+        if palette is not None:
+            o = (pal_y * 1024 + pal_x) * 2
+            img[o + 2:o + 32] = struct.pack("<H", palette) * 15  # every colour but 0 (see-through)
+        mem[b * 1024 * 512 * 2:(b + 1) * 1024 * 512 * 2] = img
+
+    def drawn():
+        shot = e.screenshot()
+        return {shot.getpixel((x, y)) for x in range(max(x0, 0), min(x3, 255)) for y in range(max(y0, 0), min(y3, 239))}
+
+    plain = drawn()
+    for b in (1, 2, 3):  # textures: the page is all colour b in bank b
+        bank(b, texture=0x1111 * b)
+    seen = {}
+    for b in (1, 2, 3):
+        e.write(p, (tpage & ~0xC000) | b << 14, "<H", 0x1A)
+        run.step(3)  # the frame after next is drawn from it
+        seen[b] = drawn()
+        e.write(p, tpage, "<H", 0x1A)
+    for b in (1, 2, 3):  # the HUD around it draws over part of its box: compare the banks' results
+        others = [seen[k] for k in (1, 2, 3) if k != b] + [plain]
+        run.expect(all(seen[b] != o for o in others), f"texpage bank {b}: drawn from bank {b}'s page",
+                   colours=len(seen[b]))
+    run.step(3)
+    plain = drawn()
+    colours = {1: 0x801F, 2: 0x83E0, 3: 0xFC00}  # red, green, blue
+    for b, c in colours.items():
+        bank(b, palette=c)
+    ids = e.addr("g_ClutIds") + 2 * (clut & 0x3FF)  # a primitive's clut is an index into these
+    original = e.read(ids, "<H")
+    for b, c in colours.items():
+        e.write(ids, 0x8000 | pal_y << 6 | (b - 1) << 4 | pal_x // 16, "<H")
+        run.step(3)
+        seen = drawn() - plain
+        e.write(ids, original, "<H")
+        want = ((c & 0x1F) * 255 // 31, (c >> 5 & 0x1F) * 255 // 31, (c >> 10 & 0x1F) * 255 // 31)
+        run.expect(any(max(abs(a - w) for a, w in zip(s, want)) <= 8 for s in seen),
+                   f"palette bank {b}: drawn in bank {b}'s colour", want=want, seen=sorted(seen)[:4])
