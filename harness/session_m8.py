@@ -364,3 +364,45 @@ def mixed_soak_baseline_10min(run):
 def mixed_soak_short(run):
     """Alucard (A) and Maria (B): mixed_soak, 2 minutes."""
     mixed_soak(run, CHAR_ALUCARD, CHAR_MARIA, 2)
+
+
+def partner_graphics_stay_in_their_bank(run, ca, cb):
+    """Issue 165: the partner's own graphics loads (Maria's HUD, guardians and font, queued for
+    DRA's loader) go to VRAM's second bank. They went to the first, over player 1's HUD name
+    (Richter's read MARIA) and sprite sheet. Each game loads its character alone, then they link:
+    A's first-bank textures are as they were once B's body runs there."""
+    a, b = run.s.a, run.s.b
+    a.unlink(), b.unlink()
+    for g, c in ((a, ca), (b, cb)):
+        if c != CHAR_ALUCARD:
+            run.expect(reload_game(run, g), f"{'AB'[g is b]} loads as {NAMES[c]}")
+    run.step(120)
+    # x 0x200-0x3FF of the first bank: the stage's and enemies' graphics (y 0-0xFF; her guardians
+    # went to x 0x300-0x3C0 there) and player 1's sheet and HUD (y 0x100-0x1FF)
+    sheet = lambda: a.vram_rect(512, 0, 512, 512)
+    before = sheet()
+    a.link(), b.link()
+    run.step(300)
+    run.expect(a.mailbox("partner_age") < 30 and a.mailbox("partner_presence").character == cb,
+               f"B's {NAMES[cb]} is with A", age=a.mailbox("partner_age"))
+    after = sheet()
+    changed = sum(1 for y in range(512) for x in range(512) if before[y][x] != after[y][x])
+    run.expect(changed < 200, f"A's own textures are untouched by B's {NAMES[cb]}", pixels_changed=changed)
+
+
+@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
+def partner_graphics_stay_in_their_bank_richter_and_maria(run):
+    """Richter (A) with Maria's body in his game: the pairing of the report."""
+    partner_graphics_stay_in_their_bank(run, CHAR_RICHTER, CHAR_MARIA)
+
+
+@session_scenario(characters=(CHAR_ALUCARD, CHAR_MARIA), full=True)
+def partner_graphics_stay_in_their_bank_alucard_and_maria(run):
+    """Alucard (A) with Maria's body in his game."""
+    partner_graphics_stay_in_their_bank(run, CHAR_ALUCARD, CHAR_MARIA)
+
+
+@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER), full=True)
+def partner_graphics_stay_in_their_bank_maria_and_richter(run):
+    """Maria (A) with Richter's body in her game."""
+    partner_graphics_stay_in_their_bank(run, CHAR_MARIA, CHAR_RICHTER)

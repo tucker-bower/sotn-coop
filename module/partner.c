@@ -202,7 +202,10 @@ static void WeaponsOn(void) {
 }
 
 // Graphics a partner's own code queues for DRA's loader (Maria's guardians, HUD): their entries
-// (its own data) get the bank bit in their y, so the loader puts them in the second bank.
+// (its own data) get the bank bit in their y, so the loader puts them in the second bank. An
+// entry's xy holds y in its low half and x in its high one (LoadPendingGfx passes xy >> 16 as x;
+// GFX_ENTRY's first argument is the y). The bit once went in the high half: x bit 9, already set
+// for x 0x200 and up, so her HUD and guardians went over player 1's HUD name and sheet (#165).
 static u8 s_GfxBusy[LEN(g_GfxLoad)];
 
 static void GfxBefore(void) {
@@ -220,7 +223,7 @@ static void GfxAfter(void) {
     for (i = 0; i < LEN(g_GfxLoad); i++) {
         if (!s_GfxBusy[i] && g_GfxLoad[i].kind != GFX_BANK_NONE) {
             for (e = g_GfxLoad[i].next; e->xy != GFX_TERMINATE(); e++) {
-                e->xy = (u_long*)((u32)e->xy | (VRAM_BANK << 16));
+                e->xy = (u_long*)((u32)e->xy | VRAM_BANK);
             }
         }
     }

@@ -116,6 +116,7 @@ EVERYDAY = {
     "ultimate_maria_subweapons", "partner_body_maria_and_ultimate_maria",  # + other mods' characters (D180)
     "saturn_maria_beasts", "partner_body_alucard_and_saturn_maria",  # + Saturn Maria (D181)
     "ultimate_richter_in_the_castle", "partner_body_alucard_and_ultimate_richter",  # + Ultimate Richter (D184)
+    "partner_graphics_stay_in_their_bank_richter_and_maria",  # + caught #165 alone (Maria over his HUD)
     # bosses, cutscenes
     "boss_aggro_switches", "boss_dead_stays_down", "boss_both_hit_one_death", "mixed_party_boss",
     "edges_boss_pull_mid_door", "keep_scene_alucard_and_richter", "keep_scene_richter_and_maria",
