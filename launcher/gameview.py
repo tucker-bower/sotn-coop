@@ -691,14 +691,16 @@ class GameView:
             pygame.time.wait(16)
 
     def send_report(self, path, note):
-        """In the background: the games carry on, and online the partner never waits."""
-        self.say("Sending the bug report...", 3600)
+        """In the background (report.py's outbox): the games carry on, online the partner never
+        waits, and a report not sent yet is tried again, also at the launcher's next start."""
+        self.say("Sending the bug report in the background...", 600)
+        report.queue_send(path, note)
 
-        def run():
-            error = report.send(path, note)
-            self.say(f"Couldn't send the bug report: {error}. It's in {path.parent}" if error
+    def outbox_news(self):
+        """What the outbox sent, or couldn't send yet, said in the status bar."""
+        for path, error in report.outbox_news():
+            self.say(f"Bug report not sent yet ({error}): it's tried again, also next time you start" if error
                      else "Bug report sent. Thank you!", 480)
-        threading.Thread(target=run, daemon=True).start()
 
     def write_cards(self):
         if self.save_cards:
@@ -1003,6 +1005,8 @@ class GameView:
                 self.rush.tick()
             if self.joiner and self.frame % 60 == 0:
                 self.follow_host()
+            if self.frame % 60 == 0:
+                self.outbox_news()
             if self.frame % 15 == 0:
                 if self.online:
                     self.games[0].mailbox("set_control", self.aggro)  # online: never mute local music (D55)

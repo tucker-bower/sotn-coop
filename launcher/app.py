@@ -554,6 +554,8 @@ class Launcher:
         import update
         update.tidy(paths.data_dir() / "updates")  # the installer that brought this version, if one did
         self.updates = update.Checker(self.settings, VERSION).start()  # in the background: launcher/update.py
+        import report
+        report.start_outbox()  # bug reports an earlier run didn't get sent
         self.update_later = False
         try:  # the test castles that ship with the app, when they changed (playtesters: D136)
             from archive import Castle

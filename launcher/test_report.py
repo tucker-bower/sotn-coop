@@ -8,6 +8,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import types
 import zipfile
 from pathlib import Path
@@ -140,6 +141,33 @@ with tempfile.TemporaryDirectory() as d:
           "it goes to the reports address, with the zip")
     replies.append(429)
     check("429" in (report.send(zip_file) or ""), "a refusal is reported, not raised")
+
+    # the outbox: one at a time, a failure tried again, nothing lost (a playtester's 4 of 7, 2026-11-14)
+    report.reports_dir = lambda: Path(d)
+    report.RETRY_SECONDS = 0.2
+    for name in ("a.zip", "b.zip"):
+        (Path(d) / name).write_bytes(name.encode())
+    replies += [503, 200, 200]
+    sent_before = len(got)
+    report.queue_send(Path(d) / "a.zip", "first")
+    report.queue_send(Path(d) / "b.zip", "second")
+    until = time.time() + 15
+    while report.pending() and time.time() < until:
+        time.sleep(0.05)
+    names = [m["attachments"][0]["filename"] for m in got[sent_before:]]
+    check(not report.pending() and sorted(names) == ["a.zip", "a.zip", "b.zip"],
+          f"the outbox sends each queued report, and tries a refused one again: {names}")
+    news = report.outbox_news()
+    check(any(e for _, e in news) and sum(1 for _, e in news if e is None) == 2,
+          f"it says what it sent, and what it couldn't yet: {news}")
+    (Path(d) / "c.zip").write_bytes(b"c")
+    (Path(d) / "c.zip.send").write_text('{"note": "from last time"}')
+    replies.append(200)
+    report.start_outbox()  # as at the launcher's start
+    until = time.time() + 15
+    while report.pending() and time.time() < until:
+        time.sleep(0.05)
+    check(not report.pending() and got[-1]["text"] == "from last time", "a report an earlier run didn't send goes at the next start")
     mail.shutdown()
     mail.server_close()
     check(report.send(zip_file) == "no connection", "no connection is reported, not raised")
