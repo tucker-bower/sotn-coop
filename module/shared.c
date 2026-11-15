@@ -591,13 +591,13 @@ static void ClearSlot(s32 i) {
     s_Local[i] = false;
 }
 
-// Shaft's orb in Richter's fight (BO6's func_us_801C03E8): the game shows it, and lets it be hit,
+// Shaft's orb in Richter's fight (BO6's func_us_801C03E8, entity 0x40): the game shows it, and lets it be hit,
 // only to a player with the Holy Glasses on, checked every frame. A copy has the authority's
 // player's: the guest's own Glasses did nothing, also put on mid-fight, and one game could kill
 // Richter with the orb alive in its own eyes while the other freed him (#283). The guest's copy is
 // seen, and hit, by its own player's Glasses; a hit goes to the authority, whose orb takes it
 // whatever its own player wears (ApplyHits).
-#define BO6_ORB_UPDATE 0x801C03E8
+#define BO6_ORB_ID 0x40 // (a copy has no update of its own: its id tells it)
 #define ORB_SEEN 0x8252   // PAL_FLAG(0x252)
 #define ORB_UNSEEN 0x810D // PAL_FLAG(PAL_PLAYER_HIDDEN)
 #define ITEM_HOLY_GLASSES 0x22
@@ -615,8 +615,7 @@ static void OwnOrb(void) {
     glasses = g_api.CheckEquipmentItemCount(ITEM_HOLY_GLASSES, 1) != 0;
     for (i = 0; i < STAGE_SLOTS; i++) {
         e = &g_Entities[STAGE_ENTITY_START + i];
-        if (!s_Mirrored[i] || !e->entityId || (u32)e->pfnUpdate != BO6_ORB_UPDATE ||
-            (e->palette != ORB_SEEN && e->palette != ORB_UNSEEN)) {
+        if (!s_Mirrored[i] || e->entityId != BO6_ORB_ID || (e->palette != ORB_SEEN && e->palette != ORB_UNSEEN)) {
             continue; // (its hit flash has a palette of its own: kept)
         }
         if (glasses && e->palette == ORB_UNSEEN) { // the authority's player has none: its hitbox is 0

@@ -783,17 +783,26 @@ _escape_test("boss_richter_corner_escape_richter_partner", (0, 1), 1, True)
 
 
 # --- #283: Shaft's orb is seen and hit by each player's own Holy Glasses --------------------------
-ORB_UPDATE = 0x801C03E8  # BO6's func_us_801C03E8
+ORB_ID = 0x40  # BO6's Shaft orb (func_us_801C03E8)
 
 
 def _orb(g):
-    """(palette, hitboxState) of g's orb, or None while there's none."""
+    """(palette, hitboxState) of g's orb, or None while there's none. Told by its entity id: a guest's
+    copy has no update of its own, and the authority's boss updates are wrapped (aggro)."""
     raw = g.read_bytes("g_Entities", 0xBC * 256)
     for slot in range(64, 256):
         b = raw[slot * 0xBC:(slot + 1) * 0xBC]
-        if int.from_bytes(b[0x26:0x28], "little") and int.from_bytes(b[0x28:0x2C], "little") == ORB_UPDATE:
+        if int.from_bytes(b[0x26:0x28], "little") == ORB_ID and int.from_bytes(b[0x16:0x18], "little") in (0x810D, 0x8252):
             return int.from_bytes(b[0x16:0x18], "little"), int.from_bytes(b[0x3C:0x3E], "little")
     return None
+
+
+def _ents(g):
+    raw = g.read_bytes("g_Entities", 0xBC * 256)
+    return [(s, hex(int.from_bytes(raw[s * 0xBC + 0x26:s * 0xBC + 0x28], "little")),
+             hex(int.from_bytes(raw[s * 0xBC + 0x28:s * 0xBC + 0x2C], "little")),
+             hex(int.from_bytes(raw[s * 0xBC + 0x16:s * 0xBC + 0x18], "little")))
+            for s in range(64, 256) if int.from_bytes(raw[s * 0xBC + 0x26:s * 0xBC + 0x28], "little")]
 
 
 def orb_by_own_glasses(run):
@@ -804,12 +813,13 @@ def orb_by_own_glasses(run):
     full_hp = lambda: [g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C) for g in (a, b)]
     for g in (a, b):
         g.mailbox("command", CMD_ARRIVE, BO6, *BO6_ARRIVE)
-    for _ in range(3600):  # the fight's opening, then the orb comes out
-        run.step(1, p1=("left", "left"))
+    for _ in range(4200):  # the fight's opening, then the orb comes out (about 1800 frames)
+        run.step(1)
         full_hp()
         if _orb(a) and _orb(b) and not any(g.read("g_CutsceneHasControl") for g in (a, b)):
             break
-    run.expect(_orb(a) and _orb(b), "the orb is out in both games", a=a.snapshot(), b=b.snapshot())
+    run.expect(_orb(a) and _orb(b), "the orb is out in both games", a=a.snapshot(), b=b.snapshot(),
+               ents_a=_ents(a)[:20], cs=[g.read("g_CutsceneHasControl") for g in (a, b)])
     owned = symbols()["g_CoopOrbsOwned"]
     roles = lambda: {g.mailbox("self_presence").role: g for g in (a, b)}
     AUTH, GUEST = ROLE_AUTHORITY, ROLE_GUEST
@@ -839,3 +849,55 @@ def boss_richter_orb_by_own_glasses(run):
     seen and hit by the authority's player's Holy Glasses, never the guest's. With the Glasses on the
     guest only, then the authority only, the wearer sees the orb and can hit it, the other can't."""
     orb_by_own_glasses(run)
+
+
+# --- #284: a player pausing mid-fight leaves one Richter on each screen ---------------------------
+def _count(g, entity_id):
+    raw = g.read_bytes("g_Entities", 0xBC * 256)
+    return sum(1 for s in range(64, 256) if int.from_bytes(raw[s * 0xBC + 0x26:s * 0xBC + 0x28], "little") == entity_id)
+
+
+def pause_mid_fight(run):
+    from link.mailbox import CMD_ARRIVE
+    a, b = run.s.a, run.s.b
+    full_hp = lambda: [g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C) for g in (a, b)]
+    for g in (a, b):
+        g.mailbox("command", CMD_ARRIVE, BO6, *BO6_ARRIVE)
+    for _ in range(4200):
+        run.step(1)
+        full_hp()
+        if _orb(a) and _orb(b) and not any(g.read("g_CutsceneHasControl") for g in (a, b)):
+            break
+    run.expect(_orb(a) and _orb(b), "the fight is on in both games, the orb out", a=a.snapshot(), b=b.snapshot())
+    richter = a.read(a.entity(64), "<H", 0x26)  # BO6's RIC (g_Entities[STAGE_ENTITY_START]): his entity id
+    roles = {g.mailbox("self_presence").role: g for g in (a, b)}
+    run.expect(set(roles) == {ROLE_AUTHORITY, ROLE_GUEST}, "the room is shared", roles=sorted(roles))
+    for who in (ROLE_AUTHORITY, ROLE_GUEST):
+        g = roles[who]
+        pad = lambda p: (p, "") if g is a else ("", p)
+        name = "the authority" if who == ROLE_AUTHORITY else "the guest"
+        run.step(2, p1=pad("start"))
+        counts = []
+        for t in range(600):
+            run.step(1)
+            full_hp()
+            if t % 20 == 0:
+                counts.append((_count(a, richter), _count(b, richter), bool(_orb(a)), bool(_orb(b))))
+        run.step(2, p1=pad("start"))
+        for t in range(600):
+            run.step(1)
+            full_hp()
+            if t % 20 == 0:
+                counts.append((_count(a, richter), _count(b, richter), bool(_orb(a)), bool(_orb(b))))
+        run.capture()
+        run.expect(all(ra == 1 and rb == 1 for ra, rb, _, _ in counts), f"{name} paused, then went on: one Richter in each game",
+                   counts=sorted(set(counts)))
+        run.expect(counts[-1][2] and counts[-1][3], f"...and the orb is out in both after", counts=counts[-5:])
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def boss_richter_pause_keeps_one_richter(run):
+    """#284 (playtest 2026-11-14): a player pausing mid-fight left a frozen Richter on the other
+    screen, beside the moving one, and the orb could vanish for good. The authority, then the guest,
+    pauses for 10 seconds and goes on: one Richter in each game all along, and the orb still out."""
+    pause_mid_fight(run)

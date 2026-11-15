@@ -240,6 +240,15 @@ During a stage change, `g_StageId` is the next stage from `Play_PrepareNextStage
 ## Shaft's orb without the Holy Glasses
 In the Castle Keep fight with Richter (BO6), Shaft's orb (entity 0x40, `src/boss/bo6/us_3E79C.c`) is unhittable without the Holy Glasses (head slot, item 0x22): the bad ending's way. It's drawn with `PAL_FLAG(PAL_PLAYER_HIDDEN)` (0x810D) to be unseen, a palette that's blank only in Alucard's game. For Richter and Maria the module keeps any BO6 stage entity with that palette out of RenderEntities (issue 189). It comes out about 1800 frames after arriving in the arena.
 
+## Telling a boss's entities apart in a shared room
+A guest's copies have no update function of their own (pfnUpdate 0: the guest's stage update is
+switched off), and in the authority the module wraps boss updates for aggro (boss.c), so a
+stage entity's pfnUpdate doesn't identify it in co-op. Use its entityId (and palette): Shaft's orb
+in BO6 is entity 0x40 (palette 0x8252 seen, 0x810D hidden), Richter is 0x16 in slot 64 (BO6's
+`RIC`). The guest's stage update and spawner are `GuestUpdate` and `Stub` while it's the guest;
+a stage overlay's own table is its header at 0x80180000 (the `Overlay` struct g_api.o is copied
+from), which is how a stub left in after a role ends is put back (#285).
+
 ## Arenas without side walls
 Richter's (BO6), Shaft's and Dracula's (RBO6) and the Succubus's (DRE) rooms have no wall tiles at their sides: the screen's edges are the walls. Alucard's `CheckWallRight`/`Left` (`src/dra/6BF64.c`) report a wall at x 248 and 8 in those stages; Richter's and Maria's (`RicCheckWallRight`, `MarCheckWallRight`) never had to. The possessed Richter's tackle and Blade Dash hit with `DAMAGEKIND_5`, which flings the player until they meet a wall (`RicStepHit` step_s 2). Past the edge, DRA's room code holds them at x 255 (`src/dra/5087C.c`, no room to load), where no wall is ever met (#188). In a report, step 10, step_s 2 at x 255 is this. Note that Richter's and Maria's `CalcPlayerDamage` (the short one at the top of `5D5BC.c`) never makes kind 4 or 5 from a hit's size: only the attack's own `hitParams` can.
 
