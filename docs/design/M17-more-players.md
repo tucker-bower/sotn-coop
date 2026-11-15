@@ -48,8 +48,8 @@ Everything today assumes one partner: about 1,500 references across `module/`, `
 
 **The hard limit is VRAM.** A partner's body draws from a full copy of the texture half in its own bank (M13). `patches/swanstation.patch` gives one extra bank, chosen per primitive by spare bits: y bit 9 for uploads, texpage bit 14 and CLUT bit 15. A third and fourth player need banks 2 and 3, so two bits per primitive:
 - **Uploads and fills:** y bits 9 and 10 (VRAM 1024×2048, 4 MB). Retail never sets either.
-- **Textures:** texpage bits 14 and 15, both unused by the PS1.
-- **Palettes:** CLUT bit 15, plus CLUT x bit 5. The palette rows a body is banked from (`partner.c`, y 0xF0–0xFF) all have x < 256, so x bit 5 (x ≥ 512) is free there. The core reads `(bit15 | xbit5 << 1)` as the bank only when bit 15 is set, so bank 1's encoding stays as it is today and two-player discs and savestates don't change.
+- **Palettes:** CLUT bit 15 picks a bank, and CLUT x bits 4–5 say which: bank = 1 + those bits. Every banked palette today has x < 256: the body's rows (`partner.c` `BankClut`: y 0xF0–0xFF) and the off-hand weapons' (`offhand.c`: y 0x1F0+). So those bits are always 0 there, bank 1 is encoded as it is now, and two-player discs and savestates don't change.
+- **Textures:** bank = texpage bit 14 | bit 15 << 1, so bank 1 is still bit 14 alone.
 - **Cost:** new cores for Windows, Linux and Android (`bootstrap.sh`), `harness/core_check.py` identical on all three, and 20 MB savestates (v59; v58 still loads).
 
 **Steps** (each a PR; acceptance criteria above, plus "two players unchanged": the gate passes):
