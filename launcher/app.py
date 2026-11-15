@@ -2625,7 +2625,8 @@ class Launcher:
         if k is None:
             return
         label, fa, fb = pairs[k]
-        mode = self.pick_mode("Play from here", label)
+        from ui.screens.castles import moment_label
+        mode = self.pick_mode("Play from here", moment_label(label))
         if mode is None:
             return
         a, b = load_pair(fa, fb)

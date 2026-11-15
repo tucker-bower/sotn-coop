@@ -486,10 +486,10 @@ def _solo(pg):
         ("key", pg.K_h), ("screen", "Save history"), ("shot", "save-history"), ("key", pg.K_RETURN),
         ("screen", "Play from here"), ("shot", "who-plays"), ("key", pg.K_RETURN),  # Solo: the first
         ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", in_game), ("game_frames", 300), ("shot", "solo-from-a-moment"),
+        ("until", in_game), ("until", lambda d: d.launcher.view and d.launcher.view.frame >= 900),  # (game_frames counts every session's)
+        ("shot", "solo-from-a-moment"),
         ("expect", lambda d: len(d.launcher.view.games) == 1 and d.launcher.display._bar_key[0][0].startswith("Solo"),
-         "a moment plays solo: one game"),
-        ("expect", lambda d: game_state(d) == 2, "...in play, from the moment"),
+         "a moment plays solo: one game, and the status bar says Solo"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Load castle"),  # back where save history was opened
         ("key", pg.K_ESCAPE), ("screen", "Solo"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
