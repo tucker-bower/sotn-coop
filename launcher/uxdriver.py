@@ -995,6 +995,33 @@ def _hud(pg):
     return steps
 
 
+def _debug_start_characters(pg):
+    """Playtest 2026-11-14: a boss's debug start, on the couch with player 2 as Richter, plays
+    Richter in game B (it loaded as Alucard: a savestate holds whoever made it), at the boss's door."""
+    A, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_RIGHT
+    view = lambda d: d.launcher.view
+    return [*first_run(pg),
+            ("screen", "Home"), ("menu", "debug_starts"),
+            ("until", lambda d: d.heading == "Debug starts"),
+            ("call", make_starts),
+            ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Solo or couch")),
+            ("key", pg.K_RETURN), ("screen", "Bosses"), ("key", pg.K_RETURN),  # the first boss
+            ("until", lambda d: d.heading not in ("Bosses", "Debug starts")), ("shot", "who-plays"),
+            ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
+            ("screen", "Press a button"),
+            ("pad", 0, A), ("pad", 0, A), ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+            ("until", lambda d: d.heading == "Game"),
+            ("expect", lambda d: d.launcher.characters == [0, 1], "player 1 Alucard, player 2 Richter"),
+            ("until", lambda d: view(d) and view(d).frame >= 600 and
+             view(d).games[1].mailbox("self_presence").flags & 1),  # B in play, after the save's load
+            ("until", lambda d: view(d).frame >= 1500), ("shot", "at-the-boss"),
+            ("expect", lambda d: view(d).games[1].mailbox("self_presence").character == 1, "game B plays Richter"),
+            ("expect", lambda d: view(d).games[0].mailbox("self_presence").stage == view(d).games[1].mailbox("self_presence").stage != 0,
+             "both at the start's stage"),
+            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+            ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
+
+
 def _randomizer(pg):
     """design/M20-randomizer.md criterion 5, issue 232: Mods › New mod preset. A seed file that's the
     retail disc is refused; a casual seed rolled in one click (the randomizer here) and Fast Warp are
@@ -1079,7 +1106,7 @@ def _randomizer(pg):
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
-SCRIPTS = {"randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"debug_start_characters": _debug_start_characters, "randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

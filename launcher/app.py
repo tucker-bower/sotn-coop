@@ -2243,11 +2243,11 @@ class Launcher:
 
     # --- playing
 
-    def session(self, starts, playthrough, bios=None):
+    def session(self, starts, playthrough, bios=None, session_file=None):
         from session import Session
         self.apply_bios(bios)
         return Session(self.disc(), starts=starts, audio=True,
-                       session_file=playthrough.joint_save if playthrough else None,
+                       session_file=playthrough.joint_save if playthrough else session_file,
                        characters=tuple(self.characters), blob=self.blob())
 
     def apply_players(self, s):
@@ -2468,13 +2468,13 @@ class Launcher:
             else:
                 self.join_online()
 
-    def online_session(self, start, playthrough, rank=0, peer=None, bios=None):
+    def online_session(self, start, playthrough, rank=0, peer=None, bios=None, session_file=None):
         from link.connect import GAME_PORT
         from session import OnlineSession
         self.apply_bios(bios)
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True, joint=True,
-            session_file=playthrough.joint_save if playthrough else None,
+            session_file=playthrough.joint_save if playthrough else session_file,
             patch_crc=self.patch_crc(), blob=self.blob(), mod=self.mod_line(),
             # tests: a fixed port (Android emulators: design/M9); else the usual one, which the LAN
             # broadcast finds (link/connect.py), or any free one
@@ -2695,11 +2695,39 @@ class Launcher:
                              [(n.removeprefix("Boss: ").removeprefix("Scene: "), starts[n]["about"]) for n in names])
             if k is not None:
                 break
-        mode = self.pick_mode(names[k].removeprefix("Boss: ").removeprefix("Scene: "), starts[names[k]]["about"])
+        start = starts[names[k]]
+        mode = self.pick_mode(names[k].removeprefix("Boss: ").removeprefix("Scene: "), start["about"])
         if mode is None:
             return
-        file = self.starts_dir() / starts[names[k]]["file"]
-        self.play_from(mode, file, None, None, goal=f"Debug start: {names[k]} — {starts[names[k]]['about']}")
+        goal = f"Debug start: {names[k]} — {start['about']}"
+        if start.get("save") and start.get("start") and (self.starts_dir() / start["save"]).exists():
+            # its save, loaded, then the arrival at its spot: as a test castle, so the lobby's
+            # characters play it (a savestate holds whoever made it: Alucard; playtest 2026-11-14)
+            return self.play_save(mode, (self.starts_dir() / start["save"]).read_bytes(), start["start"], goal)
+        self.play_from(mode, self.starts_dir() / start["file"], None, None, goal=goal)
+
+    def play_save(self, mode, save, start, goal=""):
+        """A save (a debug start's) played solo or on the couch with no castle: loaded from the title
+        as a castle's is, then each player arrives at start (stage, room, x, y)."""
+        from link.jointsave import write_session
+        if mode == "solo" and self.lobby(1, subtitle="Playing solo.") is None:
+            return
+        if mode != "solo" and None in self.pads.assign and self.lobby() is None:
+            return
+        with tempfile.TemporaryDirectory(prefix="coop-") as tmp:
+            path = Path(tmp) / "start.coop"
+            write_session(path, [save])
+            s = self.online_session(None, None, rank=0, session_file=path) if mode == "solo" else \
+                self.session((None, None), None, session_file=path)
+            with s:
+                if mode == "solo":
+                    s.solo = True
+                if not self.boot_to_title(s, "Debug start"):
+                    return
+                self.apply_players(s)
+                s.joint.start = tuple(start)
+                s.joint.resume()
+                self.run_view(s, None, goal=goal)
 
     def open_rules(self):
         """Options › Open settings: the rules of the castle being played; from the menus, pick one."""
