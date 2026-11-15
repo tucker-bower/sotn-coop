@@ -183,6 +183,31 @@ def main():
         m, ui, _ = menus([[], [("mouse", 240, 246, True)]])
         check(castle_list(m, "Load castle", castles, extras) == ("history", castles[0]), "the mouse: a click on the footer's save history opens it")
 
+        # who plays, from the menu bar's Continue and New, debug starts and save history (playtest 2026-11-14)
+        import types
+        import app
+        import archive
+        m, ui, _ = menus([["down"], ["ok"]])
+        fake = types.SimpleNamespace(menus=m)
+        check(app.Launcher.pick_mode(fake, "Continue", "Tucker", online=True) == "couch", "who plays: Solo, then Couch co-op")
+        m, ui, _ = menus([["up"], ["ok"]])
+        fake = types.SimpleNamespace(menus=m)
+        check(app.Launcher.pick_mode(fake, "Continue", "Tucker", online=True) == "host", "...and Host online, for a castle")
+        last_castle = types.SimpleNamespace(name="Tucker")
+        real_all = archive.Castle.all
+        archive.Castle.all = staticmethod(lambda: [last_castle])
+        try:
+            went = []
+            for mode in ("solo", "couch", "host", None):
+                fake = types.SimpleNamespace(pick_mode=lambda *a, mode=mode, **k: mode, solo=lambda picked: went.append(("solo", picked)),
+                                             host_online=lambda c, fresh: went.append(("host", (c, fresh))),
+                                             lobby=lambda **k: True, play=lambda c, fresh: went.append(("couch", (c, fresh))))
+                app.Launcher.couch(fake, "continue")
+        finally:
+            archive.Castle.all = real_all
+        check(went == [("solo", (last_castle, False)), ("couch", (last_castle, False)), ("host", (last_castle, False))],
+              "the menu bar's Continue plays the last castle the way the player picks: solo, couch or hosted; back plays nothing")
+
         # a castle's save history (#278)
         from ui.screens.castles import moment_label, save_history
         labels = [f"20261114-2034{k:02d} New area Castle Keep" for k in range(20)]

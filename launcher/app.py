@@ -2153,20 +2153,64 @@ class Launcher:
     def couch(self, act="couch"):
         from archive import Castle
         castles = Castle.all()
+        mode = "couch"
+        if act in ("new", "continue"):  # the menu bar's: who plays is asked, never assumed (playtest, 2026-11-14)
+            what = castles[0].name if act == "continue" and castles else "A new castle"
+            mode = self.pick_mode("Continue" if act == "continue" and castles else "New castle", what, online=True)
+            if mode is None:
+                return
         if act == "new" or (act == "continue" and not castles):
             picked = self.new_castle()
         elif act == "continue":
             picked = (castles[0], False)
         else:
             picked = self.pick_castle("Couch co-op", "Player 1 is slot 1 of the castle, player 2 slot 2.")
+        if picked and mode == "solo":
+            return self.solo(picked)
+        if picked and mode == "host":
+            return self.host_online(*picked)
         # the castle first, then who plays (design/launcher-overhaul.md)
         if picked and self.lobby(subtitle="Player 1: left screen. 2: right.") is not None:
             self.play(*picked)
 
-    def solo(self):
+    def pick_mode(self, heading, about, online=False):
+        """Who plays: "solo", "couch", "host" (online: Host online too), or None (back)."""
+        items = [("solo", "Solo", "One player."),
+                 ("couch", "Couch co-op", "Two players on this PC: left and right screens.")]
+        if online:
+            items.append(("host", "Host online", "Get a room code for your partner."))
+        if self.menus:
+            from ui.screens.pick import pick
+            return pick(self.menus, heading, items, about)
+        k = self.ui.menu(heading, [(label, what) for _, label, what in items], about)
+        return None if k is None else items[k][0]
+
+    def play_from(self, mode, a_file, b_file, playthrough, bios=None, goal=""):
+        """A savestate (a debug start, a moment of a castle's history) played solo or on the couch.
+        Solo plays A's state; couch, A's and B's (A's twice if there's no B: a solo moment)."""
+        if mode == "solo":
+            if self.lobby(1, subtitle="Playing solo.") is None:
+                return
+            with self.online_session(str(a_file), playthrough, rank=0, bios=bios) as s:
+                s.solo = True
+                if playthrough is not None:
+                    s.joint.on_write = playthrough.saved
+                    self.load_cards(s, playthrough)
+                self.run_view(s, playthrough, goal=goal)
+            return
+        if None in self.pads.assign and self.lobby() is None:
+            return
+        with self.session((str(a_file), str(b_file or a_file)), playthrough, bios) as s:
+            if playthrough is not None:
+                s.joint.on_write = playthrough.saved
+                self.load_cards(s, playthrough)
+            self.run_view(s, playthrough, goal=goal)
+
+    def solo(self, picked=None):
         """One game, no partner: 1× boss HP, full XP (the game's duo balancing waits for a
-        partner it never hears from). The castle's slot 2 stays as it was."""
-        picked = self.pick_castle("Solo", "Any castle: yours, or one you joined.")
+        partner it never hears from). The castle's slot 2 stays as it was. picked: (castle, fresh)
+        already chosen (the menu bar's Continue), else the player picks one."""
+        picked = picked or self.pick_castle("Solo", "Any castle: yours, or one you joined.")
         if not picked or self.lobby(1, subtitle="Playing solo.") is None:
             return
         castle, fresh = picked
@@ -2422,10 +2466,10 @@ class Launcher:
             else:
                 self.join_online()
 
-    def online_session(self, start, playthrough, rank=0, peer=None):
+    def online_session(self, start, playthrough, rank=0, peer=None, bios=None):
         from link.connect import GAME_PORT
         from session import OnlineSession
-        self.apply_bios()
+        self.apply_bios(bios)
         return OnlineSession(
             self.disc(), start=start, rank=rank, peer=peer, audio=True, joint=True,
             session_file=playthrough.joint_save if playthrough else None,
@@ -2578,18 +2622,19 @@ class Launcher:
         else:  # (a list that doesn't scroll: the newest)
             k = ui.menu(f"Save history: {p.name}", [(label, "") for label, _, _ in pairs[:9]],
                         "Newest first. Play the castle from one of these moments. Then save at a coffin to keep it.")
-        if k is None or (None in self.pads.assign and self.lobby() is None):
+        if k is None:
             return
         label, fa, fb = pairs[k]
+        mode = self.pick_mode("Play from here", label)
+        if mode is None:
+            return
         a, b = load_pair(fa, fb)
         with tempfile.TemporaryDirectory(prefix="coop-") as tmp:
             (Path(tmp) / "A.state").write_bytes(a)
-            (Path(tmp) / "B.state").write_bytes(b)
+            if b is not None:  # (a moment of a solo or online game has A's state only)
+                (Path(tmp) / "B.state").write_bytes(b)
             bios = Castle.state_bios(fa, BUNDLED_BIOS.parent, self.settings.get("bios") or LEGACY_BIOS)
-            with self.session((str(Path(tmp) / "A.state"), str(Path(tmp) / "B.state")), p, bios) as s:
-                s.joint.on_write = p.saved
-                self.load_cards(s, p)
-                self.run_view(s, p)
+            self.play_from(mode, Path(tmp) / "A.state", Path(tmp) / "B.state" if b is not None else None, p, bios)
 
     def savestates(self):
         from archive import Castle, load_pair
@@ -2637,7 +2682,7 @@ class Launcher:
                       ("Scenes", "Before each story scene of the first castle, with the progress of that point", "scene"),
                       ("Places", "Spots along the route, with the gear from the start", None)]
             group = self.ui.menu("Debug starts", [g[:2] for g in groups],
-                                 "Both games start here, with throwaway memory cards. F9 still saves a bug report.")
+                                 "Solo or couch, the game(s) start here, with throwaway memory cards. F9 still saves a bug report.")
             if group is None:
                 return
             kind = groups[group][2]
@@ -2647,11 +2692,11 @@ class Launcher:
                              [(n.removeprefix("Boss: ").removeprefix("Scene: "), starts[n]["about"]) for n in names])
             if k is not None:
                 break
-        if None in self.pads.assign and self.lobby() is None:
+        mode = self.pick_mode(names[k].removeprefix("Boss: ").removeprefix("Scene: "), starts[names[k]]["about"])
+        if mode is None:
             return
-        file = str(self.starts_dir() / starts[names[k]]["file"])
-        with self.session((file, file), None) as s:
-            self.run_view(s, None, goal=f"Debug start: {names[k]} — {starts[names[k]]['about']}")
+        file = self.starts_dir() / starts[names[k]]["file"]
+        self.play_from(mode, file, None, None, goal=f"Debug start: {names[k]} — {starts[names[k]]['about']}")
 
     def open_rules(self):
         """Options › Open settings: the rules of the castle being played; from the menus, pick one."""
