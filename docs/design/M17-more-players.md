@@ -42,3 +42,20 @@ Limited by, in order: **VRAM** (each partner needs a bank: M13's layout), **CPU*
 
 ## Budget
 About 8–10 usage windows.
+
+## Implementation plan (2026-11-14)
+Everything today assumes one partner: about 1,500 references across `module/`, `link/`, `launcher/` and `harness/`. So the build goes in steps, each shippable with two players unchanged and each with its own tests.
+
+**The hard limit is VRAM.** A partner's body draws from a full copy of the texture half in its own bank (M13). `patches/swanstation.patch` gives one extra bank, chosen per primitive by spare bits: y bit 9 for uploads, texpage bit 14 and CLUT bit 15. A third and fourth player need banks 2 and 3, so two bits per primitive:
+- **Uploads and fills:** y bits 9 and 10 (VRAM 1024×2048, 4 MB). Retail never sets either.
+- **Textures:** texpage bits 14 and 15, both unused by the PS1.
+- **Palettes:** CLUT bit 15, plus CLUT x bit 5. The palette rows a body is banked from (`partner.c`, y 0xF0–0xFF) all have x < 256, so x bit 5 (x ≥ 512) is free there. The core reads `(bit15 | xbit5 << 1)` as the bank only when bit 15 is set, so bank 1's encoding stays as it is today and two-player discs and savestates don't change.
+- **Cost:** new cores for Windows, Linux and Android (`bootstrap.sh`), `harness/core_check.py` identical on all three, and 20 MB savestates (v59; v58 still loads).
+
+**Steps** (each a PR; acceptance criteria above, plus "two players unchanged": the gate passes):
+1. **Core: four banks** (the patch above). `core_check`, plus a test that draws one sprite from each bank.
+2. **Mailbox: N partners.** `link.h`'s partner fields become `partners[3]` (presence, pad, sprites, prims, hits, snapshots in), each with its own 8 MB copies (weapons, familiar, status: 0x10000 each). Partner 0 is today's partner, and every module system still reads only it. `test_layout` checks it.
+3. **Hosts: the roster and the mesh.** `transport.py` is per peer; `host.py` keeps one per partner, maps each to a mailbox slot, and forwards between guests who can't reach each other (criterion 2). Python-only, so it's tested with fake games (`test_connect` with three).
+4. **Bodies: one per partner.** `partner.c`'s single body becomes an array: swap regions per body, bank k for partner k, and its own drawing pass. Tested as `m17_bodies_*` with three games.
+5. **Shared rooms, progression, bosses, respawn** (criteria 1 and 3): the authority streams to each guest, merges take every partner, boss HP scales by players in the room, and respawn goes to the nearest living partner.
+6. **Launcher:** a 4-player lobby, the map's colours, teleport choosing a partner, and couch 2×2 (criterion 4). Then the measurements and caps (criteria 5 and 6).
