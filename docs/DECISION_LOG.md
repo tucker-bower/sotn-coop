@@ -974,7 +974,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - With Soul of Bat, each backflip after the first turns his back to the held direction, so it carries him that way and he can climb toward a ledge on either side (the Gravity Boots' way in). With nothing held he flips backwards, as ever. The first backflip still needs a standing jump, as in his own game: a jump with a direction held is a forward jump, and Cross again is the Leap Stone's double jump.
 - Options considered: facing the held direction (the flip then goes away from it: backwards to what the player asked for); steering through the whole flip (changes his air control, which no relic gives him).
 
-**D206: Shaft's orb is seen by each player's own Holy Glasses** (2026-11-14, #283; agent-default, Tucker to confirm)
+**D206: Shaft's orb is seen by each player's own Holy Glasses** (2026-11-14, #283; Tucker confirmed: one orb both players fight together, one shared outcome, each seeing it by their own Glasses)
 - **The rule:** as in the original game, a player sees the orb, and can hit it, while wearing the Holy Glasses; in a shared room the guest's copy follows the guest's own Glasses (it followed the authority's player's). A hit from the guest lands on the authority's orb whatever the authority's player wears, so the orb's defeat is one, for both.
 - **Options considered:** either player's Glasses show it to both (a player without them could take the good path for both, by watching a partner); each player's own (chosen: retail's rule, per player).
 - **No shared room during the walk to the warp after Richter's fight** (#285): each game walks its own player (a guest had the partner's walk, left at its last step).
