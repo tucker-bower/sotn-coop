@@ -780,3 +780,62 @@ _escape_test("boss_richter_corner_escape_alucard", (0, 1), 0, False)
 _escape_test("boss_richter_corner_escape_richter", (1, 0), 0, False)
 _escape_test("boss_richter_corner_escape_maria", (2, 0), 0, True)
 _escape_test("boss_richter_corner_escape_richter_partner", (0, 1), 1, True)
+
+
+# --- #283: Shaft's orb is seen and hit by each player's own Holy Glasses --------------------------
+ORB_UPDATE = 0x801C03E8  # BO6's func_us_801C03E8
+
+
+def _orb(g):
+    """(palette, hitboxState) of g's orb, or None while there's none."""
+    raw = g.read_bytes("g_Entities", 0xBC * 256)
+    for slot in range(64, 256):
+        b = raw[slot * 0xBC:(slot + 1) * 0xBC]
+        if int.from_bytes(b[0x26:0x28], "little") and int.from_bytes(b[0x28:0x2C], "little") == ORB_UPDATE:
+            return int.from_bytes(b[0x16:0x18], "little"), int.from_bytes(b[0x3C:0x3E], "little")
+    return None
+
+
+def orb_by_own_glasses(run):
+    from link.mailbox import CMD_ARRIVE
+    from module import symbols
+    from scenarios_m12 import HEAD, HOLY_GLASSES, PAL_HIDDEN_FLAGGED, PAL_ORB_SEEN
+    a, b = run.s.a, run.s.b
+    full_hp = lambda: [g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C) for g in (a, b)]
+    for g in (a, b):
+        g.mailbox("command", CMD_ARRIVE, BO6, *BO6_ARRIVE)
+    for _ in range(3600):  # the fight's opening, then the orb comes out
+        run.step(1, p1=("left", "left"))
+        full_hp()
+        if _orb(a) and _orb(b) and not any(g.read("g_CutsceneHasControl") for g in (a, b)):
+            break
+    run.expect(_orb(a) and _orb(b), "the orb is out in both games", a=a.snapshot(), b=b.snapshot())
+    owned = symbols()["g_CoopOrbsOwned"]
+    roles = lambda: {g.mailbox("self_presence").role: g for g in (a, b)}
+    AUTH, GUEST = ROLE_AUTHORITY, ROLE_GUEST
+    for glasses_on in ("guest", "authority"):
+        r = roles()
+        run.expect(set(r) == {AUTH, GUEST}, "the room is shared: one authority, one guest", roles=sorted(r))
+        auth, guest = r[AUTH], r[GUEST]
+        wearer, other = (guest, auth) if glasses_on == "guest" else (auth, guest)
+        wearer.write(HEAD, HOLY_GLASSES)
+        other.write(HEAD, 0)
+        before = guest.read(owned)
+        seen = {}
+        for _ in range(60):
+            run.step(1)
+            full_hp()
+            seen = {"wearer": _orb(wearer), "other": _orb(other)}
+        run.expect(seen["wearer"] and seen["wearer"][0] == PAL_ORB_SEEN and seen["wearer"][1],
+                   f"Glasses on the {glasses_on}: it sees the orb, and can hit it", seen={k: v and tuple(map(hex, v)) for k, v in seen.items()})
+        run.expect(seen["other"] and seen["other"][0] == PAL_HIDDEN_FLAGGED and not seen["other"][1],
+                   "...and the player without them doesn't", seen={k: v and tuple(map(hex, v)) for k, v in seen.items()})
+        run.expect(guest.read(owned) > before, "the guest's copy follows its own player", owned=guest.read(owned) - before)
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def boss_richter_orb_by_own_glasses(run):
+    """#283 (playtest 2026-11-14): in a shared room the guest copies the authority's orb, so it was
+    seen and hit by the authority's player's Holy Glasses, never the guest's. With the Glasses on the
+    guest only, then the authority only, the wearer sees the orb and can hit it, the other can't."""
+    orb_by_own_glasses(run)
