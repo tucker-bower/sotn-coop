@@ -577,6 +577,8 @@ static void FreeMirrorPrims(s32 i) {
     }
 }
 
+u32 g_CoopStaleHelpersCleared; // drawn helpers with no id a guest cleared (tests read it: coop.map)
+
 static void ClearSlot(s32 i) {
     Entity* e = &g_Entities[STAGE_ENTITY_START + i];
 
@@ -587,6 +589,12 @@ static void ClearSlot(s32 i) {
         s_Mirrored[i] = false;
     } else if (e->entityId) {
         DestroyEntity(e); // something local (a hit spark): the snapshot decides what's here
+    } else if (e->animCurFrame || (e->flags & FLAG_HAS_PRIMS)) {
+        // A helper with no id of its own, drawn: Richter's afterimages (BO6's slots 65-67, set up by
+        // his code with no entityId) aren't in a snapshot, and a game that ran its own Richter (the
+        // partner paused) kept them, frozen where they were when it became the guest again (#284).
+        DestroyEntity(e);
+        g_CoopStaleHelpersCleared++;
     }
     s_Local[i] = false;
 }

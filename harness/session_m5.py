@@ -883,6 +883,12 @@ def pause_mid_fight(run):
             full_hp()
             if t % 20 == 0:
                 counts.append((_count(a, richter), _count(b, richter), bool(_orb(a)), bool(_orb(b))))
+        # The report's moment: its afterimage (BO6's slots 65-67, no entity id) drawn when it paused
+        for slot, frame in ((66, 126), (67, 126)):
+            g.write(g.entity(slot), 32, "<h", 2)
+            g.write(g.entity(slot), 126, "<h", 6)
+            g.write(g.entity(slot), frame, "<h", 0x56)
+            g.write(g.entity(slot), 0x8001, "<H", 0x14)
         run.step(2, p1=pad("start"))
         for t in range(600):
             run.step(1)
@@ -890,6 +896,9 @@ def pause_mid_fight(run):
             if t % 20 == 0:
                 counts.append((_count(a, richter), _count(b, richter), bool(_orb(a)), bool(_orb(b))))
         run.capture()
+        if g.mailbox("self_presence").role == ROLE_GUEST:  # back as the room's guest: nothing of its own drawn
+            stale = [s for s in (65, 66, 67) if g.read(g.entity(s), "<h", 0x56) and not g.read(g.entity(s), "<H", 0x26)]
+            run.expect(not stale, f"{name}, back as the guest, has no frozen Richter left (#284)", stale=stale)
         run.expect(all(ra == 1 and rb == 1 for ra, rb, _, _ in counts), f"{name} paused, then went on: one Richter in each game",
                    counts=sorted(set(counts)))
         run.expect(counts[-1][2] and counts[-1][3], f"...and the orb is out in both after", counts=counts[-5:])
@@ -897,7 +906,9 @@ def pause_mid_fight(run):
 
 @session_scenario(starts=("entrance", "entrance"))
 def boss_richter_pause_keeps_one_richter(run):
-    """#284 (playtest 2026-11-14): a player pausing mid-fight left a frozen Richter on the other
-    screen, beside the moving one, and the orb could vanish for good. The authority, then the guest,
-    pauses for 10 seconds and goes on: one Richter in each game all along, and the orb still out."""
+    """#284 (playtest 2026-11-14): a player pausing mid-fight left a frozen Richter on its own screen,
+    beside the moving one: his afterimages (BO6's slots 65-67, entities with no id) aren't in a
+    snapshot, and a game back as the guest kept the ones it drew when it paused. The authority, then
+    the guest, pauses for 10 seconds (an afterimage drawn) and goes on: one Richter in each game, the
+    orb still out, and no afterimage left frozen in the guest."""
     pause_mid_fight(run)
