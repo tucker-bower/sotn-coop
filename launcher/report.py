@@ -194,42 +194,46 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
         k += 1
     taken = taken or snapshot(games, None)
     private = private_words(games, playthrough)
-    with zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED) as z:
-        for who, g, link in zip("AB", games, taken["links"]):
-            z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
-            z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
-            try:
-                shot = g.screenshot()
-            except ImportError:  # the Android app has no PIL: window.png still has the picture
-                shot = None
-            if shot:
-                z.writestr(f"now/{who}.png", _png(shot))
-            z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))
-        if playthrough and playthrough.joint_save.exists():
-            z.writestr("now/session.coop", scrub_bytes(playthrough.joint_save.read_bytes(), private))
-        if window is not None:
-            z.writestr("now/window.png", _png(window))
-        for entry in rolling:
-            frame, states = entry[0], entry[1:]
-            for who, st in zip("AB", states):
-                z.writestr(f"before/{frame}_{who}.state", scrub_bytes(st, private))
-        z.writestr("inputs.json", json.dumps(list(inputs)))
-        z.writestr("frames.json", json.dumps(list(frame_times)))
-        z.writestr("journal.json", json.dumps(list(journal.events) if journal else []))
-        patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
-        about = {
-            "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
-            "patch": json.loads(patch.read_text()) if patch.exists() else None,
-            "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
-            "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
-            "controllers": len(controllers), "castle": bool(playthrough),
-            "presences": [str(g.mailbox("self_presence")) for g in games],
-            "rolling_frames": [entry[0] for entry in rolling], "note": note, "audio": taken["audio"],
-        }
-        about.update(extra or {})
-        z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
-        for name in ("launcher.log", "session.log", "launcher-errors.log"):
-            log = data_dir() / name
-            if log.exists():
-                z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+    try:
+        with zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED) as z:
+            for who, g, link in zip("AB", games, taken["links"]):
+                z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
+                z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
+                try:
+                    shot = g.screenshot()
+                except ImportError:  # the Android app has no PIL: window.png still has the picture
+                    shot = None
+                if shot:
+                    z.writestr(f"now/{who}.png", _png(shot))
+                z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))
+            if playthrough and playthrough.joint_save.exists():
+                z.writestr("now/session.coop", scrub_bytes(playthrough.joint_save.read_bytes(), private))
+            if window is not None:
+                z.writestr("now/window.png", _png(window))
+            for entry in rolling:
+                frame, states = entry[0], entry[1:]
+                for who, st in zip("AB", states):
+                    z.writestr(f"before/{frame}_{who}.state", scrub_bytes(st, private))
+            z.writestr("inputs.json", json.dumps(list(inputs)))
+            z.writestr("frames.json", json.dumps(list(frame_times)))
+            z.writestr("journal.json", json.dumps(list(journal.events) if journal else []))
+            patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
+            about = {
+                "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
+                "patch": json.loads(patch.read_text()) if patch.exists() else None,
+                "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
+                "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
+                "controllers": len(controllers), "castle": bool(playthrough),
+                "presences": [str(g.mailbox("self_presence")) for g in games],
+                "rolling_frames": [entry[0] for entry in rolling], "note": note, "audio": taken["audio"],
+            }
+            about.update(extra or {})
+            z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
+            for name in ("launcher.log", "session.log", "launcher-errors.log"):
+                log = data_dir() / name
+                if log.exists():
+                    z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+    except OSError:  # a full disk: no half a report left behind (#277)
+        path.unlink(missing_ok=True)
+        raise
     return path

@@ -973,3 +973,10 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D204: Richter's chained backflips go the way the player holds** (Tucker, 2026-11-12, #198, #199; the details are agent-default)
 - With Soul of Bat, each backflip after the first turns his back to the held direction, so it carries him that way and he can climb toward a ledge on either side (the Gravity Boots' way in). With nothing held he flips backwards, as ever. The first backflip still needs a standing jump, as in his own game: a jump with a direction held is a forward jump, and Cross again is the Leap Stone's double jump.
 - Options considered: facing the held direction (the flip then goes away from it: backwards to what the player asked for); steering through the whole flip (changes his air control, which no relic gives him).
+
+**D205: A full disk never costs a save; save history on Triangle** (2026-11-14, #277, #278, #279; Tucker asked for Triangle, save history and the glyphs, the details are agent-default)
+- **Writes:** memory cards, the joint save, castle.json and the menu sound cache are written to a `.tmp` beside them, then replaced. A full disk keeps the last good file; the player is told at most once a minute, and play goes on. Options considered: checking the free space before each write (racy, and still leaves half a file), or a crash (what 1.1.0 did).
+- **The disc copy-in** needs twice the disc's size plus 1 GB free (the copy and the co-op disc made from it, and room for saves), removes anything it wrote if it fails, and every start removes a stopped copy's `.part`. Under 500 MB free, the home screen's status line says so.
+- **Save history:** Triangle on a controller, H on the keyboard (S is castle settings), or a click on the footer's words, in Load castle. Every moment, newest first, scrolling: the old Savestates screen showed the newest 9.
+- **The glyphs** are the font's own (`{x}` and the like). A controller's bound face button is shown as the PlayStation glyph at that place: the bottom button is Cross, whatever the pad prints on it.
+

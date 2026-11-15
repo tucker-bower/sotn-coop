@@ -20,6 +20,7 @@ Where they are (USA disc; docs/research.md "The game's art and sound"):
 
 import json
 import mmap
+import os
 import struct
 import sys
 import wave
@@ -198,14 +199,23 @@ def sound(dra, bank, sfx):
 # --- files
 
 def write_wav(path, rate, channels, samples):
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(channels)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        if sys.byteorder == "big":
-            samples = array("h", samples)
-            samples.byteswap()
-        w.writeframes(samples.tobytes())
+    """Whole or not at all: a full disk left a music.wav with no sound in it, which the menus then
+    tried to play every second (#277)."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with wave.open(str(tmp), "wb") as w:
+            w.setnchannels(channels)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            if sys.byteorder == "big":
+                samples = array("h", samples)
+                samples.byteswap()
+            w.writeframes(samples.tobytes())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def ready(out):

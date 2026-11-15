@@ -84,6 +84,9 @@ def main():
                        frames=[()] + [("down",)] * sel + [("back",)])
         castles = [castle] + [test_ui.Castle(f"{LONG} {k}", k, "Marble Gallery", k) for k in range(12)]
         screen("castle list", lambda m: castle_list(m, "Load castle", castles, [("tests", "Test castles", "Outside each boss and before each story scene, with a typical player's progress")]))
+        from ui.screens.castles import save_history
+        screen("save history", lambda m: save_history(m, LONG, [f"20261114-2034{k:02d} Boss fight {LONG}" for k in range(20)]),
+               frames=[()] + [("down",)] * 19 + [("back",)])
         r = rules.clean({"pvp": True, "remap": True})
         n = len([1 for _ in rules.GROUPS for _ in _[1]]) + 20
         screen("castle settings (new)", lambda m: castle_settings(m, LONG, r, lambda x: None, start=True, mode={"mode": "rush"}),

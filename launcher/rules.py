@@ -52,6 +52,14 @@ TOGGLES = (
 REMAP_BUTTONS = ("cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2")
 BUTTON_NAMES = {"cross": "Cross", "circle": "Circle", "square": "Square", "triangle": "Triangle",
                 "l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2"}
+# The game font's own button glyphs (ui/theme.py SYMBOLS), for the screens in the game's style (#279)
+BUTTON_GLYPHS = {"cross": "{x}", "circle": "{o}", "square": "{s}", "triangle": "{t}"}
+
+
+def button_label(button, name=None):
+    """A button as the game's screens show it: its glyph and name ("{x} Cross"), or the name alone."""
+    name = name or BUTTON_NAMES.get(button, button)
+    return f"{BUTTON_GLYPHS[button]} {name}" if button in BUTTON_GLYPHS else name
 DEFAULTS = {**{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
 # Difficulty (design/launcher-overhaul.md, Tucker 2026-11-10): what each sets, at once. It isn't
 # stored: a castle's difficulty is whichever of these its four values match, else "Custom". Enemies

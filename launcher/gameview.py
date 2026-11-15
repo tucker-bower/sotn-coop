@@ -3,6 +3,7 @@ share. Two games, two pads, one window (or two: launcher/display.py), both games
 game's music, joint saves, savestates at moments worth going back to, and F9 bug reports."""
 
 import collections
+import errno
 import logging
 import os
 import subprocess
@@ -16,6 +17,7 @@ import pygame
 
 import crashwatch
 import report
+from paths import write_atomic
 from display import BAR
 from platform_android import ANDROID
 from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_HOLD, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
@@ -489,8 +491,19 @@ class GameView:
 
     def moment(self, event, where=""):
         if self.playthrough:
-            self.playthrough.savestate(event, self.games, where)
+            try:
+                self.playthrough.savestate(event, self.games, where)
+            except OSError as e:  # a full disk: no savestate this time, and play goes on (#277)
+                self.disk_trouble("Savestate skipped", e)
             self.playthrough.save_info()
+
+    def disk_trouble(self, what, error):
+        """A file the launcher couldn't write (the disk full): logged, and said at most once a minute."""
+        logging.getLogger("launcher").warning("%s: %s", what, error)
+        if time.monotonic() - getattr(self, "_disk_said", -60) >= 60:
+            self._disk_said = time.monotonic()
+            full = getattr(error, "errno", None) == errno.ENOSPC
+            self.say(f"{what}: {'your disk is full. Free some space' if full else error}", 600)
 
     def set_netsim(self, profile):
         """Couch, for testing: both games through a simulated internet (Help ▸ Developer)."""
@@ -635,9 +648,13 @@ class GameView:
             note = self.ask_note()
         kept = zip(*(g.kept_states() for g in games))  # the same frames in each game
         rolling = [(states[0][0], *(st for _, st in states)) for states in kept]
-        path = report.write(games, self.playthrough, shot, rolling, self.inputs,
-                            self.frame_times, self.pads.names(), note, extra={"solo": self.solo, "rules": self.rules},
-                            taken=taken, journal=self.journal)
+        try:
+            path = report.write(games, self.playthrough, shot, rolling, self.inputs,
+                                self.frame_times, self.pads.names(), note, extra={"solo": self.solo, "rules": self.rules},
+                                taken=taken, journal=self.journal)
+        except OSError as e:  # a full disk: the game goes on (#277)
+            self.disk_trouble("Bug report not saved", e)
+            return None
         if self.audio:
             self.audio.forget_wait(taken["audio"])
         if not interactive:
@@ -686,7 +703,10 @@ class GameView:
     def write_cards(self):
         if self.save_cards:
             for g, path in zip(self.games, self.save_cards):
-                path.write_bytes(g.card())
+                try:
+                    write_atomic(path, g.card())  # whole or not at all: a full disk keeps the last card (#277)
+                except OSError as e:
+                    self.disk_trouble("Memory card not saved", e)
 
     def menu_action(self, action):
         """A menu-bar item, in a game. Returns what run() should do: None, "pause", "report",
@@ -976,6 +996,9 @@ class GameView:
                     break
             if s.joint and (self.online or self.frame % 15 == 0):  # online ticks every frame for save messages
                 s.joint.tick()
+                if s.joint.error:
+                    self.disk_trouble("Game not saved to the castle", s.joint.error)
+                    s.joint.error = None
             if self.rush:
                 self.rush.tick()
             if self.joiner and self.frame % 60 == 0:
