@@ -54,6 +54,8 @@ Everything today assumes one partner: about 1,500 references across `module/`, `
 
 **Steps** (each a PR; acceptance criteria above, plus "two players unchanged": the gate passes):
 1. **Core: four banks** (the patch above). `core_check`, plus a test that draws one sprite from each bank.
+**The second limit is the 8 MB RAM: it's nearly full** (`coop_api.h`, `link.h`: blobs, partner builds, F_GAME copies, portraits, weapon and familiar copies up to 0x80800000). Each extra partner needs about 0x21000 bytes for its weapon, familiar and status copies. Worse, the Richter and Maria partner builds are linked at one address each (`PARTNER_RIC_ADDR`, `PARTNER_MAR_ADDR`) with their own statics. Two partners of the same character share that code, so each body's statics (.data/.bss) must be swapped in for its frame, as #166's design does for weapon overlays. Step 2 starts with a RAM map in `docs/research.md`.
+
 2. **Mailbox: N partners.** `link.h`'s partner fields become `partners[3]` (presence, pad, sprites, prims, hits, snapshots in), each with its own 8 MB copies (weapons, familiar, status: 0x10000 each). Partner 0 is today's partner, and every module system still reads only it. `test_layout` checks it.
 3. **Hosts: the roster and the mesh.** `transport.py` is per peer; `host.py` keeps one per partner, maps each to a mailbox slot, and forwards between guests who can't reach each other (criterion 2). Python-only, so it's tested with fake games (`test_connect` with three).
 4. **Bodies: one per partner.** `partner.c`'s single body becomes an array: swap regions per body, bank k for partner k, and its own drawing pass. Tested as `m17_bodies_*` with three games.
