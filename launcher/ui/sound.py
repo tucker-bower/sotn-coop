@@ -52,7 +52,7 @@ class MenuSound:
     def music(self, on=True):
         """Starts the title music (if it's wanted and isn't playing), or stops it."""
         on = on and self.settings.get("menu_music", True)
-        if on == self.playing or (on and not self._load()):
+        if on == self.playing or (on and (not self._load() or getattr(self, "music_broken", False))):
             return
         first, loop = self.folder / "music.wav", self.folder / "music_loop.wav"
         try:
@@ -71,6 +71,7 @@ class MenuSound:
         except (pygame.error, TypeError):
             log.exception("menu music")
             self.playing = False
+            self.music_broken = on  # a file that won't play: not tried again every second (#277)
 
     def refresh(self):
         """After Options' Menu music or Menu volume changed: the music follows, from where it is."""

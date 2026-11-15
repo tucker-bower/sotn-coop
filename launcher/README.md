@@ -38,6 +38,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_gamesound.py` | Checks the music's and sounds' decoding on made-up files, and on a dev checkout's disc. |
 | `test_library.py` | Checks game discs: names, removal, the old randomizer setting, the Alternate Scarlet Symphony download, images kept. |
 | `test_one_folder.py` | Checks the one install folder: relative paths, the move from Documents, a disc copied in. |
+| `test_disk_full.py` | Checks a full disk: no half-written save, card, savestate or disc copy left, and nothing crashes (#277). |
 | `test_update.py` | Checks updates against a fake GitHub: found, downloaded, checked, refused, and installed on one press. |
 | `test_link_errors.py` | Checks that a failure in the link never stops a player's game. |
 | `test_report.py` | Checks what a report sends and removes. |

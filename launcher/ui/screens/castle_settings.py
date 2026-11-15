@@ -6,7 +6,7 @@ import pygame
 
 import rules as castle_rules
 
-from ..theme import DIM, GOLD, GREEN, INK, shorten
+from ..theme import DIM, GOLD, GREEN, INK, shorten, width
 from ..widgets import ROW, page_step, paged, scroll
 
 HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
@@ -178,14 +178,14 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 if not plain:
                     t.text_right(s, "changed", LIST[0] + LIST[2] - 68, ty, GREEN)
             elif kind == "button":
-                names = castle_rules.BUTTON_NAMES
-                label, value, row_hint = f"{names[key]} acts as", names[rules["remap_map"].get(key, key)], "For both players."
+                label = f"{castle_rules.button_label(key)} acts as"  # the game's button glyphs (#279)
+                value, row_hint = castle_rules.button_label(rules["remap_map"].get(key, key)), "For both players."
             else:
                 label, row_hint = "Back to the defaults", ""
             t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "defaults") else 14), ty, INK)
             if value is not None:
                 arrows = kind in ("mode", "preset", "difficulty") and on and not (read_only and kind == "difficulty")
-                room = (LIST[2] - 32 - len(label) * 8) // 8 - (8 if arrows else 0)  # (what's left of the row after its label)
+                room = (LIST[2] - 32 - width(label)) // 8 - (8 if arrows else 0)  # (what's left of the row after its label)
                 t.text_right(s, ("{<} " if arrows else "") + shorten(str(value), room) + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
             if on:
                 hint = row_hint

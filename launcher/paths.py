@@ -103,6 +103,38 @@ def human(n):
         n /= 1024
 
 
+# Disk space (#277): a copy of the disc leaves this much free, and below LOW_DISK the home screen
+# says so (a savestate is about 2 MB, a bug report up to 30 MB).
+DISK_SPARE = 1 << 30
+LOW_DISK = 500 << 20
+
+
+def free_space(path=None):
+    """Bytes free where the data folder is (None if it can't be told)."""
+    import shutil
+    try:
+        return shutil.disk_usage(path or data_dir()).free
+    except OSError:
+        return None
+
+
+def write_atomic(path, data):
+    """Writes path whole, or not at all: a temporary file beside it, then put in its place. A full
+    disk keeps the old file (it truncated a save in place before: #277)."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
 DEFAULTS = {"disc": None, "bios": None, "music": "auto", "pads": [None, None], "partner_hp": True}
 
 

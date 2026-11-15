@@ -240,6 +240,9 @@ During a stage change, `g_StageId` is the next stage from `Play_PrepareNextStage
 ## Shaft's orb without the Holy Glasses
 In the Castle Keep fight with Richter (BO6), Shaft's orb (entity 0x40, `src/boss/bo6/us_3E79C.c`) is unhittable without the Holy Glasses (head slot, item 0x22): the bad ending's way. It's drawn with `PAL_FLAG(PAL_PLAYER_HIDDEN)` (0x810D) to be unseen, a palette that's blank only in Alucard's game. For Richter and Maria the module keeps any BO6 stage entity with that palette out of RenderEntities (issue 189). It comes out about 1800 frames after arriving in the arena.
 
+## The keep warp between the castles (retail; found 2026-11-14, #277's report)
+Retail has a hidden warp between the two Castle Keeps, with no progress check: in the big keep room (TOP room 2, (30,5)-(37,12); RTOP room 2 is its mirror), stand still in front of the tall carved stone doorway and press up (`GetTeleportToOtherCastle`, `src/dra/692E8.c`: TOP at world (8000, 2127), RTOP at (8384, 14407), within 3 pixels). The screen flashes white, and teleport 0x25 or 0x26 (`D_800A245C`) moves you to the other keep: from RTOP you land at (320, 847) in TOP. So a player can reach the inverted castle before freeing Richter, and come back. Richter's door (`g_RoomBossTeleports`: TOP (0x21, 0x08)) loads his fight while `TIMEATTACK_EVENT_SAVE_RICHTER` has no record, so a castle that went this way meets Richter again, as retail does. In a report: a stage change from 0x2B to 0x0B with no load step, at (320, 847).
+
 ## Telling a boss's entities apart in a shared room
 A guest's copies have no update function of their own (pfnUpdate 0: the guest's stage update is
 switched off), and in the authority the module wraps boss updates for aggro (boss.c), so a

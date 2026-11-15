@@ -481,6 +481,17 @@ def _solo(pg):
         ("screen", "Solo"), ("shot", "castle-menu"),  # Continue is first now
         ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "the castle played is the one Continue loads"),
         ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("screen", "Load castle"), ("shot", "castle-list"),
+        # #278 and the playtest of 2026-11-14: H opens the castle's save history; its Quit moment plays solo
+        ("expect", lambda d: castles()[0].savestate_pairs(), "quitting kept a moment"),
+        ("key", pg.K_h), ("screen", "Save history"), ("shot", "save-history"), ("key", pg.K_RETURN),
+        ("screen", "Play from here"), ("shot", "who-plays"), ("key", pg.K_RETURN),  # Solo: the first
+        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
+        ("until", in_game), ("until", lambda d: d.launcher.view and d.launcher.view.frame >= 900),  # (game_frames counts every session's)
+        ("shot", "solo-from-a-moment"),
+        ("expect", lambda d: len(d.launcher.view.games) == 1 and d.launcher.display._bar_key[0][0].startswith("Solo"),
+         "a moment plays solo: one game, and the status bar says Solo"),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("screen", "Load castle"),  # back where save history was opened
         ("key", pg.K_ESCAPE), ("screen", "Solo"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
 
@@ -680,7 +691,7 @@ def _menus(pg):
     steps += [("expect", lambda d: d.launcher.settings.get("layout") == "auto" and not d.launcher.settings.get("netsim"),
                "View and Developer menu items change the settings")]
     for action, screen in (("savestates", "Savestates"), ("debug_starts", "Debug starts"), ("controllers", "Press a button"),
-                           ("new", "Name your castle"), ("continue", "Name your castle")):  # the castle first (no castles yet: Continue starts one)
+                           ("new", "New castle"), ("continue", "New castle")):  # who plays first (no castles yet: Continue starts one)
         steps += [("menu", action), ("screen", screen), ("shot", action), ("key", pg.K_ESCAPE),
                   ("screen", "Home")] if screen != "Debug starts" else [
                   ("menu", action), ("until", lambda d: d.heading in ("Debug starts", "Making the debug starts")),
@@ -967,9 +978,11 @@ def _hud(pg):
              ("screen", "Home"), ("menu", "debug_starts"),
              ("until", lambda d: d.heading == "Debug starts"),
              ("call", make_starts),                               # not made yet: Yes, make them
-             ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Both")),
+             ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Solo or couch")),
              ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Places (after Bosses, Scenes)
              ("screen", "Places"), ("key", pg.K_RETURN),           # the first: the castle entrance
+             ("until", lambda d: d.heading not in ("Places", "Debug starts")),  # who plays: Couch co-op
+             ("key", pg.K_DOWN), ("key", pg.K_RETURN),
              ("screen", "Press a button"), ("pad", 0, A), ("pad", 101, A), ("pad", 0, A), ("pad", 101, A),
              ("until", lambda d: d.heading == "Game"), ("game_frames", 240)]
     for w, h in ((1032, 592), (1600, 900), (800, 1000)):
@@ -980,6 +993,33 @@ def _hud(pg):
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
     return steps
+
+
+def _debug_start_characters(pg):
+    """Playtest 2026-11-14: a boss's debug start, on the couch with player 2 as Richter, plays
+    Richter in game B (it loaded as Alucard: a savestate holds whoever made it), at the boss's door."""
+    A, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_RIGHT
+    view = lambda d: d.launcher.view
+    return [*first_run(pg),
+            ("screen", "Home"), ("menu", "debug_starts"),
+            ("until", lambda d: d.heading == "Debug starts"),
+            ("call", make_starts),
+            ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Solo or couch")),
+            ("key", pg.K_RETURN), ("screen", "Bosses"), ("key", pg.K_RETURN),  # the first boss
+            ("until", lambda d: d.heading not in ("Bosses", "Debug starts")), ("shot", "who-plays"),
+            ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
+            ("screen", "Press a button"),
+            ("pad", 0, A), ("pad", 0, A), ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
+            ("until", lambda d: d.heading == "Game"),
+            ("expect", lambda d: d.launcher.characters == [0, 1], "player 1 Alucard, player 2 Richter"),
+            ("until", lambda d: view(d) and view(d).frame >= 600 and
+             view(d).games[1].mailbox("self_presence").flags & 1),  # B in play, after the save's load
+            ("until", lambda d: view(d).frame >= 1500), ("shot", "at-the-boss"),
+            ("expect", lambda d: view(d).games[1].mailbox("self_presence").character == 1, "game B plays Richter"),
+            ("expect", lambda d: view(d).games[0].mailbox("self_presence").stage == view(d).games[1].mailbox("self_presence").stage != 0,
+             "both at the start's stage"),
+            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+            ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
 def _randomizer(pg):
@@ -1066,7 +1106,7 @@ def _randomizer(pg):
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
-SCRIPTS = {"randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"debug_start_characters": _debug_start_characters, "randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

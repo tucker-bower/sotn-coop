@@ -13,6 +13,7 @@ import pygame
 GLYPH = 8
 INK, DIM, GOLD, GREEN, RED = (255, 255, 255), (150, 152, 184), (248, 208, 112), (136, 224, 136), (255, 120, 120)
 BACK = (0, 0, 8)                       # behind the windows
+LINK, LINK_HOVER = (64, 128, 255), (160, 192, 255)  # web links: hyperlink blue, bright enough on BACK
 WINDOW_TOP, WINDOW_BOTTOM = (0, 0, 32), (32, 32, 96)  # the pause menu's default window colours
 # What the game's font can draw as itself (its other places hold Japanese)
 DRAWN = set(" !\"#$%&'()+,-./0123456789:=?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyz")
