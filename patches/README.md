@@ -5,4 +5,4 @@ Our small changes to the pinned upstream projects, applied by `scripts/bootstrap
 | File | What it does |
 |---|---|
 | `sotn-decomp.patch` | Adds the co-op hooks to sotn-decomp. |
-| `swanstation.patch` | Adds a second VRAM bank and related changes to SwanStation. |
+| `swanstation.patch` | Adds three more VRAM banks (partners' graphics, M17) and the widescreen display to SwanStation. |
