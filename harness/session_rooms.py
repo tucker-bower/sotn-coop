@@ -152,12 +152,16 @@ def partner_casts_a_spell_this_game_never_learnt(run):
     run.step(120)
     run.expect(not b.read(SPELLS_LEARNT) & 0xFF, "B hasn't learnt it")
     cast_a, cast_body = False, False
+    red = []  # B's screen: strongly red pixels, every 10 frames (the HUD alone has about 160)
     for t in range(240):
         run.step(1, ("rs_left" if t % 120 < 2 else "", ""))
         cast_a |= a.read(a.entity(0) + PLAYER_STEP, "<H") == SPELL_DARK_METAMORPHOSIS_STEP
         cast_body |= b.read(body + PLAYER_STEP, "<H") == SPELL_DARK_METAMORPHOSIS_STEP
+        if t % 10 == 0:
+            red.append(sum(1 for r, g, bl in b.screenshot().getdata() if r > 120 and g < r // 3 and bl < r // 3))
     run.expect(cast_a, "A casts it")
     run.expect(cast_body, "B's copy of A casts it")
+    run.expect(max(red) - red[0] >= 60, "B sees its red glow on A's body", red=red)
 
 
 SCENE = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Scene - Maria in the Alchemy Lab.state")

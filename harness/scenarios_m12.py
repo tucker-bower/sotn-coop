@@ -549,6 +549,16 @@ def richter_left_hand_keeps_his_graphics(run):
         run.step(2, "start")
         run.step(120)
         run.expect(block(vram(e), 0x240, 0x180, 0x40, 0x80) == his, f"{what} in his left hand: his graphics are his")
+    for hand, name in ((4, "left"), (0, "right")):  # #161: a weapon equipped, then taken off again
+        e.load_state(rich)
+        for item in (SHORT_SWORD, 0):
+            e.write(EQUIPMENT + hand, item)
+            run.step(2, "start")
+            run.step(60)
+            run.step(2, "start")
+            run.step(120)
+        run.expect(block(vram(e), 0x240, 0x180, 0x40, 0x80) == his,
+                   f"a sword on and off his {name} hand: his graphics are his")
     for item, what in ((SHORT_SWORD, "a short sword"),):  # as a load equips it
         e.load_state(start)
         e.write(EQUIPMENT + 4, item)
