@@ -176,6 +176,46 @@ def main():
         check(castle_list(m, "Load castle", castles, extras) is None, "the boss rush has no settings; back leaves the list")
         m, ui, _ = menus([[], [("mouse", 100, 34 + 8 + 16 * 2 + 4, True)]])
         check(castle_list(m, "Load castle", castles, extras) == ("castle", castles[2]), "the mouse: a click on the third row plays it")
+        m, ui, _ = menus([["down"]] * 3 + [["history"]])
+        check(castle_list(m, "Load castle", castles, extras) == ("history", castles[3]), "Triangle / Y / H on a castle opens its save history (#278)")
+        m, ui, _ = menus([["up"], ["history"], ["back"]])
+        check(castle_list(m, "Load castle", castles, extras) is None, "the boss rush has no save history")
+        m, ui, _ = menus([[], [("mouse", 240, 246, True)]])
+        check(castle_list(m, "Load castle", castles, extras) == ("history", castles[0]), "the mouse: a click on the footer's save history opens it")
+
+        # who plays, from the menu bar's Continue and New, debug starts and save history (playtest 2026-11-14)
+        import types
+        import app
+        import archive
+        m, ui, _ = menus([["down"], ["ok"]])
+        fake = types.SimpleNamespace(menus=m)
+        check(app.Launcher.pick_mode(fake, "Continue", "Tucker", online=True) == "couch", "who plays: Solo, then Couch co-op")
+        m, ui, _ = menus([["up"], ["ok"]])
+        fake = types.SimpleNamespace(menus=m)
+        check(app.Launcher.pick_mode(fake, "Continue", "Tucker", online=True) == "host", "...and Host online, for a castle")
+        last_castle = types.SimpleNamespace(name="Tucker")
+        real_all = archive.Castle.all
+        archive.Castle.all = staticmethod(lambda: [last_castle])
+        try:
+            went = []
+            for mode in ("solo", "couch", "host", None):
+                fake = types.SimpleNamespace(pick_mode=lambda *a, mode=mode, **k: mode, solo=lambda picked: went.append(("solo", picked)),
+                                             host_online=lambda c, fresh: went.append(("host", (c, fresh))),
+                                             lobby=lambda **k: True, play=lambda c, fresh: went.append(("couch", (c, fresh))))
+                app.Launcher.couch(fake, "continue")
+        finally:
+            archive.Castle.all = real_all
+        check(went == [("solo", (last_castle, False)), ("couch", (last_castle, False)), ("host", (last_castle, False))],
+              "the menu bar's Continue plays the last castle the way the player picks: solo, couch or hosted; back plays nothing")
+
+        # a castle's save history (#278)
+        from ui.screens.castles import moment_label, save_history
+        labels = [f"20261114-2034{k:02d} New area Castle Keep" for k in range(20)]
+        check(moment_label(labels[0]) == "Nov 14, 20:34  New area Castle Keep", "a moment shows its date, time and what happened")
+        m, ui, _ = menus([["down"]] * 15 + [["ok"]])
+        check(save_history(m, "Tucker", labels) == 15 and ui.names == ["Save history"], "a moment (scrolled to) is chosen")
+        m, ui, _ = menus([["back"]])
+        check(save_history(m, "Tucker", labels) is None, "back leaves it")
 
         # a castle's settings
         import rules as castle_rules
@@ -186,6 +226,18 @@ def main():
             r, applied = castle_rules.clean({}), []
             got = castle_settings(m, "Tucker", r, applied.append, **kw)
             return got, r, applied, ui
+
+        # the game's button glyphs where buttons are remapped (#279)
+        faces = {"cross": "x", "circle": "o", "square": "s", "triangle": "t"}
+        check(all(th.glyphs(castle_rules.button_label(b))[0] == (th.SYMBOLS[g], False) for b, g in faces.items())
+              and castle_rules.button_label("l1") == "L1", "Button remap: each face button is drawn with the game's own glyph")
+        import types
+        import app
+        from gameview import DEFAULT_PAD
+        fake = types.SimpleNamespace(pads=types.SimpleNamespace(pad_maps=[dict(DEFAULT_PAD)], key_maps=[{pygame.K_z: "cross"}]))
+        rows = {r["key"]: r for r in app.Launcher.button_rows(fake, 0)}
+        check(rows["button:0:cross"]["label"] == "{x} Cross" and rows["button:0:cross"]["value"] == "{x} / Z"
+              and rows["button:0:l1"]["value"].startswith("L1 /"), "Your settings › buttons: the glyph for the button and for the controller's bound one")
 
         got, r, applied, ui = settings([["right"], ["back"]])
         check(got is None and castle_rules.difficulty(r) == "Hard" and (r["enemy_hp_pct"], r["taken_pct"], r["exp_pct"]) == (300, 150, 50)

@@ -2,7 +2,7 @@
 Test castles.
 Each castle shows its save's icon, the one the game's own file select would, moving as it does there."""
 
-from ..theme import DIM, GOLD, INK, shorten
+from ..theme import DIM, GLYPH, GOLD, INK, shorten, width
 from ..widgets import ROW, move, scroll
 from .home import castle_lines, started
 
@@ -55,7 +55,8 @@ def castle_menu(m, heading, latest, has_castles, has_tests=False):
 def castle_list(m, heading, castles, extras=(), sel=0):
     """Every castle, most recent first, then extras ([(key, label, hint)]: the test castles, the
     boss rush). Returns ("castle", castle), ("rules", castle) (Square / X / right click on one),
-    an extra's key, or None (back)."""
+    ("history", castle) (Triangle / Y / H, or a click on the footer's "save history": #278), an
+    extra's key, or None (back)."""
     t, s, first = m.theme, m.s, 0
     count = len(castles) + len(extras)
     inside = (LIST[0] + 4, LIST[1] + 8, LIST[2] - 8, LIST[3] - 16)
@@ -71,6 +72,8 @@ def castle_list(m, heading, castles, extras=(), sel=0):
                 return None
             elif a == "rules" and sel < len(castles):
                 return ("rules", castles[sel])
+            elif (a == "history" or a == ("click", "history")) and sel < len(castles):
+                return ("history", castles[sel])
             elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int):
                 sel = a[1]
         first = scroll(first, sel, inside[3] // ROW, count)
@@ -97,5 +100,49 @@ def castle_list(m, heading, castles, extras=(), sel=0):
         else:
             line = extras[sel - len(castles)][2]
         t.text(s, shorten(line, 58), 8, 230, DIM)
-        m.footer("{x} play   {s} castle settings   {o} back", "Enter: play   S: castle settings   Esc: back")
+        m.footer("{x} play   {s} castle settings   {t} save history   {o} back",
+                 "Enter: play   S: settings   H: save history   Esc: back")
+        if sel < len(castles):  # the mouse's way to it: the footer's words
+            words = "{t} save history" if m.device == "pad" else "H: save history"
+            footer = "{x} play   {s} castle settings   " if m.device == "pad" else "Enter: play   S: settings   "
+            m.hit("history", (8 + width(footer) - 2, 241, width(words) + 4, GLYPH + 5))
+        m.show()
+
+
+def moment_label(label):
+    """A savestate's file label ("20261114-203412 New area Castle Keep") as a row: its date and
+    time, then what happened."""
+    import time
+    stamp, _, what = label.partition(" ")
+    try:
+        stamp = time.strftime("%b %d, %H:%M", time.strptime(stamp, "%Y%m%d-%H%M%S"))  # as the castle list's "Played"
+    except ValueError:
+        pass
+    return f"{stamp}  {what}"
+
+
+def save_history(m, name, labels, sel=0):
+    """A castle's moments, newest first (#278). Returns the chosen index, or None (back)."""
+    t, s, first = m.theme, m.s, 0
+    inside = (LIST[0] + 4, LIST[1] + 8, LIST[2] - 8, LIST[3] - 16)
+    rows = [moment_label(label) for label in labels]
+    while True:
+        for a in m.poll():
+            if a in ("up", "down"):
+                sel = move(sel, a, len(rows))
+            elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int)):
+                return a[1] if isinstance(a, tuple) else sel
+            elif a == "back":
+                return None
+            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int):
+                sel = a[1]
+        first = scroll(first, sel, inside[3] // ROW, len(rows))
+        m.begin("Save history", name)
+        m.window(HEAD)
+        t.text(s, "Save history", HEAD[0] + 8, HEAD[1] + 7, GOLD)
+        t.text_right(s, shorten(name, 36), HEAD[0] + HEAD[2] - 8, HEAD[1] + 7, INK)
+        m.window(LIST)
+        m.rows(inside, rows, sel, first)
+        t.text(s, "Play from a moment, then save at a coffin to keep it.", 8, 230, DIM)
+        m.footer("{x} play from here   {o} back", "Enter: play from here   Esc: back")
         m.show()

@@ -14,6 +14,8 @@ the partner a copy of slot 1. Loading gives both the higher XP (one shared level
 """
 
 import base64
+import logging
+import os
 import struct
 from pathlib import Path
 
@@ -71,8 +73,16 @@ def both_slots(blobs, shared_level=True):
 
 def write_session(path, blobs):
     assert all(b is not None and len(b) == SAVE_DATA_SIZE for b in blobs)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(MAGIC + struct.pack("<II", VERSION, len(blobs)) + b"".join(blobs))
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Whole or not at all: written in place, a full disk left a cut-short save (#277)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.write_bytes(MAGIC + struct.pack("<II", VERSION, len(blobs)) + b"".join(blobs))
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def read_session(path):
@@ -90,6 +100,7 @@ class JointSave:
         self.mb, self.path = mailboxes, (Path(path) if path else None)
         self.host, self.rank = host, rank
         self.on_write = None  # (blobs) -> None: the launcher updates the castle's info
+        self.error = None     # the last joint save that couldn't be written (OSError), until shown
         self.shared_level = True  # the castle's rules (D162)
         self.seen = [m.save_seq() for m in mailboxes]
         self.pending = None   # (saver index / "local" / "remote", blob) while the partner saves
@@ -112,7 +123,12 @@ class JointSave:
         if blobs[1] is None:
             old = read_session(self.path) if self.path.exists() else []
             blobs = [blobs[0]] + old[1:2]
-        write_session(self.path, blobs)
+        try:
+            write_session(self.path, blobs)
+        except OSError as e:  # a full disk: the castle keeps its last save, and the player is told
+            logging.getLogger("launcher").warning("joint save not written: %s", e)
+            self.error = e
+            return
         self.saves += 1
         self.start = None
         if self.on_write:
@@ -236,7 +252,11 @@ class JointSave:
         """The host's castle: "yours" is this player's slot."""
         yours, theirs = base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])
         if self.path is not None:
-            write_session(self.path, [yours, theirs])
+            try:
+                write_session(self.path, [yours, theirs])
+            except OSError as e:  # a full disk: the game loads it all the same
+                logging.getLogger("launcher").warning("joiner's copy not written: %s", e)
+                self.error = e
         self.resumed = True
         self.dead_frames = 0
         m.put_save(yours)

@@ -13,6 +13,7 @@ The player can delete a playthrough's savestates from the Savestates screen (it 
 """
 
 import json
+import logging
 import os
 import re
 import time
@@ -21,7 +22,9 @@ import zlib
 from pathlib import Path
 
 from link.jointsave import read_session, save_fields, write_session
-from paths import castles_dir, folder_size
+from paths import castles_dir, folder_size, write_atomic
+
+log = logging.getLogger("launcher")
 
 try:  # Python 3.14: zstd is in the standard library; it's smaller and faster than zlib
     from compression import zstd
@@ -213,9 +216,10 @@ class Castle:
 
     def save_info(self):
         self.info["played"] = time.time()
-        tmp = self.info_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.info, indent=1))
-        tmp.replace(self.info_path)
+        try:
+            write_atomic(self.info_path, json.dumps(self.info, indent=1).encode())
+        except OSError as e:  # a full disk: the castle's last info stays (#277)
+            log.warning("castle info not written: %s", e)
 
     def tidy(self):
         """After a session: the folder takes the castle's name once it has one (Windows can't
@@ -285,11 +289,16 @@ class Castle:
         if len(states) > 1:
             pairs.append(("B", compress(states[1], like=a)))
         written = []
-        for who, blob in pairs:
-            path = self.states / f"{base} {who}.state.zst"
-            with open(path, "xb") as f:  # "x": fails rather than overwrite
-                f.write(blob)
-            written.append(path)
+        try:
+            for who, blob in pairs:
+                path = self.states / f"{base} {who}.state.zst"
+                with open(path, "xb") as f:  # "x": fails rather than overwrite
+                    written.append(path)
+                    f.write(blob)
+        except OSError:  # a full disk: no half a moment left behind (#277)
+            for path in written:
+                path.unlink(missing_ok=True)
+            raise
         if os.environ.get("COOP_BIOS"):  # which BIOS made it: a state loads only on its own BIOS
             (self.states / f"{base}.bios").write_text(os.environ["COOP_BIOS"])
         return written

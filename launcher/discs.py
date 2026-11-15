@@ -64,14 +64,36 @@ def copy_in(path, folder, progress=None):
     for f in files:
         target = folder / f.name
         part = target.with_name(target.name + ".part")
-        with open(f, "rb") as src, open(part, "wb") as dst:
-            while True:
-                chunk = src.read(1 << 22)
-                if not chunk:
-                    break
-                dst.write(chunk)
-                done += len(chunk)
-                if progress:
-                    progress(done, total)
-        part.replace(target)
+        try:
+            with open(f, "rb") as src, open(part, "wb") as dst:
+                while True:
+                    chunk = src.read(1 << 22)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    done += len(chunk)
+                    if progress:
+                        progress(done, total)
+            part.replace(target)
+        except BaseException:
+            # A copy that stops (a full disk) never keeps its .part: left behind, it held every
+            # byte that was free, and each start tried again (#277).
+            part.unlink(missing_ok=True)
+            raise
     return folder / path.name
+
+
+def leftovers(folder):
+    """Files an interrupted copy or patch left in folder (a .part, the patcher's track1.tmp)."""
+    folder = Path(folder)
+    return [f for pattern in ("*.part", "*.tmp") for f in folder.glob(pattern)] if folder.is_dir() else []
+
+
+def size_of(path):
+    """A disc image's size: its .cue and every file it names, or a single file."""
+    path = Path(path)
+    files = [path]
+    if path.suffix.lower() == ".cue":
+        from patcher import cue_files
+        files += [path.parent / n for n in cue_files(path.read_text(errors="replace"))]
+    return sum(f.stat().st_size for f in files if f.exists())

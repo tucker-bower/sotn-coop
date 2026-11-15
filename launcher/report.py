@@ -26,10 +26,12 @@ import base64
 import collections
 import io
 import json
+import logging
 import os
 import platform
 import re
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -39,6 +41,8 @@ from pathlib import Path
 from link.jointsave import read_session, save_fields
 from link.mailbox import BUSY, CS_FOLLOWER, CUTSCENE, DEAD, SAVE_DATA_SIZE
 from paths import data_dir, load_settings, reports_dir
+
+log = logging.getLogger("launcher")
 
 VERSION = "1.1.0"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
@@ -149,6 +153,84 @@ def can_send():
     return KEY_FILE.is_file()
 
 
+# --- the outbox: a report the player chose to send waits beside its zip (<zip>.send, its note)
+# until it's sent. One thread sends them one at a time, and tries again later and at the next
+# start: sent from the game view's own thread, four of a playtester's seven reports were lost
+# (2026-11-14), with nothing logged.
+RETRY_SECONDS = 120
+_outbox_lock = threading.Lock()
+_outbox_thread = None
+_outbox_done = []  # (path, error or None), for whoever wants to say so (the game view)
+
+
+def queue_send(path, note=""):
+    """Sends a report in the background, until it's gone (see the outbox above)."""
+    path = Path(path)
+    try:
+        path.with_name(path.name + ".send").write_text(json.dumps({"note": note}))
+    except OSError:
+        log.exception("queueing a report")
+    start_outbox()
+
+
+def pending():
+    """The reports waiting to be sent, oldest first."""
+    return sorted(p.with_name(p.name[:-len(".send")]) for p in reports_dir().glob("*.zip.send"))
+
+
+def start_outbox():
+    """The outbox's thread, unless it's running already (at startup: what an earlier run left)."""
+    global _outbox_thread
+    if not can_send():
+        return
+    with _outbox_lock:
+        if _outbox_thread and _outbox_thread.is_alive():
+            return
+        _outbox_thread = threading.Thread(target=_outbox_run, daemon=True, name="report outbox")
+        _outbox_thread.start()
+
+
+def _outbox_run():
+    failures = {}
+    while True:
+        waiting = [p for p in pending() if time.time() >= failures.get(p, (0, 0))[1]]
+        if not waiting:
+            if not pending():
+                return
+            time.sleep(min(5, RETRY_SECONDS))
+            continue
+        path = waiting[0]
+        marker = path.with_name(path.name + ".send")
+        if not path.exists():  # the player deleted it
+            marker.unlink(missing_ok=True)
+            continue
+        try:
+            note = json.loads(marker.read_text()).get("note", "")
+        except (OSError, ValueError):
+            note = ""
+        error = send(path, note)
+        if error is None:
+            log.info("bug report sent: %s", path.name)
+            marker.unlink(missing_ok=True)
+            failures.pop(path, None)
+        else:
+            tries = failures.get(path, (0, 0))[0] + 1
+            log.warning("bug report %s not sent (try %d): %s", path.name, tries, error)
+            if tries >= 5 or error == "it's too big to send":  # left for the next start
+                return _outbox_done.append((path, error))
+            failures[path] = (tries, time.time() + RETRY_SECONDS * tries)
+            if tries > 1:
+                continue
+        _outbox_done.append((path, error))
+
+
+def outbox_news():
+    """[(path, error or None)] since the last call: what the outbox sent, or first failed to."""
+    out = _outbox_done[:]
+    del _outbox_done[:len(out)]
+    return out
+
+
 def send(path, note=""):
     """Emails a report. Returns None, or what went wrong, for the player."""
     path = Path(path)
@@ -165,8 +247,14 @@ def send(path, note=""):
         with urllib.request.urlopen(req, timeout=120, context=tls if SEND_URL.startswith("https") else None) as r:
             r.read()
     except urllib.error.HTTPError as e:
+        try:
+            said = e.read()[:300].decode(errors="replace")
+        except OSError:
+            said = ""
+        log.warning("the mail service said %s: %s", e.code, said)
         return f"the mail service said {e.code}"
-    except OSError:
+    except OSError as e:
+        log.warning("sending a report: %s", e)
         return "no connection"
     return None
 
@@ -194,42 +282,46 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
         k += 1
     taken = taken or snapshot(games, None)
     private = private_words(games, playthrough)
-    with zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED) as z:
-        for who, g, link in zip("AB", games, taken["links"]):
-            z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
-            z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
-            try:
-                shot = g.screenshot()
-            except ImportError:  # the Android app has no PIL: window.png still has the picture
-                shot = None
-            if shot:
-                z.writestr(f"now/{who}.png", _png(shot))
-            z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))
-        if playthrough and playthrough.joint_save.exists():
-            z.writestr("now/session.coop", scrub_bytes(playthrough.joint_save.read_bytes(), private))
-        if window is not None:
-            z.writestr("now/window.png", _png(window))
-        for entry in rolling:
-            frame, states = entry[0], entry[1:]
-            for who, st in zip("AB", states):
-                z.writestr(f"before/{frame}_{who}.state", scrub_bytes(st, private))
-        z.writestr("inputs.json", json.dumps(list(inputs)))
-        z.writestr("frames.json", json.dumps(list(frame_times)))
-        z.writestr("journal.json", json.dumps(list(journal.events) if journal else []))
-        patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
-        about = {
-            "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
-            "patch": json.loads(patch.read_text()) if patch.exists() else None,
-            "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
-            "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
-            "controllers": len(controllers), "castle": bool(playthrough),
-            "presences": [str(g.mailbox("self_presence")) for g in games],
-            "rolling_frames": [entry[0] for entry in rolling], "note": note, "audio": taken["audio"],
-        }
-        about.update(extra or {})
-        z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
-        for name in ("launcher.log", "session.log", "launcher-errors.log"):
-            log = data_dir() / name
-            if log.exists():
-                z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+    try:
+        with zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED) as z:
+            for who, g, link in zip("AB", games, taken["links"]):
+                z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
+                z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
+                try:
+                    shot = g.screenshot()
+                except ImportError:  # the Android app has no PIL: window.png still has the picture
+                    shot = None
+                if shot:
+                    z.writestr(f"now/{who}.png", _png(shot))
+                z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))
+            if playthrough and playthrough.joint_save.exists():
+                z.writestr("now/session.coop", scrub_bytes(playthrough.joint_save.read_bytes(), private))
+            if window is not None:
+                z.writestr("now/window.png", _png(window))
+            for entry in rolling:
+                frame, states = entry[0], entry[1:]
+                for who, st in zip("AB", states):
+                    z.writestr(f"before/{frame}_{who}.state", scrub_bytes(st, private))
+            z.writestr("inputs.json", json.dumps(list(inputs)))
+            z.writestr("frames.json", json.dumps(list(frame_times)))
+            z.writestr("journal.json", json.dumps(list(journal.events) if journal else []))
+            patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
+            about = {
+                "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
+                "patch": json.loads(patch.read_text()) if patch.exists() else None,
+                "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
+                "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
+                "controllers": len(controllers), "castle": bool(playthrough),
+                "presences": [str(g.mailbox("self_presence")) for g in games],
+                "rolling_frames": [entry[0] for entry in rolling], "note": note, "audio": taken["audio"],
+            }
+            about.update(extra or {})
+            z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
+            for name in ("launcher.log", "session.log", "launcher-errors.log"):
+                log = data_dir() / name
+                if log.exists():
+                    z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+    except OSError:  # a full disk: no half a report left behind (#277)
+        path.unlink(missing_ok=True)
+        raise
     return path

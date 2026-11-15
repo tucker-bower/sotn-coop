@@ -8,7 +8,7 @@ hit(). So every screen works with all three.
 
 import pygame
 
-from .theme import BACK, DIM, GLYPH, GOLD, INK, shorten, width
+from .theme import BACK, DIM, GLYPH, GOLD, INK, LINK, LINK_HOVER, shorten, width
 
 ROW = 16  # a menu row's height
 
@@ -111,13 +111,14 @@ class Menus:
         return x0
 
     def link(self, key, text, x, y, hover, right=False):
-        """Text only the mouse can use: never part of a controller's or the keyboard's way round."""
+        """Text only the mouse can use: never part of a controller's or the keyboard's way round. It
+        looks like a web link (Tucker, 2026-11-14): hyperlink blue and underlined, lighter under the
+        mouse. The game's font at its own 8 px: it can't be smaller without rescaling the pixels."""
         if right:
             x -= width(text)
-        on = hover == key
-        self.theme.text(self.s, text, x, y, INK if on else DIM)
-        if on:
-            pygame.draw.line(self.s, INK, (x, y + GLYPH), (x + width(text) - 1, y + GLYPH))
+        colour = LINK_HOVER if hover == key else LINK
+        self.theme.text(self.s, text, x, y, colour)
+        pygame.draw.line(self.s, colour, (x, y + GLYPH), (x + width(text) - 1, y + GLYPH))
         self.hit(key, (x - 2, y - 2, width(text) + 4, GLYPH + 5))
 
 
