@@ -7,12 +7,11 @@ Online and couch co-op mod for *Castlevania: Symphony of the Night*. Explore the
 This co-op mod utilizes custom SwanStation launcher running *two instances* of PS1 SOTN emulation, syncing with each other over a python api. 
 
 ### AI usage disclaimer
-AI wrote all of this code. However, this is not just low effort slop that will be abandon. A lot of human time, effort, and love has gone into designing, architecting, and playtesting this work. I plan to finish this mod and support it into the future. All of the code is public amd open for anyone to use, and all the prior works that made this possible are credited below.
+AI wrote this code. However, this is not low effort slop that will be abandoned. Human time, effort, and love has gone into designing, architecting, and playtesting this work. All source code is public and open for anyone to use, and all the prior works that made this possible are credited below.
 
 ## Getting started
 You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStation version (SLUS-00067), as a disc image (`.cue` + `.bin`). We can't give you the game, and we never distribute game data. Maria also needs *Castlevania: The Dracula X Chronicles* (USA, PSP) as an `.iso`, which is optional.
 
-**Mods:** in Mods on the main menu, make a mod preset: a randomized castle in one click (pick a [randomizer](https://sotn.io) preset; the seed is random, or type one), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Name it, and a new castle can use it. Both players need the same preset.
 
 **Find people to play with:** [join our Discord](https://discord.gg/q7V9eFtAW).
 
@@ -25,20 +24,19 @@ You need your own copy of *Castlevania: Symphony of the Night*, the USA PlayStat
 The downloads aren't code-signed, so your browser, Windows or Android may warn you. Choose **Keep**, **Run anyway** or **Install anyway**. Everything is built from the source in this repository.
 
 ## Features
+
+**Mods:** in Mods on the main menu, make a mod preset: a randomized castle in one click (pick a [randomizer](https://sotn.io) preset; the seed is random, or type one), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Name your modded disc image, and a new castle can use it. Both players need the same preset.
+
 **Play your way**
-- **Online co-op:** share a room code and play, with no account or server setup. PCs and phones can play each other.
+- **Online co-op:** share a room code and play, with no account or server setup. PCs and Android devices can play each other.
 - **Couch co-op:** two controllers on one PC, side by side, stacked, or in two windows.
-- **Solo:** every castle can also be played alone, with normal boss HP and full XP.
-- **Your own controls:** each player sets their own buttons and keys. Any controller works, with Cross always the bottom button.
-- **Widescreen (experimental):** 16:9 or 21:9 shows more of the castle, with nothing stretched.
+- **Widescreen:** 16:9 or 21:9 shows more of the castle, with no pixels stretched.
 
 **A shared castle**
 - **Explore independently,** each on your own screen, and see your partner on the map.
-- **Shared progress, live:** relics, unlocked areas, the explored map, beaten bosses and max HP/MP/heart upgrades count for both of you. Gold is pooled, and each of you gets a copy of every item found in the castle, even one taken just before a disconnect. An item an enemy drops goes to whoever picks it up.
-- **Shared level:** kills give both of you half the XP.
+- **Shared progress, live:** relics, unlocked areas, the explored map, beaten bosses and max HP/MP/heart upgrades count for both of you. Gold is pooled, and each of you gets a copy of every item found in the castle.
 - **Shared saves:** saving in a coffin saves both games. Anyone can pick up a castle, and whoever joins keeps a copy to play solo or host later.
-- **Save-state safety net:** the launcher keeps savestates at big moments, and never deletes them.
-- **Crash reports:** if a game crashes or hangs, the app saves a report and offers it in its own window. Nothing is sent unless you say so.
+- **Bug reports:** press F9 to send us a bug report if anything goes wrong.
 
 **Fight together**
 - **Your partner is a real second player** in your game, with their own character, attacks, familiar and sounds.
@@ -56,15 +54,10 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 **Extra modes**
 - **Boss rush:** all 22 bosses back to back, timed with splits and a best time, solo, on the couch or online.
 - **PvP:** optional, and off by default.
-- **Show ping:** an option in Settings: the round trip to your partner, in the top right while you play online.
-- **Castle rules:** each castle has its own, in Options › Open settings or the pause menu: XP, damage and boss HP sliders, button remapping, a switch for everything co-op changes about the game, and an optional rule that lets a partner hang onto Alucard's bat. The host's rules go for both players.
-- **Test castles:** start right outside any boss or scene.
+- **Castle rules:** each castle has its own ruleset: XP, damage and boss HP sliders. And every non-vanilla feature is toggle-able.
 
 ## Tips
 - **Teleport to your partner:** press Select for the map, then Cross. Your partner's cursor is blue.
-- **Report a bug:** press **F9** the moment something goes wrong, add a note, and choose Send. You can also email the zip from `Documents\SOTN Co-op\reports` to sotncoop@gmail.com. Please don't post it publicly, as it contains game data.
-- **Pause separately:** unless you're in the same room.
-- **Shortcuts:** press Triangle / Y on your lobby card to turn them on.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
 - **Maria:** drop your *Dracula X Chronicles* `.iso` on the launcher, or choose it in Discs & mods. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
 - **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` on the launcher, or choose it in Discs & mods. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
@@ -112,7 +105,7 @@ SOTN Co-op stands on other people's work. Thank you to all of them.
 - **Python**, **[pygame-ce](https://github.com/pygame-community/pygame-ce)**, **SDL**, **Pillow** and **[python-for-android](https://github.com/kivy/python-for-android)**: the launcher on Windows and Android.
 
 **Playtesting: what made it better**
-- **Zhikajira**: played the beta through the whole first castle, with detailed bug reports and ideas for new mechanics.
+- **Zhikajira**: completed several playtest playthrough, with detailed bug reports and ideas for new mechanics.
 
 *Castlevania* and *Symphony of the Night* are trademarks of Konami. This project is not affiliated with Konami. Buy the game.
 
