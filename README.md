@@ -1,5 +1,7 @@
 # SOTN Co-op
 
+![Two players sharing a room code, picking characters, fighting a boss together and teleporting to each other](docs/media/sotn-coop.gif)
+
 *What is a man? A co-operative little pile of friendship.*
 
 Online and couch co-op mod for *Castlevania: Symphony of the Night*. Explore the castle independently, fight bosses together, share progression. See your partner's location on the map and teleport to them at will. 
