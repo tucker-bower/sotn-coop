@@ -245,13 +245,14 @@ def _body_track(run, frames, pads):
 def netplay_partner_runs_smoothly_alucard_and_richter(run):
     """#291 (1.1.1 playtest): online, Alucard saw Richter "jumping all over" as he ran. On the
     playtest's connection, Richter runs one way and back across the hall, where the zombies knock
-    him back in his game but not his body in A's. On A's screen his body never jumps: it's eased
-    back to his real spot (it was put there in one step once 48 px off)."""
+    him back in his game but not his body in A's. On A's screen his body is eased back to his real
+    spot: no step over 16 px (it was put there in one step once 48 px off: three 47-52 px jumps
+    in this run). A drift that easing can't close is put right after a second, a step of about 12-16 px."""
     into_hall(run)
     run.s.set_net(PROFILE, SEED)
     run.step(300)
     xs = _body_track(run, 480, lambda t: ("", "right" if t < 240 else "left"))
     steps = [xs[i + 1] - xs[i] for i in range(len(xs) - 1)]
-    leaps = [(i, s) for i, s in enumerate(steps) if abs(s) > 12]
+    leaps = [(i, s) for i, s in enumerate(steps) if abs(s) > 16]
     run.expect(len(xs) > 400, "A shows B's body", samples=len(xs))
-    run.expect(not leaps, "B's body never jumps more than 12 px in a frame", leaps=leaps[:12], n=len(leaps))
+    run.expect(not leaps, "B's body never jumps more than 16 px in a frame", leaps=leaps[:12], n=len(leaps))

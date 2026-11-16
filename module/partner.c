@@ -151,6 +151,8 @@ static u16 s_PrevPad;
 static s16 s_ScrollX, s_ScrollY; // the camera when the copy was last swapped out
 #define SNAP_PX 96   // further than this from its real spot: put there (#291: 48 was a running Richter's knockback)
 #define DRIFT_PX 8   // nearer than this: left alone (the link's lag; its own code moves it)
+#define DRIFT_FRAMES 60 // off for longer than this (a second), easing back: put there
+static s16 s_DriftFrames;
 
 // A frame's pull back toward the real spot: an eighth of the way, at least a pixel, none when near.
 static s32 Ease(s32 d) {
@@ -991,10 +993,16 @@ void PartnerFrame(void) {
     if (PartnerLive()) { // pulled to their real spot when it drifts
         s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
         s32 dx = x - PLAYER.posX.i.hi, dy = y - PLAYER.posY.i.hi;
-        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX) {
-            PLAYER.posX.i.hi = x; // a door, a teleport: there at once
+        bool off = Ease(dx) || Ease(dy);
+
+        s_DriftFrames = off ? s_DriftFrames + 1 : 0;
+        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || s_DriftFrames > DRIFT_FRAMES) {
+            // A door, a teleport, or a drift the easing can't undo (a body on a floor below its
+            // real spot falls back each frame): there at once.
+            PLAYER.posX.i.hi = x;
             PLAYER.posY.i.hi = y;
             PLAYER.velocityX = PLAYER.velocityY = 0;
+            s_DriftFrames = 0;
         } else {
             // Drifting (its game's hit knocked it back, and not here): eased back, an eighth of the
             // way a frame. Snapped at 48 px, Richter running "jumped all over" (#291).

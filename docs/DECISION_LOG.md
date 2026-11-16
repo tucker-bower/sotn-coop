@@ -992,5 +992,5 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - Options considered: leaving Alucard's per-hand numbers (a thrown weapon showed 57 that their □ never used); a line of its own for the whip (DRA's page has two).
 
 **D208: The partner's body is eased back to its real spot, not snapped** (2026-11-15, #291; agent-default)
-- More than 8 px off, it moves an eighth of the way back each frame; more than 96 px off (a door, a teleport), it's put there. A hit in the partner's own game that its body here doesn't take (a zombie's knockback) made it drift 48 px and snap, three times in eight seconds of running: the "rubber-banding" of the 1.1.1 playtest.
+- More than 8 px off, it moves an eighth of the way back each frame; more than 96 px off (a door, a teleport), or still off after a second (easing loses to gravity when it stands on a lower floor; a knockback is undone sooner), it's put there. A hit in the partner's own game that its body here doesn't take (a zombie's knockback) made it drift 48 px and snap, three times in eight seconds of running: the "rubber-banding" of the 1.1.1 playtest.
 - Options considered: a smaller snap (more, smaller jumps); sending each hit's knockback (the body's hit reaction already follows its HP, but not where the hit came from).
