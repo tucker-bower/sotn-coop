@@ -47,6 +47,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         "j RenderPrimitivesHook\nnop\n" // M13 (after the words above: their addresses are fixed)
         ".globl g_CoopHudCharacter\ng_CoopHudCharacter: .word 0\n" // coop_api.h
         ".globl g_CoopNumberEntity\ng_CoopNumberEntity: .word 0\n" // DRA's damage numbers, for Richter's and Maria's loops (#171)
+        "j MakeAttHook\nnop\n" // #204: the status page's ATK for Richter and Maria (offhand.c)
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};

@@ -23,7 +23,7 @@ $(BUILD)/%.o: $(SRC)/%.c coop_ric.h
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 
-$(BUILD)/coop_ric.o: coop_ric.c coop_ric.h
+$(BUILD)/coop_ric.o: coop_ric.c coop_ric.h ../coop_attack.h
 	@mkdir -p $(BUILD)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 

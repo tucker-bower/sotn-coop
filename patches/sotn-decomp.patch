@@ -305,6 +305,22 @@ index 027137b..89fb5df 100644
              g_GameStep = Play_16;
          } else {
  #ifdef VERSION_PSP
+diff --git a/src/dra/menu.c b/src/dra/menu.c
+index 2377174..03399ac 100644
+--- a/src/dra/menu.c
++++ b/src/dra/menu.c
+@@ -420,7 +420,11 @@ void CalcDefense(void) {
+ 
+ void make_all(void) {
+     UpdateEquipStatBonuses();
++#ifdef COOP
++    CoopMakeAtt(); // make_att(), then Richter's and Maria's own (#204)
++#else
+     make_att();
++#endif
+     CalcDefense();
+ }
+ 
 diff --git a/src/maria/pl_blueprints.c b/src/maria/pl_blueprints.c
 index ce01a3c..67c5d91 100644
 --- a/src/maria/pl_blueprints.c

@@ -986,3 +986,11 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - **Options considered:** either player's Glasses show it to both (a player without them could take the good path for both, by watching a partner); each player's own (chosen: retail's rule, per player).
 - **No shared room during the walk to the warp after Richter's fight** (#285): each game walks its own player (a guest had the partner's walk, left at its last step).
 
+
+**D207: The status page shows what Richter's and Maria's buttons hit for** (2026-11-15, #204; agent-default)
+- Beside □, their own attack as it hits: the whip's or the owl's share plus STR, with Fire of Bat and Force of Echo (`characters/coop_attack.h` holds the numbers both their code and the page use). Beside ○, the attack of the hand ○ uses (the right hand first), 0 if it doesn't hit. DRA's `make_all` calls the module instead of `make_att` (one call for another, so DRA keeps its size), so the equip menu's preview follows the item tried on.
+- Options considered: leaving Alucard's per-hand numbers (a thrown weapon showed 57 that their □ never used); a line of its own for the whip (DRA's page has two).
+
+**D208: The partner's body is eased back to its real spot, not snapped** (2026-11-15, #291; agent-default)
+- More than 8 px off, it moves an eighth of the way back each frame; more than 96 px off (a door, a teleport), it's put there. A hit in the partner's own game that its body here doesn't take (a zombie's knockback) made it drift 48 px and snap, three times in eight seconds of running: the "rubber-banding" of the 1.1.1 playtest.
+- Options considered: a smaller snap (more, smaller jumps); sending each hit's knockback (the body's hit reaction already follows its HP, but not where the hit came from).
