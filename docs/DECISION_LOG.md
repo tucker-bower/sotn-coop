@@ -998,6 +998,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D209: Richter's and Maria's □ uses the first hand, as Alucard's** (Tucker, 2026-11-17; the details are agent-default)
 - □ uses what's in the first hand and ○ what's in the second, as for Alucard. With nothing □ uses in the first hand (empty, or a shield), □ is their own attack (the whip, the owl), so "taking the whip off" is emptying that hand; a two-handed weapon fills both hands, so both buttons swing it and there's no whip. ↑+□ still throws the subweapon whatever the hand holds. Replaces D105's "○ uses the right hand, else the left" and D207's ○ line: the status page's □ line is the first hand's weapon when it holds one.
 - **A cost:** with a weapon in the first hand, a special of theirs that ends in □ (Richter's Blade Dash) is that weapon's swing instead.
+- **Death can't take the whip or the owl:** they're no item. His scene plays only for Alucard (src/st/no3/cutscene.c), and co-op's catch-up for a player who missed it (`progress.c` RobbedUpdate) takes only Alucard's prologue pieces; any other weapon in their hands stays.
 - **VRAM:** Richter and Maria have room for one hand's weapon sheet; the swinging hand's is copied in from the 8MB as its swing starts.
 - Options considered: a "Vampire Killer" item in the equip menu (the item table is DRA's, fixed in size, with names, icons and inventory counts per item: too invasive); keeping ○ for both hands (two weapons were never both usable, which is what this fixes).
 

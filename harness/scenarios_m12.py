@@ -338,7 +338,7 @@ def maria_owl_with_a_weapon_in_hand(run):
     shots = {}
     for item, what in ((0, "empty hands"), (JEWEL_KNUCKLES, "Jewel Knuckles"), (SHORT_SWORD, "a short sword")):
         e.load_state(start)
-        e.write(EQUIPMENT, item)
+        e.write(EQUIPMENT + 4, item)  # the second hand: □ is her owl (D209)
         reload_as(run, mb, CHAR_MARIA)
         run.step(60)
         if not item:

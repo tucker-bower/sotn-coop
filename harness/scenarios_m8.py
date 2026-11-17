@@ -963,7 +963,7 @@ def damage_a_second(run, e, mb, ch, seconds=10):
     hitboxes and the target's invincibility, all counted the same way. Returns (damage a second,
     the most in one hit)."""
     from scenarios_m12 import pin_target
-    e.write(EQUIPMENT, SHORT_SWORD)
+    e.write(EQUIPMENT + (4 if ch else 0), SHORT_SWORD)  # Richter's, Maria's: the second hand, so □ is their own
     reload_as(run, mb, ch)
     mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
     wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
@@ -1282,7 +1282,7 @@ def hands_like_alucard(run, ch):
             if not weapon_ids(e) and not own_attack():
                 break
             run.step(1)
-        run.step(20)
+        run.step(60)  # the swing's recovery outlasts its sprites: a press then is lost, as Alucard's
         return ids, own, spent
 
     def sheet_is(hand):
@@ -1322,6 +1322,7 @@ def hands_like_alucard(run, ch):
     ids2, own2, _ = press("circle")
     run.expect(ids and ids2 and not own and not own2, "a two-handed sword: both buttons swing it, no whip or owl",
                square=sorted(ids), circle=sorted(ids2))
+
 
 
 FGAME_GFX_ADDR, FGAME_PAL_ADDR = 0x80580000, 0x806C2000  # module/coop_api.h: CoopBoot's F_GAME.BIN
