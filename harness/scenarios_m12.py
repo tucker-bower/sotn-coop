@@ -189,8 +189,8 @@ def _hand_items_test(ch, name, button, part):
 
 for _part in (0, 1):
     _hand_items_test(0, "alucard", "square", _part)
-    _hand_items_test(CHAR_RICHTER, "richter", "circle", _part)
-    _hand_items_test(2, "maria", "circle", _part)  # CHAR_MARIA
+    _hand_items_test(CHAR_RICHTER, "richter", "square", _part)  # the first hand: □, as Alucard's
+    _hand_items_test(2, "maria", "square", _part)  # CHAR_MARIA
 
 
 def _against_alucard(run, results):

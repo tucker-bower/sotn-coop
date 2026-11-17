@@ -49,7 +49,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 
 **Three characters**
 - **Alucard, Co-op Richter, Co-op Maria, Ultimate Maria, Saturn Maria and Ultimate Richter,** in any pairing, chosen each session.
-- **The whole castle as any character:** Co-op Richter and Maria learn their moves from Alucard's relics, level up, wear his armor, and use his weapons in their off hand.
+- **The whole castle as any character:** Co-op Richter and Maria learn their moves from Alucard's relics, level up, wear his armor, and wield his weapons: Square uses the first hand (the whip or owl when it's empty), Circle the second.
 - **Rebalanced** to stay close to Alucard's power, with extra jumps to reach everywhere he can.
 - **One-button shortcuts,** optional for each player: high jump and blade dash for Richter and Maria, spells on the right stick for Alucard.
 

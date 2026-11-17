@@ -370,7 +370,7 @@ def rules_no_offhand(run):
     """Off-hand weapons off: Circle swings nothing; back on, it does."""
     from scenarios_m8 import EQUIPMENT, OFFHAND_ITEMS, offhand_entity
     a = run.s.a
-    a.write(EQUIPMENT, OFFHAND_ITEMS[0][0])
+    a.write(EQUIPMENT + 4, OFFHAND_ITEMS[0][0])  # the second hand: ○'s
     load_characters(run)
     run.step(90)  # the module loads the weapon
 

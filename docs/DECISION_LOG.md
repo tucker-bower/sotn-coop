@@ -994,3 +994,14 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D208: The partner's body is eased back to its real spot, not snapped** (2026-11-15, #291; agent-default)
 - More than 8 px off, it moves an eighth of the way back each frame; more than 96 px off (a door, a teleport), or still off after a second (easing loses to gravity when it stands on a lower floor; a knockback is undone sooner), it's put there. A hit in the partner's own game that its body here doesn't take (a zombie's knockback) made it drift 48 px and snap, three times in eight seconds of running: the "rubber-banding" of the 1.1.1 playtest.
 - Options considered: a smaller snap (more, smaller jumps); sending each hit's knockback (the body's hit reaction already follows its HP, but not where the hit came from).
+
+**D209: Richter's and Maria's □ uses the first hand, as Alucard's** (Tucker, 2026-11-17; the details are agent-default)
+- □ uses what's in the first hand and ○ what's in the second, as for Alucard. With nothing □ uses in the first hand (empty, or a shield), □ is their own attack (the whip, the owl), so "taking the whip off" is emptying that hand; a two-handed weapon fills both hands, so both buttons swing it and there's no whip. ↑+□ still throws the subweapon whatever the hand holds. Replaces D105's "○ uses the right hand, else the left" and D207's ○ line: the status page's □ line is the first hand's weapon when it holds one.
+- **A cost:** with a weapon in the first hand, a special of theirs that ends in □ (Richter's Blade Dash) is that weapon's swing instead.
+- **VRAM:** Richter and Maria have room for one hand's weapon sheet; the swinging hand's is copied in from the 8MB as its swing starts.
+- Options considered: a "Vampire Killer" item in the equip menu (the item table is DRA's, fixed in size, with names, icons and inventory counts per item: too invasive); keeping ○ for both hands (two weapons were never both usable, which is what this fixes).
+
+**D210: F9 shows each game's hitboxes, and what last hurt each player** (2026-11-17; agent-default)
+- The report runs three frames of every game with DRA's own hitbox viewer on (`g_DebugEnabled`, `g_DebugHitboxViewMode` 1: half-transparent boxes), no buttons held, keeps each screen as `now/A-hitboxes.png`, and turns the viewer back off. On the couch that's three frames the games wouldn't otherwise have run; online they run anyway. A crash report doesn't do it (the game may be gone).
+- `about.json` gets `last_hit` per game: the entity `PLAYER.unkB8` points at (slot, id, update function, stage, place, attack). `scripts/read_report.py` names the function from the stage's map.
+- Options considered: a key to toggle the viewer in play (not for players); drawing our own boxes (DRA's are the game's truth).

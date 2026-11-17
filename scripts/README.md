@@ -18,7 +18,7 @@ Setup, build, generator and release tools.
 | `gen_overlay_table.py` | Generates `module/overlay_table.c`. |
 | `make_debug_starts.py` | Makes the harness's debug, boss and scene starts. |
 | `mingw-w64.cmake` | CMake toolchain for the Windows SwanStation build. |
-| `read_report.py` | **Manual.** Prints who was where in an unpacked F9 report, from its saved memory. |
+| `read_report.py` | **Manual.** Prints who was where in an unpacked F9 report, from its saved memory, and names what last hurt each player. |
 | `rebuild_fixtures.sh` | Rebuilds the disc, Maria and every savestate after a module change. |
 | `redux_check.sh` | Runs the module check in PCSX-Redux. |
 | `release.py` | Builds both apps and a draft GitHub release. |

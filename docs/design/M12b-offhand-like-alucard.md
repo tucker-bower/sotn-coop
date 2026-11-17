@@ -1,5 +1,7 @@
 # M12b: off-hand weapons exactly like Alucard's (D105, D106)
 
+**Since D209 (2026-11-17):** □ uses the first hand and ○ the second, as Alucard's; the whip and the owl are □ with nothing in the first hand. Where this file says ○, read "the hand's button".
+
 **Status:** decided by Tucker (2026-10-26). **Spike passed (2026-10-26)**; building on `coop-m12-coverage`.
 
 ## Goal

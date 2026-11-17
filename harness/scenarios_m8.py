@@ -357,7 +357,7 @@ def offhand_weapons(run, ch):
     start = e.save_state()
     for item, what in OFFHAND_ITEMS:
         e.load_state(start)
-        e.write(EQUIPMENT, item)
+        e.write(EQUIPMENT + 4, item)
         reload_as(run, mb, ch)
         mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
         wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
@@ -381,7 +381,7 @@ def offhand_weapons(run, ch):
                 if any(s in now and now[s] < hp < 32767 for s, hp in before.items()):
                     hit = True
                     break
-        hands = e.read(ATTACK_HANDS, "<i")
+        hands = e.read(ATTACK_HANDS + 4, "<i")  # the second hand's: ○'s
         run.expect(attack is not None and attack == hands, f"{what}: swings with the hand's attack",
                    attack=attack, attack_hands=hands)
         run.expect(hit, f"{what}: hits an enemy")
@@ -397,7 +397,7 @@ def offhand_weapons(run, ch):
     # A potion and food heal.
     for item, what in ((POTION, "a potion"), (APPLE, "food")):
         e.load_state(start)
-        e.write(EQUIPMENT, item)
+        e.write(EQUIPMENT + 4, item)
         reload_as(run, mb, ch)
         e.write(HP_NOW, 10, "<i")
         run.step(1, "circle")
@@ -409,7 +409,7 @@ def offhand_weapons(run, ch):
 def offhand_crouching_swings_low_richter(run):
     """Issue 162: crouched, ○'s swing is Alucard's crouching one, lower than standing."""
     e, mb = run.emu, mailbox(run)
-    e.write(EQUIPMENT, OFFHAND_ITEMS[0][0])
+    e.write(EQUIPMENT + 4, OFFHAND_ITEMS[0][0])
     reload_as(run, mb, CHAR_RICHTER)
     run.step(90)  # the module loads the weapon
     start = e.save_state()
@@ -434,7 +434,7 @@ def offhand_crouching_swings_low_richter(run):
 def offhand_one_attack_at_a_time_richter(run):
     """Issue 29: ○ waits for the whip to end, and the whip waits for ○'s swing: never both."""
     e, mb, ch = run.emu, mailbox(run), CHAR_RICHTER
-    e.write(EQUIPMENT, OFFHAND_ITEMS[0][0])
+    e.write(EQUIPMENT + 4, OFFHAND_ITEMS[0][0])
     reload_as(run, mb, ch)
     run.step(90)  # the module loads the weapon
     run.step(2, "square")
@@ -513,7 +513,7 @@ def offhand_frame_palettes_richter(run):
     bad, many = [], []
     for item, what in OFFHAND_ITEMS:
         e.load_state(start)
-        e.write(EQUIPMENT, item)
+        e.write(EQUIPMENT + 4, item)
         reload_as(run, mb, CHAR_RICHTER)
         run.step(90)  # the module loads the weapon
         seen = set()
@@ -634,7 +634,7 @@ def library_card(run, ch):
     """Issue 197 (0.16.3, 0.17.0): Richter and Maria couldn't use the Library Card. In a hand, ○
     takes them to the Library, and the card is used up."""
     e, mb = run.emu, mailbox(run)
-    e.write(EQUIPMENT, LIBRARY_CARD)
+    e.write(EQUIPMENT + 4, LIBRARY_CARD)
     reload_as(run, mb, ch)
     run.step(60)
     run.step(1, "circle")
@@ -1205,26 +1205,123 @@ SHURIKEN = 133  # a thrown weapon (OFFHAND_ITEMS)
 @per_character
 def status_attack(run, ch):
     """#204: the status page's ATK. Beside □ it's their own attack (the whip's, the owl's: 20% or
-    50% of it, plus STR), whatever the hands hold; beside ○, the hand ○ uses. A thrown weapon in
-    a hand made the □ number jump (0.17 playtest), though their □ never used it."""
+    50% of it, plus STR) while the first hand holds nothing □ uses, else that hand's (a weapon in
+    it is what □ swings); beside ○, the second hand's."""
     e, mb = run.emu, mailbox(run)
     start = e.save_state()
     own = 32 * 20 // 100 if ch == CHAR_RICHTER else 12 * 50 // 100  # coop_attack.h
 
-    def hands(item):
+    def hands(first, second=0):
         e.load_state(start)
-        e.write(EQUIPMENT, item)
+        e.write(EQUIPMENT, first)
+        e.write(EQUIPMENT + 4, second)
         reload_as(run, mb, ch)
         return e.read(ATTACK_HANDS, "<i"), e.read(ATTACK_HANDS + 4, "<i"), e.read(STR_TOTAL, "<i")
 
     square, circle, strength = hands(0)
     run.expect(square == own + strength, "empty hands: □ shows their own attack", square=square, str=strength)
     run.expect(circle == 0, "...and ○ shows nothing", circle=circle)
+    s, c, _ = hands(LEATHER_SHIELD)
+    run.expect(s == square, "a shield in the first hand: □ stays their own attack", square=s)
     for item, what in ((OFFHAND_ITEMS[0][0], "a short sword"), (SHURIKEN, "a thrown weapon")):
-        s, c, _ = hands(item)
-        run.expect(s == square, f"{what} in hand: □ stays their own attack", square=s)
+        s, c, _ = hands(0, item)
+        run.expect(s == square, f"{what} in the second hand: □ stays their own attack", square=s)
         run.expect(c > 0, f"...and ○ shows its attack", circle=c)
+        s, c, _ = hands(item)
+        run.expect(s > 0 and s != square, f"{what} in the first hand: □ shows its attack", square=s)
+        run.expect(c == 0, "...and ○ nothing", circle=c)
 
+
+def weapon_ids(e):
+    """The weapon overlays' entities in slots 4-63: their ids (0xE0+: the first hand's, 0xF0+: the second's)."""
+    import struct
+    raw = e.read_bytes("g_Entities", 0xBC * 64)
+    return {struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0] for s in range(4, 64)} & set(range(0xE0, 0x100))
+
+
+SHEET_COPIES = 0x80700000  # module/coop_api.h WEAPON_SHEET_ADDR: each hand's sheet (16 KB), kept in the 8MB
+
+
+@per_character
+def hands_like_alucard(run, ch):
+    """As Alucard's: □ uses the first hand and ○ the second. With nothing in the first hand □ is
+    their own attack (the whip, the owl); with a weapon there □ swings it and ↑+□ still throws the
+    subweapon; a two-handed weapon is both buttons. Each swing draws from its own hand's sheet (one
+    sheet's room in VRAM: the swinging hand's goes in)."""
+    from scenarios_m12 import AXE, SUBWEAPON, HEARTS as HEARTS_NOW
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    sword, club, two_handed = OFFHAND_ITEMS[0][0], OFFHAND_ITEMS[3][0], OFFHAND_ITEMS[2][0]
+
+    def holding(first, second):
+        e.load_state(start)
+        e.write(EQUIPMENT, first)
+        e.write(EQUIPMENT + 4, second)
+        e.write(SUBWEAPON, AXE, "<i")
+        reload_as(run, mb, ch)
+        run.step(120)  # the module loads the weapons; they land
+
+    def own_attack():
+        """Richter's whip (his attack flag), or Maria's owl (an entity: her attack sets no flag)."""
+        if ch == CHAR_RICHTER:
+            return bool(e.read(ATTACK_NOW, "<H"))
+        raw = e.read_bytes("g_Entities", 0xBC * 64)
+        return any(struct.unpack_from("<H", raw, s * 0xBC + 0x54)[0] == 0x8011 for s in range(4, 64))  # ANIMSET_WPN_OWL
+
+    def press(pad):
+        """What the press did over the next 30 frames: (weapon ids seen, their own attack ran, hearts spent)."""
+        e.write(HEARTS_NOW, 99, "<i")
+        run.step(2, pad)
+        ids, own = set(), False
+        for _ in range(30):
+            run.step(1)
+            ids |= weapon_ids(e)
+            own |= own_attack()
+        spent = e.read(HEARTS_NOW, "<i") < 99
+        for _ in range(120):  # until everything's over
+            if not weapon_ids(e) and not own_attack():
+                break
+            run.step(1)
+        run.step(20)
+        return ids, own, spent
+
+    def sheet_is(hand):
+        import struct
+        y = 0x180 if ch != CHAR_RICHTER else 0x100
+        rows = e.vram_rect(0x240, y, 0x40, 0x80)
+        return b"".join(struct.pack("<64H", *r) for r in rows) == e.read_bytes(SHEET_COPIES + hand * 0x4000, 0x4000)
+
+    holding(0, sword)
+    ids, own, _ = press("square")
+    run.expect(own and not ids, "nothing in the first hand: □ is their own attack", ids=sorted(ids), own=own)
+    ids, own, _ = press("circle")
+    run.expect(ids and min(ids) >= 0xF0, "a sword in the second: ○ swings it", ids=sorted(ids))
+
+    holding(sword, 0)
+    ids, own, _ = press("square")
+    run.expect(ids and max(ids) < 0xF0 and not own, "a sword in the first hand: □ swings it, not their attack",
+               ids=sorted(ids), own=own)
+    ids, own, spent = press("up+square")
+    run.expect(spent and not ids, "...and ↑+□ still throws the subweapon", ids=sorted(ids), spent=spent)
+    ids, own, _ = press("circle")
+    run.expect(not ids and not own, "...and ○, with nothing in the second hand, does nothing", ids=sorted(ids))
+
+    holding(sword, club)
+    ids, _, _ = press("square")
+    first = sheet_is(0)
+    ids2, _, _ = press("circle")
+    second = sheet_is(1)
+    ids3, _, _ = press("square")
+    run.expect(ids and max(ids) < 0xF0 and ids2 and min(ids2) >= 0xF0 and ids3 and max(ids3) < 0xF0,
+               "a weapon in each hand: □ and ○ each swing their own", square=sorted(ids), circle=sorted(ids2))
+    run.expect(first and second and sheet_is(0), "each swing draws from its hand's sheet",
+               first=first, second=second)
+
+    holding(two_handed, two_handed)  # as the menu equips one
+    ids, own, _ = press("square")
+    ids2, own2, _ = press("circle")
+    run.expect(ids and ids2 and not own and not own2, "a two-handed sword: both buttons swing it, no whip or owl",
+               square=sorted(ids), circle=sorted(ids2))
 
 
 FGAME_GFX_ADDR, FGAME_PAL_ADDR = 0x80580000, 0x806C2000  # module/coop_api.h: CoopBoot's F_GAME.BIN
