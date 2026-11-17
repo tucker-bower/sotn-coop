@@ -263,6 +263,13 @@ class Emu:
         raw = bytes(mem)
         return [struct.unpack_from(f"<{w}H", raw, ((y + r) * 1024 + x) * 2) for r in range(h)]
 
+    def write_vram(self, x, y, rows):
+        """Writes rows of u16 pixels at (x, y), as vram_rect reads them (the GPU draws from it next)."""
+        mem = self._session.core.get_memory(libretro.RETRO_MEMORY_VIDEO_RAM)
+        for r, row in enumerate(rows):
+            o = ((y + r) * 1024 + x) * 2
+            mem[o:o + 2 * len(row)] = struct.pack(f"<{len(row)}H", *row)
+
     # --- memory card 1 (libretro save RAM: 128KB, the raw card image)
     def card(self):
         return bytes(self._session.core.get_memory(libretro.RETRO_MEMORY_SAVE_RAM))

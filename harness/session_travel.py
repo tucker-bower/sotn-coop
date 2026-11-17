@@ -415,3 +415,57 @@ def warp_room_door_with_partner_inside(run):
 def warp_room_door_with_partner_beside(run):
     """#289 (report 160825): A and B in the room by the warp room; A walks in through its door."""
     _into_warp_room(run, "beside")
+
+
+def _press_up(run, g):
+    pads = lambda pad: ("", pad) if g is run.s.b else (pad, "")
+    run.step(1, p1=pads("up"))
+    run.step(1)
+
+
+@session_scenario(starts=("no1", "no1"))
+def warp_with_partner_in_the_warp_room(run):
+    """#290 (1.1.1 playtest, reports 161209 and 161217): both players stand on the Outer Wall's warp.
+    Only the authority's warp ran: the guest's was a copy, so its Up did nothing, and it showed the
+    authority's fade to white, which stayed when the authority left. Here the guest warps (to the
+    Entrance's: its bit is always on), the other follows, then in the Entrance's warp room, shared
+    again, the authority warps back. Each lands in play, faded back in, and whoever stays behind
+    isn't left on a white screen."""
+    from link.mailbox import ROLE_AUTHORITY, ROLE_GUEST
+    a, b = run.s.a, run.s.b
+    run.step(120)
+    arrive(run, a, WRP, WRP_OUTER_WALL, 128, 167)
+    run.step(30)
+    arrive(run, b, WRP, WRP_OUTER_WALL, 128, 167)
+    run.step(240)
+    for n, who in enumerate((ROLE_GUEST, None, ROLE_AUTHORITY)):
+        roles = {g.mailbox("self_presence").role: g for g in (a, b)}
+        if who is None:  # the one still in the Outer Wall's warp room
+            g = next(g for g in (a, b) if g.mailbox("self_presence").room_id == WRP_OUTER_WALL)
+            name, other = "the one left behind", None
+        else:
+            run.expect(set(roles) == {ROLE_AUTHORITY, ROLE_GUEST}, f"warp {n + 1}: the warp room is shared",
+                       roles=sorted(roles))
+            g = roles[who]
+            other = roles[ROLE_AUTHORITY if who == ROLE_GUEST else ROLE_GUEST]
+            name = "the guest" if who == ROLE_GUEST else "the authority"
+        before = g.mailbox("self_presence")
+        _press_up(run, g)
+        moved = None
+        for i in range(900):
+            run.step(1)
+            p = g.mailbox("self_presence")
+            if p.room != before.room and p.flags & IN_PLAY and not p.flags & BUSY:
+                moved = i
+                break
+        p = g.mailbox("self_presence")
+        run.expect(moved is not None, f"warp {n + 1}: {name} warps out, in play", p=str(p), before=str(before))
+        run.step(240)
+        p = g.mailbox("self_presence")
+        run.expect(p.stage == WRP and p.flags & IN_PLAY and not p.flags & BUSY and g.read("g_PauseAllowed"),
+                   f"...and plays on in the next warp room, faded back in", p=str(p))
+        run.capture()
+        if other:
+            shot = other.screenshot().convert("L")
+            bright = sum(shot.getdata()) / (shot.width * shot.height)
+            run.expect(bright < 160, "...and the partner left behind isn't on a white screen", brightness=round(bright))

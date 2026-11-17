@@ -32,12 +32,15 @@ HELPERS = ("GetSideToPlayer", "GetDistanceToPlayerX", "GetDistanceToPlayerY")
 # (NZ1's g_bossDoorsLocked) is one of the overlay's DATA words below, which the guest gets too.
 # Camera limits too: they're the limits of one game's own camera, set as its own player walks
 # past (playtest 0.14: a guest kept the old limit, and stood on it as if on a floor).
+# The warp rooms' machine too: it warps the game's own player when that player presses Up on it.
+# A guest's copy never warped its player, and showed the authority's fade to white, which left the
+# guest on a white screen when the authority warped (#290).
 DECOR = re.compile(r"Entity(RedDoor|SealedDoor|LockCamera|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
                    r"Vortex|Bookcase|Furniture|Gears|DoorRubble|Shadow)|Clouds|LightningCloud|"
                    r"DistantBackgroundTrees|ForegroundTree|3DBackgroundHouse|HouseShader|ClockTower3D|"
                    r"StainedGlass|StainedGlassBackground|CavernBackground\w*|NightSky|BgColumnsParallax\w*|"
                    r"DeepBackgroundArch|DistantBookshelves|PurpleBrickScrollingBackground|Fog|DeathSkySwirl|"
-                   r"BridgeBackgroundPiece)")
+                   r"BridgeBackgroundPiece|R?WarpRoom)")
 MAX_DECOR = 16
 # The layout spawner's cursors (src/st/create_entity.h). A guest's are copies of the
 # authority's (they're in the BSS), so a guest that takes the room over re-seats them for its
