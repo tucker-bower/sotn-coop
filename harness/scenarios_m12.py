@@ -626,3 +626,49 @@ def stage_palettes_maria(run):
     drawn = sum(1 for r, g, b in shot.getdata() if (r >> 3, g >> 3, b >> 3) in colors)
     run.expect(drawn > 50, f"it's drawn (palette {pal:#x})", pixels=drawn, colors=len(colors))
 
+
+
+# --- F9 reports: the game's own hitbox viewer, and what last hurt the player ------------------
+@scenario(start="entrance", disc=COOP_DISC)
+def report_f9_hitboxes_and_last_hit(run):
+    """F9 adds each screen with DRA's hitbox viewer on (report.hitboxes) and what last hurt each
+    player (report.last_hit). The picture differs from the same frames without it, the viewer is
+    off again after, and an enemy put on the player is the one named."""
+    import struct
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
+    import report
+    e = run.emu
+    run.step(120)
+    start = e.save_state()
+    run.step(report.HITBOX_FRAMES)
+    plain = e.screenshot().convert("RGB")
+    e.load_state(start)
+    boxes = report.hitboxes([e], lambda: run.step(1))[0].convert("RGB")
+    changed = sum(1 for a, b in zip(plain.getdata(), boxes.getdata()) if a != b)
+    from coop_env import TOOLS
+    (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
+    boxes.save(TOOLS["out"] / run.name / "hitboxes.png")
+    run.expect(changed > 100, "the hitboxes are drawn over the game", pixels=changed)
+    run.expect((e.read(report.DEBUG_ENABLED), e.read(report.HITBOX_MODE)) == (0, 0), "and the viewer is off again")
+    # In the hall (its zombies), an enemy with an attack, put on the player until it touches him
+    mb = mailbox(run)
+    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
+    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
+        mb.self_presence()), 900, "arrived in the hall")
+    hurt = None
+    for _ in range(600):
+        raw = e.read_bytes("g_Entities", 0xBC * 256)
+        foes = [s for s in range(64, 256) if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0]
+                and struct.unpack_from("<h", raw, s * 0xBC + 0x40)[0] > 0 and raw[s * 0xBC + 0x3C]]
+        if foes:
+            px, py = struct.unpack_from("<h", raw, 2)[0], struct.unpack_from("<h", raw, 6)[0]
+            e.write("g_Entities", px, "<h", foes[0] * 0xBC + 2)
+            e.write("g_Entities", py, "<h", foes[0] * 0xBC + 6)
+        run.step(1)
+        hit = report.last_hit(e)
+        if hit and foes and hit["slot"] == foes[0]:
+            hurt = hit
+            break
+    run.expect(hurt is not None, "the enemy put on the player is the last thing that hurt him", hit=hurt)

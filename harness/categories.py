@@ -40,7 +40,7 @@ CATEGORIES = {
                 r"online|netplay|link_|stale_link|soak", ("session_online", "session_m9", "spec_test")),
     "rules": ("The castle's rules", r"rules_|_off_by_default", ("session_rules",)),
     "pvp": ("PvP", r"pvp", ("session_m15",)),
-    "launcher": ("The app: menus, settings, reports, the UI flows", r"launcher_|ui_|char_select|report_state|solo_continue", ()),
+    "launcher": ("The app: menus, settings, reports, the UI flows", r"launcher_|ui_|char_select|report_state|report_f9|solo_continue", ()),
     "mods": ("Other mods' discs: the randomizer, editor hacks, the patcher", r"mod_|patcher_|rando", ("session_mods",)),
     "inverted": ("The inverted castle", r"inverted|final_boss|shaft|crawl_r", ("session_inverted",)),
     "widescreen": ("Widescreen views (design/M19)", r"widescreen", ("scenarios_widescreen", "session_widescreen")),
