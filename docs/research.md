@@ -299,3 +299,27 @@ A stage entity's primitives can be a long chain: a boss's life-up reward (`Entit
 Each warp room's entity sets bit 0 of `g_CastleFlags[WRP_UNLOCKS]` (the Entrance's warp) as well as its own when it loads (`src/st/wrp/warp.c`). So the first warp room a player finds already teleports to the Entrance's, in the original game too. A report of "a teleport before finding a second" is that.
 
 The warp entity (`EntityWarpRoom`, entity 0x16) warps the game's own player: it reads `g_pads[0]` and moves `PLAYER`. In a shared room the guest only had the authority's copy, so the guest's Up did nothing, and it drew the authority's fade to white, which stayed on screen once the authority left (#290). It's on the guest's own-scenery list now (`scripts/gen_overlay_table.py`), as red doors are: each game runs its own.
+
+## The sotn.fun wiki (read 2026-11-16)
+[sotn.fun/wiki](https://www.sotn.fun/wiki/Main_Page) is the speedrun and decomp community's wiki: 39 pages, many of them stubs. The ones worth coming back to:
+
+| Page | What's there |
+|---|---|
+| [RNG](https://www.sotn.fun/wiki/RNG) | The two generators (below) |
+| [Damage-output](https://www.sotn.fun/wiki/Damage-output) | Alucard's ATT, damage and critical formulas (from GameFAQs; one worked example is wrong) |
+| [Fire Boomerang Super Jump](https://www.sotn.fun/wiki/Fire_Boomerang_Super_Jump) | Entity factories and their slot pool (below) |
+| [Overlay](https://www.sotn.fun/wiki/Overlay) | Every build's files with sizes and hashes (US `DRA.BIN` 1153136 bytes), and the RAM map |
+| [Entity Identification](https://www.sotn.fun/wiki/Entity_Identification) | `PLAYER.unkB8` (0x80073490) points at the last entity that hurt the player: read its `pfnUpdate` to find an enemy's code |
+| [GameShark](https://www.sotn.fun/wiki/GameShark) | A hitbox viewer (`800BD1C0 0001`, `801362B0 0001`) and debug prints outside play |
+| [TPAGE layout](https://www.sotn.fun/wiki/TPAGE_layout), [Room IDs](https://www.sotn.fun/wiki/Room_IDs) | Annotated images of VRAM's texture pages and of every room's id |
+| [Glitches](https://www.sotn.fun/wiki/Glitches), [Techniques](https://www.sotn.fun/wiki/Techniques), [Death Skip](https://www.sotn.fun/wiki/Death_Skip) | Shiftline, the Infinity Glitch, speedrun skips: what players may try in our castle |
+| [Alucard](https://www.sotn.fun/wiki/Alucard) | His afterimages: 6, drawn 3 a frame in turn |
+| [Game Versions](https://www.sotn.fun/wiki/Game_Versions), [Ports/Saturn](https://www.sotn.fun/wiki/Ports/Saturn), [Ports/PSP](https://www.sotn.fun/wiki/Ports/PSP) | The 15 builds and their lineage; the Saturn and PSP ports |
+
+- **Two random number generators.** `Random()` (the "nice" one: seed × 0x01010101 + 1, top byte) moves only when called: Dracula's prologue teleports, Flea Men, the Library's books. `rand()` (the "evil" one: the PsyQ LCG, × 0x41C64E6D + 0x3039) also moves once every frame, and decides drops, their rarity, a Meal Ticket's food and critical hits. Both start at 0 (Saturn's evil one at 1). Each game's `rand()` runs its own course, so a shared room's drops are the authority's.
+- **Entity factories come from slots 8-15 only** (`CreateEntFactoryFromEntity`). With them full, a factory isn't made: several Fire Boomerangs in flight stop Alucard's wolf transformation midway, and he keeps his speed (the "super jump"). Anything of ours that takes those slots (the partner's body, familiars, weapons) makes this likelier.
+- **Damage:** ATT = STR + MaxATT when STR ≥ MaxATT, else STR + (MaxATT - STR/2); damage = ATT × (½ when poisoned, ½ when resisted, 2 when weak) - DEF. A critical picks the highest of INT, STR, LCK and CON, each plus `rand()` 0-63: STR doubles ATT, CON adds DEF/2, LCK adds up to LCK, INT adds the square root of "the room count" (the page doesn't say which). The chance: √(LCK×2 + 0..15) - 5 + the weapon's rate, out of 256.
+- **The Infinity Glitch:** in the Underground Caverns a picked-up item (a Life Max Up too) can come back after leaving and returning. The wiki thinks entity slots filling up are the cause; nobody has looked in the decomp.
+
+## Enemies that stay dead
+A room's killed enemies are bits in `g_unkGraphicsStruct.D_80097428` (`PreventEntityFromRespawning`), cleared on every room change (`func_800F2404`, `src/dra/5087C.c`): leave a room and come back, and its enemies are back, in the original game too. What stays dead is kept in castle flags: the bosses and minibosses (Slogra and Gaibon's retreat and defeat, the Scylla wyrm), and the armors that hold an item, which are collectibles (`CAT_SPIKE_BREAKER_ARMOR`, the Library's `LIBRARIAN_AXE_LORD_ARMOR`; `include/castle_flags.h`).

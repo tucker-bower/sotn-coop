@@ -148,3 +148,44 @@ def widescreen_red_door_comes_back(run):
                 break
         run.expect(through is not None, f"{WIDE_SHAPES[shape]}: back through the door into the next room",
                    at=e.snapshot(), doors=[s for s, v in _stage_entities(e).items() if v[0] == 5])
+
+
+
+
+DRAW_OFS_X = 0x8003CB14  # g_GpuBuffers[0].draw.ofs[0]: where the frame is drawn from (both buffers agree)
+
+
+@scenario(start="no1", disc=COOP_DISC)
+def widescreen_no_judder_by_room_edge(run):
+    """#295 (1.1.1 playtest): the picture shook at 21:9 in the Outer Wall. Near a room's edge the wide
+    window's slide follows the camera; it was worked out before the camera moved, so each frame was
+    drawn with the last frame's and the picture jumped back and forth a pixel as the player walked.
+    Here, walking left across the Outer Wall's room 8 (61,13) at 21:9 to its edge, the window each
+    frame is drawn with (its draw offset) never starts left of the room or steps back against the walk."""
+    from link.mailbox import BUSY, CMD_ARRIVE, IN_PLAY
+    e = run.emu
+    mb = Mailbox(HarnessAdapter(e), symbols()["g_CoopLink"])
+    _wide(e, 2)
+    mb.command(CMD_ARRIVE, 0x01, 8, 256, 120)  # the middle of (61,13), 512 wide
+    for _ in range(600):
+        run.step(1)
+        p = mb.self_presence()
+        if p.room_id == 8 and p.flags & IN_PLAY and not p.flags & BUSY:
+            break
+    run.step(90)
+
+    def start():  # where the window the frame was drawn with starts, in the room
+        sx = e.snapshot()
+        return sx["world_x"] - sx["x"] - e.read(DRAW_OFS_X, "<h")  # the camera less the slide drawn
+
+    room, starts = e.snapshot()["room"], []
+    for _ in range(120):
+        run.step(1, "left")
+        if e.snapshot()["room"] != room:
+            break
+        starts.append(start())
+    steps = [b - a for a, b in zip(starts, starts[1:])]
+    run.expect(len(set(starts)) > 20, "the window moves on the walk", starts=starts[:5] + starts[-5:])
+    run.expect(min(starts) >= 0, "it never starts left of the room's edge", lowest=min(starts))
+    run.expect(all(d <= 0 for d in steps), "and never steps back against the walk: no judder",
+               back=[(i, d) for i, d in enumerate(steps) if d > 0][:10])
