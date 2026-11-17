@@ -34,10 +34,23 @@ s32 g_CoopWideSlide;   // how far the wide window starts left of the game's view
 s32 g_CoopWideWindows;  // tests: the width the stage's entity windows are for (WindowsWidth)
 u8 g_CoopWideStageOff; // tests: the stage's own entity windows (harness/widescreen_edges.py --raw)
 static s32 s_Columns;
+static s32 s_Wide; // the view's width this frame, while wide
+static s32 Slide(s32 w);
 
+// The game's tilemap drawing, wide. It runs after the camera has moved this frame, so the slide is
+// worked out again here, for the camera the frame is drawn with: WidescreenFrame's was the last
+// frame's camera. Where the slide follows the camera (near a room's edge), the picture was a frame
+// behind it and jumped back and forth a pixel or two as the player walked (#295: the Outer Wall's
+// narrow rooms). The draw offset is read when the frame is drawn, after this.
 static void WideRenderTilemap(void) {
     s32 i;
 
+    if (s_Wide) {
+        g_CoopWideSlide = Slide(s_Wide);
+        for (i = 0; i < 2; i++) {
+            g_GpuBuffers[i].draw.ofs[0] = i * s_Wide + g_CoopWideSlide;
+        }
+    }
     g_Tilemap.scrollX.i.hi -= g_CoopWideSlide;
     for (i = 0; i < MAX_BG_LAYER_COUNT; i++) {
         g_BgLayers[i].scrollX.i.hi -= g_CoopWideSlide;
@@ -83,7 +96,6 @@ static s32 Slide(s32 w) {
 // the screen too, but in its middle: drawn centred on the wide view.
 #define CENTRED_LAYER 0x1F1
 static DR_OFFSET s_LayerOffset[2][2];
-static s32 s_Wide; // the view's width this frame, while wide
 
 static void Offset(DR_OFFSET* p, u32* slot, s32 x, s32 y) {
     p->code[0] = 0xE5000000 | ((y & 0x7FF) << 11) | (x & 0x7FF);
