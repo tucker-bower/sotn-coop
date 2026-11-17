@@ -82,7 +82,7 @@ def my_test(run):
     s = run.play(walker("left", attack_every=8), 600, until=lambda s: s["room"] == (14, 40))
     run.expect(s["room"] == (14, 40), "reaches the hall", room=s["room"])
 ```
-`run.emu` gives you `step(n, p1, p2)`, `read("symbol", fmt, offset)`, `write(...)`, `snapshot()`, `save_state()` and `screenshot()`. Symbols come from the decomp's `config/symbols.us*.txt`, and co-op module symbols come from `build/coop/coop.map` (`module.py`).
+`run.emu` gives you `step(n, p1, p2)`, `read("symbol", fmt, offset)`, `write(...)`, `snapshot()`, `save_state()`, `screenshot()`, and `vram_rect(x, y, w, h)` / `write_vram(x, y, rows)` for VRAM in 16-bit words. Symbols come from the decomp's `config/symbols.us*.txt`, and co-op module symbols come from `build/coop/coop.map` (`module.py`).
 
 ## Writing a two-game scenario
 ```python

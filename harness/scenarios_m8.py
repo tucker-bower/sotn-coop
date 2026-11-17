@@ -1224,3 +1224,40 @@ def status_attack(run, ch):
         s, c, _ = hands(item)
         run.expect(s == square, f"{what} in hand: □ stays their own attack", square=s)
         run.expect(c > 0, f"...and ○ shows its attack", circle=c)
+
+
+
+FGAME_GFX_ADDR, FGAME_PAL_ADDR = 0x80580000, 0x806C2000  # module/coop_api.h: CoopBoot's F_GAME.BIN
+PICS = (0x380, 0x181, 0x20, 0x7F)  # the familiar list's pictures: F_GAME.BIN's strip 0x1A
+
+
+@per_character
+def familiar_list_pictures(run, ch):
+    """#298 (1.1.1 playtest): the familiar list showed no pictures for Richter and Maria. Their
+    games load F_GAME2.BIN, which has none, and their own colours in the pictures' palettes. Here
+    the pictures' corner is blanked (as their own load leaves it); with the menu open it holds
+    Alucard's pictures and palettes, and when it closes their VRAM is as it was."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    x, y, w, h = PICS
+    e.write_vram(x, y, [[0] * w for _ in range(h)])
+    cluts = [e.read(SYMBOLS["g_ClutIds"] + (0x1D0 + k) * 2, "<H") for k in range(7)]
+    pal = lambda: [e.vram_rect((c & 0x3F) << 4, c >> 6, 16, 1)[0] for c in cluts]
+    before_pics, before_pal = e.vram_rect(x, y, w, h), pal()
+    alu_pics = [struct.unpack_from(f"<{w}H", e.read_bytes(FGAME_GFX_ADDR + 0x1A * 0x2000 + r * w * 2, w * 2)) for r in range(h)]
+    alu_pal = [struct.unpack_from("<16H", e.read_bytes(FGAME_PAL_ADDR + ((c >> 6) - 0xF0) * 0x200 + ((c & 0x3F) << 5), 32))
+               for c in cluts]
+    run.step(4, "start")
+    run.step(90)
+    run.expect(e.read("g_GameEngineStep") == 2, "the pause menu is open")
+    run.expect([tuple(r) for r in e.vram_rect(x, y, w, h)] == [tuple(r) for r in alu_pics],
+               "the familiars' pictures are Alucard's", blank_rows=sum(not any(r) for r in e.vram_rect(x, y, w, h)))
+    run.expect([tuple(p) for p in pal()] == [tuple(p) for p in alu_pal], "...and their palettes")
+    for _ in range(6):
+        run.step(2, "triangle")
+        run.step(30)
+        if e.read("g_GameEngineStep") == 1:
+            break
+    run.step(10)
+    run.expect(e.read("g_GameEngineStep") == 1, "the menu closed")
+    run.expect(e.vram_rect(x, y, w, h) == before_pics and pal() == before_pal, "closed: their own VRAM is back")

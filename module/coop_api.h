@@ -41,6 +41,10 @@
 #define PORTRAIT_MENU_ADDR 0x806C8000
 #define PORTRAIT_SAVED_ADDR 0x806C9800
 #define PORTRAIT_SAVED_CLUT_ADDR 0x806CB000
+// The familiar list's pictures (portrait.c) and their palettes: what they overwrite in Richter's
+// and Maria's VRAM while the menu is open.
+#define FAMILIAR_PICS_SAVED_ADDR 0x806CC000
+#define FAMILIAR_PICS_SAVED_CLUT_ADDR 0x806CE000
 #define PARTNER_RIC_ADDR 0x80740000
 #define PARTNER_MAR_ADDR 0x80780000
 #define PARTNER_PLAYER_SIZE 0x40000
