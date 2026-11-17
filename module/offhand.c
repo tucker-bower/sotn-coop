@@ -26,6 +26,7 @@
 #include "character.h"
 #include "offhand.h"
 #include "weapons.h"
+#include "../characters/coop_attack.h"
 
 // DRA (src/dra/menu.c, 5D5BC.c, 7879C.c)
 bool LoadWeaponPrg(s32 equipIndex);
@@ -659,4 +660,63 @@ void OffhandUpdate(void) {
             return;
         }
     }
+}
+
+// The status page's ATK for Richter and Maria (#204). DRA's make_att gives each hand Alucard's
+// attack with what's in it, drawn beside □ and ○; their □ is the whip or the owl, which no hand
+// sets, and a thrown weapon in a hand showed a big number that did nothing. So the □ line is their
+// own attack as it hits (coop_ric.c CoopRicAttack, coop_maria.c CoopMarAttack), and the ○ line is
+// the hand ○ uses, in the order above. Display only: a weapon's hit takes CalcAttack itself
+// (GetEquipProperties). The equip menu's preview runs make_all with the item tried on, so its
+// numbers and arrows follow.
+void make_att(void);                                  // DRA (src/dra/menu.c)
+#define MOVE_ON(relic) (RULE_OFF(OPT_NO_RELIC_MOVES) || (g_Status.relics[relic] & RELIC_FLAG_ACTIVE))
+
+static s32 SquareAttack(u32 character) {
+    bool richter = character == CHAR_RICHTER;
+    s32 attack = richter ? WHIP_ATTACK : OWL_ATTACK;
+
+    if (RULE_OFF(OPT_NO_ALUCARD_STATS)) {
+        return attack; // their own game's
+    }
+    attack = attack * (richter ? WHIP_BASE_PCT : BASIC_BASE_PCT) / 100 +
+             g_Status.statsTotal[STAT_STR] * (richter ? WHIP_STR_PCT : BASIC_STR_PCT) / 100;
+    if (MOVE_ON(RELIC_FIRE_OF_BAT)) {
+        attack = attack * (richter ? FIRE_WHIP_PCT : FIRE_PCT) / 100;
+    }
+    if (MOVE_ON(RELIC_FORCE_OF_ECHO)) {
+        attack = attack * (richter ? ECHO_WHIP_PCT : ECHO_PCT) / 100;
+    }
+    return attack;
+}
+
+static s32 CircleAttack(void) {
+    s32 hand;
+    u8 c;
+
+    if (RULE_OFF(RULE_NO_OFFHAND)) {
+        return 0;
+    }
+    for (hand = 0; hand < 2; hand++) {
+        c = Category(hand);
+        if (IsWeapon(c) && WeaponOvl(hand) != 0xFF) { // an empty hand is a "fist" with no weapon
+            return g_Status.attackHands[hand];
+        }
+        if (g_Status.equipment[hand] == ITEM_LIBRARY_CARD || c == ITEM_FOOD ||
+            (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF)) {
+            return 0; // ○ uses it, and it doesn't hit
+        }
+    }
+    return 0;
+}
+
+void MakeAttHook(void) {
+    u32 character = CharacterLoaded();
+
+    make_att();
+    if (!CHAR_COOP(character)) {
+        return;
+    }
+    g_Status.attackHands[1] = CircleAttack();
+    g_Status.attackHands[0] = SquareAttack(character);
 }

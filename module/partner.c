@@ -2,7 +2,7 @@
 // game has updated player 1, the partner's copy of "the player" is swapped into RAM, the game's
 // own player update runs on it with the partner's buttons (CoopLink.partnerPad, played out with
 // its presence), and it's swapped back out. It exists while the partner is in our room, and is
-// pulled to their real spot when it drifts past SNAP_PX. Cosmetic: no hit detection runs for it.
+// eased back to their real spot when it drifts (put there past SNAP_PX). Cosmetic: no hit detection runs for it.
 // It's how the partner is drawn (M13 step 5: the puppet is gone). Without a partner, there's no
 // body, except in the harness's spike test (OPT_PARTNER_SIM): a copy of player 1 on g_CoopSpikePad.
 //
@@ -149,7 +149,18 @@ u32 g_CoopSpikeBody[BODY_SIZE / 4]; // the partner's copy, while player 1's is i
 static bool s_Made;
 static u16 s_PrevPad;
 static s16 s_ScrollX, s_ScrollY; // the camera when the copy was last swapped out
-#define SNAP_PX 48
+#define SNAP_PX 96   // further than this from its real spot: put there (#291: 48 was a running Richter's knockback)
+#define DRIFT_PX 8   // nearer than this: left alone (the link's lag; its own code moves it)
+#define DRIFT_FRAMES 60 // off for longer than this (a second), easing back: put there
+static s16 s_DriftFrames;
+
+// A frame's pull back toward the real spot: an eighth of the way, at least a pixel, none when near.
+static s32 Ease(s32 d) {
+    if (d <= DRIFT_PX && d >= -DRIFT_PX) {
+        return 0;
+    }
+    return d / 8 ? d / 8 : (d > 0 ? 1 : -1);
+}
 
 u32 g_CoopSpikePad;   // harness: the partner's buttons (PAD_*)
 u32 g_CoopSpikeLines; // the last partner frame's cost, in scanlines (263 a frame)
@@ -981,11 +992,22 @@ void PartnerFrame(void) {
     }
     if (PartnerLive()) { // pulled to their real spot when it drifts
         s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
-        if (PLAYER.posX.i.hi - x > SNAP_PX || x - PLAYER.posX.i.hi > SNAP_PX ||
-            PLAYER.posY.i.hi - y > SNAP_PX || y - PLAYER.posY.i.hi > SNAP_PX) {
+        s32 dx = x - PLAYER.posX.i.hi, dy = y - PLAYER.posY.i.hi;
+        bool off = Ease(dx) || Ease(dy);
+
+        s_DriftFrames = off ? s_DriftFrames + 1 : 0;
+        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || s_DriftFrames > DRIFT_FRAMES) {
+            // A door, a teleport, or a drift the easing can't undo (a body on a floor below its
+            // real spot falls back each frame): there at once.
             PLAYER.posX.i.hi = x;
             PLAYER.posY.i.hi = y;
             PLAYER.velocityX = PLAYER.velocityY = 0;
+            s_DriftFrames = 0;
+        } else {
+            // Drifting (its game's hit knocked it back, and not here): eased back, an eighth of the
+            // way a frame. Snapped at 48 px, Richter running "jumped all over" (#291).
+            PLAYER.posX.i.hi += Ease(dx);
+            PLAYER.posY.i.hi += Ease(dy);
         }
     }
     if (PartnerLive() && (p->flipX & FLIP_CARRIED)) { // hanging under a bat: where its own game holds it

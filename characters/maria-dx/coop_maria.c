@@ -1,12 +1,9 @@
 // Our Maria's co-op additions (design/M8b): her power grows like Alucard's.
 #include "maria.h"
+#include "../coop_attack.h"
 
 // Tuning knobs (M8b §5), as for Richter (characters/richter-ps1/coop_ric.c).
-#define BASIC_BASE_PCT 50  // issue 114: her attack's own value, so her damage a second is Alucard's
-#define BASIC_STR_PCT 100  // her own attack gains this % of STR
 #define GUARDIAN_INT_DIV 50 // guardians and their crashes: × (1 + INT / this)
-#define FIRE_PCT 125       // Fire of Bat: her attack burns, for this % of its damage
-#define ECHO_PCT 125       // Force of Echo: her attack's echo, this % of its damage
 
 // Her frame tables, at a fixed place (maria.ld: 0x8013C1F0), for another character's game to
 // draw her from its copy (module/puppet.c).
@@ -61,7 +58,6 @@ s32 CoopMarGuardianGear(s32 attack) {
 // kick, blade dash, high jump: MarSetSubweaponParams, with their PL_W_ id) grow with STR, the body's
 // in proportion to the owl's, as Richter's body moves to his whip's; her guardians' (every attack in
 // src/maria/pl_subweapons.c, which sets g_CoopMarGuardian) with INT.
-#define OWL_ATTACK 12 // the owl's own attack (src/maria/pl_blueprints.c EntityMariaOwl)
 int g_CoopMarGuardian;
 
 s32 CoopMarAttack(Entity* entity, s32 subweapon, s32 attack) {

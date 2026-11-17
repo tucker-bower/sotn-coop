@@ -30,6 +30,7 @@ void FlushCache(void);                   // main.exe
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 #define ROLE_SETTLE 4      // frames a role change must hold before it happens
 #define MAX_PRIMS_PER_ENTITY 64
+#define MAX_CHAIN MAX_PRIM_COUNT // no chain is longer: stops the count on a looped one
 #define CAMERA_NEAR 256    // shared only while the cameras are within a screen of each other
 #define UI_PRIORITY 0x1E0  // primitives from here up are screen-space UI (message boxes, 0x1FC+)
 #define STAGE_CODE 0x80180000 // stage overlays load here (each starts with its Overlay table)
@@ -74,7 +75,12 @@ typedef struct {
     u8 slot;   // 0..191 (+ STAGE_ENTITY_START)
     u8 nPrims; // primitives that follow the entity
     u8 nEnvs;  // then the DR_ENV of each PRIM_ENV among them, in order
-    u8 nMore;  // how many longer its chain is than the primitives sent (MAX_PRIMS_PER_ENTITY)
+    u8 pad;
+    // How many longer its chain is than the primitives sent (MAX_PRIMS_PER_ENTITY). A u8 held
+    // 255 at most: a boss's life-up reward walks 385, its chain was handed over at 319, and the
+    // game wrote through a null pointer into low memory (#288).
+    u16 nMore;
+    u16 pad2;
 } SnapEntity;
 
 // A PRIM_ENV primitive (a render-to-texture pass: the Warg burning away) points at a DR_ENV from
@@ -105,7 +111,7 @@ static void (*s_OrigUpdate)(void);
 static void (*s_OrigSpawner)(void);
 static s16 s_MirrorPrims[STAGE_SLOTS]; // head index per slot, -1 if none
 static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while the count holds)
-static u8 s_MirrorMore[STAGE_SLOTS];   // what the chain lacks of the authority's (SnapEntity.nMore)
+static u16 s_MirrorMore[STAGE_SLOTS];  // what the chain lacks of the authority's (SnapEntity.nMore)
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
@@ -865,7 +871,7 @@ static void CaptureSnapshot(void) {
         }
         n = more = 0;
         if (e->flags & FLAG_HAS_PRIMS) {
-            for (p = &g_PrimBuf[e->primIndex]; p && more < 0xFF; p = p->next) {
+            for (p = &g_PrimBuf[e->primIndex]; p && more < MAX_CHAIN; p = p->next) {
                 if (n < MAX_PRIMS_PER_ENTITY) {
                     n++;
                 } else {

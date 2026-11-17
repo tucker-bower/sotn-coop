@@ -33,7 +33,7 @@ $(BUILD)/.assets: $(PSPBIN) assets.pspus.maria.yaml splat.pspus.maria.yaml
 
 $(BUILD)/maria.o: $(GLUE) coop_maria.h $(BUILD)/.assets
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/coop_maria.o: coop_maria.c coop_maria.h $(BUILD)/.assets
+$(BUILD)/coop_maria.o: coop_maria.c coop_maria.h ../coop_attack.h $(BUILD)/.assets
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/%.o: $(SRC)/%.c coop_maria.h $(BUILD)/.assets
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
@@ -41,7 +41,7 @@ $(BUILD)/%.o: $(SRC)/%.c coop_maria.h $(BUILD)/.assets
 $(PBUILD)/maria.o: $(GLUE) coop_maria.h $(BUILD)/.assets
 	@mkdir -p $(PBUILD)
 	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
-$(PBUILD)/coop_maria.o: coop_maria.c coop_maria.h $(BUILD)/.assets
+$(PBUILD)/coop_maria.o: coop_maria.c coop_maria.h ../coop_attack.h $(BUILD)/.assets
 	@mkdir -p $(PBUILD)
 	$(CROSS)gcc $(CFLAGS) -DCOOP_PARTNER -c $< -o $@
 $(PBUILD)/coop_partner.o: ../richter-ps1/coop_partner.c $(BUILD)/.assets

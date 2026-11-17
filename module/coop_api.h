@@ -59,6 +59,7 @@ void CoopRenderEntities(void); // replaces RenderEntities()
 void CoopRenderPrimitives(void); // replaces the frame's RenderPrimitives() (M13)
 void CoopDrawMapCursor(void);  // replaces DrawMapCursor()
 void CoopStoreSaveData(SaveData* save, s32 block, s32 cardIcon); // replaces the save room's StoreSaveData()
+void CoopMakeAtt(void);        // replaces make_all's make_att(): Richter's and Maria's ATK on the status page (#204)
 
 // M8: the character this game's player is (PLAYER_ALUCARD / PLAYER_RICHTER; Maria runs as
 // Richter's overlay). DRA's player code reads it through dra.h's PL_CHARACTER; the world keeps

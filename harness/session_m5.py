@@ -8,7 +8,7 @@ import struct
 
 from session import session_scenario  # first: puts `link` on the path
 
-from link.mailbox import BOSS, BUSY, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
+from link.mailbox import BOSS, BUSY, CMD_ARRIVE, DEAD, IN_PLAY, ROLE_AUTHORITY, ROLE_GUEST
 from session_progress import arrive, status
 from session_scenarios import heal
 
@@ -912,3 +912,70 @@ def boss_richter_pause_keeps_one_richter(run):
     the guest, pauses for 10 seconds (an afterimage drawn) and goes on: one Richter in each game, the
     orb still out, and no afterimage left frozen in the guest."""
     pause_mid_fight(run)
+
+
+LIFE_UP_SPAWN = 0x1D  # BO4's EntityLifeUpSpawn: the reward's light, 385 primitives in one chain
+LIFE_UP_PRIMS = 385
+
+
+def _chain(g, slot):
+    """The length of the primitive chain of g's entity in slot, or 0."""
+    e = g.read_bytes(g.entity(slot), 0xBC)
+    if not struct.unpack_from("<I", e, 0x34)[0] & 0x800000:  # FLAG_HAS_PRIMS
+        return 0
+    base = g.addr("g_PrimBuf")
+    at, n = base + struct.unpack_from("<h", e, 0x64)[0] * 0x34, 0
+    while at and n < 0x500:
+        n += 1
+        at = g.read(at, "<I") & 0xFFFFFFFF
+    return n
+
+
+@session_scenario(starts=("no1", "entrance"))
+def boss_reward_survives_hand_over(run):
+    """The authority beats the Doppleganger; while the reward's light plays (385 primitives in one
+    chain), it leaves the room and the other game takes the room over. The chain it takes over is
+    whole, and the game doesn't crash (#288: a snapshot could say 319 at most, and both games of
+    the 1.1.1 playtest wrote through a null pointer into low memory)."""
+    a, b = run.s.a, run.s.b
+    into_boss_room(run, a)
+    run.expect(wait_pulled(run, b, a, 600) is not None, "B is pulled into the boss room")
+    run.step(30)
+    roles = {g: g.mailbox("self_presence").role for g in (a, b)}
+    auth = next((g for g in (a, b) if roles[g] == ROLE_AUTHORITY), None)
+    run.expect(auth is not None, "one game holds the room", roles={g.name: r for g, r in roles.items()})
+    guest = b if auth is a else a
+    for slot in bosses(auth):  # harness shortcut: one hit left
+        auth.write(auth.entity(slot), 1, "<h", 0x3E)
+    pad = lambda inp: (inp, "") if auth is a else ("", inp)
+    living = lambda: [s for s, (_, hp, _) in bosses(auth).items() if hp > 0]
+    for i in range(1800):
+        if not living():
+            break
+        run.step(1, p1=pad(toward(auth, auth, living()[0], i)))
+        if i % 20 == 0:
+            heal(a), heal(b)
+    run.expect(not living(), "the boss is beaten", frames=i)
+    slot = None
+    for i in range(600):
+        run.step(1)
+        slot = next((s for s in range(64, 256) if guest.read(guest.entity(s), "<H", 0x26) == LIFE_UP_SPAWN), None)
+        if slot is not None and _chain(auth, slot) >= LIFE_UP_PRIMS:
+            break
+    run.expect(slot is not None, "the guest shows the reward's light", frames=i)
+    run.expect(_chain(auth, slot) >= LIFE_UP_PRIMS, "the authority's chain is whole", n=_chain(auth, slot))
+    auth.mailbox("command", CMD_ARRIVE, NO1, *NEXT_TO_BOSS)  # leaves the room at once
+    took = None
+    for i in range(600):
+        run.step(1)
+        if guest.mailbox("self_presence").role != ROLE_GUEST:
+            took = i
+            break
+    run.expect(took is not None, "the other game takes the room over", frames=i)
+    alive = guest.read(guest.entity(slot), "<H", 0x26) == LIFE_UP_SPAWN
+    run.expect(alive, "the reward's light is still playing at the hand-over")
+    run.expect(_chain(guest, slot) >= LIFE_UP_PRIMS, "the chain it takes over is whole",
+               n=_chain(guest, slot))
+    run.step(600)  # the light runs to its end in this game (a crash fails the test by itself)
+    p = guest.mailbox("self_presence")
+    run.expect(p.flags & IN_PLAY and not p.flags & DEAD, "that game plays on", flags=p.flags)

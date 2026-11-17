@@ -1197,3 +1197,30 @@ def richter_backflips_turn(run):
             what = f"holding {held}: the backflips take him {held}"
         run.expect(top > 80 and (dx > 48 if held == "right" else dx < -48), f"facing {facing}, {what}, and up",
                    dx=dx, rise=top, all=got)
+
+
+SHURIKEN = 133  # a thrown weapon (OFFHAND_ITEMS)
+
+
+@per_character
+def status_attack(run, ch):
+    """#204: the status page's ATK. Beside □ it's their own attack (the whip's, the owl's: 20% or
+    50% of it, plus STR), whatever the hands hold; beside ○, the hand ○ uses. A thrown weapon in
+    a hand made the □ number jump (0.17 playtest), though their □ never used it."""
+    e, mb = run.emu, mailbox(run)
+    start = e.save_state()
+    own = 32 * 20 // 100 if ch == CHAR_RICHTER else 12 * 50 // 100  # coop_attack.h
+
+    def hands(item):
+        e.load_state(start)
+        e.write(EQUIPMENT, item)
+        reload_as(run, mb, ch)
+        return e.read(ATTACK_HANDS, "<i"), e.read(ATTACK_HANDS + 4, "<i"), e.read(STR_TOTAL, "<i")
+
+    square, circle, strength = hands(0)
+    run.expect(square == own + strength, "empty hands: □ shows their own attack", square=square, str=strength)
+    run.expect(circle == 0, "...and ○ shows nothing", circle=circle)
+    for item, what in ((OFFHAND_ITEMS[0][0], "a short sword"), (SHURIKEN, "a thrown weapon")):
+        s, c, _ = hands(item)
+        run.expect(s == square, f"{what} in hand: □ stays their own attack", square=s)
+        run.expect(c > 0, f"...and ○ shows its attack", circle=c)

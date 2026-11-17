@@ -290,3 +290,9 @@ SEL's ending cutscene waits before each line for `func_80131F68()` to say no sou
 
 ## Stage entities live in slots 64 to 255
 `g_Entities` has 256 slots, and the stage's are 64 to 255 (`STAGE_ENTITY_START`, `TOTAL_ENTITY_COUNT`). The spawner puts most of a room's objects at 192 and up, so a scan of 64 to 191 sees almost nothing (`widescreen_edges.py` did, until #260). The same windows are written two ways in the stages' Update: signed (`slti 321`, with an `addiu -64` nearby) and, in most stages, unsigned (`(u16)(x + 64) < 385`: `addiu 64; sltiu 385`, and `addiu 128; sltiu 513` for -128..384). The y windows use the same offsets and end at 353 and 481.
+
+## A snapshot's chain counts
+A stage entity's primitives can be a long chain: a boss's life-up reward (`EntityLifeUpSpawn`, every boss stage) walks 385. A snapshot sends the first 64 and says how many more there are; a guest that takes the room over lengthens its copy to that. With the count in a byte, 255 more was the most, so the reward was handed over 319 long and wrote through a null pointer into low memory (#288). An F9 report shows it: low memory near address 0 holds primitive fields and pointers, and the entity's chain in the dead game ends early.
+
+## Warp rooms: the Entrance is always on
+Each warp room's entity sets bit 0 of `g_CastleFlags[WRP_UNLOCKS]` (the Entrance's warp) as well as its own when it loads (`src/st/wrp/warp.c`). So the first warp room a player finds already teleports to the Entrance's, in the original game too. A report of "a teleport before finding a second" is that.

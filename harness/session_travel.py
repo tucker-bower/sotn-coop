@@ -355,3 +355,63 @@ def report_hold_pauses_the_game(run):
     run.expect(a.read("g_GameTimer") - t0 >= 100, "let go, it runs again", timer=(t0, a.read("g_GameTimer")))
     run.expect(not a.mailbox("self_presence").flags & PAUSED, "and isn't paused")
     run.expect(a.snapshot()["world_x"] != x0, "the player moves", x=(x0, a.snapshot()["world_x"]))
+
+
+WRP, WRP_OUTER_WALL = 0x0E, 16  # the warp rooms' stage; its room at the Outer Wall (59,17)
+
+
+@session_scenario(starts=("no1", "no1"))
+def teleport_to_partner_in_warp_room(run):
+    """#289 (1.1.1 playtest): A is in a warp room (a stage of its own, WRP), B teleports to A from
+    the map, and lands there in play. Twice, B's game hung on a garbled screen."""
+    a, b = run.s.a, run.s.b
+    run.step(120)
+    arrive(run, a, WRP, WRP_OUTER_WALL, 150, 167)
+    run.step(60)
+    target = a.mailbox("self_presence")
+    map_teleport(run, b)
+    frames = wait_arrived(run, b, target, 900)
+    p = b.mailbox("self_presence")
+    run.expect(frames is not None, "B lands in A's warp room, in play", b=str(p), a=str(target))
+    run.step(120)
+    p = b.mailbox("self_presence")
+    run.expect(p.flags & IN_PLAY and not p.flags & BUSY and p.room == target.room, "and stays there", b=str(p))
+
+
+NO1, NO1_BY_WARP = 0x01, 0  # the Outer Wall's room (60,17): its left door leads to the warp room
+
+
+def _into_warp_room(run, partner_where):
+    """A walks through the Outer Wall's door into its warp room, with B there already or beside A."""
+    a, b = run.s.a, run.s.b
+    run.step(120)
+    arrive(run, a, NO1, NO1_BY_WARP, 180, 135)
+    if partner_where == "warp":
+        arrive(run, b, WRP, WRP_OUTER_WALL, 150, 167)
+    else:
+        arrive(run, b, NO1, NO1_BY_WARP, 150, 135)
+    run.step(60)
+    for i in range(900):
+        run.step(1, p1=("left", ""))
+        p = a.mailbox("self_presence")
+        if p.stage == WRP and p.flags & IN_PLAY and not p.flags & BUSY and i > 30:
+            break
+    p = a.mailbox("self_presence")
+    run.expect(p.stage == WRP and p.flags & IN_PLAY and not p.flags & BUSY, "A walks into the warp room, in play",
+               a=str(p), b=str(b.mailbox("self_presence")))
+    run.step(180)
+    p = a.mailbox("self_presence")
+    run.expect(p.stage == WRP and p.flags & IN_PLAY and not p.flags & BUSY, "and plays on there", a=str(p))
+
+
+@session_scenario(starts=("no1", "no1"))
+def warp_room_door_with_partner_inside(run):
+    """#289 (1.1.1 playtest, report 161112): B is in the warp room; A walks in through its door.
+    A's game hung, busy, on a garbled screen."""
+    _into_warp_room(run, "warp")
+
+
+@session_scenario(starts=("no1", "no1"))
+def warp_room_door_with_partner_beside(run):
+    """#289 (report 160825): A and B in the room by the warp room; A walks in through its door."""
+    _into_warp_room(run, "beside")
