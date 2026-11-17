@@ -1,7 +1,9 @@
-// Off-hand weapons for Richter and Maria (D105, design/M12b): ○ uses what's in a hand.
+// Hand items for Richter and Maria (D105, D209, design/M12b): as Alucard's,
+// □ uses what's in the first hand and ○ what's in the second.
 //
-// Richter keeps his whip and Maria her guardians. In Alucard's equip menu they put any weapon,
-// food or potion in a hand, and ○ uses it:
+// Richter's whip and Maria's owl are what □ does with nothing in the first hand (or a shield), and
+// ↑+□ still throws their subweapon. In Alucard's equip menu they put any weapon, food or potion
+// in a hand (a two-handed weapon fills both: no whip then), and that hand's button uses it:
 // - a weapon works exactly as in Alucard's hands: its own overlay's code, sprites, hitboxes and
 //   specials, timed by Alucard's own attack animation run on a virtual Alucard (see below);
 // - potions heal as Alucard's do (Potion, High potion, Elixir, Manna prism: DRA's amounts),
@@ -112,6 +114,10 @@ static u8 WeaponOvl(s32 hand) { return g_EquipDefs[g_Status.equipment[hand]].wea
 
 // The weapon in that hand is the one in its overlay slot.
 static bool Loaded(s32 hand) { return WeaponOvl(hand) != 0xFF && g_EquippedWeaponIds[hand] == WeaponOvl(hand); }
+
+static bool Holds(s32 hand);
+static void HandButton(s32 hand);
+static bool s_SquareTaken; // □ went to the first hand: kept from their own code until let go
 
 static u16* Pal(s32 pal) { return (u16*)g_Clut + pal * COLORS_PER_PAL; }
 
@@ -325,6 +331,9 @@ static bool s_Fist; // that swing is a fist weapon's: Alucard's own arm is the p
 static u16 s_Unk46;
 static bool s_Grounded; // the swing started on the ground
 
+static s8 s_SheetHand;
+static void LoadSheet(s32 hand);
+
 u16 OffhandArmFrame(void) { return s_Swinging && s_Fist ? s_Alu.animCurFrame & 0x7FFF : 0; }
 
 static void AluSwing(s32 hand) {
@@ -345,6 +354,9 @@ static void AluSwing(s32 hand) {
     s_Alu.ext.player.anim = eq->playerAnim + (!s_Grounded ? 4 : g_pads[0].pressed & PAD_DOWN ? 2 : 0);
     s_Unk46 = eq->unk11 + 0x7FFF + 2;
     s_Swinging = true;
+    if (s_SheetHand >= 0 && s_SheetHand != hand) {
+        LoadSheet(hand); // one sheet's room: the swinging hand's
+    }
     s_Fist = eq->itemCategory == ITEM_FIST;
     g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
     PlayAnimation(D_800B0130, D_800B01B8);
@@ -388,7 +400,7 @@ static void AluAnimate(void) {
 #define SHEET_H 0x80
 #define SHEET_Y(hand) ((hand) ? 0x180 : 0x100)
 #define SHEET(hand) ((u_long*)(WEAPON_SHEET_ADDR + (hand) * SHEET_W * SHEET_H * 2))
-static s8 s_SheetHand = -1; // the hand whose sheet is at 0x240,0x180 in Maria's game
+static s8 s_SheetHand = -1; // the hand whose sheet is at 0x240,0x180 in Maria's game (Richter's: 0x240,0x100)
 #define OWL_X 0x1C0 // her owl's copy: the left half of texture page 0x17's lower half
 #define OWL_Y 0x180
 #define OWL_W 0x20
@@ -415,10 +427,22 @@ static s8 s_PlaceIn;
 
 void OffhandPlaceSheet(void) { s_PlaceIn = SHEET_DELAY; }
 
+// There's room for one hand's sheet: the first hand's with a weapon after a load, then the hand
+// that swings (AluSwing), copied in from the 8MB.
+static void LoadSheet(s32 hand) {
+    RECT r;
+
+    r.x = 0x240;
+    r.y = SHEET_Y(CHAR_IS_MARIA(CharacterLoaded()));
+    r.w = SHEET_W;
+    r.h = SHEET_H;
+    LoadImage(&r, SHEET(hand));
+    s_SheetHand = hand;
+}
+
 static void PlaceSheet(void) {
     RECT r;
     s32 hand;
-    bool maria = CHAR_IS_MARIA(CharacterLoaded());
 
     for (hand = 0; hand < 2 && !(IsWeapon(Category(hand)) && Loaded(hand)); hand++) {
     }
@@ -426,18 +450,16 @@ static void PlaceSheet(void) {
         s_SheetHand = -1;
         return;
     }
-    r.x = 0x240;
-    r.y = SHEET_Y(maria);
-    r.w = OWL_W;
-    r.h = SHEET_H;
-    if (maria) {
+    if (CHAR_IS_MARIA(CharacterLoaded())) {
+        r.x = 0x240;
+        r.y = SHEET_Y(1);
+        r.w = OWL_W;
+        r.h = SHEET_H;
         DrawSync(0);
         MoveImage(&r, OWL_X, OWL_Y); // her owl, just put back by her guardians' upload
         DrawSync(0);
     }
-    r.w = SHEET_W;
-    LoadImage(&r, SHEET(hand));
-    s_SheetHand = hand;
+    LoadSheet(hand);
 }
 
 // --- Richter: his graphics in the left hand's sheet area (issue 195) --------------------------
@@ -615,9 +637,6 @@ void CoopWeaponEntity(Entity* self) {
 
 // Once per frame, before UpdateGame (the pads are this frame's).
 void OffhandUpdate(void) {
-    s32 hand;
-    u8 c;
-
     if (g_GameState == Game_NowLoading) {
         s_HaveOwn = false;
     }
@@ -641,32 +660,56 @@ void OffhandUpdate(void) {
     if (s_PlaceIn && !--s_PlaceIn) {
         PlaceSheet();
     }
-    // g_Player.unk46: an attack of their own is under way, and ○ waits for it as a whip does
-    if (!(g_pads[0].tapped & PAD_CIRCLE) || s_Swinging || g_Player.unk46 || RULE_OFF(RULE_NO_OFFHAND)) {
+    if (RULE_OFF(RULE_NO_OFFHAND)) {
         return;
     }
-    for (hand = 0; hand < 2; hand++) { // the right hand first, as Alucard's ○
-        c = Category(hand);
-        if (g_Status.equipment[hand] == ITEM_LIBRARY_CARD) {
-            Use(hand);
-            return;
-        }
-        if (IsWeapon(c) && Loaded(hand) && s_Loading < 0) {
-            AluSwing(hand);
-            return;
-        }
-        if (c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF)) {
-            Use(hand);
-            return;
-        }
+    // □ with something in the first hand is that, not the whip or the owl (↑+□: the subweapon
+    // still). Their code finds a press in the held buttons (pressed, not tapped: src/ric/pl_main.c),
+    // so □ is taken out of them until it's let go, and out of what the partner's copy of us plays.
+    if (s_SquareTaken && !(g_pads[0].pressed & PAD_SQUARE)) {
+        s_SquareTaken = false;
+    }
+    if (!s_SquareTaken && (g_pads[0].tapped & PAD_SQUARE) && !(g_pads[0].pressed & PAD_UP) && Holds(0)) {
+        s_SquareTaken = true;
+        HandButton(0);
+    }
+    if (s_SquareTaken) {
+        g_pads[0].pressed &= ~PAD_SQUARE;
+        g_pads[0].tapped &= ~PAD_SQUARE;
+        g_CoopLink.selfPad &= ~PAD_SQUARE;
+    }
+    if (g_pads[0].tapped & PAD_CIRCLE) {
+        HandButton(1);
     }
 }
 
+// What a hand holds that its button uses: a weapon, the Library Card, food, a potion.
+static bool Holds(s32 hand) {
+    u8 c = Category(hand);
+
+    return g_Status.equipment[hand] == ITEM_LIBRARY_CARD || (IsWeapon(c) && WeaponOvl(hand) != 0xFF) ||
+           c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF);
+}
+
+// That hand's button. g_Player.unk46: an attack of their own is under way, and the hand waits for
+// it as a whip does; one swing at a time.
+static void HandButton(s32 hand) {
+    if (s_Swinging || g_Player.unk46 || !Holds(hand)) {
+        return;
+    }
+    if (IsWeapon(Category(hand))) {
+        if (Loaded(hand) && s_Loading < 0) {
+            AluSwing(hand);
+        }
+        return;
+    }
+    Use(hand);
+}
+
 // The status page's ATK for Richter and Maria (#204). DRA's make_att gives each hand Alucard's
-// attack with what's in it, drawn beside □ and ○; their □ is the whip or the owl, which no hand
-// sets, and a thrown weapon in a hand showed a big number that did nothing. So the □ line is their
-// own attack as it hits (coop_ric.c CoopRicAttack, coop_maria.c CoopMarAttack), and the ○ line is
-// the hand ○ uses, in the order above. Display only: a weapon's hit takes CalcAttack itself
+// attack with what's in it, drawn beside □ and ○. The □ line is the first hand's, or with nothing
+// there their own attack as it hits (coop_ric.c CoopRicAttack, coop_maria.c CoopMarAttack); the ○
+// line the second hand's. Display only: a weapon's hit takes CalcAttack itself
 // (GetEquipProperties). The equip menu's preview runs make_all with the item tried on, so its
 // numbers and arrows follow.
 void make_att(void);                                  // DRA (src/dra/menu.c)
@@ -690,33 +733,20 @@ static s32 SquareAttack(u32 character) {
     return attack;
 }
 
-static s32 CircleAttack(void) {
-    s32 hand;
-    u8 c;
-
-    if (RULE_OFF(RULE_NO_OFFHAND)) {
-        return 0;
-    }
-    for (hand = 0; hand < 2; hand++) {
-        c = Category(hand);
-        if (IsWeapon(c) && WeaponOvl(hand) != 0xFF) { // an empty hand is a "fist" with no weapon
-            return g_Status.attackHands[hand];
-        }
-        if (g_Status.equipment[hand] == ITEM_LIBRARY_CARD || c == ITEM_FOOD ||
-            (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF)) {
-            return 0; // ○ uses it, and it doesn't hit
-        }
-    }
-    return 0;
+// A hand's line: Alucard's attack with its weapon (make_att's), or 0 for what doesn't hit.
+static s32 HandAttack(s32 hand) {
+    return IsWeapon(Category(hand)) && WeaponOvl(hand) != 0xFF ? g_Status.attackHands[hand] : 0;
 }
 
 void MakeAttHook(void) {
     u32 character = CharacterLoaded();
+    bool hands;
 
     make_att();
     if (!CHAR_COOP(character)) {
         return;
     }
-    g_Status.attackHands[1] = CircleAttack();
-    g_Status.attackHands[0] = SquareAttack(character);
+    hands = !RULE_OFF(RULE_NO_OFFHAND);
+    g_Status.attackHands[0] = hands && Holds(0) ? HandAttack(0) : SquareAttack(character);
+    g_Status.attackHands[1] = hands ? HandAttack(1) : 0;
 }

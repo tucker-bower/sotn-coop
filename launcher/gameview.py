@@ -561,13 +561,17 @@ class GameView:
         """While a box is up: online, this game runs on with no buttons held, or the partner's game
         would lose it (playtest 0.14: reporting a problem froze the partner). On the couch both wait."""
         if self.online:
-            for g in self.games:
-                g.frame_start(0)
-            for g in self.games:
-                g.frame_end()
-            self.frame += 1
-            if self.audio:
-                self.audio.clear()
+            self.run_frame()
+
+    def run_frame(self):
+        """One frame of every game, no buttons held, not shown (keep_playing, F9's hitboxes)."""
+        for g in self.games:
+            g.frame_start(0)
+        for g in self.games:
+            g.frame_end()
+        self.frame += 1
+        if self.audio:
+            self.audio.clear()
 
     def ask_note(self):
         """"What happened?" Typed text, or "" (Enter on nothing, or Esc)."""
@@ -632,12 +636,13 @@ class GameView:
         games = self.games if games is None else games
         shot = self.display.screenshot()  # the window as it was: the games, not the note box
         shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
-        taken = report.snapshot(games, self.audio)
         interactive = note is None
         held = interactive and self.online
         if held:  # online the game runs on behind the boxes (keep_playing), held still (#192)
             self.games[0].mailbox("set_control", self.aggro | CONTROL_HOLD)
         try:
+            # The games' hitboxes for a few frames (no buttons held): not for a crashed game
+            taken = report.snapshot(games, self.audio, self.run_frame if interactive else None)
             return self._report(games, shot, taken, note, interactive)
         finally:
             if held:

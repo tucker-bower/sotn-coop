@@ -1,14 +1,16 @@
 """F9: a full environment snapshot, as one zip in reports/ (design/M6, D69).
 
 Everything needed to see, and replay, what happened:
-    now/          both games' savestates, memory cards, the joint save, both screens, the window
+    now/          both games' savestates, memory cards, the joint save, both screens, the window,
+                  and each screen with the game's own hitbox viewer on (A-hitboxes.png, hitboxes())
     before/       the in-memory states from about 5 and 10 s earlier (never written otherwise)
     inputs.json   both pads, the last 60 s
     link-A.json, link-B.json   each host's link traffic, the 60 s before F9
     journal.json  what changed, and when, for the whole session (rooms, scenes, deaths, the link)
     frames.json   frame times, the last 60 s
     about.json    versions, OS family, gameplay settings, how many controllers, presences, audio
-                  stats, the player's note: only what diagnosis needs (never paths or names)
+                  stats, what last hurt each player (last_hit()), the player's note: only what
+                  diagnosis needs (never paths or names)
     launcher.log  the launcher's log
     session.log   the game processes' log (connecting, the relay)
     launcher-errors.log   anything the launcher printed to stderr
@@ -112,15 +114,19 @@ def private_words(games, playthrough):
     return sorted(paths | {n for n in names if len(n) >= MIN_NAME})
 
 
-def snapshot(games, audio):
-    """What must be read the moment F9 is pressed, before the note box stops the clock."""
+def snapshot(games, audio, run_frame=None):
+    """What must be read the moment F9 is pressed, before the note box stops the clock. With
+    run_frame, the games' hitboxes too (hitboxes())."""
     links = []
     for g in games:
         try:
             links.append(g.host("log_dump"))
         except Exception as e:  # noqa: BLE001 - a report should never fail to be written
             links.append({"error": str(e)})
-    return {"links": links, "audio": audio.stats() if audio else None}
+    taken = {"links": links, "audio": audio.stats() if audio else None,
+             "last_hit": [last_hit(g) for g in games]}
+    taken["hitboxes"] = hitboxes(games, run_frame) if run_frame else [None for _ in games]
+    return taken
 
 
 class Journal:
@@ -147,6 +153,61 @@ class Journal:
 def flag_names(flags):
     return " ".join(n for n, bit in (("busy", BUSY), ("dead", DEAD), ("cutscene", CUTSCENE),
                                      ("follower", CS_FOLLOWER)) if flags & bit)
+
+
+# --- what the game itself knows about the moment (docs/research.md: the sotn.fun wiki)
+ENTITIES, ENTITY_SIZE, N_ENTITIES = 0x800733D8, 0xBC, 256  # g_Entities
+LAST_HIT = ENTITIES + 0xB8  # PLAYER.unkB8: the entity whose hitbox last touched the player (st/collision.h)
+STAGE_ID = 0x800974A0       # g_StageId
+DEBUG_ENABLED = 0x800BD1C0  # g_DebugEnabled: DRA draws hitboxes while it's set... (src/dra/42398.c)
+HITBOX_MODE = 0x801362B0    # g_DebugHitboxViewMode: ...and this is 1-4 (the blend; 1 is half and half)
+HITBOX_FRAMES = 3           # a screenshot shows the frame before: two frames drawn with them, and one
+
+
+def last_hit(g):
+    """What last hurt that game's player: its slot, id, update function (with the stage, enough to
+    name it from the stage's map: scripts/read_report.py), place and numbers. The pointer stays
+    after the entity is gone, so its slot may hold something else by now. None if it's no entity."""
+    try:
+        at = g.read(LAST_HIT)
+        if not ENTITIES <= at < ENTITIES + N_ENTITIES * ENTITY_SIZE or (at - ENTITIES) % ENTITY_SIZE:
+            return None
+        e = g.read_bytes(at, ENTITY_SIZE)
+    except Exception:  # noqa: BLE001 - a report should never fail to be written
+        return None
+    import struct
+    x, y = struct.unpack_from("<hh", e, 2)[0], struct.unpack_from("<h", e, 6)[0]
+    return {"slot": (at - ENTITIES) // ENTITY_SIZE, "id": struct.unpack_from("<H", e, 0x26)[0],
+            "update": f"{struct.unpack_from('<I', e, 0x28)[0]:#010x}", "stage": g.read(STAGE_ID, "<H"),
+            "x": x, "y": y, "hp": struct.unpack_from("<h", e, 0x3E)[0], "attack": struct.unpack_from("<h", e, 0x40)[0],
+            "element": struct.unpack_from("<H", e, 0x42)[0], "params": struct.unpack_from("<H", e, 0x30)[0]}
+
+
+def hitboxes(games, run_frame):
+    """Each game's screen with DRA's own hitbox viewer on, for HITBOX_FRAMES frames (run_frame runs
+    one frame of every game), then off again as it was. Drawing only: nothing the games decide
+    reads these. [picture or None] per game."""
+    try:
+        before = [(g.read(DEBUG_ENABLED), g.read(HITBOX_MODE)) for g in games]
+    except Exception:  # noqa: BLE001 - the fakes in test_report.py, a game gone
+        return [None for _ in games]
+    shots = []
+    try:
+        for g in games:
+            g.write(DEBUG_ENABLED, 1)
+            g.write(HITBOX_MODE, 1)
+        for _ in range(HITBOX_FRAMES):
+            run_frame()
+        for g in games:
+            try:
+                shots.append(g.screenshot())
+            except ImportError:  # the Android app has no PIL
+                shots.append(None)
+    finally:
+        for g, (enabled, mode) in zip(games, before):
+            g.write(DEBUG_ENABLED, enabled)
+            g.write(HITBOX_MODE, mode)
+    return shots
 
 
 def can_send():
@@ -293,6 +354,9 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
                     shot = None
                 if shot:
                     z.writestr(f"now/{who}.png", _png(shot))
+                boxes = (taken.get("hitboxes") or [None, None])["AB".index(who)]
+                if boxes:
+                    z.writestr(f"now/{who}-hitboxes.png", _png(boxes))
                 z.writestr(f"link-{who}.json", scrub(json.dumps(link), private))
             if playthrough and playthrough.joint_save.exists():
                 z.writestr("now/session.coop", scrub_bytes(playthrough.joint_save.read_bytes(), private))
@@ -314,6 +378,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
                 "controllers": len(controllers), "castle": bool(playthrough),
                 "presences": [str(g.mailbox("self_presence")) for g in games],
                 "rolling_frames": [entry[0] for entry in rolling], "note": note, "audio": taken["audio"],
+                "last_hit": taken.get("last_hit"),
             }
             about.update(extra or {})
             z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))

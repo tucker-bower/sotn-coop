@@ -598,12 +598,21 @@ def _startup(pg):
     ]
 
 
+def _unzip(b64):
+    import base64
+    import io
+    import zipfile
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))) as z:
+        return {n: z.read(n) for n in z.namelist()}
+
+
 def _report_send(pg):
     """F9, a note, Send: the report reaches the mail service (a fake one here), with the note."""
     import http.server
     import threading
     import report
     got = []
+    zipped = {}
 
     class Mail(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
@@ -630,6 +639,12 @@ def _report_send(pg):
         ("expect", lambda d: got[0][1]["to"] == [report.REPORT_EMAIL], "it goes to the reports address"),
         ("expect", lambda d: got[0][1]["text"] == "stuck in a wall", "the note goes with it"),
         ("expect", lambda d: len(got[0][1]["attachments"][0]["content"]) > 1000, "the zip goes with it"),
+        ("call", lambda d: zipped.update(_unzip(got[0][1]["attachments"][0]["content"]))),
+        ("expect", lambda d: "now/A-hitboxes.png" in zipped, "it holds the screen with the hitboxes on"),
+        ("expect", lambda d: "last_hit" in json.loads(zipped["about.json"]), "and what last hurt the player"),
+        ("expect", lambda d: (d.view.games[0].read(report.DEBUG_ENABLED), d.view.games[0].read(report.HITBOX_MODE))
+         == (0, 0), "the hitbox viewer is off again"),
+        ("call", lambda d: (d.out / "report-hitboxes.png").write_bytes(zipped["now/A-hitboxes.png"])),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
     ]

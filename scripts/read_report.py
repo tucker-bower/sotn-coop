@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Summarizes an unpacked F9 report from its saved game memory: who, where, and how each game stood.
+"""Summarizes an unpacked F9 report from its saved game memory: who, where, and how each game stood,
+and what last hurt each player, by name (the stage's map from the decomp's build).
 
   read_report.py <report folder>... [--map <coop.map>]
 """
@@ -43,6 +44,39 @@ def describe(p):
             f"{'+'.join(p['flagnames'])}")
 
 
+DECOMP = ROOT / ".env/src/sotn-decomp"
+MAP_LINE = re.compile(r"^\s+(0x[0-9a-f]{8})\s+([A-Za-z_]\w*)$", re.M)
+
+
+def map_symbols(path):
+    return {int(m[1], 16): m[2] for m in MAP_LINE.finditer(path.read_text())} if path.exists() else {}
+
+
+def stage_names():
+    """g_StageId -> its name in include/game.h's enum (STAGE_NO1 -> "no1")."""
+    text = (DECOMP / "include/game.h").read_text() if (DECOMP / "include/game.h").exists() else ""
+    return {int(m[2], 16): m[1].lower() for m in re.finditer(r"\bSTAGE_(\w+) = (0x[0-9A-Fa-f]+)", text)}
+
+
+def name_of(address, stage, module_syms):
+    """The function at that address: the stage's overlay, DRA, Richter's, or the module."""
+    name = stage_names().get(stage, "")
+    found = {}
+    for f in (f"st{name}", f"bo{name}", "dra", "ric"):
+        found.update(map_symbols(DECOMP / f"build/us/{f}.map"))
+    found.update({a: n for n, a in module_syms.items()})
+    below = [a for a in found if a <= address and address - a < 0x4000]
+    return f"{found[max(below)]}+{address - max(below):#x}" if below else "?"
+
+
+def last_hits(about, syms):
+    for who, hit in zip("AB", about.get("last_hit") or []):
+        if hit:
+            fn = name_of(int(hit["update"], 16), hit["stage"], syms)
+            print(f"  last hit {who}: {fn} (id {hit['id']:#x}, slot {hit['slot']}, at {hit['x']},{hit['y']}, "
+                  f"attack {hit['attack']}, element {hit['element']:#x}, params {hit['params']:#x}, hp {hit['hp']})")
+
+
 def report(folder, syms):
     folder = Path(folder)
     about = json.loads((folder / "about.json").read_text())
@@ -60,6 +94,7 @@ def report(folder, syms):
         print(f" {name.parent.name}/{name.name} pc {regs[34]:08x} vec {vec[:16]} age {age} {extra}")
         print("   me     ", describe(self_))
         print("   partner", describe(partner))
+    last_hits(about, syms)
     journal = json.loads((folder / "journal.json").read_text())
     print("  journal", journal[-6:])
 

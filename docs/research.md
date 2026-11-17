@@ -309,8 +309,8 @@ The warp entity (`EntityWarpRoom`, entity 0x16) warps the game's own player: it 
 | [Damage-output](https://www.sotn.fun/wiki/Damage-output) | Alucard's ATT, damage and critical formulas (from GameFAQs; one worked example is wrong) |
 | [Fire Boomerang Super Jump](https://www.sotn.fun/wiki/Fire_Boomerang_Super_Jump) | Entity factories and their slot pool (below) |
 | [Overlay](https://www.sotn.fun/wiki/Overlay) | Every build's files with sizes and hashes (US `DRA.BIN` 1153136 bytes), and the RAM map |
-| [Entity Identification](https://www.sotn.fun/wiki/Entity_Identification) | `PLAYER.unkB8` (0x80073490) points at the last entity that hurt the player: read its `pfnUpdate` to find an enemy's code |
-| [GameShark](https://www.sotn.fun/wiki/GameShark) | A hitbox viewer (`800BD1C0 0001`, `801362B0 0001`) and debug prints outside play |
+| [Entity Identification](https://www.sotn.fun/wiki/Entity_Identification) | `PLAYER.unkB8` (0x80073490) points at the last entity that hurt the player: read its `pfnUpdate` to find an enemy's code. Set by the stage's hit detection (src/st/collision.h) on touch, and never cleared: the slot can hold something else later. F9's `about.json` has it (D210) |
+| [GameShark](https://www.sotn.fun/wiki/GameShark) | A hitbox viewer (`800BD1C0 0001`, `801362B0 0001`) and debug prints outside play. In the US build only the drawing is left: `g_DebugEnabled` and `g_DebugHitboxViewMode` (1-4: the boxes' blend, 1 half-transparent) make `MainGame` call `DrawEntitiesHitbox` (src/dra/66590.c; white: the player's, green/red/blue/magenta by `hitboxState`). F9 uses it (D210) |
 | [TPAGE layout](https://www.sotn.fun/wiki/TPAGE_layout), [Room IDs](https://www.sotn.fun/wiki/Room_IDs) | Annotated images of VRAM's texture pages and of every room's id |
 | [Glitches](https://www.sotn.fun/wiki/Glitches), [Techniques](https://www.sotn.fun/wiki/Techniques), [Death Skip](https://www.sotn.fun/wiki/Death_Skip) | Shiftline, the Infinity Glitch, speedrun skips: what players may try in our castle |
 | [Alucard](https://www.sotn.fun/wiki/Alucard) | His afterimages: 6, drawn 3 a frame in turn |

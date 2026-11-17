@@ -1016,7 +1016,7 @@ def _swing_drawn(run, chars, button, item=None, settle=0):
     a, b = run.s.a, run.s.b
     raw = a.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
     items = [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
-    hand = 0  # the right hand (○ swings it for Richter and Maria, as in the hand-item tests)
+    hand = 0  # the first hand: □ swings it, for everyone
     item = items[0] if item is None else item
     a.write(EQUIPMENT, item, "<I")
     as_characters(run, *chars)  # the load loads the weapon
@@ -1062,15 +1062,15 @@ def partner_swing_drawn(run):
 
 @session_scenario(characters=(1, 0))
 def partner_swing_drawn_richter(run):
-    """Note 2, phase 2: Richter swings his off-hand sword (D105) next to Alucard."""
-    _swing_drawn(run, (1, 0), "circle")
+    """Note 2, phase 2: Richter swings a sword in his first hand (D105, □) next to Alucard."""
+    _swing_drawn(run, (1, 0), "square")
 
 
 @session_scenario(characters=(1, 0))
 def partner_fist_drawn_richter(run):
     """Issue 123: Richter punches with an off-hand fist weapon next to Alucard: Alucard's arm, in
     both games."""
-    _swing_drawn(run, (1, 0), "circle", item=85, settle=6)  # to the arm's full reach
+    _swing_drawn(run, (1, 0), "square", item=85, settle=6)  # to the arm's full reach
 
 
 # --- the first castle, chained (design/M12-v1-release.md criterion 8; D120) -------------------
