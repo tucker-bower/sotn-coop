@@ -131,7 +131,15 @@ static bool PartnerFighting(void) {
            p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-// --- enemies' health: 2x with a partner (D25, D160), unless the castle's rules say otherwise (D162)
+// --- enemies' health: the castle's HP for one player (D162, #316), times the players in the session
+// (D25, D160: 2x with a partner; design/M17-more-players.md: 2.75x with three, 3.5x with four)
+
+static const s16 PLAYERS_HP[] = {100, 200, 275, 350}; // launcher/rules.py's PLAYERS_HP
+
+// The players this game has heard from in the last 10 s, itself included.
+static s32 PlayersHere(void) {
+    return 1 + (g_CoopLink.partnerAge < 600);
+}
 
 #define ENEMY_DEFS 400 // g_EnemyDefs (assets/dra/us/enemydefs.yaml)
 
@@ -140,8 +148,7 @@ static s32 s_HpPct = 100;        // what the table holds, in %
 
 static void UpdateHp(void) {
     EnemyDef* defs = g_api.enemyDefs;
-    // a partner's game has been heard from (10 s)
-    s32 want = g_CoopLink.partnerAge < 600 ? RULE_PCT(enemyHpPct, 200) : RULE_PCT(enemyHpSoloPct, 100);
+    s32 want = RULE_PCT(enemyHpPct, 100) * PLAYERS_HP[PlayersHere() - 1] / 100;
     s32 i, hp;
 
     if (!defs) {

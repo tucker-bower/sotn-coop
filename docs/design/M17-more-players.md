@@ -16,7 +16,7 @@ The link was built per partner, so most of this is turning "the partner" into "t
 - **Shared rooms:** one authority and any number of guests; the authority streams to each (the delta snapshots already are per receiver).
 - **Shared progression:** the same merge rules, from all games (they're unions and maxima, so order doesn't matter).
 - **Presence, map, teleport:** every partner on the map, each with their own colour; teleport asks which partner.
-- **Bosses:** HP scales with the players in the room (1×, 2×, 2.75×, 3.5×: to tune); aggro picks among all of them; the boss pull-in brings everyone.
+- **Bosses:** enemy HP scales with the players in the session (1×, 2×, 2.75×, 3.5×: D213, already in); aggro picks among all of them; the boss pull-in brings everyone.
 - **Respawn:** at the nearest living partner. Everyone dead: reload the last joint save.
 - **Castles (M11):** more slots; every joiner keeps a copy.
 - **Couch:** 3 or 4 panes in one window (a 2×2 grid), a controller each.
