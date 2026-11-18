@@ -741,17 +741,22 @@ class GameView:
         return ("navigate", action)  # New game, Savestates...: leave the game first
 
     def pause_menu(self, why=None):
-        """Esc (or Start on a TV, with the menu bar out of reach): Resume, the View settings, How to
-        play, Report a problem, Leave. Returns "resume", "menu", "quit" or ("navigate", action)."""
+        """Esc (or Start on a TV, with the menu bar out of reach): Resume, the room code (hosting
+        online), the View settings, How to play, Report a problem, Leave. Returns "resume", "menu", "quit" or ("navigate", action)."""
         from display import LAYOUT_NAMES
         sel = 0
         if self.audio:
             self.audio.clear()
         st = self.launcher.settings if self.launcher else self.display.settings
+        # hosting online: the room code, for whoever joins next (#317); OK copies it
+        code = getattr(self.launcher, "room_code", "") if self.online and not self.joiner else ""
         while True:
-            items = ["Resume",
-                     f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}",
-                     "How to play", "Castle rules", "Your settings", "Report a problem (F9)", "Save and go back to the menu"]
+            rows = [("resume", "Resume"), ("code", f"Room code: {code}") if code else None,
+                    ("layout", f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}"),
+                    ("help", "How to play"), ("rules", "Castle rules"), ("player", "Your settings"),
+                    ("report", "Report a problem (F9)"), ("menu", "Save and go back to the menu")]
+            rows = [r for r in rows if r]
+            items = self.pause_items = [text for _, text in rows]
             for ev in pygame.event.get():
                 if self.display.handle(ev):
                     continue
@@ -785,28 +790,34 @@ class GameView:
                 if move == "back":
                     return "resume"
                 if move == "ok":
-                    if sel == 0:
+                    key = rows[sel][0]
+                    if key == "resume":
                         return "resume"
-                    if sel == 1:  # cycle the layout, as View in the menu bar
+                    if key == "code":
+                        if self.launcher:
+                            self.launcher._clip_put(code)
+                        why = f"{code} is on your clipboard."
+                        continue
+                    if key == "layout":  # cycle the layout, as View in the menu bar
                         key, order = "layout", list(LAYOUT_NAMES)
                         now = st.get(key, order[0])
                         st[key] = order[(order.index(now) + 1) % len(order)] if now in order else order[0]
                         if self.launcher:
                             self.launcher.action(f"{key}:{st[key]}")
                         continue
-                    if sel == 2:
+                    if key == "help":
                         if self.launcher:
                             self.launcher.action("help_play")
                         continue
-                    if sel == 3:
+                    if key == "rules":
                         if self.launcher:
                             self.launcher.action("rules")
                         continue
-                    if sel == 4:  # each player's own: apart from the castle's rules (issue 232)
+                    if key == "player":  # each player's own: apart from the castle's rules (issue 232)
                         if self.launcher:
                             self.launcher.action("player_settings")
                         continue
-                    if sel == 5:
+                    if key == "report":
                         self.report()
                         return "resume"
                     return "menu"

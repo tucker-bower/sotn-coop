@@ -103,7 +103,7 @@ AT(expPct, 0x225BC);
 AT(dealtPct, 0x225BE);
 AT(takenPct, 0x225C0);
 AT(enemyHpPct, 0x225C2);
-AT(enemyHpSoloPct, 0x225C4);
+AT(rulesPad2, 0x225C4);
 AT(rulesPad, 0x225C6);
 #undef AT
 _Static_assert(sizeof(CoopLink) == 0x225C8, "CoopLink changed size");

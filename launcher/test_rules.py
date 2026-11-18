@@ -22,9 +22,14 @@ def check(ok, what):
 
 def main():
     import rules
-    check(rules.encode({}) == (0, 0, 0, 0, 0, 0), "the defaults give the game all zeros: it plays as it always has")
-    check(rules.DEFAULTS["enemy_hp_pct"] == 200 and rules.DEFAULTS["enemy_hp_solo_pct"] == 100 and rules.DEFAULTS["aggro"] == 50,
-          "boss HP 2x with a partner, 1x alone, 50% aggro")
+    check(rules.encode({}) == (0, 0, 0, 0, 0), "the defaults give the game all zeros: it plays as it always has")
+    check(rules.DEFAULTS["enemy_hp_player_pct"] == 100 and rules.DEFAULTS["aggro"] == 50 and rules.DEFAULTS["difficulty"] == "Medium",
+          "enemy HP 1x for one player (the game multiplies it by its players), 50% aggro, Medium")
+    check(rules.PLAYERS_HP == (100, 200, 275, 350), "1, 2, 2.75 and 3.5x for 1 to 4 players (design/M17-more-players.md)")
+    import re
+    boss = (HERE.parent / "module" / "boss.c").read_text()
+    table = re.search(r"PLAYERS_HP\[\] = \{([^}]*)\}", boss)
+    check(table and tuple(int(x) for x in table.group(1).split(",")) == rules.PLAYERS_HP, "the game's table is the same")
     check(rules.DEFAULTS["pvp"] is False and rules.DEFAULTS["remap"] is False, "PvP and the button remap start off")
     check(all(t[3] for t in rules.TOGGLES if t[0] not in ("pvp", "remap", "bat_carry")), "every other toggle starts on, as the game plays now")
     check("stick_spells" not in rules.DEFAULTS and all("stick_spells" not in g[1] for g in rules.GROUPS),
@@ -39,28 +44,47 @@ def main():
     old = rules.clean({"growth": False})
     check(not old["growth"] and not old["alucard_stats"], "a castle from before Alucard's stats had its own rule: growth off was both")
     check(rules.clean({"growth": False, "alucard_stats": True})["alucard_stats"], "levels off, Alucard's stats on: each is its own")
-    check(rules.encode({"exp_pct": 200, "dealt_pct": 50, "taken_pct": 75, "enemy_hp_pct": 100, "enemy_hp_solo_pct": 300}) ==
-          (0, 200, 0, 75, 100, 300), "each slider reaches the game, and a castle's old damage-dealt setting no longer does")
+    custom = {"difficulty": "Custom", "exp_pct": 200, "dealt_pct": 50, "taken_pct": 75, "enemy_hp_player_pct": 125}
+    check(rules.encode(custom) == (0, 200, 0, 75, 125), "each slider reaches the game, and a castle's old damage-dealt setting no longer does")
     check("dealt_pct" not in rules.DEFAULTS and "dealt_pct" not in rules.clean({"dealt_pct": 50}), "there is no damage-dealt rule")
     check(rules.difficulty(rules.clean({})) == "Medium", "a new castle, and every castle on the old defaults, is on Medium")
-    want = {"Easy": (100, 50, 50, 150), "Medium": (200, 100, 100, 100), "Hard": (300, 150, 150, 50), "Nightmare": (400, 200, 200, 50)}
+    want = {"Easy": (50, 50, 150), "Medium": (100, 100, 100), "Hard": (150, 150, 50), "Nightmare": (200, 200, 50)}
     for name, values in want.items():
         r = rules.clean({"pvp": True})
         rules.set_difficulty(r, name)
-        got = (r["enemy_hp_pct"], r["enemy_hp_solo_pct"], r["taken_pct"], r["exp_pct"])
+        got = (r["enemy_hp_player_pct"], r["taken_pct"], r["exp_pct"])
         check(got == values and rules.difficulty(r) == name and r["pvp"] and rules.clean(r) == r,
-              f"{name}: enemy HP {values[0]}% with a partner and {values[1]}% alone, damage taken {values[2]}%, XP {values[3]}%; nothing else changes")
+              f"{name}: enemy HP {values[0]}% a player, damage taken {values[1]}%, XP {values[2]}%; nothing else changes")
+    old = {"Easy": (100, 50), "Medium": (200, 100), "Hard": (300, 150), "Nightmare": (400, 200)}
+    for name, (partner, alone) in old.items():
+        o = {"enemy_hp_pct": partner, "enemy_hp_solo_pct": alone, **{k: v for k, v in dict(rules.DIFFICULTIES)[name].items() if k in ("taken_pct", "exp_pct")}}
+        check(rules.difficulty(o) == name, f"a castle from before #316 on {name} is still {name}")
+    check(rules.clean({"enemy_hp_pct": 300})["enemy_hp_player_pct"] == 150 and rules.difficulty({"enemy_hp_pct": 300}) == "Custom",
+          "one with only its HP-with-a-partner changed: half of it a player, and Custom")
     r = rules.clean({})
-    r["taken_pct"] = 125
-    check(rules.difficulty(r) == "Custom" and rules.next_difficulty(r, 1) == "Medium", "one of the four moved by hand: Custom, and left or right from there is Medium")
+    rules.set_difficulty(r, "Hard")
+    rules.set_difficulty(r, "Custom")
+    check(rules.difficulty(r) == "Custom" and r["enemy_hp_player_pct"] == 150, "Custom starts from the difficulty it was on")
+    rules.set_difficulty(r, "Medium")
+    rules.set_difficulty(r, "Custom")
+    check(rules.difficulty(rules.clean(r)) == "Custom" and rules.clean(r)["taken_pct"] == 100,
+          "Custom stays Custom, even with a preset's values")
+    r = rules.clean({"difficulty": "Hard", "taken_pct": 400})
+    check(r["taken_pct"] == 150, "a preset's values are the preset's, whatever else is stored")
+    check(rules.changed({"difficulty": "Hard"}) == ["Hard difficulty"], "a preset is one line in the lobby")
+    check(rules.changed(dict(custom, aggro=50)) == ["Custom difficulty", "Enemy HP", "Damage taken", "XP gain"],
+          "Custom: and which sliders moved")
     r = rules.clean({})
     check([rules.next_difficulty(r, -1), rules.next_difficulty(r, 1)] == ["Easy", "Hard"], "left and right step through the difficulties")
     rules.set_difficulty(r, "Nightmare")
-    check(rules.next_difficulty(r, 1) == "Nightmare", "and stop at the ends")
+    check(rules.next_difficulty(r, 1) == "Custom", "Custom comes after Nightmare")
+    rules.set_difficulty(r, "Custom")
+    check(rules.next_difficulty(r, 1) == "Custom" and rules.next_difficulty(rules.clean({"difficulty": "Easy"}), -1) == "Easy",
+          "and they stop at the ends")
     grouped = [k for _, keys in rules.GROUPS for k in keys]
-    check(sorted(grouped) == sorted(k for k in rules.DEFAULTS if k != "remap_map") and len(grouped) == len(set(grouped)),
+    check(sorted(grouped) == sorted(k for k in rules.DEFAULTS if k not in ("remap_map", "difficulty")) and len(grouped) == len(set(grouped)),
           "every rule is in one group of the settings screen")
-    check(rules.clean({"exp_pct": 100000, "aggro": -5})["exp_pct"] == 400 and rules.clean({"aggro": -5})["aggro"] == 0,
+    check(rules.clean({"exp_pct": 100000, "difficulty": "Custom"})["exp_pct"] == 400 and rules.clean({"aggro": -5, "difficulty": "Custom"})["aggro"] == 0,
           "sliders stay in range")
     check(rules.clean({"pvp": "yes", "unknown": 1})["pvp"] is False and "unknown" not in rules.clean({"unknown": 1}),
           "a partner's junk is ignored")

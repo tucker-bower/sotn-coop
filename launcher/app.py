@@ -143,8 +143,12 @@ R2. Alucard casts spells with the right stick.
 
 Esc pauses. F9 saves a bug report: please send it to us."""
 
+REJOIN_S = 12 * 3600  # a room code stays the castle's, and Rejoin offers it, this long (#318)
+
 HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Send it to your partner.
 Joining: type your partner's room code. You both need the same version of SOTN Co-op.
+Dropped out? Online co-op offers Rejoin, and a castle hosted again within 12 hours keeps its code.
+Hosting, the pause menu shows the room code.
 
 Can't connect? Only one of you needs to fix it:
 ·  If Windows asks about its firewall, choose Allow.
@@ -547,6 +551,7 @@ class Launcher:
         self.apply_buttons()
         self.audio = None
         self.room_info = ""  # while hosting: the port, for Help › About
+        self.room_code = ""  # while hosting online, lobby and game: the pause menu shows it (#317)
         self.new_castle_start = False  # the next game view starts a new game (issue 109)
         self.view = None  # the game view, while one runs
         self.menus = None  # ui/widgets.py's Menus, once the game's art has been read (prepare_art)
@@ -2441,27 +2446,34 @@ class Launcher:
         if self.menus:  # Host or Join, in the game's style
             from ui.screens.pick import pick
             while True:
-                choice = pick(self.menus, "Online co-op", [
+                last = self.last_room()
+                rejoin = [("rejoin", f"Rejoin {last}", "The room you were in last. Hosting the same castle again keeps its code.")] if last else []
+                choice = pick(self.menus, "Online co-op", rejoin + [
                     ("host", "Host", "Get a room code for your partner."),
                     ("join", "Join", "Type your partner's room code.")],
                     "You both need the same version.")
                 if choice is None:
                     return
-                if choice == "host":
+                if choice == "rejoin":
+                    self.join_online(last)
+                elif choice == "host":
                     picked = self.pick_castle("Online co-op: host", "Your partner joins it, and keeps a copy.")
                     if picked:
                         self.host_online(*picked)
                 else:
                     self.join_online()
         while True:
+            last = self.last_room()
             items = [("Host", "Pick a castle; you get a room code to give your partner"),
                      ("Join your partner", "Type their room code: you play their castle, and keep a copy"),
-                     ("Back", "")]
+                     ("Back", "")] + ([(f"Rejoin {last}", "The room you were in last")] if last else [])
             choice = self.ui.menu("Online co-op", items,
                                   "Each of you plays on your own PC or phone, with the same version of SOTN Co-op.")
             if choice is None or choice == 2:
                 return
-            if choice == 0:
+            if choice == 3:
+                self.join_online(last)
+            elif choice == 0:
                 picked = self.pick_castle("Online co-op: host", "Your partner joins it, and keeps a copy.")
                 if picked:
                     self.host_online(*picked)
@@ -2509,6 +2521,7 @@ class Launcher:
         try:
             self._host_online(castle, fresh)
         finally:
+            self.room_code = ""
             castle.tidy()
 
     def _host_online(self, playthrough, fresh):
@@ -2520,7 +2533,7 @@ class Launcher:
             s.local.host("set_fresh", fresh)
             rules = castle_rules.for_castle(playthrough, self.settings)
             s.local.host("set_rules", castle_rules.encode(rules), rules)  # the castle's: for the session (D162)
-            room = make_room_code()
+            room = self.room_code = self.castle_room(playthrough, make_room_code)
             self._clip_put(room)
             s.local.host("start_connect", room, "host", app=VERSION)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
@@ -2536,6 +2549,24 @@ class Launcher:
                 self.room_info = ""
             self.continue_castle(s, playthrough, fresh)
             self.run_view(s, playthrough)
+
+    def castle_room(self, castle, make):
+        """The castle's room code: the one it was last hosted with, while that's recent, so a
+        partner who dropped out rejoins with the code they have (#318); else a new one."""
+        last = castle.info.get("room") if isinstance(castle.info.get("room"), dict) else {}
+        recent = isinstance(last.get("at"), (int, float)) and 0 <= time.time() - last["at"] < REJOIN_S
+        code = last.get("code") if recent and isinstance(last.get("code"), str) else make()
+        castle.info["room"] = {"code": code, "at": time.time()}
+        castle.save_info()
+        return code
+
+    def last_room(self):
+        """The room code this player last joined, while it's recent (#318), else ""."""
+        last = self.settings.get("last_room")
+        if not isinstance(last, dict) or not isinstance(last.get("code"), str):
+            return ""
+        at = last.get("at")
+        return last["code"] if isinstance(at, (int, float)) and 0 <= time.time() - at < REJOIN_S else ""
 
     def offer_their_disc(self, failed):
         """Refused for being on another game disc than the host: if this player has the host's,
@@ -2555,15 +2586,19 @@ class Launcher:
             self.ui.message("Switched", f"You're on {name} now. Ask your partner to host again, then join them.")
         return True
 
-    def join_online(self):
+    def join_online(self, rejoin=""):
+        """rejoin: a room code to join straight away (Rejoin, #318); a failure asks for one."""
         import rules as castle_rules
         from archive import Castle
         from link.rendezvous import ConnectError, parse_connect_input
         code = ""
         while True:
-            code = self.ask_code("Join your partner",
-                                 "Type the room code your partner gives you (like BAT-7K2Q).",
-                                 initial=code or self._clip_code())
+            if rejoin:
+                code, rejoin = rejoin, ""
+            else:
+                code = self.ask_code("Join your partner",
+                                     "Type the room code your partner gives you (like BAT-7K2Q).",
+                                     initial=code or self._clip_code())
             if code is None:
                 return
             try:
@@ -2585,6 +2620,9 @@ class Launcher:
                     if not self.offer_their_disc(e):
                         self.ui.message("Couldn't reach your partner", str(e))
                     continue
+                if kind == "room":  # Rejoin offers it next time (#318)
+                    self.settings["last_room"] = {"code": target, "at": time.time()}
+                    save_settings(self.settings)
                 # The host's castle: this player's copy of it (design/M11)
                 theirs = s.local.host("status").get("partner_hello") or {}
                 meta = theirs.get("castle")
@@ -2769,7 +2807,10 @@ class Launcher:
 
         def rows():
             out = [("start", "")] if start else []
-            out += [("slider", key) for key in sliders] + [("toggle", key) for key in toggles]
+            out.append(("difficulty", ""))
+            if castle_rules.difficulty(rules) == castle_rules.CUSTOM:  # the sliders, only then (#316)
+                out += [("slider", key) for key in sliders]
+            out += [("toggle", key) for key in toggles]
             if rules["remap"]:
                 out += [("button", b) for b in castle_rules.REMAP_BUTTONS]
             return out + ([] if read_only else [("defaults", "")])
@@ -2778,6 +2819,8 @@ class Launcher:
             names = castle_rules.BUTTON_NAMES
             if kind == "start":
                 return "Start", "Play with these rules"
+            if kind == "difficulty":
+                return f"Difficulty: {castle_rules.difficulty(rules)}", "Left / right. Custom: set each yourself"
             if kind == "slider":
                 return f"{sliders[key][1]}: {rules[key]}%", sliders[key][2]
             if kind == "toggle":
@@ -2790,7 +2833,9 @@ class Launcher:
             kind, key = row
             if read_only:
                 return
-            if kind == "slider":
+            if kind == "difficulty":
+                castle_rules.set_difficulty(rules, castle_rules.next_difficulty(rules, step or 1))
+            elif kind == "slider":
                 _, _, _, _, low, high, each = sliders[key]
                 rules[key] = max(low, min(high, rules[key] + step * each))
             elif kind == "toggle":
@@ -2815,7 +2860,7 @@ class Launcher:
                 elif a == "down":
                     sel = (sel + 1) % len(table)
                 elif a in ("left", "right"):
-                    if table[sel][0] == "slider":
+                    if table[sel][0] in ("slider", "difficulty"):
                         change(table[sel], 1 if a == "right" else -1)
                 elif a == "ok":
                     if table[sel][0] == "start":

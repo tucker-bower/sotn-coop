@@ -40,6 +40,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `test_crash_window.py` | Checks what counts as stopped, and that closing the crash window sends nothing. |
 | `randomizer_tool.py` | Rolls a randomized castle: the randomizer and Node.js, downloaded on first use. |
 | `rules.py` | A castle's rules: every rule, its default, and what the game gets. |
+| `test_rejoin.py` | Checks rejoining: a castle keeps its room code while recent, and Join offers the last room. |
 | `test_rules.py` | Checks the rules: defaults, per-castle storage, the joiner's copy, the button remap. |
 | `test_screens_fit.py` | Draws every screen with long content and fails on any text cut off. |
 | `test_settings.py` | Checks the app's settings, and that PvP and aggro are no longer among them. |

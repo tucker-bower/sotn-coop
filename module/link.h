@@ -263,8 +263,8 @@ typedef struct {
     /* 0x225BC */ u16 expPct;       // XP from a kill, % (0: 100)
     /* 0x225BE */ u16 dealtPct;     // damage the player deals, % (0: 100)
     /* 0x225C0 */ u16 takenPct;     // damage the player takes, after defense, % (0: 100)
-    /* 0x225C2 */ u16 enemyHpPct;   // enemies' HP with a partner, % (0: 200)
-    /* 0x225C4 */ u16 enemyHpSoloPct; // enemies' HP alone, % (0: 100)
+    /* 0x225C2 */ u16 enemyHpPct;   // enemies' HP for one player, % (0: 100); more players multiply it (#316)
+    /* 0x225C4 */ u16 rulesPad2;
     /* 0x225C6 */ u16 rulesPad;
 } CoopLink; // size = 0x225C8
 
