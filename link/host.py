@@ -65,6 +65,9 @@ class Host:
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
         self.portraits = None
         self.rule_words = None  # the castle's rules, for the mailbox: None until a launcher sets them
+        # 3+ players (link/mesh.py): the HELO sids this link never takes as its partner, or the one
+        # it only takes (None: any)
+        self.refuse_sids, self.only_sid = set(), None
 
     def set_player(self, character=None, options=None, blob=None):
         """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
@@ -287,6 +290,8 @@ class Host:
                 return
         if theirs.get("sid") == self.hello["sid"]:
             return  # our own HELO, come back to us (a candidate that was this PC, or a LAN broadcast)
+        if theirs.get("sid") in self.refuse_sids or (self.only_sid and theirs.get("sid") != self.only_sid):
+            return  # 3+ players (link/mesh.py): another link's partner, or one already seated
         if (not self.hello.get("room") and theirs.get("room") and self.transport.peer
                 and addr is not None and tuple(addr) != tuple(self.transport.peer)):
             return  # joined by ip:port: another room's LAN broadcast (link/connect.py) isn't our partner
