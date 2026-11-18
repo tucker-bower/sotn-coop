@@ -105,8 +105,9 @@ AT(takenPct, 0x225C0);
 AT(enemyHpPct, 0x225C2);
 AT(enemyHpSoloPct, 0x225C4);
 AT(rulesPad, 0x225C6);
+AT(more, 0x225C8);
 #undef AT
-_Static_assert(sizeof(CoopLink) == 0x225C8, "CoopLink changed size");
+_Static_assert(sizeof(CoopLink) == 0x23788 && sizeof(CoopPartnerIn) == 0x8E0, "CoopLink changed size");
 _Static_assert(sizeof(CoopPresence) == 0x2C && sizeof(CoopEvent) == 8 && sizeof(CoopRing) == 0x808 &&
                    sizeof(CoopCommand) == 0x10 && sizeof(CoopSprite) == 0x14 && sizeof(CoopHit) == 0xC,
                "a mailbox record changed size");

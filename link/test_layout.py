@@ -27,7 +27,7 @@ FIELDS = {
     "CONTROL": "control", "CHARACTER": "character", "OPTIONS": "options", "PAD_EXTRA": "padExtra",
     "SELF_SPRITES": "selfSpriteCount", "PARTNER_SPRITES": "partnerSpriteCount", "SELF_PRIMS": "selfPrimCount",
     "PARTNER_PRIMS": "partnerPrimCount", "SELF_PAD": "selfPad", "PARTNER_PAD": "partnerPad",
-    "SELF_HITS": "selfHitCount", "PARTNER_HITS": "partnerHitCount", "RULES": "rulesOff",
+    "SELF_HITS": "selfHitCount", "PARTNER_HITS": "partnerHitCount", "RULES": "rulesOff", "MORE": "more",
 }
 # link.h's name -> mailbox.py's, where they differ (the rest are compared under the same name)
 ALIASES = {
@@ -43,7 +43,7 @@ SIZES = {
     "CoopPresence": mb.Presence.SIZE, "CoopEvent": mb.EVENT_SIZE, "CoopCommand": mb._COMMAND.size,
     "CoopSprite": mb.SPRITE_SIZE, "CoopHit": mb.HIT_SIZE, "CoopWeapon": mb.WEAPON_SIZE,
     "CoopFamiliar": mb.FAMILIAR_SIZE, "CoopStatus": 4 + sum(n for _, n in mb.STATUS_RANGES),
-    "CoopRing": 8 + mb.RING_SIZE * mb.EVENT_SIZE,
+    "CoopRing": 8 + mb.RING_SIZE * mb.EVENT_SIZE, "CoopPartnerIn": mb.MORE_SIZE,
 }
 
 
@@ -85,6 +85,28 @@ def main():
     check(mb._RULES.size == offsets["rulesPad"] + 2 - offsets["rulesOff"], "mailbox._RULES isn't the size of link.h's rules")
     check(mb._HEADER.size == offsets["self"], "mailbox._HEADER isn't what comes before the presence")
     print(f"ok   {len(SIZES)} record sizes match")
+
+    # M17: partners 1 and 2. Their fields, as partner 0's...
+    more = h[h.index("typedef struct {\n    /* 0x00 */ CoopPresence presence;"):h.index("} CoopPartnerIn;")]
+    fields = {name: int(off, 16) for off, name in re.findall(r"/\* (0x[0-9A-Fa-f]+) \*/ \w+ (\w+)", more)}
+    want = {"presence": "presence", "age": "age", "pad": "pad", "sprites": "spriteCount", "prims": "primCount",
+            "hits": "hitCount"}
+    for py, field in want.items():
+        check(fields.get(field) == mb._MORE[py], f"mailbox._MORE[{py!r}] isn't link.h's CoopPartnerIn.{field}")
+    # ...and their copies in the 8 MB: link.h's macros, and none overlaps another or what's there
+    macros = h[h.index("#define WEAPON_MORE_ADDR"):h.index("#define STATUS_MORE_ADDR")]
+    check(all(f"{a:#X}"[2:].upper() in macros.upper() for a in (mb.weapon_partner(1, 0), mb.weapon_partner(2, 0),
+          mb.weapon_partner(2, 1), mb.familiar_partner(1), mb.familiar_partner(2))),
+          "mailbox's partner copies aren't at link.h's WEAPON_MORE_ADDR and FAMILIAR_MORE_ADDR")
+    taken = [(0x80540000, 203756), (0x80580000, 0x40000), (0x806C2000, 0xC0E0), (0x80700000, 0xC000),
+             (0x80710000, 0x20000), (0x80740000, 0x80000), (0x807C0000, 0x40000)]  # research.md "8 MB RAM"
+    copies = [(mb.status_partner(k), 0x84) for k in range(mb.COOP_PARTNERS)]
+    copies += [(mb.weapon_partner(k, hand), mb.WEAPON_SIZE) for k in (1, 2) for hand in (0, 1)]
+    copies += [(mb.familiar_partner(k), mb.FAMILIAR_SIZE) for k in (1, 2)]
+    spans = sorted(taken + copies)
+    for (a, n), (b, _) in zip(spans, spans[1:]):
+        check(a + n <= b, f"{a:#x} (+{n:#x}) runs into {b:#x}")
+    print(f"ok   {mb.COOP_PARTNERS - 1} more partners' fields and copies are where link.h says, apart")
 
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
