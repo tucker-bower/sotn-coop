@@ -35,8 +35,9 @@ static u16 s_ClutAge;
 
 static CoopWeapon* Self(s32 hand) { return (CoopWeapon*)(WEAPON_SELF_ADDR + hand * WEAPON_HAND_SIZE); }
 
-static const CoopWeapon* Partner(s32 hand) {
-    return (const CoopWeapon*)(WEAPON_PARTNER_ADDR + hand * WEAPON_HAND_SIZE);
+// Partner k's copy of that hand's weapon (M17: k 1 and 2's are elsewhere: link.h)
+static const CoopWeapon* Partner(s32 k, s32 hand) {
+    return (const CoopWeapon*)(k ? WEAPON_MORE_ADDR(k, hand) : WEAPON_PARTNER_ADDR + hand * WEAPON_HAND_SIZE);
 }
 
 static u16* WeaponClut(s32 hand) { return (u16*)g_Clut + (PAL_WEAPONS + hand * N_WEAPON_PAL) * COLORS_PER_PAL; }
@@ -113,20 +114,21 @@ void WeaponsUpdate(void) {
 
 // --- the partner's, drawn here ----------------------------------------------------------------
 // The window (D106: VRAM words 0x1E0-0x1FF, rows 0x100-0x1DF) is the right half of texture page
-// 0x1C0,0x100: tiles from its top, a hand's 24 palettes (two to a row) in its last 24 rows.
+// 0x1C0,0x100: tiles from its top, each partner's hands' 24 palettes (two to a row) in its last rows
+// (M17: 12 rows for each hand of each partner).
 #define WIN_X 0x1E0
 #define WIN_Y 0x100
 #define WIN_W 0x20
 #define WIN_H 0xE0
-#define WIN_TILES_H (WIN_H - 2 * N_WEAPON_PAL / 2)
-#define WIN_PAL_ROW(hand, pal) (WIN_TILES_H + (hand) * N_WEAPON_PAL / 2 + (pal) / 2)
+#define WIN_TILES_H (WIN_H - COOP_PARTNERS * 2 * N_WEAPON_PAL / 2)
+#define WIN_PAL_ROW(k, hand, pal) (WIN_TILES_H + ((k) * 2 + (hand)) * N_WEAPON_PAL / 2 + (pal) / 2)
 #define WIN_TPAGE 0x17 // GetTPage(0, 0, 0x1C0, 0x100): the window is its u 0x80-0xFF
 #define CLUT_ID(x, y) (((y) << 6) | ((x) >> 4))
 #define DRAW_SCALE_ROTATE (ENTITY_SCALEX | ENTITY_SCALEY | ENTITY_ROTATE)
 
 static u16 s_Win[WIN_H][WIN_W]; // the window's picture this frame
 static s32 s_CurX, s_CurY, s_ShelfH; // where the next tiles go (words, rows), and this row's height
-static u8 s_PalsIn; // hands whose palettes are in the picture (bits)
+static u8 s_PalsIn; // partners' hands whose palettes are in the picture (bit k * 2 + hand)
 
 // The sheet's pixels [sx, sx + w) x [sy, sy + h) into the picture; *u, *v: where (sx, sy) went,
 // in the window's pixels. False if they don't fit.
@@ -159,20 +161,20 @@ static bool Place(const u16* sheet, s32 stride, s32 sx, s32 sy, s32 w, s32 h, s3
 }
 
 // Palette pal's CLUT: the weapon's own are in the window; any other is this game's too.
-static u16 Clut(s32 hand, s32 pal) {
-    s32 k, row, rel = pal - (PAL_WEAPONS + hand * N_WEAPON_PAL);
+static u16 Clut(s32 who, s32 hand, s32 pal) {
+    s32 k, row, rel = pal - (PAL_WEAPONS + hand * N_WEAPON_PAL), bit = 1 << (who * 2 + hand);
 
     if (rel < 0 || rel >= N_WEAPON_PAL) {
         return g_ClutIds[pal];
     }
-    if (!(s_PalsIn & (1 << hand))) {
-        s_PalsIn |= 1 << hand;
+    if (!(s_PalsIn & bit)) {
+        s_PalsIn |= bit;
         for (k = 0; k < N_WEAPON_PAL * COLORS_PER_PAL; k++) {
-            row = WIN_PAL_ROW(hand, k / COLORS_PER_PAL);
-            s_Win[row][((k / COLORS_PER_PAL) & 1) * COLORS_PER_PAL + k % COLORS_PER_PAL] = Partner(hand)->clut[k];
+            row = WIN_PAL_ROW(who, hand, k / COLORS_PER_PAL);
+            s_Win[row][((k / COLORS_PER_PAL) & 1) * COLORS_PER_PAL + k % COLORS_PER_PAL] = Partner(who, hand)->clut[k];
         }
     }
-    return CLUT_ID(WIN_X + (rel & 1) * COLORS_PER_PAL, WIN_Y + WIN_PAL_ROW(hand, rel));
+    return CLUT_ID(WIN_X + (rel & 1) * COLORS_PER_PAL, WIN_Y + WIN_PAL_ROW(who, hand, rel));
 }
 
 // The frame's parts (SpriteParts, in the partner's overlay copy), or NULL.
@@ -191,8 +193,8 @@ static const s16* Frame(const CoopWeapon* w, s32 hand, s32 pose) {
 }
 
 // One sprite: each part as RenderEntities draws it (src/dra/4B758.c, the sprite parts branch).
-static void Draw(const CoopSprite* s, s32 hand) {
-    const CoopWeapon* w = Partner(hand);
+static void Draw(const CoopSprite* s, s32 who, s32 hand) {
+    const CoopWeapon* w = Partner(who, hand);
     const s16* f = Frame(w, hand, s->animCurFrame & 0x7FFF);
     const s16* part;
     POLY_GT4* poly;
@@ -305,7 +307,7 @@ static void Draw(const CoopSprite* s, s32 hand) {
         v1 = (flags & 1) ? vT - 1 : vB;
         setUV4(poly, u0, v0, u1, v0, u0, v1, u1, v1);
         poly->tpage = WIN_TPAGE;
-        poly->clut = Clut(hand, (s->palette & PAL_UNK_FLAG) ? s->palette & 0x7FFF : part[5] + s->palette);
+        poly->clut = Clut(who, hand, (s->palette & PAL_UNK_FLAG) ? s->palette & 0x7FFF : part[5] + s->palette);
         if (s->blendMode) {
             setSemiTrans(poly, true);
             poly->tpage += s->blendMode & BLEND_QUARTER;
@@ -377,22 +379,21 @@ static void DrawArm(const CoopSprite* s, bool partner) {
     g_GpuUsage.gt4++;
 }
 
-static bool PartnerHere(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    return g_CoopLink.partnerAge <= 30 && (p->flags & PRESENCE_IN_PLAY) && SAME_WORLD(p) &&
+static bool PartnerHere(s32 who) {
+    const CoopPresence* p = PARTNER_PRESENCE(who);
+    return PARTNER_AGE(who) <= 30 && (p->flags & PRESENCE_IN_PLAY) && SAME_WORLD(p) &&
            p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-u32 g_CoopWeaponsDrawn; // sprites drawn last frame (tests read it: coop.map)
+u32 g_CoopWeaponsDrawn; // sprites drawn last frame, every partner's (tests read it: coop.map)
 
-// After RenderEntities: the partner's weapon sprites.
+static void PartnerWeapons(s32 who);
+
+// After RenderEntities: the partners' weapon sprites.
 void WeaponsDraw(void) {
-    const CoopSprite* s;
     RECT r;
-    s32 k, hand, before = g_GpuUsage.gt4;
+    s32 who, before = g_GpuUsage.gt4;
     CoopSprite moved;
-    s16 dx = 0, dy = 0;
-    bool sim;
 
     g_CoopWeaponsDrawn = 0;
     if (g_GameState != Game_Play) {
@@ -403,12 +404,36 @@ void WeaponsDraw(void) {
     if (WeaponArm(&moved)) {
         DrawArm(&moved, false);
     }
+    for (who = 0; who < COOP_PARTNERS; who++) {
+        if (PartnerHere(who)) {
+            PartnerSelect(who);
+            PartnerWeapons(who);
+        }
+    }
+    PartnerSelect(0);
+    if (g_GpuUsage.gt4 != before) {
+        r.x = WIN_X;
+        r.y = WIN_Y;
+        r.w = WIN_W;
+        r.h = WIN_H;
+        LoadImage(&r, (u_long*)s_Win);
+    }
+}
+
+// Partner `who`'s (its body selected: PartnerSelect).
+static void PartnerWeapons(s32 who) {
+    const CoopSprite* s;
+    s32 k, hand;
+    CoopSprite moved;
+    s16 dx = 0, dy = 0;
+    bool sim;
+
     sim = PartnerSimulated();
     if (sim) {
         PartnerBodyOffset(&dx, &dy);
     }
-    for (k = 0; PartnerHere() && k < (s32)g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
-        s = &g_CoopLink.partnerSprites[k];
+    for (k = 0; k < (s32)PARTNER_SPRITE_COUNT(who) && k < COOP_SPRITES; k++) {
+        s = &PARTNER_SPRITES(who)[k];
         hand = s->weapon & 1;
         if (s->weapon & WEAPON_ARM) {
             moved = *s;
@@ -418,7 +443,7 @@ void WeaponsDraw(void) {
             g_CoopWeaponsDrawn++;
             continue;
         }
-        if (!(s->weapon & WEAPON_SPRITE) || Partner(hand)->magic != WEAPON_MAGIC ||
+        if (!(s->weapon & WEAPON_SPRITE) || Partner(who, hand)->magic != WEAPON_MAGIC ||
             (s->animSet & 0x7FFF) != 0x10 + hand * 2) { // the second bank: not yet
             continue;
         }
@@ -431,15 +456,8 @@ void WeaponsDraw(void) {
             moved.y += dy;
             s = &moved;
         }
-        Draw(s, hand);
+        Draw(s, who, hand);
         g_CoopWeaponsDrawn++;
-    }
-    if (g_GpuUsage.gt4 != before) {
-        r.x = WIN_X;
-        r.y = WIN_Y;
-        r.w = WIN_W;
-        r.h = WIN_H;
-        LoadImage(&r, (u_long*)s_Win);
     }
 }
 

@@ -44,6 +44,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_rooms.py` | What the 0.14 playtest's reports found: doors, camera limits, the partner's body, scene votes. |
 | `session_carry.py` | Hanging onto Bat Alucard, a castle rule. |
 | `session_rules.py` | Each castle rule, turned off or moved, in two games. |
+| `session_three.py` | Three players (M17): each game runs both partners' bodies, two partners on one character, enemy HP for three. `--full` only. |
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |
@@ -88,6 +89,8 @@ def my_test(run):
     run.expect(run.s.b.mailbox("partner_presence").x > 100, "B sees A move right")
 ```
 `run.s.a` / `run.s.b` proxy every `Emu` call, plus `mailbox(...)`, `unlink()` / `link()` (stop or resume a game's host), and `proc` (its worker process). The driver steps the games alternately, one frame each, so B gets A's presence for frame N before B's frame N+1. `session_scenarios.partner_pixels(game)` renders a game's next frames with and without its partner, to find the partner on screen. `session_progress.arrive(run, game, stage, roomId, x, y)` sends a game anywhere (CMD_ARRIVE), and `take()` stands it on a pickup. `Session(..., session_file=path)` runs the couch launcher's joint saves (`link/jointsave.py`).
+
+**Three or four games (M17):** give `starts` three or four savestates. Every pair is linked, and each game runs a Host per partner, keeping each partner in its slot (`link/mesh.py` `slot()`). `run.s.c` and `run.s.d` are the extra games, `run.step` takes a pad for each, and `g._ask("call", ("hosts", name, args, kwargs))` calls every Host of a game (`"host1"`, `"transport2"`: one partner's). `partition()` cuts all of a game's links, `_ask("partition_k", (k, True))` one. These tests are `full=True` (`session_three.py`).
 
 ## Autonomous playtests
 `python playtest.py [tour ...] [--minutes N] [--seed S]` plays both games with bots for minutes at a time. The tours are `entrance`, `nz0`, `no0`, `no1`, and `castle`, which hops between stages through the game's own stage doors. The bots cycle through phases: together, apart, regroup by map teleport, room hops, and no healing.

@@ -6,8 +6,14 @@ SECTIONS {
         *(.data.RIC_player)
         *(.data.richter_sprites)
         
-        *(.data*)
+        /* M17: what never changes, shared by every body that runs this build... */
+        *pl_header.o(.data*)
+        *pl_blueprints.o(.data*)
+        *spritebanks.o(.data*)
         *(.rodata*)
+        . = ALIGN(4);
+        coop_statics = .;  /* ...then each body's own (the module swaps them per body) */
+        *(.data*)
         *(.sdata*)
     }
     .text : {
@@ -17,15 +23,22 @@ SECTIONS {
         *(.bss*)
         *(.sbss*)
         *(.scommon)
+        *(EXCLUDE_FILE(*coop_sat_partner.o) COMMON)
+        . = ALIGN(4);
+        coop_shared_bss = .;  /* M17: kept by every body: her palettes' copy (g_CoopPartnerClut) */
         *(COMMON)
         . = ALIGN(4);
     }
+    ASSERT((ADDR(.text) - coop_statics) + (coop_shared_bss - ADDR(.bss)) + 0x588 <= 0x5000,
+           "each body's statics outgrow the module's buffer for them (module/partner.c STATICS_MAX)")
     .trailer : AT(LOADADDR(.text) + SIZEOF(.text)) {
         LONG(0x31524146)  /* 'FAR1' */
         LONG(SIZEOF(.data))
         LONG(SIZEOF(.text))
         LONG(SIZEOF(.bss))
         LONG(ADDR(.text))
+        LONG(coop_statics)     /* M17: each body's own data, from here to the code */
+        LONG(coop_shared_bss)  /* ...and BSS, from its start to here */
     }
     end = .;
     /DISCARD/ : { *(.MIPS.abiflags) *(.reginfo) *(.pdr) *(.comment) *(.gnu.attributes) }

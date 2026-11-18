@@ -46,6 +46,7 @@ def main():
 
     w = _Worker.__new__(_Worker)  # a worker with no game: only what "frame" and "step" touch
     w.emu, w.host, w.shm, w.linked = Emu(), Host(), None, True
+    w.hosts = [w.host]  # one partner (M17: a Host per partner)
     w.clock, w.host_ms = {"t": 0.0, "dt": 1 / 60}, []
     failures = []
 

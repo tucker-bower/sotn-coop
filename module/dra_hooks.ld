@@ -15,3 +15,4 @@ CoopRenderPrimitives = 0x80280044;
 g_CoopHudCharacter = 0x8028004C;
 g_CoopNumberEntity = 0x80280050;
 CoopMakeAtt = 0x80280054;
+g_CoopPartnerVram = 0x8028005C;

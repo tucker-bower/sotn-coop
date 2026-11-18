@@ -48,6 +48,7 @@ __asm__(".section .coop-table, \"ax\"\n"
         ".globl g_CoopHudCharacter\ng_CoopHudCharacter: .word 0\n" // coop_api.h
         ".globl g_CoopNumberEntity\ng_CoopNumberEntity: .word 0\n" // DRA's damage numbers, for Richter's and Maria's loops (#171)
         "j MakeAttHook\nnop\n" // #204: the status page's ATK for Richter and Maria (offhand.c)
+        ".globl g_CoopPartnerVram\ng_CoopPartnerVram: .word 0x200\n" // M17: the partner body's VRAM bank, for its build (partner.c)
         ".set pop\n.previous");
 
 CoopLink g_CoopLink = {COOP_MAGIC, COOP_LINK_VERSION};
@@ -231,6 +232,8 @@ static u32 PadDrivingPlayer(void) {
 u16 g_CoopStage;
 
 static bool __attribute__((used)) UpdateHook(void) {
+    s32 i;
+
     g_CoopLink.heartbeat++;
     WidescreenFrame();
     if (g_GameState != Game_Play || g_GameEngineStep == Engine_Init) {
@@ -249,6 +252,11 @@ static bool __attribute__((used)) UpdateHook(void) {
     MessageUpdate();
     if (g_CoopLink.partnerAge < 0xFFFF) {
         g_CoopLink.partnerAge++;
+    }
+    for (i = 0; i < COOP_PARTNERS - 1; i++) {
+        if (g_CoopLink.more[i].age < 0xFFFF) {
+            g_CoopLink.more[i].age++;
+        }
     }
     ProgressUpdate();
     MistStepUpdate();

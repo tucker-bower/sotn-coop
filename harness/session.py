@@ -5,6 +5,9 @@ own SwanStation core and Host, linked over UDP.
         a, b = s.step(60, p1=("right", ""))   # both games one frame at a time; returns snapshots
         s.a.read("g_CoopLink", ...)           # any Emu call on either game
 
+Three or four starts (M17): every pair linked, each game with a Host per partner, keeping each
+partner in its slot (link/mesh.py slot()). s.c, s.d are the third and fourth games.
+
 The driver steps the games alternately, one frame each, so a presence sent at the end of A's
 frame N is in B's mailbox before B's frame N+1 (and B's reaches A two frames later at most).
 One libretro core per process, so each game is a worker process driven over a pipe.
@@ -28,7 +31,7 @@ class _Worker:
     in its own process (InProcessGame, design/M9)."""
 
     def __init__(self, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
-                 port=0, patch_crc=None, learn_peer=False):
+                 port=0, patch_crc=None, learn_peer=False, partners=1):
         import collections
         from emu import Emu
         from link.adapter import HarnessAdapter
@@ -48,16 +51,27 @@ class _Worker:
         if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
             emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
         self.mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
-        self.transport = UdpTransport(port=port, host="127.0.0.1", bind_host=bind_host)
-        self.transport.learn_peer = learn_peer
         # Virtual time for the simulated internet (link/netsim.py): this game's frames / 60,
         # with the second game half a frame behind (the driver steps them alternately).
         # Real-time play (audio) keeps the wall clock.
         self.clock = {"t": rank / 120, "dt": 1 / 60}
-        if not audio and not os.environ.get("COOP_REALTIME"):
-            self.transport.clock = lambda: self.clock["t"]
-        self.host = Host(self.mailbox, self.transport, rank, patch_crc=patch_crc, playout=learn_peer)
-        self.host.set_portraits(portraits.read(disc))
+        # M17: a Host per partner, each with its view of the mailbox (link/mailbox.py Partners)
+        views = [self.mailbox]
+        if partners > 1:
+            from link.mailbox import Partners
+            shared = Partners(self.mailbox)
+            views = [shared.view(k) for k in range(partners)]
+        self.transports, self.hosts = [], []
+        for view in views:
+            t = UdpTransport(port=port if not self.transports else 0, host="127.0.0.1", bind_host=bind_host)
+            t.learn_peer = learn_peer
+            if not audio and not os.environ.get("COOP_REALTIME"):
+                t.clock = lambda: self.clock["t"]
+            self.transports.append(t)
+            self.hosts.append(Host(view, t, rank, patch_crc=patch_crc, playout=learn_peer))
+        self.transport, self.host = self.transports[0], self.hosts[0]
+        for host in self.hosts:
+            host.set_portraits(portraits.read(disc))
         self.linked = True
         self.host_ms = collections.deque(maxlen=3600)  # the host's time per frame (never waits)
 
@@ -71,7 +85,8 @@ class _Worker:
                 self.clock["t"] += self.clock["dt"]
                 if self.linked:
                     t0 = time.perf_counter()
-                    host.after_frame()
+                    for h in self.hosts:
+                        h.after_frame()
                     self.host_ms.append((time.perf_counter() - t0) * 1000)
             return emu.snapshot()
         if cmd == "host_ms":
@@ -84,15 +99,27 @@ class _Worker:
             self.clock["t"] += args / 60
         elif cmd == "connect":
             self.transport.connect(args)
-        elif cmd == "partition":  # the network drops everything, both ways
-            self.transport.partitioned = args
+        elif cmd == "connect_k":  # M17: partner k's link
+            k, port = args
+            self.transports[k].connect(port)
+        elif cmd == "partition":  # the network drops everything, both ways (every partner's)
+            for t in self.transports:
+                t.partitioned = args
+        elif cmd == "partition_k":  # M17: only partner k's link
+            k, on = args
+            self.transports[k].partitioned = on
         elif cmd == "unlink":  # stop the host: as if the partner's side vanished
             self.linked = False
         elif cmd == "link":
             self.linked = True
         elif cmd == "call":  # any Emu, Mailbox, Host, or UdpTransport method
             target, name, a, kw = args
-            obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport}[target]
+            if target == "hosts":  # M17: every partner's Host, the same call
+                return [getattr(h, name)(*a, **kw) for h in self.hosts]
+            obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport}.get(target)
+            if obj is None:  # "host1", "transport2": partner k's (M17)
+                kind, k = target.rstrip("0123456789"), int(target[len(target.rstrip("0123456789")):])
+                obj = {"host": self.hosts, "transport": self.transports}[kind][k]
             return getattr(obj, name)(*a, **kw)
         elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
             emu.step(1, args)
@@ -120,7 +147,8 @@ class _Worker:
         (the partner stalls, at worst), and the first few failures go to the worker's log, for F9
         reports. Tests step with "step", which raises."""
         try:
-            self.host.after_frame()
+            for h in self.hosts:
+                h.after_frame()
         except Exception:  # noqa: BLE001 - a player's session is worth more than the link's frame
             self.link_errors = getattr(self, "link_errors", 0) + 1
             if self.link_errors <= self.LINK_ERRORS_LOGGED:
@@ -129,13 +157,15 @@ class _Worker:
 
     def close(self):
         if self.linked:
-            self.host.goodbye()
-        self.transport.close()
+            for h in self.hosts:
+                h.goodbye()
+        for t in self.transports:
+            t.close()
         self.emu.__exit__(None, None, None)
 
 
 def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.0.0.1",
-            port=0, patch_crc=None, learn_peer=False):
+            port=0, patch_crc=None, learn_peer=False, partners=1):
     import faulthandler  # a native crash (the emulator's) writes its stack where the proxy finds it
     faulthandler.enable(open(Path(tempfile.gettempdir()) / f"coop-worker-{os.getpid()}.txt", "w"))
     if os.environ.get("COOP_WORKER_LOG"):  # the launcher's: a worker's warnings (connect, relay) kept
@@ -143,8 +173,8 @@ def _worker(conn, disc, start, rank, audio=False, shm_name=None, bind_host="127.
         logging.basicConfig(filename=os.environ["COOP_WORKER_LOG"], level=logging.INFO,
                             format="%(asctime)s %(levelname)s %(name)s %(message)s")
     try:
-        w = _Worker(disc, start, rank, audio, shm_name, bind_host, port, patch_crc, learn_peer)
-        conn.send(("ok", w.transport.port))
+        w = _Worker(disc, start, rank, audio, shm_name, bind_host, port, patch_crc, learn_peer, partners)
+        conn.send(("ok", w.transport.port if partners == 1 else [t.port for t in w.transports]))
         while True:
             cmd, args = conn.recv()
             try:
@@ -303,20 +333,22 @@ class HostProxy:
 
 class Session:
     def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False,
-                 characters=(0, 0), blob=None):
-        """disc: one disc for both games, or (disc A, disc B). session_file: run the couch
-        launcher's joint saves (link.jointsave) into that file, every frame. audio: keep sound
-        (the launcher). characters: each game's CHAR_* (design/M8), from its next load. blob:
-        Maria's (launcher/characters.py), for both games, if either plays her."""
+                 characters=None, blob=None):
+        """disc: one disc for every game, or one each. starts: one per game (two, or three or four:
+        M17). session_file: run the couch launcher's joint saves (link.jointsave) into that file,
+        every frame (two games). audio: keep sound (the launcher). characters: each game's CHAR_*
+        (design/M8), from its next load. blob: Maria's (launcher/characters.py), for every game, if
+        any plays her."""
         self.disc, self.starts, self.session_file, self.audio = disc, starts, session_file, audio
-        self.characters, self.blob = characters, blob
+        self.characters, self.blob = characters or (0,) * len(starts), blob
         self.joint = None
         self.guard = CrashGuard()
 
     def __enter__(self):
         ctx = mp.get_context("spawn")
         self.games = []
-        discs = self.disc if isinstance(self.disc, (tuple, list)) else (self.disc, self.disc)
+        n = len(self.starts)
+        discs = self.disc if isinstance(self.disc, (tuple, list)) else (self.disc,) * n
         self._shms = []
         for i, start in enumerate(self.starts):
             shm_name = None
@@ -327,9 +359,10 @@ class Session:
                 shm_name = shm.name
             parent, child = ctx.Pipe()
             proc = ctx.Process(target=_worker, daemon=True,
-                               args=(child, str(discs[i]), start, i, self.audio, shm_name))
+                               args=(child, str(discs[i]), start, i, self.audio, shm_name),
+                               kwargs={"partners": n - 1})
             proc.start()
-            game = Game("AB"[i], parent, proc)
+            game = Game("ABCD"[i], parent, proc)
             game.shm = self._shms[-1] if shm_name else None
             self.games.append(game)
         ports = []
@@ -338,11 +371,20 @@ class Session:
             if status != "ok":
                 raise RuntimeError(f"game {g.name} failed to start: {value}")
             ports.append(value)
-        self.a, self.b = self.games
-        self.a._ask("connect", ports[1])
-        self.b._ask("connect", ports[0])
+        self.a, self.b = self.games[:2]
+        self.c = self.games[2] if n > 2 else None
+        self.d = self.games[3] if n > 3 else None
+        if n == 2:
+            self.a._ask("connect", ports[1])
+            self.b._ask("connect", ports[0])
+        else:  # M17: every pair, each in the other's slot
+            from link.mesh import slot
+            for i in range(n):
+                for j in range(n):
+                    if i != j:
+                        self.games[i]._ask("connect_k", (slot(i, j), ports[j][slot(j, i)]))
         for g, c in zip(self.games, self.characters):
-            g.host("set_player", character=c, blob=self.blob)
+            g._ask("call", ("hosts", "set_player", (), {"character": c, "blob": self.blob}))
         if os.environ.get("COOP_BODY_OFF"):  # M13: no partner body in either game (comparisons)
             from module import symbols
             for g in self.games:
@@ -358,21 +400,20 @@ class Session:
             g.transport("set_netsim", profile, seed * 2 + i, **overrides)
             g.host("set_playout", bool(profile))
 
-    def step(self, n=1, p1=("", ""), each=None):
-        """Steps both games n frames, alternating one frame each. p1 is (pad A, pad B), or a
-        function (frame index, snapshot A, snapshot B) -> (pad A, pad B). each(i, sa, sb) is
-        called after every frame. Returns the last pair of snapshots."""
-        sa = sb = None
+    def step(self, n=1, p1=None, each=None):
+        """Steps every game n frames, one frame each in turn. p1 is (pad A, pad B, ...), or a
+        function (frame index, snapshot A, snapshot B, ...) -> pads. each(i, sa, sb, ...) is
+        called after every frame. Returns the last snapshots, one per game."""
+        snaps = [None] * len(self.games)
         for i in range(n):
-            pa, pb = p1(i, sa, sb) if callable(p1) else p1
-            sa = self.a.step(1, pa)
-            sb = self.b.step(1, pb)
+            pads = p1(i, *snaps) if callable(p1) else (p1 or ("",) * len(self.games))
+            snaps = [g.step(1, pad) for g, pad in zip(self.games, pads)]
             if self.joint:
                 self.joint.tick()
             self.guard.check(self.games)
             if each:
-                each(i, sa, sb)
-        return sa, sb
+                each(i, *snaps)
+        return tuple(snaps)
 
     def __exit__(self, *exc):
         for g in self.games:
@@ -483,9 +524,10 @@ class OnlineSession:
 SESSION_SCENARIOS = {}
 
 
-def session_scenario(starts=("entrance", "entrance"), discs=None, characters=(0, 0), full=False):
-    """Like scenario.scenario, for two linked games. discs defaults to the co-op disc twice.
-    characters: each game's CHAR_* (design/M8), from its next load. full: only in the full suite."""
+def session_scenario(starts=("entrance", "entrance"), discs=None, characters=None, full=False):
+    """Like scenario.scenario, for two linked games (or three or four: one start each, M17). discs
+    defaults to the co-op disc for each. characters: each game's CHAR_* (design/M8), from its next
+    load. full: only in the full suite."""
     def register(fn):
         from scenario import FULL_ONLY
         SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs, characters)
@@ -502,24 +544,27 @@ class SessionRun:
         self.s, self.name = session, name
         self.checks, self._frames, self._gif_every, self._n = [], [], gif_every, 0
 
-    def step(self, n=1, p1=("", ""), each=None):
-        def after(i, sa, sb):
+    def step(self, n=1, p1=None, each=None):
+        def after(i, *snaps):
             self._n += 1
             if self._n % self._gif_every == 0:
                 self.capture()
             if each:
-                each(i, sa, sb)
+                each(i, *snaps)
         return self.s.step(n, p1, after)
 
     def capture(self):
         from PIL import Image
         if not all(g.proc.is_alive() for g in self.s.games):  # e.g. stale_link killed one
             return
-        a, b = self.s.a.screenshot(), self.s.b.screenshot()
-        if a and b:
-            frame = Image.new("RGB", (a.width + 4 + b.width, max(a.height, b.height)), "white")
-            frame.paste(a, (0, 0))
-            frame.paste(b, (a.width + 4, 0))
+        shots = [g.screenshot() for g in self.s.games]
+        if all(shots):
+            frame = Image.new("RGB", (sum(x.width for x in shots) + 4 * (len(shots) - 1), max(x.height for x in shots)),
+                              "white")
+            x = 0
+            for shot in shots:
+                frame.paste(shot, (x, 0))
+                x += shot.width + 4
             self._frames.append(frame.resize((frame.width * 3 // 4, frame.height * 3 // 4)))
 
     def expect(self, ok, what, **details):
@@ -547,7 +592,7 @@ def run_session_scenario(name):
     run = None
     try:
         blob = None
-        if {2, 3, 4, 5} & set(characters):  # the blob characters (the Marias, Ultimate Richter)
+        if {2, 3, 4, 5} & set(characters or ()):  # the blob characters (the Marias, Ultimate Richter)
             from module import maria_blob
             blob = maria_blob()
         with Session(discs or COOP_DISC, starts, characters=characters, blob=blob) as s:

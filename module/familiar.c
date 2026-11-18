@@ -23,28 +23,31 @@ void RenderPrimitives(void); // DRA
 #define COPY_DELAY 30 // frames after it loads: its init uploads its palettes
 
 static CoopFamiliar* Self(void) { return (CoopFamiliar*)FAMILIAR_SELF_ADDR; }
-static const CoopFamiliar* Partner(void) { return (const CoopFamiliar*)FAMILIAR_PARTNER_ADDR; }
+static const CoopFamiliar* Partner(s32 k) {
+    return (const CoopFamiliar*)(k ? FAMILIAR_MORE_ADDR(k) : FAMILIAR_PARTNER_ADDR);
+}
 
 static s32 s_Have = -1; // g_ServantLoaded when this game's copy was made
 static s16 s_CopyIn;
 
-static void SheetAt(u16* dst, bool store, s16 x) {
+// The sheet out of the first bank (store), or into `bank`.
+static void SheetAt(u16* dst, bool store, s16 x, u32 bank) {
     RECT r;
 
     r.x = x;
-    r.y = SHEET_Y | (store ? 0 : VRAM_BANK);
+    r.y = SHEET_Y | (store ? 0 : VRAM_BANK_OF(bank));
     r.w = 0x40;
     r.h = 0x80;
     DrawSync(0);
     store ? StoreImage(&r, (u_long*)dst) : LoadImage(&r, (u_long*)dst);
-    r.y = (SHEET_Y + 0x80) | (store ? 0 : VRAM_BANK);
+    r.y = (SHEET_Y + 0x80) | (store ? 0 : VRAM_BANK_OF(bank));
     r.w = 0x20;
     DrawSync(0);
     store ? StoreImage(&r, (u_long*)(dst + 0x40 * 0x80)) : LoadImage(&r, (u_long*)(dst + 0x40 * 0x80));
     DrawSync(0);
 }
 
-static void Sheet(u16* dst, bool store) { SheetAt(dst, store, SHEET_X); }
+static void Sheet(u16* dst, bool store, u32 bank) { SheetAt(dst, store, SHEET_X, bank); }
 
 // Co-op Maria keeps her HUD set (0x2C0,0x100), turtle (0x2E0,0x100) and cat (0x2C0,0x180) in the
 // familiar's texture page, and her init puts the HUD set back at every stage: her familiar came out
@@ -61,8 +64,8 @@ static bool s_InBank; // this game's familiar draws from the second bank
 void FamiliarToBank(void) {
     s_InBank = CharacterLoaded() == CHAR_MARIA;
     if (s_InBank) {
-        Sheet(Self()->sheet, true);
-        SheetAt(Self()->sheet, false, OWN_X);
+        Sheet(Self()->sheet, true, 0);
+        SheetAt(Self()->sheet, false, OWN_X, 1);
     }
 }
 
@@ -180,7 +183,7 @@ void FamiliarUpdate(void) {
     if (s_Have) {
         __builtin_memcpy(f->ovl, (const void*)FAMILIAR_PRG, FAMILIAR_OVL_SIZE);
         if (!s_InBank) { // in Co-op Maria's game it was taken as it loaded (FamiliarToBank)
-            Sheet(f->sheet, true);
+            Sheet(f->sheet, true, 0);
         }
         __builtin_memcpy(f->clut, (u16*)g_Clut + PAL_FIRST * COLORS_PER_PAL, FAMILIAR_CLUT_SIZE);
         f->bank = ((u32*)g_api.o.spriteBanks)[FAM_BANK];
@@ -189,45 +192,45 @@ void FamiliarUpdate(void) {
     f->seq++;
 }
 
-// --- the partner's -------------------------------------------------------------------------
-static u32 s_Seen;  // the partner's copy in the second bank (its seq + 1; 0: none)
-static u32 s_Table[FAM_FRAMES]; // its frame table, rebased onto the copy
+// --- the partners' (M17: each from its body's bank) ---------------------------------------------
+static u32 s_Seen[COOP_PARTNERS];  // partner k's copy in its bank (its seq + 1; 0: none)
+static u32 s_Table[COOP_PARTNERS][FAM_FRAMES]; // its frame table, rebased onto the copy
 
-void FamiliarReload(void) { s_Seen = 0; }
+void FamiliarReload(s32 k) { s_Seen[k] = 0; }
 
-static bool Ready(void) {
-    const CoopFamiliar* f = Partner();
+static bool Ready(s32 p) {
+    const CoopFamiliar* f = Partner(p);
     const u32* table;
-    u32 k, v, delta = (u32)f->ovl - FAMILIAR_PRG;
+    u32 i, v, delta = (u32)f->ovl - FAMILIAR_PRG;
     RECT r;
 
     if (f->magic != FAMILIAR_MAGIC || !f->servant) {
         return false;
     }
-    if (s_Seen == f->seq + 1) {
+    if (s_Seen[p] == f->seq + 1) {
         return true;
     }
     // its frame table (the sword has none: it's primitives, and its bank is someone else's)
     table = (const u32*)(f->bank + delta);
-    for (k = 0; k < FAM_FRAMES; k++) {
-        v = f->bank >= FAMILIAR_PRG && (u32)&table[k] < (u32)f->ovl + FAMILIAR_OVL_SIZE ? table[k] : 0;
-        s_Table[k] = v >= FAMILIAR_PRG && v < FAMILIAR_PRG + FAMILIAR_OVL_SIZE ? v + delta : 0;
+    for (i = 0; i < FAM_FRAMES; i++) {
+        v = f->bank >= FAMILIAR_PRG && (u32)&table[i] < (u32)f->ovl + FAMILIAR_OVL_SIZE ? table[i] : 0;
+        s_Table[p][i] = v >= FAMILIAR_PRG && v < FAMILIAR_PRG + FAMILIAR_OVL_SIZE ? v + delta : 0;
     }
-    Sheet((u16*)f->sheet, false);
-    for (k = 0; k < N_PAL; k++) {
-        u16 clut = g_ClutIds[PAL_FIRST + k];
+    Sheet((u16*)f->sheet, false, p + 1);
+    for (i = 0; i < N_PAL; i++) {
+        u16 clut = g_ClutIds[PAL_FIRST + i];
         r.x = (clut & 0x3F) * 16;
-        r.y = ((clut >> 6) & 0x1FF) | VRAM_BANK;
+        r.y = ((clut >> 6) & 0x1FF) | VRAM_BANK_OF(p + 1);
         r.w = 16;
         r.h = 1;
-        LoadImage(&r, (u_long*)(f->clut + k * COLORS_PER_PAL));
+        LoadImage(&r, (u_long*)(f->clut + i * COLORS_PER_PAL));
         DrawSync(0);
     }
-    s_Seen = f->seq + 1;
+    s_Seen[p] = f->seq + 1;
     return true;
 }
 
-u32 g_CoopFamiliarDrawn; // its sprites and primitives drawn last frame (tests read it: coop.map)
+u32 g_CoopFamiliarDrawn[COOP_PARTNERS]; // each partner's sprites and primitives drawn last frame (tests read it: coop.map)
 
 // Its primitives (the sword's): replayed in a pool of this game's own (as sprites.c's, allocated
 // once per stage), drawn in a pass of their own from the second bank, hidden from the game's.
@@ -250,7 +253,7 @@ static bool PoolIntact(void) {
     return true;
 }
 
-static s32 DrawPrims(s16 dx, s16 dy) {
+static s32 DrawPrims(s32 who, s16 dx, s16 dy) {
     static u8 s_Shown[MAX_PRIM_COUNT];
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
     Primitive* p;
@@ -263,8 +266,8 @@ static s32 DrawPrims(s16 dx, s16 dy) {
         }
     }
     p = &g_PrimBuf[s_Pool];
-    for (k = 0; k < (s32)g_CoopLink.partnerPrimCount && p; k++) {
-        const u8* q = g_CoopLink.partnerPrims[k];
+    for (k = 0; k < (s32)PARTNER_PRIM_COUNT(who) && k < COOP_PRIMS && p; k++) {
+        const u8* q = PARTNER_PRIMS(who)[k];
         if (q[PRIM_TAG] != FAMILIAR_TAG || q[3] == PRIM_NONE) {
             continue;
         }
@@ -311,9 +314,9 @@ static s32 DrawPrims(s16 dx, s16 dy) {
     return n;
 }
 
-// In the partner's drawing pass (partner.c, its slots in): its familiar's sprites, by themselves,
+// In partner `who`'s drawing pass (partner.c, its slots in): its familiar's sprites, by themselves,
 // moved with the body (dx, dy: the body's spot minus the partner's real one).
-void FamiliarDraw(s16 dx, s16 dy) {
+void FamiliarDraw(s32 who, s16 dx, s16 dy) {
     static u16 s_Frames[256];
     static u8 s_Placed[COOP_SPRITES];
     const CoopSprite* s;
@@ -322,16 +325,16 @@ void FamiliarDraw(s16 dx, s16 dy) {
     u32 saved, gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
     s32 i, k, n = 0, slot = 63;
 
-    g_CoopFamiliarDrawn = 0;
-    if (!Ready()) {
+    g_CoopFamiliarDrawn[who] = 0;
+    if (!Ready(who)) {
         return;
     }
     for (i = 0; i < 256; i++) {
         s_Frames[i] = g_Entities[i].animCurFrame;
         g_Entities[i].animCurFrame = 0;
     }
-    for (k = 0; k < g_CoopLink.partnerSpriteCount && k < COOP_SPRITES; k++) {
-        s = &g_CoopLink.partnerSprites[k];
+    for (k = 0; k < PARTNER_SPRITE_COUNT(who) && k < COOP_SPRITES; k++) {
+        s = &PARTNER_SPRITES(who)[k];
         s_Placed[k] = 0;
         if ((u16)s->animSet != ANIMSET_OVL(FAM_BANK) || s->weapon) {
             continue;
@@ -363,12 +366,12 @@ void FamiliarDraw(s16 dx, s16 dy) {
     if (g_GameStep != Play_Default) {
         s_Pool = -1; // a load frees every primitive
     } else {
-        g_CoopFamiliarDrawn = DrawPrims(dx, dy);
+        g_CoopFamiliarDrawn[who] = DrawPrims(who, dx, dy);
     }
     if (n) {
         banks = (u32*)g_api.o.spriteBanks;
         saved = banks[FAM_BANK];
-        banks[FAM_BANK] = (u32)s_Table;
+        banks[FAM_BANK] = (u32)s_Table[who];
         RenderEntities();
         banks[FAM_BANK] = saved;
         PartnerBankPolys(gt4, gt3);
@@ -385,5 +388,5 @@ void FamiliarDraw(s16 dx, s16 dy) {
     for (i = 0; i < 256; i++) {
         g_Entities[i].animCurFrame = s_Frames[i];
     }
-    g_CoopFamiliarDrawn += n;
+    g_CoopFamiliarDrawn[who] += n;
 }

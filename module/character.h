@@ -13,7 +13,7 @@ void CharacterRenderStart(void); // around RenderEntities: what this player's ch
 void CharacterRenderEnd(void);   // ...back after it
 // Ultimate Richter's coat (a RIC2 file: his palettes and arm art), into the game's palettes and
 // VRAM, or into VRAM's second bank for a partner who wears it
-void CharacterRicCoat(const u8* file, bool partner);
+void CharacterRicCoat(const u8* file, u32 bank); // bank: 0 for this game's, a partner body's for theirs
 void CharacterCurePoison(void); // Richter's and Maria's (character.c)
 void CharacterDamageNumber(s32 hit); // Richter's and Maria's: a hit's number over them, as Alucard's (#171)
 // Co-op Richter and Maria: levels, Alucard's stats, relic moves, off-hand weapons, familiars and

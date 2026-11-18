@@ -76,9 +76,9 @@ $(BUILD)/SATMAR.BIN: $(BUILD)/satmar.elf
 	$(CROSS)objcopy -O binary $< $@
 	@echo "SATMAR.BIN: $$(stat -c %s $@) bytes; data $$($(CROSS)size -A $< | awk '$$1==".data"{print $$2}') of $$((0x80170000 - 0x8013C000))"
 
-$(BUILD)/satmarp.elf: $(POBJS) $(BUILD)/symbols.txt sat_maria_partner.ld
+$(BUILD)/satmarp.elf: $(POBJS) $(BUILD)/symbols.txt sat_maria_partner.ld ../richter-ps1/coop_player.ld
 	$(CROSS)ld -nostdlib -Map=$(BUILD)/satmarp.map --build-id=none -T sat_maria_partner.ld \
-	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -o $@ $(POBJS)
+	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -T ../richter-ps1/coop_player.ld -o $@ $(POBJS)
 
 $(BUILD)/SATMARP.BIN: $(BUILD)/satmarp.elf
 	$(CROSS)objcopy -O binary $< $@

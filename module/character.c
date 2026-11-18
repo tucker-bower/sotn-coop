@@ -194,7 +194,7 @@ static void CopyOverlay(const CharBlob* b) {
 // block's address where the file runs (0x8013C000); `file` is where it is now.
 #define RIC2_HDR_AT (0x170AC - 8)
 #define RIC2_MAGIC 0x32434952 // "RIC2"
-void CharacterRicCoat(const u8* file, bool partner) {
+void CharacterRicCoat(const u8* file, u32 bank) {
     const u32* hdr = (const u32*)(file + RIC2_HDR_AT);
     const u32* p;
     s32 n, i;
@@ -207,13 +207,13 @@ void CharacterRicCoat(const u8* file, bool partner) {
     p = (const u32*)(file + (hdr[1] - PLAYER_OVL_ADDR));
     for (n = *p++; n > 0; n--) {
         id = *p++;
-        if (!partner) { // the game's copy; a partner's palettes are only in the second bank
+        if (!bank) { // the game's copy; a partner's palettes are only in its body's bank
             for (i = 0; i < COLORS_PER_PAL; i++) {
                 g_Clut[1][(id - 0x100) * COLORS_PER_PAL + i] = ((const u16*)p)[i];
             }
         }
         rect.x = (g_ClutIds[id] & 0x3F) << 4;
-        rect.y = (g_ClutIds[id] >> 6) | (partner ? VRAM_BANK : 0);
+        rect.y = (g_ClutIds[id] >> 6) | VRAM_BANK_OF(bank);
         rect.w = COLORS_PER_PAL;
         rect.h = 1;
         LoadImage(&rect, (u_long*)p);
@@ -221,7 +221,7 @@ void CharacterRicCoat(const u8* file, bool partner) {
     }
     for (n = *p++; n > 0; n--) {
         rect.x = ((const u16*)p)[0];
-        rect.y = ((const u16*)p)[1] | (partner ? VRAM_BANK : 0);
+        rect.y = ((const u16*)p)[1] | VRAM_BANK_OF(bank);
         rect.w = ((const u16*)p)[2];
         rect.h = ((const u16*)p)[3];
         p += 2;
@@ -722,7 +722,7 @@ void CharacterFrame(void) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
             if (s_Loaded == CHAR_ULT_RICHTER) { // after F_GAME2, which his load always follows
-                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, false);
+                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, 0);
             }
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
             PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);

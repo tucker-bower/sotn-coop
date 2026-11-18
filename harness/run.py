@@ -52,6 +52,7 @@ import scenarios_ultimate  # noqa: F401
 import scenarios_widescreen  # noqa: F401
 import session_m15  # noqa: F401
 import session_rules  # noqa: F401
+import session_three  # noqa: F401
 import session_carry  # noqa: F401
 import session_endings  # noqa: F401
 import session_inverted  # noqa: F401
@@ -95,7 +96,7 @@ def run_one(name):
 
 def show(r, name):
     rooms = " -> ".join(f"{x['room'][0]},{x['room'][1]}" for x in r.get("rooms", []))
-    detail = f"{r['frames']} frames in {r['seconds']}s; rooms {rooms}" if "frames" in r else f"{r['seconds']}s, two games"
+    detail = f"{r['frames']} frames in {r['seconds']}s; rooms {rooms}" if "frames" in r else f"{r['seconds']}s, { {3: 'three', 4: 'four'}.get(len(r.get('starts') or ()), 'two')} games"
     lines = [f"{'PASS' if r['passed'] else 'FAIL'} {name}: {detail}"]
     for c in r["checks"]:
         lines.append(f"   {'ok ' if c['ok'] else 'BAD'} {c['what']}")

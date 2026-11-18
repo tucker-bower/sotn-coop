@@ -125,7 +125,7 @@ EVERYDAY = {
     "ui_couch", "ui_menus", "ui_randomizer", "ui_startup",
     # rooms and widescreen
     "char_select_session", "guest_gets_hurt", "guest_takes_heart", "mixed_soak_short", "no_effect_on_play",
-    "partner_body_follows", "shared_same_enemies", "targeting_nearer_player",
+    "partner_body_follows", "partner_vram_banks_draw", "shared_same_enemies", "targeting_nearer_player",
     "widescreen_stage_windows_every_stage",
 }
 

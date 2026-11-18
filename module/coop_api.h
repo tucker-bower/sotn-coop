@@ -82,6 +82,8 @@ extern CdlFILE g_CoopRicFile;
 extern CdlFILE g_CoopRicPartnerFile;
 // The player's OPT_* settings, for the player overlays (characters/richter-ps1/coop_ric.h): mirrors the mailbox.
 extern u32 g_CoopOptions;
+// M17: the partner body's VRAM bank (VRAM_BANK_OF), for its build's uploads (characters/richter-ps1/coop_partner.c).
+extern u32 g_CoopPartnerVram;
 #endif
 
 #endif

@@ -3,8 +3,8 @@
 #define FAMILIAR_H
 
 void FamiliarUpdate(void);           // once per frame: this game's copy
-void FamiliarDraw(s16 dx, s16 dy);   // in the partner's drawing pass (partner.c)
-void FamiliarReload(void);           // the second bank was reloaded: the partner's copy again
+void FamiliarDraw(s32 k, s16 dx, s16 dy); // in partner k's drawing pass (partner.c)
+void FamiliarReload(s32 k);           // partner k's bank was reloaded: its copy again
 
 // Co-op Maria's own familiar (issue 208): its graphics live in VRAM's second bank, since hers
 // share its page in the first.

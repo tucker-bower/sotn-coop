@@ -86,6 +86,14 @@ typedef struct {
 #define VRAM_BANK 0x200
 #define TPAGE_BANK 0x4000
 #define CLUT_BANK 0x8000
+// M17: banks 1-3, one per partner body (partner k's is k + 1: design/M17-more-players.md). Uploads
+// take the bank in y bits 9-10, textures in tpage bits 14-15, palettes CLUT bit 15 with bank - 1
+// in its x bits 4-5 (a banked palette's x is under 0x100). Bank 1 is the three above.
+#define VRAM_BANK_OF(b) ((b) << 9)
+#define TPAGE_BANK_OF(b) ((b) << 14)
+#define CLUT_BANK_OF(b) (CLUT_BANK | (((b) - 1) << 4))
+#define TPAGE_BANKS 0xC000                 // a tpage's bank bits
+#define TPAGE_BANK_IS(t) (((t) >> 14) & 3) // ...and its bank
 
 // M13: the partner's status (g_Status from spellsLearnt to statsTotal, and from subWeapon to the elements:
 // stats, level, equipment), for the partner's body (partner.c). The host reads it from the
@@ -215,8 +223,8 @@ typedef struct {
 } CoopCommand; // size = 0x10
 
 // M17 (3+ players, design/M17-more-players.md step 2): what the host writes for each partner after
-// the first (partner 0 is CoopLink's partner fields). The module reads only partner 0 until the
-// bodies come (step 4).
+// the first (partner 0 is CoopLink's partner fields: PARTNER_* below reads either). Partners' bodies,
+// weapons and familiars read them all (step 4); the rest of the module, partner 0 only (step 5).
 #define COOP_PARTNERS 3
 typedef struct {
     /* 0x00 */ CoopPresence presence;
@@ -382,5 +390,12 @@ typedef struct {
 #define CHAR_BLOBS_MAX 4 // Co-op Maria, Ultimate Maria, Saturn Maria, Ultimate Richter
 #define CHAR_BLOBS_END 0x804C0000 // PARTNER_ULT_ADDR (module/coop_api.h): the blobs end before it (1.75 MB)
 extern CoopLink g_CoopLink;
+// M17: partner k's side of the link (0: CoopLink's partner fields; 1 and 2: more[k - 1])
+#define PARTNER_PRESENCE(k) ((k) ? &g_CoopLink.more[(k) - 1].presence : &g_CoopLink.partner)
+#define PARTNER_AGE(k) ((k) ? g_CoopLink.more[(k) - 1].age : g_CoopLink.partnerAge)
+#define PARTNER_SPRITE_COUNT(k) ((k) ? g_CoopLink.more[(k) - 1].spriteCount : g_CoopLink.partnerSpriteCount)
+#define PARTNER_SPRITES(k) ((k) ? g_CoopLink.more[(k) - 1].sprites : g_CoopLink.partnerSprites)
+#define PARTNER_PRIM_COUNT(k) ((k) ? g_CoopLink.more[(k) - 1].primCount : g_CoopLink.partnerPrimCount)
+#define PARTNER_PRIMS(k) ((k) ? g_CoopLink.more[(k) - 1].prims : g_CoopLink.partnerPrims)
 
 #endif
