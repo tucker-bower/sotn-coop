@@ -8,6 +8,7 @@ Release notes for the versions we've published.
 | `v0.12.0.md` | The beta of 1.0: the whole first castle together. |
 | `v1.1.0.md` | Endings, boss arenas, bat carry and 21:9 fixed; typing with a cursor, one-press updates. |
 | `v1.1.1.md` | Richter's fight fixed (the orb, the portal, pausing); save history, reliable bug reports, a full disk handled. |
+| `v1.2.0.md` | Richter's and Maria's hands like Alucard's, hitboxes in bug reports; the Doppleganger10 crash and warp rooms fixed. |
 | `v1.0.0.md` | 1.0: your own controls, the new character select, settings in pages, choosing the install folder. |
 | `v0.19.0.md` | Widescreen (experimental), a fullscreen that fills the screen, Richter's and Maria's gear. |
 | `v0.18.0.md` | The new launcher, mods, updates, one folder. |
