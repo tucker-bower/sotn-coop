@@ -61,3 +61,23 @@ Everything today assumes one partner: about 1,500 references across `module/`, `
 4. **Bodies: one per partner.** `partner.c`'s single body becomes an array (`Body`): swap regions per body, bank k + 1 for partner k, its own tint, and each partner's weapon swings and familiar from its own copies. Two partners on one character share its partner build, each with its own statics (D214). Tested with three games (`session_three.py`, `--full`): `partner_bodies_three_players`, `partner_bodies_two_richters`, `rules_enemy_hp_three_players`.
 5. **Shared rooms, progression, bosses, respawn** (criteria 1 and 3): the authority streams to each guest, merges take every partner, bosses go for every player, and a fallen player revives at a living partner (D215). Enemy HP scales by the players in the session (D213), not only the room: a player across the castle can arrive at any moment. Tested with three games: `shared_rooms_three_players`, `gold_pooled_three_players`, `castle_flags_rejoin_three_players`, `boss_aggro_three_players`.
 6. **Launcher:** a 4-player lobby, the map's colours, teleport choosing a partner, and couch 2×2 (criterion 4). Then the measurements and caps (criteria 5 and 6).
+
+## Step 6 plan: the app (needs Tucker's approval, 2026-11-18)
+Steps 1–5 make three and four games work together when linked (the tests link them directly). Step 6 lets players do it from the app. Two choices are hard to reverse:
+
+**1. Castle saves for 3–4 players.** Today a castle file holds slot 1 (this machine's player) and slot 2 (whoever plays with them).
+| Option | Idea | Verdict |
+|---|---|---|
+| **A. A slot per player number (recommended)** | Slots 1–4 by player number in the room; every joiner keeps a copy, as today. A returning player loads their own slot; a new one gets a copy of slot 1, as a new partner does now. Old castles read as two slots. | ✅ Everyone resumes as themselves; a format bump, read both ways |
+| B. Two slots, extra players start fresh each time | Players 3 and 4 get slot 1's copy every session | ❌ Their level and gear don't carry over |
+| C. Only the host's castle keeps everyone | Joiners keep nothing | ❌ A joiner can't host the castle later (M11 gives everyone a copy) |
+
+**2. How players 3 and 4 join.**
+| Option | Idea | Verdict |
+|---|---|---|
+| **A. Drop in (recommended)** | The host's room stays open while it plays; anyone with the code joins mid-game and arrives at the host, and anyone who dropped out rejoins the same way (completes #318's Rejoin). The pause menu lists who's in. | ✅ Matches how people play: someone joins late or reconnects |
+| B. A lobby that waits | Everyone joins first; the host starts | ❌ Anyone who drops can't come back until the next session |
+
+**3. Couch with 3–4 controllers** (2×2 panes): after online, as the goal says, once the measurements (criterion 5) show four emulators hold 60 fps on Tucker's PC.
+
+Also for the release: the four-bank cores for Windows and Android (`bootstrap.sh swanstation_win swanstation_android`, `core_check`).
