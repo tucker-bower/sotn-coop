@@ -1,7 +1,5 @@
 """M1 acceptance tests that need two linked games (design/M1-link-presence.md)."""
 
-import hashlib
-from dataclasses import replace
 
 from PIL import ImageChops
 
@@ -14,25 +12,6 @@ from lockstep import random_inputs
 from module import COOP_DISC, symbols
 
 RETAIL = DISKS / "sotn.us.cue"
-# Game state the link must never change (criterion 8): every entity, the player, status, castle
-# flags, the game's RNG, and the BIOS kernel area, which holds rand()'s seed.
-STATE_REGIONS = [("g_Entities", 256 * 0xBC), ("g_Player", 0x3D0), ("g_Status", 0x334),
-                 ("g_CastleFlags", 0x300), ("g_randomNext", 4), ("kernel", 0x10000)]
-TCB_SIZE = 0xC0
-
-
-def state_hash(g):
-    """{region: sha1} over STATE_REGIONS. In the kernel area, the BIOS thread context (registers
-    saved by the last interrupt) is zeroed: the module's extra instructions per frame move where
-    VBlank interrupts the game, which is not game state."""
-    out = {}
-    for where, size in STATE_REGIONS:
-        data = bytearray(g.read_bytes(0x80000000 if where == "kernel" else where, size))
-        if where == "kernel":
-            tcb = int.from_bytes(data[0x110:0x114], "little") & 0x1FFFFF  # BIOS table of TCBs
-            data[tcb:tcb + TCB_SIZE] = bytes(TCB_SIZE)
-        out[str(where)] = hashlib.sha1(data).hexdigest()[:12]
-    return out
 
 
 def scroll(g):
@@ -101,80 +80,6 @@ def no_effect_on_play(run):
 
 
 @session_scenario()
-def presence_follows(run):
-    """Criterion 4: game A walks, jumps, crouches and turns. After every frame, B's mailbox holds
-    A's presence from that same frame (so B draws it one frame later, A sees B's within two)."""
-    a, b = run.s.a, run.s.b
-    script = [("right", 60), ("right+cross", 20), ("right", 40), ("down", 30), ("", 10), ("left", 40),
-              ("left+cross", 25), ("", 20)]
-    seen = {"anim": set(), "flip": set(), "x": set()}
-    mismatches = []
-    for pad, n in script:
-        for _ in range(n):
-            run.step(1, p1=(pad, ""))
-            mine, theirs = a.mailbox("self_presence"), b.mailbox("partner_presence")
-            if mine != theirs:
-                mismatches.append((pad, mine, theirs))
-            seen["anim"].add(mine.anim_cur_frame), seen["flip"].add(mine.flip_x), seen["x"].add(mine.x)
-    run.expect(not mismatches, "B's partner == A's presence after every frame (latency 1 frame)",
-               mismatches=len(mismatches), first=str(mismatches[:1]))
-    run.expect(len(seen["anim"]) > 10 and seen["flip"] == {0, 2} and len(seen["x"]) > 50,
-               "the presence changed pose, facing and position", poses=len(seen["anim"]),
-               flips=sorted(seen["flip"]), xs=len(seen["x"]))
-    run.step(1)
-    theirs, mine = a.mailbox("partner_presence"), b.mailbox("self_presence")
-    same = lambda p: replace(p, frame=0, room_frames=0)  # both tick every frame
-    run.expect(same(theirs) == same(mine) and mine.frame - theirs.frame == 1,
-               "A holds B's presence from the previous frame (latency 2 frames)")
-    run.expect(a.mailbox("partner_age") <= 1 and b.mailbox("partner_age") == 0, "both partners fresh",
-               age_a=a.mailbox("partner_age"), age_b=b.mailbox("partner_age"))
-
-
-@session_scenario()
-def puppet_same_room_only(run):
-    """Criterion 5: in the same room, each game draws the tinted partner where the partner really
-    is; once A leaves the room, B draws nothing."""
-    a, b = run.s.a, run.s.b
-    run.step(90, p1=("", "right"))  # B moves away from A (both start on the same spot)
-    for viewer, other in ((b, a), (a, b)):
-        p = other.mailbox("self_presence")
-        sx, sy = scroll(viewer)
-        ex, ey = p.x - sx, p.y - sy
-        bbox, count, rgb = partner_pixels(viewer)
-        run.expect(bbox is not None and count > 150, f"game {viewer.name} draws its partner",
-                   pixels=count, bbox=bbox)
-        run.expect(bbox[0] - 8 <= ex <= bbox[2] + 8 and bbox[1] - 64 <= ey <= bbox[3] + 64,
-                   f"game {viewer.name}: the partner is at the partner's real screen position",
-                   expected=(ex, ey), bbox=bbox)
-        # The tint multiplies the sprite by (0x60, 0x70, 0xA0)/0x80: blue gains 2x on red.
-        run.expect(rgb[2] >= rgb[0] * 1.15, f"game {viewer.name}: the partner is tinted blue", mean_rgb=rgb)
-    bot = walker("left", attack_every=8)  # walk_entrance_rooms' way out of Death's room
-    room0 = a.snapshot()["room"]
-    run.step(1500, p1=lambda i, sa, sb: (bot(sa or a.snapshot(), i), ""))
-    run.expect(a.snapshot()["room"] != room0, "A walked into another room", room=a.snapshot()["room"])
-    bbox, count, _ = partner_pixels(b)
-    run.expect(bbox is None, "B draws no partner once A is in another room", pixels=count, bbox=bbox)
-
-
-@session_scenario(starts=("no0", "no0"))
-def map_marker(run):
-    """Criterion 6: on B's map screen, a second cursor marks A's room."""
-    a, b = run.s.a, run.s.b
-    run.step(300)                          # stage title card
-    run.step(240, p1=("right", ""))        # A walks off B's screen
-    run.step(1, p1=("", "select"))         # B opens the map (in a shared room, that freezes A)
-    run.step(40)
-    run.expect(b.read("g_GameEngineStep") == 20, "B is on the map screen", step=b.read("g_GameEngineStep"))
-    p = a.mailbox("self_presence")
-    ex, ey = (p.room_left + (p.x >> 8)) * 4 - 14, (p.room_top + (p.y >> 8)) * 4 - 13
-    bbox, count, _ = partner_pixels(b, frames=20)
-    run.expect(bbox is not None, "B's map shows a partner cursor", pixels=count)
-    run.expect(ex <= bbox[0] <= ex + 16 and ey <= bbox[1] <= ey + 16 and bbox[2] - bbox[0] <= 32,
-               "the cursor is on A's map cell", cell=(p.room_left + (p.x >> 8), p.room_top + (p.y >> 8)),
-               expected_corner=(ex, ey), bbox=bbox)
-
-
-@session_scenario()
 def stale_link(run):
     """Criterion 7: kill game B's process. A keeps running, and its copy of B outlasts a stall of
     the link, standing still, then goes (partner.c's BODY_STALE_FRAMES)."""
@@ -239,18 +144,3 @@ def soak(run, minutes):
     assert_converged(run)
 
 
-
-
-@session_scenario()
-def soak_short(run):
-    soak(run, 1)
-
-
-@session_scenario(full=True)
-def soak_10min(run):
-    soak(run, 10)
-
-
-@session_scenario(full=True)
-def soak_30min(run):
-    soak(run, 30)

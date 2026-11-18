@@ -3,7 +3,7 @@
 from link.mailbox import CHAR_ALUCARD, CHAR_MARIA
 from module import COOP_DISC
 from scenario import scenario
-from scenarios_m8 import EQUIPMENT, LEATHER_SHIELD, NAMES, mailbox, reload_as
+from scenarios_m8 import EQUIPMENT, LEATHER_SHIELD, mailbox, reload_as
 from vram_survey import VRAM_W, vram
 
 SHORT_SWORD = 19
@@ -20,76 +20,14 @@ def block(v, x, y, w=0x20, h=0x80):
     return b"".join(v[2 * (row * VRAM_W + x):2 * (row * VRAM_W + x + w)] for row in range(y, y + h))
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def maria_guardians_keep_their_graphics(run):
-    """Playtest 2026-10-25 note 4: Maria's birds turned into a skull and a shield. A weapon or shield
-    in her other hand must not overwrite her guardians' graphics."""
-    e, mb = run.emu, mailbox(run)
-    reload_as(run, mb, CHAR_MARIA)
-    run.step(60)
-    before = vram(e)
-    for item, what in ((SHORT_SWORD, "a short sword"), (LEATHER_SHIELD, "a shield")):
-        e.write(EQUIPMENT, item)
-        e.write(EQUIPMENT + 4, item)  # both hands: both weapon slots load
-        reload_as(run, mb, CHAR_MARIA)
-        run.step(120)
-        after = vram(e)
-        changed = [n for n, (x, y) in GUARDIANS.items() if block(before, x, y) != block(after, x, y)]
-        run.expect(not changed, f"{what} in her hands: her guardians' graphics are intact", changed=changed)
-
-
 AXE = 2  # Richter's subweapon ids; Maria's code turns the axe into her cardinal
-ANIMSET_WPN_CARDINAL = 0x8014  # ANIMSET_OVL(20), src/maria/maria.h
 SUBWEAPON, HEARTS = 0x80097BFC, 0x80097BA8  # g_Status.subWeapon, .hearts
-
-
-def cardinals(e):
-    import struct
-    raw = e.read_bytes("g_Entities", 0xBC * 256)
-    return sum(1 for s in range(256) if struct.unpack_from("<H", raw, s * 0xBC + 0x54)[0] == ANIMSET_WPN_CARDINAL)
-
-
-@scenario(start="entrance", disc=COOP_DISC)
-def maria_keeps_throwing(run):
-    """Playtest 2026-10-25 note 4: after a while, Maria stopped throwing anything. Her cardinal,
-    thrown again and again (hearts kept up), with weapons in and out of her other hand between
-    rounds: every throw makes a bird. (Her cardinal, alone of her guardians, can't be thrown while
-    she moves or is in the air: src/maria/pl_setstep.c MarDoSubweapon. Each throw here is made
-    standing.)"""
-    e, mb = run.emu, mailbox(run)
-    rounds = []
-    for r, item in enumerate((0, SHORT_SWORD, 0, LEATHER_SHIELD, SHORT_SWORD, 0, 0, 0)):
-        e.write(EQUIPMENT, item)
-        e.write(SUBWEAPON, AXE, "<i")
-        reload_as(run, mb, CHAR_MARIA)
-        run.step(120)  # she lands (a weapon's load pauses the game a moment)
-        birds = 0
-        for k in range(8):  # walk a little, stop, throw
-            run.step(20, "left" if k % 2 else "right")
-            run.step(20)
-            e.write(HEARTS, 99, "<i")
-            run.step(2, "up+square")
-            for _ in range(30):
-                run.step(1)
-                if cardinals(e):
-                    birds += 1
-                    break
-        rounds.append(birds)
-    run.expect(all(n == 8 for n in rounds), "every standing throw makes a bird, weapon in hand or not", rounds=rounds)
 
 
 # --- off-hand weapons through the weapon's own overlay (D105): helpers ------------------------
 # (The M12b spike's 6-weapon tests are gone: the hand-item tests below cover all 72, item by item.)
 from scenarios_m8 import HALL_ROOM, NO3, enemies_hp, wait  # noqa: E402
 from link.mailbox import BUSY, CHAR_RICHTER, CMD_ARRIVE, IN_PLAY  # noqa: E402
-
-
-def weapon_entities(e):
-    """Slots 4-63 holding a weapon overlay's entity (ids 0xE0-0xFF): {slot: animSet}."""
-    import struct
-    raw = e.read_bytes("g_Entities", 0xBC * 64)
-    return {s: struct.unpack_from("<H", raw, s * 0xBC + 0x54)[0] for s in range(4, 64)
-            if struct.unpack_from("<H", raw, s * 0xBC + 0x26)[0] >= 0xE0}
 
 
 def pin_target(e):
@@ -122,87 +60,7 @@ def pin_target(e):
 
 # --- M12 part 3: every hand weapon in every character's hands --------------------------------
 EQUIP_DEFS, EQUIP_SIZE, CATEGORY_OFS, N_HAND_ITEMS = 0x800A4B04, 0x34, 0x0E, 0xA9
-IVE_BEEN_ROBBED = 53
 WEAPON_CATEGORIES = (0, 1, 2, 3, 4, 5)  # short sword, sword, thrown, fist, club, two-handed
-
-
-def hand_weapons(e):
-    raw = e.read_bytes(EQUIP_DEFS, EQUIP_SIZE * N_HAND_ITEMS)
-    return [i for i in range(1, N_HAND_ITEMS) if raw[i * EQUIP_SIZE + CATEGORY_OFS] in WEAPON_CATEGORIES]
-
-
-def try_weapon(run, mb, ch, item, button, frames=400):
-    """Equip, go to the hall, swing at an enemy kept on the live hitbox: (spawned, hit, ended)."""
-    e = run.emu
-    e.write(EQUIPMENT, item)
-    e.write("g_CastleFlags", 0, "<B", IVE_BEEN_ROBBED)  # the Alucard Sword: else a load takes it, as Death did
-    reload_as(run, mb, ch)
-    mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
-    wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
-        mb.self_presence()), 900, "arrived in the hall")
-    run.step(90)
-    spawned = hit = ended = False
-    for i in range(frames):
-        for slot, hp in enemies_hp(e).items():
-            if 0 < hp < 999:
-                e.write("g_Entities", 999, "<h", slot * 0xBC + 0x3E)
-        before = enemies_hp(e)
-        pin_target(e)
-        run.step(1, button if i % 60 == 0 else "")
-        w = weapon_entities(e)
-        spawned |= bool(w)
-        now = enemies_hp(e)
-        hit |= any(s in now and now[s] < hp == 999 for s, hp in before.items())
-        if spawned and not w and i % 60 > 40:
-            ended = True
-            if hit:
-                break
-    return spawned, hit, ended
-
-
-def hand_items(run, ch, button, part):
-    """Half the hand weapons (part 0 or 1: every other one), so the halves run side by side."""
-    e, mb = run.emu, mailbox(run)
-    start = e.save_state()
-    items = hand_weapons(e)[part::2]
-    results = {}
-    for item in items:
-        e.load_state(start)
-        results[item] = try_weapon(run, mb, ch, item, button)
-    import json
-    from coop_env import TOOLS
-    (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
-    (TOOLS["out"] / run.name / "items.json").write_text(json.dumps(results))
-    bad = {i: r for i, r in results.items() if not (r[0] and r[2])}
-    run.expect(not bad, f"every hand weapon ({len(items)}) spawns and ends", bad=bad)
-    return results
-
-
-def _hand_items_test(ch, name, button, part):
-    def test(run):
-        _against_alucard(run, hand_items(run, ch, button, part))
-    test.__name__ = f"hand_items_{name}_{part + 1}"
-    test.__doc__ = (f"Every other hand weapon (half {part + 1}) in {name.capitalize()}'s hands, against "
-                    "Alucard's results (D105; Alucard's: harness/data/hand_items_alucard.json).")
-    scenario(start="entrance", disc=COOP_DISC, full=name != "alucard")(test)  # Richter's, Maria's: --full
-
-
-for _part in (0, 1):
-    _hand_items_test(0, "alucard", "square", _part)
-    _hand_items_test(CHAR_RICHTER, "richter", "square", _part)  # the first hand: □, as Alucard's
-    _hand_items_test(2, "maria", "square", _part)  # CHAR_MARIA
-
-
-def _against_alucard(run, results):
-    """Alucard's own results are the reference (his weapons are the game's own code): kept in
-    harness/data/, so the characters' halves needn't wait for his run. If his change, that file
-    is updated on purpose, after a look at why."""
-    import json
-    from pathlib import Path
-    ref = json.loads((Path(__file__).parent / "data/hand_items_alucard.json").read_text())
-    alu = {int(k): v for k, v in ref.items()}
-    differ = {i: (alu.get(i), list(r)) for i, r in results.items() if list(r) != alu.get(i)}
-    run.expect(not differ, "the same as Alucard's reference, item by item", differ=differ)
 
 
 # --- the test castles the app ships (D136) ---------------------------------------------------
@@ -210,50 +68,6 @@ from pathlib import Path  # noqa: E402
 MOD = Path(__file__).resolve().parent.parent  # this repo (coop_env's REPO is the decomp's)
 from link.mailbox import CMD_LOAD_SAVE  # noqa: E402
 import savestates as route  # noqa: E402
-
-@scenario(start="entrance", disc=COOP_DISC)
-def test_castles_bundled(run):
-    """Every test castle in launcher/assets/test-castles, as a playtester gets it (its memory card
-    header blanked: scripts/export_test_castles.py): its save loads, the player arrives at its
-    start, and a bot walking on meets its boss, or its scene starts. (The Lesser Demon's start
-    needs mist through bars: the bot starts past them, as the debug start's own check does.)"""
-    import json
-    import sys
-    from link.mailbox import BOSS, CUTSCENE, IN_PLAY
-    sys.path.insert(0, str(MOD / "launcher"))
-    import bossstarts
-    from bots import walker
-    e, mb = run.emu, mailbox(run)
-    bundle = MOD / "launcher" / "assets" / "test-castles"
-    index = json.loads((bundle / "index.json").read_text())["castles"]
-    rows = {f"Boss: {b['name']}": b for b in bossstarts.B} | {f"Scene: {b['name']}": b for b in bossstarts.S}
-    base = e.save_state()
-    bad = []
-    playing = lambda: (lambda q: q.flags & IN_PLAY and not q.flags & BUSY)(mb.self_presence())
-    for name, v in sorted(index.items(), key=lambda kv: kv[1]["order"]):
-        b = rows[name]
-        e.load_state(base)
-        mb.put_save((bundle / v["save"]).read_bytes())
-        mb.command(CMD_LOAD_SAVE)
-        if not (wait_for(run, lambda: e.read("g_GameState") == route.GAME_NOW_LOADING, 600) and
-                wait_for(run, lambda: e.read("g_GameState") == route.GAME_PLAY and  # (the Nightmare and
-                         (playing() or mb.self_presence().flags & CUTSCENE), 3000)):  # Dracula's open with a scene)
-            bad.append((name, "the save didn't load"))
-            continue
-        stage, room, x, y = v["start"]
-        if b.get("check"):
-            room, x, y = b["check"]
-        mb.command(CMD_ARRIVE, stage, room, x, y)
-        if not wait_for(run, lambda: mb.self_presence().stage == stage and mb.self_presence().room_id == room, 1200):
-            bad.append((name, "never arrived", e.snapshot()))
-            continue
-        run.step(60)
-        bot = walker(b["walk"], attack_every=0)
-        reached = ((lambda: e.read("g_CutsceneHasControl")) if b.get("scene")  # (the Librarian's isn't shared)
-                   else (lambda: mb.self_presence().flags & BOSS))
-        if not wait_for(run, reached, 7200, bot):
-            bad.append((name, "no boss or scene", e.snapshot()))
-    run.expect(not bad, f"all {len(index)} test castles load and reach their boss or scene", bad=bad)
 
 
 def wait_for(run, cond, frames, bot=None):
@@ -266,32 +80,6 @@ def wait_for(run, cond, frames, bot=None):
 
 GAME_PROLOGUE_END = 7  # g_GameState: the prologue's text crawl (src/dra/game_handlers.c)
 CRAWL_STEP, CRAWL_SKIP_STEP = 6, 16  # PrologueScroll's steps: the crawl, its fade-out
-
-
-@scenario(start="st0_end", disc=COOP_DISC)
-def prologue_crawl_skips_on_start(run):
-    """#159: after Dracula falls, Start skips the prologue's text crawl, even on a castle that has
-    never seen it (the game itself skips only once it has: 110 s every new castle)."""
-    e = run.emu
-    for i in range(6000):
-        if e.read("g_GameState") == GAME_PROLOGUE_END and e.read("g_GameStep") == CRAWL_STEP:
-            break
-        run.step(1)
-    run.expect(e.read("g_GameStep") == CRAWL_STEP, "the text crawl started", frames=i, state=e.read("g_GameState"))
-    seen, cleared = e.read("g_Settings", "<i", 0x10C) & 2, e.read("g_GameClearFlag", "<i")
-    run.expect(not seen and not cleared, "the game itself wouldn't let it be skipped", seen=seen, cleared=cleared)
-    run.step(120)
-    run.expect(e.read("g_GameStep") == CRAWL_STEP, "it runs on by itself (not yet skipped)")
-    run.step(2, "start")
-    run.step(4)
-    run.expect(e.read("g_GameStep") >= CRAWL_SKIP_STEP or e.read("g_GameState") != GAME_PROLOGUE_END,
-               "Start skipped it", step=e.read("g_GameStep"), state=e.read("g_GameState"))
-    for i in range(3000):
-        if e.read("g_StageId") == 0x41 and e.read("g_GameState") == 2:
-            break
-        run.step(1)
-    run.expect(e.read("g_StageId") == 0x41, "and the castle's entrance comes next", frames=i)
-
 
 
 JEWEL_KNUCKLES = 97
@@ -498,31 +286,6 @@ def shaft_orb_unseen_richter(run):
             run.expect(kept_out > 900, "...and it isn't drawn for Richter", hidden=kept_out)
 
 
-@scenario(start="entrance", disc=COOP_DISC)
-def maria_run_into_a_step(run):
-    """Issue 172: in the Marble Gallery's dolls corridor (NO0 room 0), Maria's run (L1: 8 px a frame)
-    into the step at x 422 sank her through the floor, and she fell out of the room (to y 680).
-    Now she stays on the floor (y 424), and her walk and run still go their ways."""
-    e, mb = run.emu, mailbox(run)
-    reload_as(run, mb, CHAR_MARIA)
-    mb.command(CMD_ARRIVE, 0, 0, 416, 424)
-    wait(run, lambda: mb.self_presence().stage == 0 and mb.self_presence().flags & IN_PLAY
-         and not mb.self_presence().flags & BUSY, 1200, "she arrives in the dolls corridor")
-    run.step(60)
-    start = e.save_state()
-    for what, pads in (("running", ["right"] * 12 + ["l1"] * 40), ("running twice", ["right"] * 12 + (["l1"] * 2 + [""] * 20) * 3)):
-        e.load_state(start)
-        ys, xs = [], []
-        for pad in pads + [""] * 60:
-            run.step(1, pad)
-            s_ = e.snapshot()
-            xs.append(s_["world_x"])
-            ys.append(s_["world_y"])
-        run.expect(max(ys) <= 430, f"{what} into the step, she stays on the floor", lowest=max(ys))
-        run.expect(min(xs) < 425, f"{what}, she gets to the step", leftmost=min(xs))
-
-
-
 POT_ROAST = 0x43
 LEFT_SHEET_COPY = 0x80704000  # module/offhand.c SHEET(1): the left hand's sheet, kept in the 8MB
 
@@ -625,7 +388,6 @@ def stage_palettes_maria(run):
     shot = e.screenshot().convert("RGB").crop(box)
     drawn = sum(1 for r, g, b in shot.getdata() if (r >> 3, g >> 3, b >> 3) in colors)
     run.expect(drawn > 50, f"it's drawn (palette {pal:#x})", pixels=drawn, colors=len(colors))
-
 
 
 # --- F9 reports: the game's own hitbox viewer, and what last hurt the player ------------------

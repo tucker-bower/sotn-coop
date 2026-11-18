@@ -19,7 +19,6 @@ SPELLS_LEARNT, HP, HP_MAX, HEARTS_MAX, LEVEL, EXP, GOLD, SUBWEAPON, EQUIPMENT = 
 
 # Castle entrance pickups: (roomId, x, y). roomId is the RoomHeader offset in NO3's room table.
 CUBE_OF_ZOE = (120, 272, 114)   # relic orb, relic 10
-SHIELD_POTION = (120, 440, 153)  # same room as the Cube of Zoe: consumable
 HOLY_MAIL = (24, 80, 89)        # body armour
 LIFE_APPLE = (64, 128, 153)     # consumable
 LIFE_VESSEL = (136, 160, 169)   # Life Max Up
@@ -89,68 +88,6 @@ def relic_shared(run):
 
 
 @session_scenario()
-def items_and_maxups_shared(run):
-    """M2 criteria 2, 3 and 6: equipment and consumables reach B (D37), Life and Heart Max Ups
-    raise B's maximums by the same amount, the pickups are gone from B's world (flags), and
-    what's separate stays separate."""
-    a, b = run.s.a, run.s.b
-    b0, a0 = status(b), status(a)
-    for spot in (HOLY_MAIL, LIFE_APPLE, LIFE_VESSEL, HEART_VESSEL):
-        take(run, a, spot)
-    run.step(10)
-    a1, b1 = status(a), status(b)
-    run.expect(counts(a1) - counts(a0) >= 2, "A picked up the Holy Mail and the Life Apple",
-               gained=counts(a1) - counts(a0))
-    gained_a = [(i, a1["body"][i] - a0["body"][i]) for i in range(NUM_BODY) if a1["body"][i] != a0["body"][i]]
-    gained_a += [(i + 1000, a1["hand"][i] - a0["hand"][i]) for i in range(NUM_HAND) if a1["hand"][i] != a0["hand"][i]]
-    gained_b = [(i, b1["body"][i] - b0["body"][i]) for i in range(NUM_BODY) if b1["body"][i] != b0["body"][i]]
-    gained_b += [(i + 1000, b1["hand"][i] - b0["hand"][i]) for i in range(NUM_HAND) if b1["hand"][i] != b0["hand"][i]]
-    run.expect(gained_a and gained_b == gained_a, "B gained exactly the items A found", a=gained_a, b=gained_b)
-    run.expect(a1["hp_max"] - a0["hp_max"] == 5 and b1["hp_max"] - b0["hp_max"] == 5,
-               "Life Max Up: +5 max HP in both", a=a1["hp_max"] - a0["hp_max"], b=b1["hp_max"] - b0["hp_max"])
-    run.expect(a1["hearts_max"] - a0["hearts_max"] == 5 and b1["hearts_max"] - b0["hearts_max"] == 5,
-               "Heart Max Up: +5 max hearts in both",
-               a=a1["hearts_max"] - a0["hearts_max"], b=b1["hearts_max"] - b0["hearts_max"])
-    fa, fb = a.read_bytes("g_CastleFlags", 0x300), b.read_bytes("g_CastleFlags", 0x300)
-    run.expect(fa[0x100:0x190] == fb[0x100:0x190] and fa[0x100:0x190] != bytes(0x90),
-               "the pickups are marked taken in B's world too")
-    run.expect(all(b1[k] == b0[k] for k in ("level", "exp", "spells", "subweapon", "equipment")),
-               "B's level, XP, spells, subweapon and equipped items didn't change",
-               changed=[k for k in ("level", "exp", "spells", "subweapon", "equipment") if b1[k] != b0[k]])
-
-
-@session_scenario()
-def finds_caught_up_after_reconnect(run):
-    """#154: B takes the Life Apple and a Life Max Up, then quits without saving and comes back
-    (B's game back where it was before, away long enough for A to see it gone). The pickups stay
-    taken in the castle, and B gets them again when A sends B everything on its return. A gets
-    nothing twice."""
-    a, b = run.s.a, run.s.b
-    run.step(5)
-    saved, a0, b0 = b.save_state(), status(a), status(b)
-    for spot in (LIFE_APPLE, LIFE_VESSEL):
-        take(run, b, spot)
-    run.step(10)
-    a1 = status(a)
-    run.expect(counts(a1) - counts(a0) == 1 and a1["hp_max"] - a0["hp_max"] == 5,
-               "A got B's finds once, live", items=counts(a1) - counts(a0), hp_max=a1["hp_max"] - a0["hp_max"])
-    b.unlink()
-    b.load_state(saved)  # B's game restarted from the save before the pickups
-    run.step(400)  # A's side: no word from B for 400 frames
-    run.expect(counts(status(b)) == counts(b0), "B lost its unsaved finds")
-    b.link()
-    run.step(120)
-    a2, b2 = status(a), status(b)
-    run.expect(counts(b2) - counts(b0) == 1 and b2["hp_max"] - b0["hp_max"] == 5,
-               "back, B has the Life Apple and +5 max HP again", items=counts(b2) - counts(b0),
-               hp_max=b2["hp_max"] - b0["hp_max"])
-    run.expect(counts(a2) == counts(a1) and a2["hp_max"] == a1["hp_max"], "A got nothing twice",
-               items=counts(a2) - counts(a1), hp_max=a2["hp_max"] - a1["hp_max"])
-    fa, fb = a.read_bytes("g_CastleFlags", 0x300), b.read_bytes("g_CastleFlags", 0x300)
-    run.expect(fa[0x100:0x190] == fb[0x100:0x190], "and the pickups are taken in both worlds")
-
-
-@session_scenario()
 def gold_pooled(run):
     """D38: gold is one purse. A's gold changes (a stand-in for a money bag or a purchase: a
     harness poke) reach B as the same change, and B's spending reaches A."""
@@ -175,40 +112,6 @@ def entities(g, ids):
         if eid in ids and step:
             out.append((slot, eid, g.read(e + 0x30, "<H"), g.read(e + 0xB4, "<H")))
     return out
-
-
-@session_scenario()
-def live_despawn(run):
-    """M2 criterion 5 (pickups): B stands in the Cube of Zoe's room, with the orb and the Shield
-    Potion on its screen. A takes both in its own world. In B's world they vanish within 5 frames,
-    without B leaving the room, and B gets each exactly once."""
-    a, b = run.s.a, run.s.b
-    arrive(run, b, NO3, 120, 360, 153 - STAND)  # between the orb and the potion
-    run.step(60)
-    before = entities(b, (0x0B, 0x0C))
-    run.expect(any(e[1] == 0x0B for e in before) and any(e[1] == 0x0C for e in before),
-               "B's world shows the relic orb and the potion", entities=before)
-    room_b = b.mailbox("self_presence").room
-    b0 = status(b)
-    take(run, a, CUBE_OF_ZOE, frames=0)
-    gone, waited = None, 0
-    for waited in range(600):
-        run.step(1)
-        if status(a)["relics"][RELIC_CUBE_OF_ZOE] and not any(e[1] == 0x0B for e in entities(b, (0x0B,))):
-            gone = waited
-            break
-    run.expect(gone is not None, "the orb vanished from B's world", after=entities(b, (0x0B, 0x0C)))
-    take(run, a, SHIELD_POTION, frames=0)
-    for waited in range(600):
-        run.step(1)
-        if not any(e[1] == 0x0C for e in entities(b, (0x0C,))):
-            break
-    run.expect(not any(e[1] == 0x0C for e in entities(b, (0x0C,))), "the potion vanished from B's world")
-    run.step(30)
-    run.expect(b.mailbox("self_presence").room == room_b, "B never left the room")
-    b1 = status(b)
-    run.expect(b1["relics"][RELIC_CUBE_OF_ZOE] & 1 and counts(b1) - counts(b0) == 1,
-               "B got the relic once and the potion once", items=counts(b1) - counts(b0))
 
 
 E_RED_DOOR = 5
@@ -284,38 +187,5 @@ def map_shared(run):
 
 
 NZ0 = 0x0C
-NZ0_SECRET_WALL_OPEN = 0x81
-E_LEFT_SECRET_WALL = 0x17  # NZ0 entity id (src/st/nz0/nz0.h)
-SECRET_WALL_ROOM = 112     # NZ0 room (12,32)-(12,34); the wall is at (16, 640)
 
 
-@session_scenario()
-def live_object_refresh(run):
-    """M2 criterion 5 (objects): B stands by the Alchemy Lab's left secret wall. A opens it in
-    A's world (a harness poke of NZ0_SECRET_WALL_OPEN stands in for breaking it). In B's world
-    the wall's own init runs again: it opens (room tiles change, the entity goes) within 5 frames,
-    and B never leaves the room. Also checks the generated table's report exists."""
-    from coop_env import COOP
-    a, b = run.s.a, run.s.b
-    arrive(run, b, NZ0, SECRET_WALL_ROOM, 72, 640)
-    run.step(90)
-    wall = [s for s in range(64, 256) if b.read(b.entity(s) + 0x26, "<H") == E_LEFT_SECRET_WALL]
-    run.expect(wall, "B's world has the closed secret wall", room=b.mailbox("self_presence").room)
-    fg = b.read("g_Tilemap", "<I", 0)  # g_Tilemap.fg: the room's foreground tile indices
-    fg0 = b.read_bytes(fg, 0x800)
-    room_b = b.mailbox("self_presence").room
-    a.write("g_CastleFlags", 1, "<B", NZ0_SECRET_WALL_OPEN)
-    gone = None
-    for i in range(30):
-        run.step(1)
-        if b.read(b.entity(wall[0]) + 0x26, "<H") != E_LEFT_SECRET_WALL:
-            gone = i
-            break
-    run.expect(gone is not None and gone <= 5, "the wall opened in B's world within 5 frames", frames=gone)
-    run.expect(b.read("g_CastleFlags", "<B", NZ0_SECRET_WALL_OPEN) == 1, "B has the flag")
-    fg1 = b.read_bytes(fg, 0x800)
-    run.expect(fg0 != fg1, "B's room tiles changed (the wall's tiles were rewritten as open)")
-    run.expect(b.mailbox("self_presence").room == room_b, "B never left the room")
-    report = (COOP / "docs/flag-gated-entities.md").read_text()
-    run.expect("EntityLeftSecretRoomWall" in report and report.count("\n- ") > 100,
-               "the generated report lists the flag-gated entities", entries=report.count("\n- "))

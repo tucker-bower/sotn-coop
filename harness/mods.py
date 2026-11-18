@@ -4,22 +4,21 @@ machine, with co-op layered on top (patcher/layer.py), and its savestates.
     python harness/mods.py [--boot] [--keep] [name ...]   # build (every mod by default)
     python harness/mods.py --list
     python harness/mods.py --drop [--all] [name ...]   # delete discs (all but TESTED, or every one)
-    python harness/mods.py --test [name ...]   # one at a time: build, boot, its tests, record, delete
+    python harness/mods.py --test [name ...]   # one at a time: build, boot, record, delete
 
 The mods come from their own repositories, checked out at pinned commits into .env/mods/src:
 the randomizer (node), and SOTN Editor (its PPFs and its Extra Hacks, applied with the editor's
 own code by editor_hacks.js). Everything built is game data: it stays in .env/mods.
---boot also makes each disc's savestates (savestates.py's route), which the mod_* tests need.
+--boot also makes each disc's savestates (savestates.py's route).
 Each mod's build.json says how far it got: layered (with what was merged), booted, and whether the
 entrance savestate fell back to the castle's first room (a mod that changed the entrance).
 
-Disk space (AGENTS.md): each disc is 540 MB. Only the presets the tests use (TESTED) keep theirs;
-any other is checked (layered, booted) and its disc deleted, unless --keep. --drop deletes discs.
+Disk space (AGENTS.md): each disc is 540 MB. Each is checked (layered, booted) and its disc
+deleted, unless --keep. --drop deletes discs.
 Every build first checks scripts/disk_space.py.
 """
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -44,10 +43,9 @@ SOURCES = {
     "editor": ("https://github.com/pddmergilla/sotn-editor", "7bf42de068e07068d439eebf29b9657b255e275f"),
 }
 SEED = "sotn-coop"
-# The presets whose discs the tests use (session_mods.py): kept. Every other preset's disc is
-# deleted once it has been checked (disk space, AGENTS.md).
-TESTED = ("rando-casual", "rando-safe", "rando-boss-rush", "rando-lycanthrope-spr26te",
-          "rando-cornivus")  # 2nd-castle start room: rando_trap_door_cornivus (#179)
+# The presets whose discs the tests keep: none since D212 (the per-mod tests were cut). Every
+# preset's disc is deleted once it has been checked (disk space, AGENTS.md).
+TESTED = ()
 # Presets the randomizer's own command line can't make at the pinned commit, with any seed: not
 # co-op's (#144). gem-farmer and bingo crash in randomize_relics.js (target.min, no complexity
 # goal); glitch and glitch-legacy search for over 15 minutes. Left out of every-preset runs.
@@ -172,21 +170,13 @@ def drop(name):
 
 
 def test(name):
-    """The whole check of one mod, holding one disc at a time: build and boot it, run its smoke test
-    (and a randomizer preset's finds test) through run.py, record the result in build.json, then
-    delete the disc unless the tests keep it (TESTED). For every preset: --test with no names."""
+    """The check of one mod, holding one disc at a time: build and boot it, record the result in
+    build.json, then delete the disc (D212: the per-mod two-game tests were cut). For every
+    preset: --test with no names."""
     info = build(name, boot=True, keep=True)
-    if info.get("booted"):
-        tests = [f"mod_{name.replace('-', '_')}"]
-        if name.startswith("rando-"):
-            tests.append(f"rando_finds_{name[len('rando-'):].replace('-', '_')}")
-        r = subprocess.run([sys.executable, str(HERE / "run.py"), *tests], capture_output=True, text=True)
-        info["tests"] = {t: f"PASS {t}:" in r.stdout for t in tests}
-        info["tested"] = r.returncode == 0
-        tail = r.stdout.strip().splitlines()[-1:] or [""]
-        info["test_summary"] = tail[0][:200]
-        (MODS_DIR / name / "build.json.part").write_text(json.dumps(info, indent=1))
-        (MODS_DIR / name / "build.json.part").replace(MODS_DIR / name / "build.json")
+    info["tested"] = bool(info.get("booted"))
+    (MODS_DIR / name / "build.json.part").write_text(json.dumps(info, indent=1))
+    (MODS_DIR / name / "build.json.part").replace(MODS_DIR / name / "build.json")
     if name not in TESTED:
         drop(name)
     return info

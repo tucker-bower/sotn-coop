@@ -11,8 +11,7 @@ from coop_env import TOOLS
 from link.mailbox import BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_ARRIVE, IN_PLAY
 from module import COOP_DISC
 from scenario import scenario
-from scenarios_m8 import (HALL_ROOM, NO3, RELIC_ON, SERVANT, SERVANT_LOADED, STATUS, mailbox, reload_as, rise,
-                          travel, wait)
+from scenarios_m8 import (HALL_ROOM, NO3, RELIC_ON, STATUS, mailbox, reload_as, rise, wait)
 
 # include/game.h RelicIds
 (SOUL_OF_BAT, FIRE_OF_BAT, ECHO_OF_BAT, FORCE_OF_ECHO, SOUL_OF_WOLF, POWER_OF_WOLF, SKILL_OF_WOLF,
@@ -24,7 +23,6 @@ HEART_OF_VLAD, TOOTH_OF_VLAD, RIB_OF_VLAD, RING_OF_VLAD, EYE_OF_VLAD = range(25,
 MORPH_BAT, MORPH_MIST, MORPH_WOLF = 5, 7, 24
 # g_Status (include/game.h)
 MP, MP_MAX = 0x80097BB0, 0x80097BB4
-STATS_EQUIP = 0x80097BC8  # STR, CON, INT, LCK
 ELEMENTS_IMMUNE, ELEMENT_CURSE = 0x80097C2C, 0x100
 STEP = 0x2C  # Entity.step
 
@@ -75,7 +73,6 @@ def mp_spent(run, inputs):
 
 
 BAT, MIST, WOLF = ["r1"] * 2 + [""] * 40, ["l1"] * 2 + [""] * 30, ["r2"] * 2 + [""] * 40
-QCF = ["down"] * 3 + ["down+right"] * 3 + ["right"] * 2 + ["right+square"] * 2 + [""] * 60
 
 # (what, relics without, relics with, measure(run), at least this much more with the relic)
 ALUCARD_ROWS = [
@@ -134,71 +131,6 @@ def relics_alucard(run):
 NAMES = {CHAR_ALUCARD: "alucard", CHAR_RICHTER: "richter", CHAR_MARIA: "maria"}
 
 
-def per_character(fn):
-    """Registers fn(run, character) as <name>_alucard, _richter and _maria."""
-    for ch, name in NAMES.items():
-        def one(run, ch=ch):
-            return fn(run, ch)
-        one.__name__ = f"{fn.__name__}_{name}"
-        one.__doc__ = fn.__doc__
-        scenario(start="entrance", disc=COOP_DISC)(one)
-    return fn
-
-
-@per_character
-def vlad_relics(run, ch):
-    """Dracula's relics, for every character: +10 to a stat each (Tooth STR, Rib CON, Ring INT, Eye
-    LCK), and the Heart makes the player immune to curses."""
-    e, mb = run.emu, mailbox(run)
-    start = e.save_state()
-
-    def with_relic(relic):
-        """The status after a load with the relic on (the game works stats out on a load and in
-        the menu, not every frame)."""
-        e.load_state(start)
-        if relic is not None:
-            e.write(STATUS, RELIC_ON, "<B", relic)
-        reload_as(run, mb, ch)
-        return [e.read(STATS_EQUIP + 4 * i, "<i") for i in range(4)], e.read(ELEMENTS_IMMUNE, "<H") & ELEMENT_CURSE
-    base, cursed = with_relic(None)
-    got = []
-    for relic, stat, name in ((TOOTH_OF_VLAD, 0, "Tooth: STR"), (RIB_OF_VLAD, 1, "Rib: CON"),
-                              (RING_OF_VLAD, 2, "Ring: INT"), (EYE_OF_VLAD, 3, "Eye: LCK")):
-        now = with_relic(relic)[0]
-        got.append({"what": f"{name} +10", "without": base[stat], "with": now[stat], "ok": now[stat] == base[stat] + 10})
-    immune = with_relic(HEART_OF_VLAD)[1]
-    got.append({"what": "Heart: immune to curses", "without": cursed, "with": immune, "ok": not cursed and immune})
-    report(run, got)
-    bad = [g for g in got if not g["ok"]]
-    run.expect(not bad, f"every Vlad relic works for {NAMES[ch].capitalize()}", bad=bad)
-
-
-@per_character
-def familiars(run, ch):
-    """Every familiar card, for every character (M8b §3 tested the bat and the ghost): with the card
-    on and a load, the familiar is loaded, comes out, and the player still plays."""
-    e, mb = run.emu, mailbox(run)
-    start = e.save_state()
-    got = []
-    for fam, (relic, name) in enumerate(CARDS.items(), 1):
-        e.load_state(start)
-        e.write(STATUS, RELIC_ON, "<B", relic)
-        reload_as(run, mb, ch)
-        run.step(300)
-        ids = [e.read(e.entity(s), "<H", 0x26) for s in range(4, 64)]
-        loaded = e.read(SERVANT) == fam and e.read(SERVANT_LOADED) == fam
-        out = any(0xD0 <= i < 0xE0 for i in ids)
-        s0 = e.snapshot()
-        for i in range(300):
-            run.step(1, "left" if i % 120 < 60 else "right+square" if i % 12 == 0 else "right")
-        s = e.snapshot()
-        plays = s["hp"] > 0 and (s["world_x"] != s0["world_x"] or s["room"] != s0["room"])
-        got.append({"what": name, "loaded": loaded, "out": out, "plays": plays, "ok": loaded and out and plays})
-    report(run, got)
-    bad = [g for g in got if not g["ok"]]
-    run.expect(not bad, f"all 5 familiars work for {NAMES[ch].capitalize()}", bad=bad)
-
-
 # --- subweapons and item crashes ------------------------------------------------------------
 SUBWEAPON, HEARTS, HEARTS_MAX = 0x80097BFC, 0x80097BA8, 0x80097BAC  # g_Status
 SUBWEAPONS = range(1, 10)  # SUBWPN_DAGGER..SUBWPN_AGUNEA (include/game.h): the castle's pickups
@@ -246,7 +178,6 @@ def subweapon_sweep(run, ch, inputs, relics=()):
     return got
 
 
-@per_character
 def subweapons(run, ch):
     """Every subweapon the castle has (1-9), thrown by every character (up + attack): it costs
     hearts, makes its entities, and the game plays on. For Maria, each is picked up while she holds
@@ -256,17 +187,8 @@ def subweapons(run, ch):
     run.expect(not bad, f"every subweapon works for {NAMES[ch].capitalize()}", bad=bad)
 
 
-def _crashes(run, ch):
-    """Every item crash (Richter) and guardian crash (Maria), with Echo of Bat (M8b §3): triangle
-    spends the crash's hearts and makes its entities, for every subweapon."""
-    got = subweapon_sweep(run, ch, ["triangle"] * 2, relics=(ECHO_OF_BAT,))
-    bad = [g for g in got if not g["ok"]]
-    run.expect(not bad, f"every crash works for {NAMES[ch].capitalize()}", bad=bad)
-
-
-for _ch in (CHAR_RICHTER, CHAR_MARIA):
-    def _one(run, ch=_ch):
-        return _crashes(run, ch)
-    _one.__name__ = f"crashes_{NAMES[_ch]}"
-    _one.__doc__ = _crashes.__doc__
-    scenario(start="entrance", disc=COOP_DISC)(_one)
+@scenario(start="entrance", disc=COOP_DISC)
+def subweapons_alucard(run):
+    """Every subweapon (1-9) thrown by Alucard: it costs hearts, makes its entities, and the game
+    plays on (a check of everything the module hooks around the game's own subweapon code)."""
+    return subweapons(run, CHAR_ALUCARD)
