@@ -8,9 +8,8 @@ games' enemy table first, so that half of it is told apart from all of it."""
 from session import session_scenario  # first: puts `link` on the path
 
 from bots import walker
-from link.mailbox import CHAR_ALUCARD, CHAR_RICHTER
 from module import stage_symbol
-from session_progress import EXP, LEVEL, STATUS, status
+from session_progress import EXP, STATUS, status
 from session_shared import HALL, stage_entities
 
 ENEMY_DEF_SIZE, DEF_LEVEL, DEF_EXP = 0x28, 0x16, 0x18  # EnemyDef (include/game.h)
@@ -56,24 +55,6 @@ def fight_until_xp(run, frames=1200):
         if status(a)["exp"] != before:
             return before, status(a)["exp"]
     return before, before
-
-
-@session_scenario()
-def shared_xp(run):
-    """M11 criterion 2: A's kill gives A half the XP (a partner is linked), and B gains exactly
-    what A gained. Then, from just short of the next level, A's kill levels up both games."""
-    shared_xp(run)
-
-
-@session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER))
-def shared_xp_richter(run):
-    """M11 risk: a Richter partner levels up from Alucard's kills too (character.c's Growth:
-    only Alucard's own code checks EXP)."""
-    from session_m8 import reload_game
-    run.expect(reload_game(run, run.s.b), "B loads as Richter")
-    run.expect(run.s.b.mailbox("self_presence").character == CHAR_RICHTER, "B plays Richter",
-               b=run.s.b.mailbox("self_presence").character)
-    shared_xp(run)
 
 
 def shared_xp(run):
@@ -157,37 +138,6 @@ def until(s0, s1, cond, frames):
     return False
 
 
-def coffin_save(s0, s1, saver, path_ok):
-    """The saver walks into the Alchemy Lab's coffin and saves; returns when path_ok()."""
-    saver.local.mailbox("command", 1, NZ0, SAVE_ROOM, *COFFIN)
-
-    def there():
-        p = saver.local.mailbox("self_presence")
-        return p.stage == NZ0 and p.room_id == SAVE_ROOM and p.flags & IN_PLAY and not p.flags & BUSY
-    until(s0, s1, there, 300)
-    step_pair(s0, s1, 60)
-    if saver is s0:
-        step_pair(s0, s1, 2, p0="up")
-    else:
-        step_pair(s0, s1, 2, p1="up")
-    return until(s0, s1, path_ok, 900)
-
-
-def joiner_copy(run, s0, s1, pc_folder):
-    """What the launcher does when the lobby connects (app.join_online): the copy of the
-    host's castle, from its HELO."""
-    from archive import Castle
-    from test_castles import pc
-    run.expect(until(s0, s1, lambda: (s1.local.host("status").get("partner_hello") or {}).get("castle"), 240),
-               "the host's HELO names its castle")
-    meta = s1.local.host("status")["partner_hello"]["castle"]
-    with pc(pc_folder):
-        copy = Castle.receive(meta)
-    s1.joint.path = copy.joint_save
-    s1.joint.on_write = lambda blobs: copy.saved(blobs, theirs=True)
-    return copy
-
-
 @session_scenario()
 def castle_solo_play(run):
     """M11 criterion 1: a solo game (no partner) has 1x boss HP and full kill XP, and its save
@@ -241,155 +191,3 @@ def castle_solo_play(run):
                    "solo: the coffin saves slot 1 of the castle, with no partner to wait for")
 
 
-@session_scenario()
-def castle_joint_save_copies(run):
-    """M11 criteria 3 and 4: A hosts castle X and B joins; their joint save leaves B with a copy
-    of X (A's id and name, B in slot 1). Then B hosts its copy and C joins: B loads its own
-    slot, C gets slot 2 (the last partner's), and C has a copy too. A's X is untouched."""
-    from archive import Castle
-    from test_castles import pc
-    pa, pb, pcc = data("A"), data("B"), data("C")
-    with pc(pa):
-        x = Castle.new()
-    with online("nz0", 0, x) as s0, online("entrance", 1) as s1:
-        s0.joint.on_write = x.saved
-        s0.local.host("set_castle", x.meta())
-        link(s0, s1)
-        copy = joiner_copy(run, s0, s1, pb)
-        ok = coffin_save(s0, s1, s0, lambda: x.joint_save.exists() and copy.joint_save.exists())
-        run.expect(ok, "the joint save reached both PCs")
-    xa, xb = read_session(x.joint_save), read_session(copy.joint_save)
-    run.expect(xb == xa[::-1], "B's copy: the same two saves, B in slot 1")
-    with pc(pb):
-        copy = Castle(copy.dir)
-    run.expect(copy.info["id"] == x.info["id"] and copy.info["received"], "B's copy has X's id")
-    with pc(pa):
-        x = Castle(x.dir)
-    run.expect(x.info.get("name") and copy.name == x.name, "and X's name", a=x.name, b=copy.name)
-    a_file = x.joint_save.read_bytes()
-
-    # B hosts its copy; C joins
-    with pc(pb):
-        copy.played_here()
-    with online("entrance", 0, copy) as s0, online("entrance", 1) as s2:
-        s0.local.host("set_castle", copy.meta())
-        link(s0, s2)
-        c_copy = joiner_copy(run, s0, s2, pcc)
-        step_pair(s0, s2, 30)
-        s0.joint.resume()
-        run.expect(until(s0, s2, lambda: c_copy.joint_save.exists(), 300), "B continues its copy: C receives it")
-        step_pair(s0, s2, 600)
-        pb_now, pc_now = s0.local.mailbox("self_presence"), s2.local.mailbox("self_presence")
-    xc = read_session(c_copy.joint_save)
-    run.expect(xc[0] == xb[1] and xc[1] == xb[0], "C plays slot 2 (A's state, the last partner), B its own slot 1")
-    run.expect(pb_now.stage == pc_now.stage == NZ0, "both play on from the save room", b=pb_now.stage, c=pc_now.stage)
-    run.expect(c_copy.info["id"] == x.info["id"], "C's copy has X's id too")
-    run.expect(x.joint_save.read_bytes() == a_file, "A's X is untouched")
-
-
-@session_scenario()
-def castle_takes_a_second_player(run):
-    """M11 criterion 6: a castle only ever played solo (one slot) takes a partner: slot 2 starts
-    as a copy of slot 1, in the same save room, at the same level."""
-    from archive import Castle
-    from link.jointsave import save_fields
-    from test_castles import pc
-    pa, pb = data("A"), data("B")
-    with pc(pa):
-        y = Castle.new()
-    # A solo save: the host's own game saves in the coffin with no partner linked
-    with online("nz0", 0, y) as s0, online("entrance", 1) as s1:
-        ok = coffin_save(s0, s1, s0, lambda: y.joint_save.exists())
-    run.expect(ok and len(read_session(y.joint_save)) == 1, "a solo save: one slot")
-    solo = read_session(y.joint_save)[0]
-    with online("entrance", 0, y) as s0, online("entrance", 1) as s1:
-        s0.local.host("set_castle", y.meta())
-        link(s0, s1)
-        copy = joiner_copy(run, s0, s1, pb)
-        step_pair(s0, s1, 30)
-        s0.joint.resume()
-        run.expect(until(s0, s1, lambda: copy.joint_save.exists(), 300), "the partner received the castle")
-        step_pair(s0, s1, 600)
-        p0, p1 = s0.local.mailbox("self_presence"), s1.local.mailbox("self_presence")
-    got = read_session(copy.joint_save)
-    run.expect(got[0] == solo and save_room(got[0]) == save_room(solo), "slot 2 is a copy of slot 1, in its save room")
-    run.expect(save_fields(got[0])[2] == save_fields(solo)[2], "at the same level")
-    run.expect(p0.stage == p1.stage == NZ0 and p0.room_id == p1.room_id, "both start in the save room",
-               a=(p0.stage, p0.room_id), b=(p1.stage, p1.room_id))
-
-
-@session_scenario()
-def test_castle_hosted(run):
-    """Test castles (Tucker, 2026-10-28): hosting a fresh copy of one, both players load its save,
-    then arrive at its start (not the save's room); its first joint save ends that."""
-    from archive import Castle
-    from test_castles import pc
-    pa, pb = data("A"), data("B")
-    with pc(pa):
-        x = Castle.new()
-    with online("nz0", 0, x) as s0, online("entrance", 1) as s1:
-        link(s0, s1)
-        run.expect(coffin_save(s0, s1, s0, lambda: x.joint_save.exists()), "a joint save to make the test castle from")
-    shaft = 176
-    start = (NZ0, shaft, 104, 36)  # the lab's elevator shaft (a debug start), away from the save room
-    with pc(pa):
-        t = Castle.make_test("Scene: Test", read_session(x.joint_save)[0], start, 0, "a test")
-        run.expect([c.info["name"] for c in Castle.tests()] == ["Scene: Test"] and
-                   not any(c.info.get("test") for c in Castle.all()), "it's listed with the test castles only")
-        c = t.fresh_copy()
-    run.expect(c.info["start"] == list(start) and c.dir != t.dir and not c.info.get("test"),
-               "playing it plays a fresh copy, with its start")
-
-    def at(s):
-        p = s.local.mailbox("self_presence")
-        return p.stage == NZ0 and p.room_id == shaft and p.flags & IN_PLAY and not p.flags & BUSY
-    with online("entrance", 0, c) as s0, online("entrance", 1) as s1:
-        s0.local.host("set_castle", c.meta())
-        s0.joint.on_write = c.saved
-        link(s0, s1)
-        joiner_copy(run, s0, s1, pb)
-        step_pair(s0, s1, 30)
-        s0.joint.start = c.info["start"]  # as app.continue_castle does
-        s0.joint.resume()
-        run.expect(until(s0, s1, lambda: at(s0) and at(s1), 1500), "both arrive at the test castle's start",
-                   a=s0.local.mailbox("self_presence").room_id, b=s1.local.mailbox("self_presence").room_id)
-        ok = coffin_save(s0, s1, s0, lambda: s0.joint.saves > 0)
-        run.expect(ok and s0.joint.start is None and "start" not in Castle(c.dir).info,
-                   "its first save ends the start: it goes on from the save")
-
-
-@session_scenario(starts=(None, None))
-def castle_continue_keeps_character(run):
-    """0.16.0: Continue on a solo or online castle played Alucard, whoever was picked. The
-    launcher's way (app.continue_castle): title screen, set_player, then the joint save's load
-    in the same breath; the load must see the picked character."""
-    from coop_env import TOOLS
-    from link.jointsave import write_session
-    starts = TOOLS["out"].parent / "fixtures" / "debug-starts"
-    save = (starts / "Scene - The Librarian.save").read_bytes()
-    for character, name in ((1, "Richter"), (2, "Maria")):
-        path = data(f"continue-{name}") / "session.coop"
-        write_session(path, [save])
-        blob = None
-        if character == 2:
-            from module import maria_blob
-            blob = maria_blob()
-        with OnlineSession(COOP_DISC, start=None, rank=0, bind_host="127.0.0.1", joint=True,
-                           session_file=path, blob=blob) as s:
-            g = s.local
-            for _ in range(9000):
-                s.step(1)
-                if g.read("g_GameState") == 1:
-                    break
-            run.expect(g.read("g_GameState") == 1, f"{name}: the title screen")
-            g.host("set_player", character=character, blob=blob)
-            s.joint.resume()
-            for i in range(3000):
-                s.step(1)
-                p = g.mailbox("self_presence")
-                if p.flags & IN_PLAY and not p.flags & BUSY:
-                    break
-            s.step(60)
-            got = g.read(0x80280020, "<i")  # g_CoopCharacter: PLAYER_ALUCARD 0, PLAYER_RICHTER 1
-            run.expect(p.flags & IN_PLAY and got == 1, f"continued as {name}, not Alucard",
-                       g_CoopCharacter=got, frames=i)

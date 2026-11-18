@@ -447,84 +447,6 @@ def game_state(d):
     return v.games[0].read("g_GameState") if v else None
 
 
-def _solo(pg):
-    """M11 criterion 1, from the launcher: Home > Solo plays a new castle at once (no castles
-    yet); back on Home, Solo lists it."""
-    A = pg.CONTROLLER_BUTTON_A
-    in_game = lambda d: d.heading == "Game"
-
-    def castles():
-        from archive import Castle
-        return Castle.all()
-    return [
-        *first_run(pg),
-        ("count_inputs",),
-        ("screen", "Home"), ("shot", "home"), ("key", pg.K_RETURN),  # Solo: the first item
-        ("screen", "Solo"), ("key", pg.K_RETURN),  # New castle (no castles yet: no Continue)
-        ("screen", "Name your castle"), ("pad", 0, A),
-        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", in_game), ("expect", lambda d: d.inputs <= 5, "home to playing solo in 5 inputs (4, plus New castle now the test castles ship: D136)"),
-        ("expect", lambda d: len(castles()) == 1, "a new castle"),
-        # Issue 149: unnamed, the scripted start stops at the game's name entry for the player (D126)
-        ("until", lambda d: d.launcher.view and not d.launcher.view.script and game_state(d) == 8),
-        ("shot", "name-entry"), ("wait", 60),
-        ("expect", lambda d: game_state(d) == 8, "an unnamed castle waits at the game's name entry"),
-        ("hold", 0, "cross"), ("wait", 4), ("hold", 0, ""), ("wait", 30),
-        ("hold", 0, "start"), ("wait", 4), ("hold", 0, ""),
-        ("until", lambda d: game_state(d) not in (8, None)),
-        ("expect", lambda d: game_state(d) != 8, "the player's own name entry starts the game"),
-        ("game_frames", 900), ("shot", "solo-game"),
-        ("expect", lambda d: d.launcher.display._bar_key[0][0].startswith("Solo"), "the status bar says Solo, no partner"),
-        ("game_frames", 3000), ("shot", "solo-game-later"),
-        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("shot", "castle-menu"),  # Continue is first now
-        ("expect", lambda d: len(castles()) == 1 and castles()[0].info.get("played"), "the castle played is the one Continue loads"),
-        ("key", pg.K_DOWN), ("key", pg.K_DOWN), ("key", pg.K_RETURN), ("screen", "Load castle"), ("shot", "castle-list"),
-        # #278 and the playtest of 2026-11-14: H opens the castle's save history; its Quit moment plays solo
-        ("expect", lambda d: castles()[0].savestate_pairs(), "quitting kept a moment"),
-        ("key", pg.K_h), ("screen", "Save history"), ("shot", "save-history"), ("key", pg.K_RETURN),
-        ("screen", "Play from here"), ("shot", "who-plays"), ("key", pg.K_RETURN),  # Solo: the first
-        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", in_game), ("until", lambda d: d.launcher.view and d.launcher.view.frame >= 900),  # (game_frames counts every session's)
-        ("shot", "solo-from-a-moment"),
-        ("expect", lambda d: len(d.launcher.view.games) == 1 and d.launcher.display._bar_key[0][0].startswith("Solo"),
-         "a moment plays solo: one game, and the status bar says Solo"),
-        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        ("screen", "Load castle"),  # back where save history was opened
-        ("key", pg.K_ESCAPE), ("screen", "Solo"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
-    ]
-
-
-def _test_castles(pg):
-    """Test castles (D127), with COOP_DATA holding a castle and the test castles: Solo > Test castles >
-    the first (Slogra & Gaibon) plays a fresh copy, and the game arrives at its start."""
-    A = pg.CONTROLLER_BUTTON_A
-
-    def at_start(d):
-        from archive import Castle
-        played = [c for c in Castle.all() if c.info.get("start")]
-        g = d.view.games[0] if d.view and d.view.games else None
-        if not played or g is None:
-            return False
-        p, want = g.mailbox("self_presence"), played[0].info["start"]
-        return [p.stage, p.room_id] == want[:2] and abs(p.x - want[2]) < 16  # the save alone: x 128
-    return [
-        *first_run(pg),
-        ("screen", "Home"), ("key", pg.K_RETURN),
-        ("screen", "Solo"), ("shot", "castle-menu"), ("key", pg.K_UP), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Test castles: before Back
-        ("screen", "Test castles"), ("shot", "test-castles"), ("key", pg.K_RETURN),
-        ("screen", "Press a button"), ("pad", 0, A), ("pad", 0, A),
-        ("until", lambda d: d.heading == "Game"),
-        ("until", lambda d: at_start(d) or d.waited > 20000),
-        ("call", lambda d: setattr(d, "arrived", d.view.frame)),  # then past the room's fade in
-        ("until", lambda d: d.view.frame > d.arrived + 150 or d.waited > 20000), ("shot", "at-the-boss"),
-        ("expect", at_start, "the fresh copy plays from its start, outside Slogra & Gaibon"),
-        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
-    ]
-
-
 def _boss_rush(pg):
     """Boss rush (docs/design/boss-rush.md): Home > Solo > Boss rush starts at the first boss's
     door, the status bar counting it (1/22)."""
@@ -595,79 +517,6 @@ def _startup(pg):
         ("expect", lambda d: d.startup["title_s"] <= 20.0, "the title within 20 s"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
-    ]
-
-
-def _unzip(b64):
-    import base64
-    import io
-    import zipfile
-    with zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))) as z:
-        return {n: z.read(n) for n in z.namelist()}
-
-
-def _report_send(pg):
-    """F9, a note, Send: the report reaches the mail service (a fake one here), with the note."""
-    import http.server
-    import threading
-    import report
-    got = []
-    zipped = {}
-
-    class Mail(http.server.BaseHTTPRequestHandler):
-        def do_POST(self):
-            got.append((self.headers["Authorization"], json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
-            self.send_response(200)
-            self.end_headers()
-
-        def log_message(self, *a):
-            pass
-
-    def start(d):
-        mail = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Mail)
-        threading.Thread(target=mail.serve_forever, daemon=True).start()
-        report.SEND_URL = f"http://127.0.0.1:{mail.server_port}/emails"
-        report.KEY_FILE = Path(os.environ["COOP_DATA"]) / "report_key.txt"
-        report.KEY_FILE.write_text("test-key\n")
-    steps = _solo(pg)
-    i = next(k for k, s in enumerate(steps) if s[0] == "game_frames")
-    return steps[:i] + [
-        ("call", start), ("game_frames", 300), ("key", pg.K_F9), ("wait", 30), ("type", "stuck in a wall"),
-        ("wait", 10), ("key", pg.K_RETURN), ("wait", 30), ("shot", "send-report"), ("key", pg.K_RETURN),
-        ("until", lambda d: got), ("wait", 30), ("shot", "report-sent"),
-        ("expect", lambda d: got[0][0] == "Bearer test-key", "the key goes with it"),
-        ("expect", lambda d: got[0][1]["to"] == [report.REPORT_EMAIL], "it goes to the reports address"),
-        ("expect", lambda d: got[0][1]["text"] == "stuck in a wall", "the note goes with it"),
-        ("expect", lambda d: len(got[0][1]["attachments"][0]["content"]) > 1000, "the zip goes with it"),
-        ("call", lambda d: zipped.update(_unzip(got[0][1]["attachments"][0]["content"]))),
-        ("expect", lambda d: "now/A-hitboxes.png" in zipped, "it holds the screen with the hitboxes on"),
-        ("expect", lambda d: "last_hit" in json.loads(zipped["about.json"]), "and what last hurt the player"),
-        ("expect", lambda d: (d.view.games[0].read(report.DEBUG_ENABLED), d.view.games[0].read(report.HITBOX_MODE))
-         == (0, 0), "the hitbox viewer is off again"),
-        ("call", lambda d: (d.out / "report-hitboxes.png").write_bytes(zipped["now/A-hitboxes.png"])),
-        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-    ]
-
-
-def _crash(pg):
-    """Issue 113: a game crashes in play (its vector overwritten). The report is saved with the
-    states from before, the crash window is asked for, and the app goes back to its menu."""
-    import zipfile
-    import report
-    opened = []
-
-    def crash(d):
-        d.view.open_crash_window = opened.append
-        d.view.games[0].write(0x80000080, 0x12345678)
-    steps = _solo(pg)
-    i = next(k for k, s in enumerate(steps) if s[0] == "game_frames")
-    return steps[:i] + [
-        ("game_frames", 300), ("call", crash), ("until", lambda d: opened), ("wait", 30), ("shot", "crashed"),
-        ("expect", lambda d: opened[0].parent == report.reports_dir(), "the report is saved before anything is asked"),
-        ("expect", lambda d: any(n.startswith("before") for n in zipfile.ZipFile(opened[0]).namelist()),
-         "it holds states from before the crash"),
-        ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),
     ]
 
 
@@ -890,47 +739,6 @@ def _perf(pg):
     return steps
 
 
-def _characters(pg):
-    """Discs & mods, the PSP slot: a European PSP disc refused in plain words, the PlayStation disc
-    put in its own slot, a text file refused, then the DXC disc adds Maria (design/M8 criterion 5). Then Maria (player 1) and Richter (player 2) start a game."""
-    import test_characters
-    A, L, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_LEFT, pg.CONTROLLER_BUTTON_DPAD_RIGHT
-    tmp = Path(tempfile.mkdtemp(prefix="coop-ux-files-"))
-    junk = tmp / "notes.txt"
-    junk.write_bytes(b"hello" * 2000)
-    wrong = [(test_characters.fake_psp_iso(tmp / "Castlevania DXC (Europe).iso", "ULES-00841"), "ULUS-10277", "eu"),
-             (ROOT / "disks" / "sotn.us.cue", "PlayStation disc", "ps1"),  # the one attached: said, not made again
-             (junk, "isn't a disc image", "junk")]
-
-    def pick(path):
-        return ("call", lambda d: os.environ.__setitem__("COOP_PICK_FILE", str(path)))
-    steps = [*first_run(pg),
-             ("screen", "Home"), *[("key", pg.K_DOWN)] * 3, ("key", pg.K_RETURN),  # Discs & mods
-             ("screen", "Discs"), ("shot", "discs"),
-             ("expect", lambda d: not d.launcher.maria_ready(), "no Maria before her disc"),
-             ("key", pg.K_RIGHT)]  # the PSP disc's slot
-    for path, words, name in wrong:
-        steps += [pick(path), ("key", pg.K_RETURN),
-                  ("until", lambda d, w=words: d.heading == "Discs" and w in d.subtitle), ("shot", f"dxc-wrong-{name}"),
-                  ("expect", lambda d, w=words: w in d.subtitle, f"{name}: it says {words!r}")]
-    steps += [pick(ROOT / "disks" / "sotn.pspus.iso"), ("key", pg.K_RETURN),
-              ("until", lambda d: d.heading == "Discs" and "unlocked" in d.subtitle), ("shot", "maria-ready"),
-              ("expect", lambda d: d.launcher.maria_ready(), "Maria is made"),
-              ("key", pg.K_ESCAPE), ("screen", "Home"),
-              ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
-              ("screen", "Couch co-op"), ("key", pg.K_RETURN),  # New castle (D136)
-              ("screen", "Name your castle"), ("pad", 0, A),  # empty: named at the game's name entry (D126)
-              ("screen", "Press a button"),
-              ("pad", 0, A), ("pad", 0, L), ("wait", 3), ("shot", "lobby-maria"), ("pad", 0, A),
-              ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
-              ("until", lambda d: d.heading == "Game"),
-              ("expect", lambda d: d.launcher.characters == [2, 1], "player 1 plays Maria (PSP), player 2 Richter"),
-              ("game_frames", 600), ("shot", "maria-and-richter"),
-              ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Save and go back
-              ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
-    return steps
-
-
 def hud_check(name):
     """Both games' pictures, top rows included (each HUD), are on screen as drawn: the window's
     client area (Windows: PrintWindow, under the menu bar) matches what we rendered, at the size
@@ -1008,33 +816,6 @@ def _hud(pg):
               ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
               ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
     return steps
-
-
-def _debug_start_characters(pg):
-    """Playtest 2026-11-14: a boss's debug start, on the couch with player 2 as Richter, plays
-    Richter in game B (it loaded as Alucard: a savestate holds whoever made it), at the boss's door."""
-    A, R = pg.CONTROLLER_BUTTON_A, pg.CONTROLLER_BUTTON_DPAD_RIGHT
-    view = lambda d: d.launcher.view
-    return [*first_run(pg),
-            ("screen", "Home"), ("menu", "debug_starts"),
-            ("until", lambda d: d.heading == "Debug starts"),
-            ("call", make_starts),
-            ("until", lambda d: d.heading == "Debug starts" and d.subtitle.startswith("Solo or couch")),
-            ("key", pg.K_RETURN), ("screen", "Bosses"), ("key", pg.K_RETURN),  # the first boss
-            ("until", lambda d: d.heading not in ("Bosses", "Debug starts")), ("shot", "who-plays"),
-            ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Couch co-op
-            ("screen", "Press a button"),
-            ("pad", 0, A), ("pad", 0, A), ("pad", 101, A), ("pad", 101, R), ("wait", 3), ("pad", 101, A),
-            ("until", lambda d: d.heading == "Game"),
-            ("expect", lambda d: d.launcher.characters == [0, 1], "player 1 Alucard, player 2 Richter"),
-            ("until", lambda d: view(d) and view(d).frame >= 600 and
-             view(d).games[1].mailbox("self_presence").flags & 1),  # B in play, after the save's load
-            ("until", lambda d: view(d).frame >= 1500), ("shot", "at-the-boss"),
-            ("expect", lambda d: view(d).games[1].mailbox("self_presence").character == 1, "game B plays Richter"),
-            ("expect", lambda d: view(d).games[0].mailbox("self_presence").stage == view(d).games[1].mailbox("self_presence").stage != 0,
-             "both at the start's stage"),
-            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
-            ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
 def _randomizer(pg):
@@ -1121,7 +902,7 @@ def _randomizer(pg):
         ("screen", "Home"), ("call", forget_disc), ("key", pg.K_UP), ("key", pg.K_RETURN)]
 
 
-SCRIPTS = {"debug_start_characters": _debug_start_characters, "randomizer": _randomizer, "report_send": _report_send, "crash": _crash, "couch": _couch, "solo": _solo, "test_castles": _test_castles, "boss_rush": _boss_rush, "startup": _startup, "characters": _characters, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
+SCRIPTS = {"randomizer": _randomizer, "couch": _couch, "boss_rush": _boss_rush, "startup": _startup, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
            "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
 

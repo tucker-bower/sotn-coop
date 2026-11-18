@@ -1,7 +1,7 @@
 """M15 (design/M15-pvp.md): PvP, the host's option. The victim's game decides each hit from the
 attacker's hitboxes (module/pvp.c, D132); its player's own damage code does the rest."""
 
-from link.mailbox import BOSS, BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CONTROL_PVP, DEAD, IN_PLAY, OPT_PARTNER_SIM
+from link.mailbox import BUSY, CHAR_ALUCARD, CONTROL_PVP, DEAD, IN_PLAY, OPT_PARTNER_SIM
 from module import symbols
 from session import session_scenario
 from session_progress import status
@@ -90,132 +90,12 @@ def expect_hit(run, r, what, away=1):
 GALLERY = (0x00, 80, 680, 150)  # NO0, "next to Maria" (debugstarts): flat from x 417 to 693 (her scene is to the right)
 
 
-def setup_wide(run, gap, options=0):
-    """setup() for throws that need more floor than the entrance's: both in the Marble Gallery,
-    B walks left until it's `gap` px from A, A faces it (left)."""
-    from session_progress import arrive
-    a, b = run.s.a, run.s.b
-    load_characters(run)
-    for g in (a, b):
-        g.mailbox("set_control", CONTROL_PVP)
-        g.host("set_player", options=OPT_PARTNER_SIM | (options if g is a else 0))
-        arrive(run, g, *GALLERY)
-    run.step(200)  # spawn protection
-    for _ in range(240):
-        if a.snapshot()["world_x"] - b.snapshot()["world_x"] >= gap:
-            break
-        run.step(1, p1=("", "left"))
-    run.step(10)
-    run.expect(abs(a.snapshot()["world_y"] - b.snapshot()["world_y"]) <= 2, "A and B stand on the same ground",
-               a=(a.snapshot()["world_x"], a.snapshot()["world_y"]), b=(b.snapshot()["world_x"], b.snapshot()["world_y"]))
-    run.step(1, p1=("left", ""))  # A faces B
-    run.step(10)
-
-
-def _hand(run):
-    """Criteria 1-2, a hand attack (weapon, fist, whip): A swings at B (in the Marble Gallery: the
-    entrance's floor is too short once Richter's or Maria's load has moved them). B is hit by its own damage code (its HP drops,
-    by less than the attack: its defence), staggers (its hit step) and is knocked away from A;
-    A's copy of B shows the hit too."""
-    a, b = run.s.a, run.s.b
-    setup_wide(run, 24)
-    body0 = a.read(symbols()["g_CoopBodyHits"])
-    r = attack(run, "left+square")
-    run.expect(r["hits"] > 0, "B's game took A's swing", **r)
-    run.expect(r["hp"] > 0, "B lost HP", **r)
-    run.expect(STEP_HIT in r["steps"], "B staggered (its hit step)", **r)
-    run.expect(r["moved"] < 0, "B was knocked away from A (left)", **r)
-    run.expect(r["a_body_hits"] > body0, "A's copy of B was hit too", **r)
-
-
-NAMES = ("alucard", "richter", "maria")  # CHAR_*
-# The everyday suite's pairings (each character attacking and attacked, each attack kind once);
-# the rest of the matrix: --full.
-EVERYDAY = {("hand", 0, 1), ("hand", 1, 2), ("hand", 2, 0), ("dagger", 0, 2), ("spell", 0, 1),
-            ("guardian", 2, 1), ("crash", 1, 0)}
-
-
-def _pair_test(kind, fn, ca, cb):
-    """pvp_<kind>_<A's character>_vs_<B's>: A (ca) attacks B (cb)."""
-    def test(run):
-        fn(run)
-    test.__name__ = f"pvp_{kind}_{NAMES[ca]}_vs_{NAMES[cb]}"
-    test.__doc__ = fn.__doc__
-    session_scenario(starts=("entrance", "entrance"), characters=(ca, cb),
-                     full=(kind, ca, cb) not in EVERYDAY)(test)
-
-
 @session_scenario(starts=("entrance", "entrance"))
 def pvp_off(run):
     """Criterion 3: PvP off (the default), the same swings do nothing."""
     setup(run, pvp=False)
     r = attack(run, "right+square")
     run.expect(r["hits"] == 0 and r["hp"] == 0, "no PvP hit, no HP lost", **r)
-
-
-def _subweapon(run):
-    """Criterion 1, a subweapon: A throws the dagger at B, out of a swing's reach (44 px)."""
-    setup_wide(run, 44)
-
-    def arm(a):
-        a.write(SUBWEAPON, 1, "<i")  # the dagger
-        a.write(HEARTS, 50, "<i")
-    expect_hit(run, attack(run, "up+square", frames=120, every=40, arm=arm), "A's dagger", away=-1)
-
-
-def _spell(run):
-    """Criterion 1, a spell: A (Alucard) casts Hellfire (the right-stick shortcut) at B, 44 px away."""
-    from link.mailbox import OPT_SHORTCUTS, SPELLS, spell_options
-    from scenarios_m8 import MP, MP_MAX, SPELLS_LEARNT
-    setup_wide(run, 44, options=OPT_SHORTCUTS | spell_options([None, None, None, SPELLS.index("Hellfire")]))
-
-    def arm(a):
-        a.write(SPELLS_LEARNT, 0xFF)
-        a.write(MP, 99, "<i")
-        a.write(MP_MAX, 99, "<i")
-    expect_hit(run, attack(run, "rs_left", frames=240, every=120, arm=arm), "A's Hellfire", away=-1)
-
-
-RELICS, AXE, ECHO_OF_BAT = 0x80097964, 2, 2  # g_Status.relics; Maria's code turns the axe into a guardian
-
-
-def _guardian(run):
-    """Criterion 1, Maria's guardians: A (Maria) calls the axe's guardian, which stays around her
-    (a 96 x 80 hitbox), with B next to her. (Her guardians can't be called moving: A stands.)"""
-    setup_wide(run, 24)
-
-    def arm(a):
-        a.write(SUBWEAPON, AXE, "<i")
-        a.write(HEARTS, 50, "<i")
-    expect_hit(run, attack(run, "up+square", frames=180, every=60, arm=arm), "A's guardian", away=-1)
-
-
-def _crash(run):
-    """Criterion 1, an item crash (Echo of Bat on, one-button moves: hearts spent on △):
-    Richter's dagger crash, or Maria's axe guardian's, at B 44 px away."""
-    from link.mailbox import OPT_SHORTCUTS
-    setup_wide(run, 44, options=OPT_SHORTCUTS)
-
-    def arm(a):
-        a.write(RELICS + ECHO_OF_BAT, 3, "<B")  # found and on
-        a.write(SUBWEAPON, 1 if a.mailbox("self_presence").character == CHAR_RICHTER else AXE, "<i")
-        a.write(HEARTS, 50, "<i")
-    expect_hit(run, attack(run, "triangle", frames=240, every=120, arm=arm), "A's crash", away=-1)
-
-
-# Hand attacks for all 9 pairings; the dagger thrown by Alucard and Richter, Maria's guardian (her
-# subweapons are guardians) at each; spells are Alucard's; Richter's and Maria's crashes.
-for _ca in (CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA):
-    for _cb in (CHAR_ALUCARD, CHAR_RICHTER, CHAR_MARIA):
-        _pair_test("hand", _hand, _ca, _cb)
-        if _ca != CHAR_MARIA:
-            _pair_test("dagger", _subweapon, _ca, _cb)
-        else:
-            _pair_test("guardian", _guardian, _ca, _cb)
-        if _ca == CHAR_ALUCARD:
-            _pair_test("spell", _spell, _ca, _cb)
-    if _ca != CHAR_ALUCARD:
-        _pair_test("crash", _crash, _ca, CHAR_ALUCARD)
 
 
 @session_scenario(starts=("entrance", "entrance"))
@@ -246,42 +126,6 @@ def pvp_spawn_protection(run):
     expect_hit(run, attack(run, "right+square"), "after 3 s, A's swing")
 
 
-@session_scenario(starts=("no1", "entrance"))
-def pvp_not_in_boss_fight(run):
-    """Criterion 4: no PvP in a boss fight. Both in the Doppleganger's room, A swings at B."""
-    from session_m5 import into_boss_room, wait_pulled
-    a, b = run.s.a, run.s.b
-    for g in (a, b):
-        g.mailbox("set_control", CONTROL_PVP)
-        g.host("set_player", options=OPT_PARTNER_SIM)
-    run.expect(into_boss_room(run, a) is not None, "A is in the boss fight")
-    run.expect(wait_pulled(run, b, a, 300) is not None, "B was pulled in")
-    run.step(SPAWN_SAFE)
-    hits0 = pvp_hits(b)
-    for i in range(600):
-        side = "right" if b.snapshot()["world_x"] > a.snapshot()["world_x"] else "left"
-        far = abs(b.snapshot()["world_x"] - a.snapshot()["world_x"]) > 20
-        run.step(1, p1=(side if far else (side + "+square" if i % 20 < 2 else ""), ""))
-        if i % 30 == 0:
-            for g in (a, b):
-                g.write("g_Status", status(g)["hp_max"], "<i", 0x23C)
-    run.expect(pvp_hits(b) == hits0, "A's swings never hurt B", hits=pvp_hits(b) - hits0,
-               boss=bool(b.mailbox("self_presence").flags & BOSS))
-
-
-@session_scenario(starts=("entrance", "entrance"))
-def pvp_not_in_scene(run):
-    """Criterion 4: no PvP while a scene has B's game (g_CutsceneHasControl, set by hand here)."""
-    a, b = run.s.a, run.s.b
-    setup(run)
-    for _ in range(90):
-        b.write("g_CutsceneHasControl", 1)
-        run.step(1, p1=("right+square" if _ % 20 < 2 else "", ""))
-    b.write("g_CutsceneHasControl", 0)
-    run.expect(pvp_hits(b) == 0 and status(b)["hp"] == status(b)["hp_max"], "A's swings did nothing",
-               hits=pvp_hits(b), hp=status(b)["hp"])
-
-
 @session_scenario(starts=("entrance", "entrance"))
 def pvp_death(run):
     """Criterion 5: B, at 1 HP, dies to A's swing; it respawns at A with full HP, no Game Over,
@@ -310,93 +154,5 @@ def pvp_death(run):
                "B is back at A, with full HP", hp=status(b)["hp"], room=str(b.mailbox("self_presence").room))
     after = {g: (status(g)["exp"], status(g)["gold"], status(g)["hand"]) for g in (a, b)}
     run.expect(after == before, "no XP, gold or items changed hands")
-
-
-@session_scenario()
-def online_pvp_lossy(run):
-    """Criterion 6: online, 120 ms round trip and 5% loss each way. A swings at B again and again;
-    each swing hits B at most once, and each hit B's game takes (an HP drop) shows once on A's
-    copy of B: none lost, none twice."""
-    a, b = run.s.a, run.s.b
-    run.s.set_net("country", 6, delay=60, jitter=4, loss=0.05)
-    setup(run)
-    body0 = a.read(symbols()["g_CoopBodyHits"])
-    seen = {"drops": 0, "hp": status(b)["hp"]}
-
-    def watch(*_):  # every frame: B's HP drops (hits taken)
-        now = status(b)["hp"]
-        seen["drops"] += now < seen["hp"]
-        seen["hp"] = now
-    last_swing, swings = -999, 0
-    for i in range(1500):
-        dx = b.snapshot()["world_x"] - a.snapshot()["world_x"]
-        if dx > 22:
-            pad = "right"
-        elif i - last_swing >= 60:
-            pad, last_swing, swings = "right+square", i, swings + 1
-        else:
-            pad = ""
-        run.step(1, p1=(pad, ""), each=watch)
-        if seen["hp"] < status(b)["hp_max"] // 3:
-            run.step(60, each=watch)  # A's copy of B gets the hit first...
-            b.write("g_Status", status(b)["hp_max"], "<i", 0x23C)
-            seen["hp"] = status(b)["hp_max"]
-            run.step(60, each=watch)  # ...then the heal, which isn't a hit
-    run.step(60, each=watch)
-    drops = seen["drops"]
-    shown = a.read(symbols()["g_CoopBodyHits"]) - body0
-    run.expect(drops >= 5, "A hit B again and again over the lossy link", hits=drops)
-    run.expect(drops <= swings, "no swing hit B twice (a lost packet never leaves an attack behind)",
-               hits=drops, swings=swings)
-    run.expect(shown == drops, "A's copy of B showed each hit once", b_hits=drops, a_shown=shown)
-
-
-@session_scenario(starts=("entrance", "entrance"))
-def pvp_familiar(run):
-    """Criterion 1, a familiar: B has the Sword familiar out and walks into the zombie hall,
-    pressing nothing else, with A just behind it. The sword fights the zombies; when its attacks
-    catch A, they count."""
-    from session_m8 import reload_game
-    from session_shared import into_hall, stage_entities
-    a, b = run.s.a, run.s.b
-    b.write(0x80097964 + 22, 3, "<B")  # the sword card, on (g_Status.relics)
-    run.expect(reload_game(run, b), "B reloads with the sword card on")
-    for g in (a, b):
-        g.mailbox("set_control", CONTROL_PVP)
-        g.host("set_player", options=OPT_PARTNER_SIM)
-    into_hall(run)
-    run.step(SPAWN_SAFE)
-    t0 = pvp_hits(a)
-    for i in range(1800):  # B walks into the zombies (pressing nothing else), A just behind it
-        sa, sb = a.snapshot(), b.snapshot()
-        run.step(1, p1=("left" if sa["world_x"] > sb["world_x"] + 12 else "", "left" if i % 240 < 200 else ""))
-        if i % 20 == 0:
-            for g in (a, b):
-                g.write("g_Status", status(g)["hp_max"], "<i", 0x23C)
-                # the hall's enemies go down at the sword's first hit: it's free to find A (a warg,
-                # hit once per swing since issue 157, kept it busy for the whole test)
-                for slot, v in stage_entities(g).items():
-                    if 1 < v[3] < 32767:
-                        g.write("g_Entities", 1, "<h", slot * 0xBC + 0x3E)
-        if pvp_hits(a) > t0:
-            break
-    run.expect(pvp_hits(a) > t0, "the Sword familiar's attacks reached A", frames=i, touches=pvp_hits(a) - t0,
-               rooms=(str(a.mailbox("self_presence").room), str(b.mailbox("self_presence").room)))
-
-
-@session_scenario()
-def online_pvp_setting(run):
-    """The host's PvP setting covers the session: it goes to the joiner in every HELO, where the
-    launcher reads it (launcher/app.py's join_online) to set the joiner's game the same."""
-    a, b = run.s.a, run.s.b
-    run.step(90)
-    run.expect(not (b.host("status").get("partner_hello") or {}).get("rules"), "nothing set, nothing told")
-    a.host("set_rules", (0, 0, 0, 0, 0, 0), {"pvp": True})
-    run.step(90)
-    run.expect(((b.host("status").get("partner_hello") or {}).get("rules") or {}).get("pvp") is True,
-               "the joiner hears PvP is on",
-               hello=b.host("status").get("partner_hello"))
-
-
 
 

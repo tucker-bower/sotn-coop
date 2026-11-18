@@ -83,7 +83,7 @@ Each test's report, clip and log are in `.env/out/<name>/`. The exit code is 0 o
 | While working | The tests you're writing or fixing, by name | seconds |
 | A change is done | Its categories: `-c <category>` for the part you changed, or `--changed` | 1–5 minutes |
 | Opening or updating a PR with code changes | The gate: `run.py` | 5 minutes |
-| A release, playtest betas included | `--full`, then `scripts/redux_check.sh` | 30 minutes |
+| A release, playtest betas included | `--full`, then `scripts/redux_check.sh` | 20 minutes |
 
 The categories are richter, maria, alucard, combat, bosses, cutscenes, progression, traversal, rooms, network, rules, pvp, launcher, mods, inverted and widescreen. `harness/categories.py` lists what each covers, and which source files touch which categories. Example: a change to Richter's defense is `-c richter`, not the gate.
 
@@ -93,11 +93,15 @@ The categories are richter, maria, alucard, combat, bosses, cutscenes, progressi
 - **Don't run a category the change can't reach.** A docs or launcher-only change runs no game tests.
 - **Before a long run, say which tier and why** in a sentence. If it's bigger than the table above says, don't run it.
 
-**The gate is earned.** `categories.EVERYDAY` holds the tests that have caught a bug alone (not in a broken build where everything fails), plus one or two quick ones per category. As of 2026-11-07, 277 of the old 343 everyday tests had never failed alone, so they moved out: they still run in their categories and in `--full`. A new test goes in its category, and joins the gate only if it covers something no gate test does. At each release, `--history` shows which gate tests haven't caught anything in a long while: move them out.
+**The suite is earned (D212).** On 2026-11-17 it was cut from 630 tests (13 hours of test time) to 145 (under 2): every test that had never failed alone in 11,700 runs went, but for 49 quick ones that each guard something nothing else does. Keep it that way:
+- **A test stays only while it pays.** At each release, `--history` lists the tests that haven't failed alone in a long while: delete them, don't just move them out of the gate. Deleted tests are in git if a bug comes back.
+- **One pairing per check.** Test the mixed pairing (Alucard and Richter, say), and another only where it runs different code.
+- **No long tests.** Over 2 minutes needs a reason no shorter test covers, and soaks stay short: a two-game session runs about 2–3× real time, not 30 (one game alone does).
+- **The gate** (`categories.EVERYDAY`) holds the tests that have caught a bug alone, plus a quick one per category. A new test joins it only if it covers something no gate test does.
 
 **After a module change, rebuild first:** `scripts/rebuild_fixtures.sh` (about 15 minutes) rebuilds the disc, Maria's patches and every savestate, because savestates hold the module's code. Don't rebuild while tests are running.
 
-**New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. Its name must put it in a category (`run.py --list` shows them). Soaks and more pairings of something already covered are `full=True`: they run only in `--full`.
+**New tests:** `harness/README.md` shows how to write them. Name a test for what it checks, with no milestone prefix: `<feature>_<what>`, and `_<A>_and_<B>` for character pairings (`_vs_` for PvP), e.g. `boss_olrox_richter_and_maria`. Its name must put it in a category (`run.py --list` shows them). Slow tests that are still worth keeping are `full=True`: they run only in `--full`.
 
 ## PR template
 Before opening a PR with code changes, run the gate (`run.py`). Only a release runs `--full`. Additonally, check that all documentation is up-to-date before issuing the PR, including the md roadmap, repo root readme, and status.

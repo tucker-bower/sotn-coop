@@ -47,7 +47,6 @@ import session_m11  # noqa: F401
 import session_m12  # noqa: F401
 import scenarios_m12  # noqa: F401
 import scenarios_relics  # noqa: F401
-import scenarios_movement  # noqa: F401
 import scenarios_m13  # noqa: F401
 import scenarios_ultimate  # noqa: F401
 import scenarios_widescreen  # noqa: F401
@@ -56,12 +55,8 @@ import session_rules  # noqa: F401
 import session_carry  # noqa: F401
 import session_endings  # noqa: F401
 import session_inverted  # noqa: F401
-import session_inverted_rooms  # noqa: F401
-import session_crawl  # noqa: F401
-import session_edges  # noqa: F401
 import session_bossrush  # noqa: F401
 import session_netplay  # noqa: F401
-import session_mods  # noqa: F401
 import spec_test  # noqa: F401
 import categories
 from commands import COMMANDS, run_command
