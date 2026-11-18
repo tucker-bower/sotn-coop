@@ -44,7 +44,7 @@ SELF_PAD, PARTNER_PAD = 0x22428, 0x2242C  # M13: each player's buttons, with the
 PRIM_SIZE, N_PRIMS = 0x30, 32
 SELF_HITS, PARTNER_HITS = 0x22430, 0x224F4  # M15: u32 count, then CoopHit[16] (0xC each): pvp.c
 HIT_SIZE, N_HITS = 0xC, 16
-RULES = 0x225B8  # the castle's rules (D162): u32 RULE_* bits, then u16 exp, dealt, taken, enemy HP, enemy HP alone, pad
+RULES = 0x225B8  # the castle's rules (D162): u32 RULE_* bits, then u16 exp, dealt, taken, enemy HP for one player (#316), two pads
 _RULES = struct.Struct("<IHHHHHH")
 RULE_NO_SHARED_LEVEL, RULE_NO_SHARED_GOLD, RULE_NO_REVIVE, RULE_NO_FAERIE_REVIVE = 0x001, 0x002, 0x004, 0x008
 RULE_NO_BOSS_PULL, RULE_NO_SCENE_PULL, RULE_NO_NEAR_TARGET, RULE_NO_MAP_TELEPORT = 0x010, 0x020, 0x040, 0x080
@@ -341,12 +341,13 @@ class Mailbox:
     def set_pad_extra(self, bits):
         self.adapter.write_bytes(self.address + PAD_EXTRA, struct.pack("<I", bits))
 
-    def set_rules(self, off=0, exp=0, dealt=0, taken=0, enemy_hp=0, enemy_hp_solo=0):
-        """The castle's rules (launcher/rules.py's encode()): all zero is the game as we built it."""
-        self.adapter.write_bytes(self.address + RULES, _RULES.pack(off, exp, dealt, taken, enemy_hp, enemy_hp_solo, 0))
+    def set_rules(self, off=0, exp=0, dealt=0, taken=0, enemy_hp=0):
+        """The castle's rules (launcher/rules.py's encode()): all zero is the game as we built it.
+        enemy_hp: for one player; the game multiplies it by its players (#316)."""
+        self.adapter.write_bytes(self.address + RULES, _RULES.pack(off, exp, dealt, taken, enemy_hp, 0, 0))
 
     def rules(self):
-        return _RULES.unpack(self.adapter.read_bytes(self.address + RULES, _RULES.size))[:6]
+        return _RULES.unpack(self.adapter.read_bytes(self.address + RULES, _RULES.size))[:5]
 
     def set_rank(self, rank):
         self.adapter.write_bytes(self.address + RANK, struct.pack("<I", rank))

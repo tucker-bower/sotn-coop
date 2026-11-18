@@ -117,18 +117,18 @@ Online co-op opens a small pop-up over the menu: **Host** / **Join**. Join asks 
 
 ### 5. Castle settings
 - **Mode** is the first row on a new castle: **Story** (the game from its start) or **Boss rush** (all 22 bosses back to back, each with a typical player's progress, timed; `design/boss-rush.md`). It's chosen once: an existing castle shows its mode and can't change it. Boss rush leaves the bottom of the Load castle list (Tucker, 2026-11-10: it belongs in the castle settings); the test castles stay there.
-- **Difficulty** is the next row: Easy, Medium, Hard, Nightmare. Left / right changes it, and the sliders it sets move at once:
+- **Difficulty** is the next row: Easy, Medium, Hard, Nightmare, Custom (D213 replaced the first version, D193). Left / right changes it. A preset sets these at once, and its sliders are hidden; Custom starts from the preset it was on and shows them:
 
-  | Difficulty | Enemy HP, with a partner | Enemy HP, alone | Damage taken | XP gain |
+  | Difficulty | Enemy HP, a player | Damage taken | XP gain | Boss aggro |
   |---|---|---|---|---|
-  | Easy | 100% | 50% | 50% | 150% |
-  | **Medium** (a new castle's) | 200% | 100% | 100% | 100% |
-  | Hard | 300% | 150% | 150% | 50% |
-  | Nightmare | 400% | 200% | 200% | 50% |
+  | Easy | 50% | 50% | 150% | 50% |
+  | **Medium** (a new castle's) | 100% | 100% | 100% | 50% |
+  | Hard | 150% | 150% | 50% | 50% |
+  | Nightmare | 200% | 200% | 50% | 50% |
 
-  Alone, enemy HP is half the co-op figure, so Medium alone is the original game. Moving any of those four sliders by hand shows the difficulty as **Custom**. The difficulty isn't stored: it's whichever row the four values match, so today's castles, which are all at 200 / 100 / 100 / 100, read as Medium with no migration.
+  The game multiplies enemy HP by the players in the session: 1, 2, 2.75 and 3.5 times for 1–4 (so Medium alone is the original game, and Medium with a partner is the old 200%). The difficulty is stored; a castle from before reads as the preset its values match, else Custom.
 - The **Damage dealt** slider is removed (Tucker, 2026-11-10: players shouldn't feel nerfed; enemy HP does the same job). A castle that had changed it goes back to 100%. The game's `dealtPct` word stays in the mailbox, always 0, so this needs no module change; removing the word is added to issue 224's list.
-- One screen, grouped under headings instead of 24 flat rows: **Balance** (difficulty and the five sliders), **Sharing** (level, purse), **Falling and reviving**, **Staying together** (boss and scene pulls, map teleport), **Richter and Maria** (growth, stats, relic moves, jumps, off-hand, familiars, gear), **Extras** (bat carry, PvP, button remap).
+- One screen, grouped under headings instead of 24 flat rows: **Balance** (difficulty, and under Custom its four sliders), **Sharing** (level, purse), **Falling and reviving**, **Staying together** (boss and scene pulls, map teleport), **Richter and Maria** (growth, stats, relic moves, jumps, off-hand, familiars, gear), **Extras** (bat carry, PvP, button remap).
 - Sliders are bars with their value; toggles are switches. Left / right or a drag moves a slider; OK or a click flips a toggle. The selected row's explanation shows in a window at the bottom.
 - A row that differs from its default is marked, and **Back to the defaults** restores them all.
 - Every other default is unchanged from `launcher/rules.py` today: all balance options on.

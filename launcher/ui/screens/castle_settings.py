@@ -1,5 +1,5 @@
 """A castle's settings (launcher/rules.py): the mode of a new castle, the difficulty, then every
-rule under its group's heading. Sliders are bars (left / right, or a click on the bar), rules are
+rule under its group's heading. The Balance sliders show only when the difficulty is Custom (#316). Sliders are bars (left / right, or a click on the bar), rules are
 the game's own ON / OFF switches (OK, or a click). Each change is applied at once."""
 
 import pygame
@@ -13,7 +13,8 @@ HEAD, LIST, HINT = (8, 6, 464, 22), (8, 34, 464, 148), (8, 186, 464, 52)
 BAR_X, BAR_W = 300, 100          # a slider's bar
 MODES = (("story", "Story", "The game from its start."),
          ("rush", "Boss rush", "All 22 bosses back to back, timed."))
-DIFFICULTY_HINT = "Sets enemy HP, damage taken and XP."
+DIFFICULTY_HINT = ("Sets enemy HP, damage taken, XP and boss aggro. More players: more enemy HP. "
+                   "Custom: set each yourself.")
 
 
 def table(rules, start, mode, read_only):
@@ -27,9 +28,10 @@ def table(rules, start, mode, read_only):
     if not read_only:
         out.append(("defaults", ""))
     sliders = {s[0] for s in castle_rules.SLIDERS}
+    custom = castle_rules.difficulty(rules) == castle_rules.CUSTOM  # the sliders, only then (#316)
     for heading, keys in castle_rules.GROUPS:
         out.append(("head", heading))
-        out += [("slider" if k in sliders else "toggle", k) for k in keys]
+        out += [("slider" if k in sliders else "toggle", k) for k in keys if custom or k not in sliders]
     if rules["remap"]:
         out += [("button", b) for b in castle_rules.REMAP_BUTTONS]
     return out

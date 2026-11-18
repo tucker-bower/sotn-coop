@@ -13,14 +13,18 @@ from link.mailbox import (OPT_NO_AIR_JUMPS, OPT_NO_ALUCARD_STATS, OPT_NO_GROWTH,
                           RULE_NO_OFFHAND, RULE_NO_REVIVE, RULE_NO_SCENE_PULL, RULE_NO_SHARED_GOLD,
                           RULE_NO_SHARED_LEVEL)
 
-# (id, label, hint, default, min, max, step): a slider, in %
+# (id, label, hint, default, min, max, step): a slider, in %. Shown only when the difficulty is
+# Custom (#316): the others set them.
 SLIDERS = (
-    ("exp_pct", "XP gain", "XP from each kill.", 100, 25, 400, 25),
+    ("enemy_hp_player_pct", "Enemy HP",
+     "For one player. More players multiply it: 2 players 2x, 3 players 2.75x, 4 players 3.5x.", 100, 25, 400, 25),
     ("taken_pct", "Damage taken", "Damage enemies do to you.", 100, 25, 400, 25),
-    ("enemy_hp_pct", "Enemy HP, with a partner", "With a partner. 100% is the original game.", 200, 50, 400, 25),
-    ("enemy_hp_solo_pct", "Enemy HP, alone", "Playing alone. 100% is the original game.", 100, 50, 400, 25),
-    ("aggro", "Boss aggro", "How often a boss turns on the other player.", 50, 0, 100, 10),
+    ("exp_pct", "XP gain", "XP from each kill.", 100, 25, 400, 25),
+    ("aggro", "Boss aggro", "How often a boss turns on another player.", 50, 0, 100, 10),
 )
+# Enemy HP for 1, 2, 3 and 4 players in the session, in hundredths (design/M17-more-players.md):
+# the game's own table (module/boss.c PLAYERS_HP) is the one that counts
+PLAYERS_HP = (100, 200, 275, 350)
 # (id, label, hint, default, the rule's bit when it's off)
 TOGGLES = (
     ("shared_level", "Shared level", "You level up together.",
@@ -61,21 +65,21 @@ def button_label(button, name=None):
     """A button as the game's screens show it: its glyph and name ("{x} Cross"), or the name alone."""
     name = name or BUTTON_NAMES.get(button, button)
     return f"{BUTTON_GLYPHS[button]} {name}" if button in BUTTON_GLYPHS else name
-DEFAULTS = {**{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
-# Difficulty (design/launcher-overhaul.md, Tucker 2026-11-10): what each sets, at once. It isn't
-# stored: a castle's difficulty is whichever of these its four values match, else "Custom". Enemies
-# alone have half the HP they have with a partner, so Medium alone is the original game. There is
-# no "damage dealt": more enemy HP does the same without the player's numbers going down.
+# Difficulty (design/launcher-overhaul.md, Tucker 2026-11-10; a choice of its own since #316): what
+# each sets, at once. Custom sets nothing and shows the sliders. There is no "damage dealt": more
+# enemy HP does the same without the player's numbers going down.
 DIFFICULTIES = (
-    ("Easy", {"enemy_hp_pct": 100, "enemy_hp_solo_pct": 50, "taken_pct": 50, "exp_pct": 150}),
-    ("Medium", {"enemy_hp_pct": 200, "enemy_hp_solo_pct": 100, "taken_pct": 100, "exp_pct": 100}),
-    ("Hard", {"enemy_hp_pct": 300, "enemy_hp_solo_pct": 150, "taken_pct": 150, "exp_pct": 50}),
-    ("Nightmare", {"enemy_hp_pct": 400, "enemy_hp_solo_pct": 200, "taken_pct": 200, "exp_pct": 50}),
+    ("Easy", {"enemy_hp_player_pct": 50, "taken_pct": 50, "exp_pct": 150, "aggro": 50}),
+    ("Medium", {"enemy_hp_player_pct": 100, "taken_pct": 100, "exp_pct": 100, "aggro": 50}),
+    ("Hard", {"enemy_hp_player_pct": 150, "taken_pct": 150, "exp_pct": 50, "aggro": 50}),
+    ("Nightmare", {"enemy_hp_player_pct": 200, "taken_pct": 200, "exp_pct": 50, "aggro": 50}),
 )
 CUSTOM = "Custom"
+LEVELS = tuple(n for n, _ in DIFFICULTIES) + (CUSTOM,)
+DEFAULTS = {"difficulty": "Medium", **{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
 # The settings screen's groups, in order: (heading, the rules under it)
 GROUPS = (
-    ("Balance", ("enemy_hp_pct", "enemy_hp_solo_pct", "taken_pct", "exp_pct", "aggro")),
+    ("Balance", ("enemy_hp_player_pct", "taken_pct", "exp_pct", "aggro")),
     ("Sharing", ("shared_level", "shared_gold")),
     ("Falling and reviving", ("revive", "faerie_revive")),
     ("Staying together", ("boss_pull", "scene_pull", "map_teleport", "near_target")),
@@ -85,20 +89,27 @@ GROUPS = (
 
 
 def difficulty(rules):
-    """ "Easy", "Medium", "Hard", "Nightmare", or "Custom" when the four values match none of them."""
-    return next((name for name, sets in DIFFICULTIES if all(rules.get(k) == v for k, v in sets.items())), CUSTOM)
+    """ "Easy", "Medium", "Hard", "Nightmare" or "Custom": the castle's choice."""
+    return clean(rules)["difficulty"]
 
 
 def set_difficulty(rules, name):
-    """Sets what that difficulty sets (an unknown name: nothing)."""
-    rules.update(dict(DIFFICULTIES).get(name, {}))
+    """Chooses a difficulty: a preset sets its values; Custom keeps the ones there, to change by hand.
+    (an unknown name: nothing)"""
+    if name in LEVELS:
+        rules["difficulty"] = name
+        rules.update(dict(DIFFICULTIES).get(name, {}))
 
 
 def next_difficulty(rules, step):
-    """The difficulty one step up or down from the castle's; from Custom, Medium."""
-    names = [n for n, _ in DIFFICULTIES]
+    """The difficulty one step up or down from the castle's, Custom last."""
     now = difficulty(rules)
-    return "Medium" if now == CUSTOM else names[max(0, min(len(names) - 1, names.index(now) + step))]
+    return LEVELS[max(0, min(len(LEVELS) - 1, LEVELS.index(now) + step))]
+
+
+def _matching(values):
+    """The preset these values are, else Custom (a castle from before the choice was stored)."""
+    return next((name for name, sets in DIFFICULTIES if all(values.get(k) == v for k, v in sets.items())), CUSTOM)
 
 
 def clean(stored):
@@ -106,10 +117,18 @@ def clean(stored):
     its default, anything unknown goes."""
     stored = stored if isinstance(stored, dict) else {}
     out = dict(DEFAULTS)
+    if "enemy_hp_player_pct" not in stored:  # from before #316: HP alone, else HP with a partner, halved
+        old = stored.get("enemy_hp_solo_pct")
+        if not isinstance(old, (int, float)) and isinstance(stored.get("enemy_hp_pct"), (int, float)):
+            old = round(stored["enemy_hp_pct"] / 50) * 25
+        stored = {**stored, "enemy_hp_player_pct": old} if isinstance(old, (int, float)) else stored
     for key, _, _, _, low, high, _ in SLIDERS:
         v = stored.get(key)
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             out[key] = max(low, min(high, int(v)))
+    level = stored.get("difficulty")
+    out["difficulty"] = level if level in LEVELS else _matching(out)
+    out.update(dict(DIFFICULTIES).get(out["difficulty"], {}))  # a preset's values are the preset's
     for t in TOGGLES:
         if isinstance(stored.get(t[0]), bool):
             out[t[0]] = stored[t[0]]
@@ -133,14 +152,14 @@ def for_castle(castle, settings=None):
 def legacy(settings):
     settings = settings or {}
     out = {k: settings[k] for k in ("pvp", "aggro") if k in settings}
-    if "enemy_hp" in settings:
+    if "enemy_hp" in settings:  # (HP with a partner)
         out["enemy_hp_pct"] = settings["enemy_hp"]
     return clean(out)
 
 
 def encode(rules):
-    """What the game gets: (the RULE_* / OPT_NO_* bits, exp, dealt, taken, enemy HP, enemy HP alone),
-    the percentages 0 at their defaults."""
+    """What the game gets: (the RULE_* / OPT_NO_* bits, exp, dealt, taken, enemy HP for one player),
+    the percentages 0 at their defaults. The game multiplies the enemy HP by its players (PLAYERS_HP)."""
     rules = clean(rules)
     off = 0
     for key, _, _, _, bit in TOGGLES:
@@ -152,7 +171,7 @@ def encode(rules):
     def pct(key):
         return 0 if rules[key] == DEFAULTS[key] else rules[key]
     # (the game also takes a "damage dealt" percentage: no rule sets it any more, so it's the default)
-    return (off, pct("exp_pct"), 0, pct("taken_pct"), pct("enemy_hp_pct"), pct("enemy_hp_solo_pct"))
+    return (off, pct("exp_pct"), 0, pct("taken_pct"), pct("enemy_hp_player_pct"))
 
 
 def remapped(pad, rules):
@@ -179,4 +198,8 @@ def set_target(rules, button, target):
 def changed(rules):
     """The labels of what differs from the defaults, for a line in a lobby or the castle list."""
     rules = clean(rules)
-    return [s[1] for s in SLIDERS if rules[s[0]] != s[3]] + [t[1] for t in TOGGLES if rules[t[0]] != t[3]]
+    level = rules["difficulty"]
+    out = [] if level == "Medium" else [f"{level} difficulty"]
+    if level == CUSTOM:
+        out += [s[1] for s in SLIDERS if rules[s[0]] != s[3]]
+    return out + [t[1] for t in TOGGLES if rules[t[0]] != t[3]]
