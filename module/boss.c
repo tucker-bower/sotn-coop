@@ -138,7 +138,12 @@ static const s16 PLAYERS_HP[] = {100, 200, 275, 350}; // launcher/rules.py's PLA
 
 // The players this game has heard from in the last 10 s, itself included.
 static s32 PlayersHere(void) {
-    return 1 + (g_CoopLink.partnerAge < 600);
+    s32 n = 1 + (g_CoopLink.partnerAge < 600), k;
+
+    for (k = 0; k < COOP_PARTNERS - 1; k++) {
+        n += g_CoopLink.more[k].age < 600;
+    }
+    return n;
 }
 
 #define ENEMY_DEFS 400 // g_EnemyDefs (assets/dra/us/enemydefs.yaml)
