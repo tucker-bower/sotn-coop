@@ -393,3 +393,44 @@ class Mailbox:
         self.adapter.write_bytes(self.address + SNAP_IN, data)
         self.adapter.write_bytes(self.address + SNAP_IN_SEQ, struct.pack("<II", seq + 1, len(data)))
 
+
+
+class Partners:
+    """One game's mailbox shared by its links to several partners (M17, 3+ players): a Host per
+    partner, each given view(k). The game's out ring is read once and every view gets each event;
+    what a view writes about its partner goes to partner k's fields and copies."""
+
+    _PARTNER = {"partner_presence", "partner_age", "write_partner", "write_partner_prims", "write_partner_hits",
+                "partner_sprite_count", "write_partner_sprites", "write_partner_weapon", "write_partner_familiar",
+                "write_partner_status"}
+
+    def __init__(self, mailbox):
+        self.mailbox = mailbox
+        self._pending = {}
+
+    def view(self, k):
+        if not 0 <= k < COOP_PARTNERS:
+            raise ValueError(f"partner {k}: a game shows {COOP_PARTNERS} at most")
+        self._pending.setdefault(k, [])
+        return _PartnerView(self, k)
+
+    def _take_events(self, k):
+        fresh = self.mailbox.take_events()
+        for pending in self._pending.values():
+            pending += fresh
+        mine, self._pending[k] = self._pending[k], []
+        return mine
+
+
+class _PartnerView:
+    def __init__(self, partners, k):
+        self._partners, self.k = partners, k
+
+    def take_events(self):
+        return self._partners._take_events(self.k)
+
+    def __getattr__(self, name):
+        attr = getattr(self._partners.mailbox, name)
+        if name in Partners._PARTNER:
+            return lambda *a, **kw: attr(*a, k=self.k, **kw)
+        return attr
