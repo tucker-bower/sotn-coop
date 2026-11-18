@@ -8,7 +8,8 @@ import os
 import struct
 import time
 
-from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_SIZE, WEAPON_SIZE, Presence
+from .mailbox import (CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_SIZE, ROLE_AUTHORITY, ROOM_EVENTS, WEAPON_SIZE,
+                      Presence)
 from .portraits import PORTRAIT_ADDR
 from .playout import Playout
 from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
@@ -140,6 +141,14 @@ class Host:
         if rules is not None:
             self.hello["rules"] = rules
         return True
+
+    def _room_partner(self, authority=False):
+        """M17, a game with several partners (mailbox.Partners): this host's partner is in this
+        game's room (and runs it, with authority). With one partner: always (two players as before)."""
+        if not hasattr(self.mailbox, "k"):
+            return True
+        theirs, mine = self.mailbox.partner_presence(), self.mailbox.self_presence()
+        return theirs.room == mine.room and (not authority or theirs.role == ROLE_AUTHORITY)
 
     def start_connect(self, room, role, relay=None, **kw):
         """Find the partner for a room code (role "host" or "join"): link/connect.py."""
@@ -443,10 +452,12 @@ class Host:
             prims = inflate(prims_in, N_PRIMS * PRIM_SIZE)
             if prims is not None:
                 self.mailbox.write_partner_prims(prims)
-        if snap is not None:
+        if snap is not None and self._room_partner(authority=True):
             self.mailbox.put_snapshot(snap)
             self._note("in", f"snapshot ({len(snap)} bytes)")
         theirs = self.events.tick(reliable)
+        if theirs and not self._room_partner():  # M17: another room's hits and spawns aren't this game's
+            theirs = [ev for ev in theirs if ev[0] not in ROOM_EVENTS]
         for ev in theirs:
             self._note("in", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
         self._inbox += theirs

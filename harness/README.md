@@ -44,7 +44,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_rooms.py` | What the 0.14 playtest's reports found: doors, camera limits, the partner's body, scene votes. |
 | `session_carry.py` | Hanging onto Bat Alucard, a castle rule. |
 | `session_rules.py` | Each castle rule, turned off or moved, in two games. |
-| `session_three.py` | Three players (M17): each game runs both partners' bodies, two partners on one character, enemy HP for three. `--full` only. |
+| `session_three.py` | Three players (M17): each game runs both partners' bodies, two partners on one character, enemy HP, a shared room with two guests, one purse, a player rejoining, a boss going for all three. `--full` only. |
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |

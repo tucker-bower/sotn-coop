@@ -338,35 +338,54 @@ static void Tile(s32 x, s32 y, s32 w, u8 r, u8 g, u8 b) {
     g_GpuUsage.tile++;
 }
 
+// M17: each partner's bar, one under another (partner 0's where it always was), in its colour.
 static void PartnerHealth(void) {
-    const CoopStatus* st = (const CoopStatus*)STATUS_PARTNER_ADDR;
-    s32 hp, max, w;
+    static const u8 s_Fill[COOP_PARTNERS][3] = {{0x30, 0xC0, 0x60}, {0xC0, 0x50, 0x40}, {0x40, 0xA0, 0xC0}};
+    const CoopStatus* st;
+    s32 hp, max, w, k, y = HP_BAR_Y;
 
-    if (!(g_CoopLink.options & OPT_PARTNER_HP) || g_GameState != Game_Play || st->magic != STATUS_MAGIC ||
-        g_CoopLink.partnerAge > PARTNER_STALE_FRAMES || g_GpuUsage.tile + 2 >= MAX_TILE_COUNT) {
+    if (!(g_CoopLink.options & OPT_PARTNER_HP) || g_GameState != Game_Play) {
         return;
     }
-    hp = ((const s32*)st->a)[1]; // g_Status.hp, hpMax
-    max = ((const s32*)st->a)[2];
-    if (max <= 0) {
-        return;
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        st = (const CoopStatus*)(k ? STATUS_MORE_ADDR(k) : STATUS_PARTNER_ADDR);
+        if (st->magic != STATUS_MAGIC || PARTNER_AGE(k) > PARTNER_STALE_FRAMES || g_GpuUsage.tile + 2 >= MAX_TILE_COUNT) {
+            continue;
+        }
+        hp = ((const s32*)st->a)[1]; // g_Status.hp, hpMax
+        max = ((const s32*)st->a)[2];
+        if (max <= 0) {
+            continue;
+        }
+        w = hp <= 0 ? 0 : hp >= max ? HP_BAR_W : hp * HP_BAR_W / max;
+        if (w) {
+            Tile(HP_BAR_X, y, w, s_Fill[k][0], s_Fill[k][1], s_Fill[k][2]);
+        }
+        Tile(HP_BAR_X, y, HP_BAR_W, 0x20, 0x20, 0x28);
+        y += HP_BAR_H + 2;
     }
-    w = hp <= 0 ? 0 : hp >= max ? HP_BAR_W : hp * HP_BAR_W / max;
-    if (w) {
-        Tile(HP_BAR_X, HP_BAR_Y, w, 0x30, 0xC0, 0x60);
-    }
-    Tile(HP_BAR_X, HP_BAR_Y, HP_BAR_W, 0x20, 0x20, 0x28);
 }
 
-// After the player's map cursor: a second, blue one on the partner's map cell. Same animation
-// and geometry as the player's (DrawMapCursor, src/dra/5087C.c).
+static void PartnerCursor(s32 k);
+
+// After the player's map cursor: one on each partner's map cell, partner 0's blue (M17: each
+// partner's colour). Same animation and geometry as the player's (DrawMapCursor, src/dra/5087C.c).
 static void __attribute__((used)) DrawMapCursorHook(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    s32 k;
+
+    DrawMapCursor();
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        PartnerCursor(k);
+    }
+}
+
+static void PartnerCursor(s32 k) {
+    static const u8 s_Rgb[COOP_PARTNERS][3] = {{4, 8, 16}, {16, 6, 4}, {6, 14, 6}};
+    const CoopPresence* p = PARTNER_PRESENCE(k);
     POLY_GT4* poly;
     s32 x, y, tick, size;
 
-    DrawMapCursor();
-    if (g_CoopLink.partnerAge > PARTNER_STALE_FRAMES || !(p->flags & PRESENCE_IN_PLAY) ||
+    if (PARTNER_AGE(k) > PARTNER_STALE_FRAMES || !(p->flags & PRESENCE_IN_PLAY) ||
         (p->stage & STAGE_INVERTEDCASTLE_FLAG) != (g_StageId & STAGE_INVERTEDCASTLE_FLAG) ||
         g_GpuUsage.gt4 >= MAX_POLY_GT4_COUNT) {
         return;
@@ -394,10 +413,10 @@ static void __attribute__((used)) DrawMapCursorHook(void) {
     setUV4(poly, 0, 0, 32, 0, 0, 32, 32, 32);
     poly->tpage = 0x1A;
     poly->clut = g_ClutIds[0x170];
-    setRGB0(poly, tick * 4, tick * 8, tick * 16);
-    setRGB1(poly, tick * 4, tick * 8, tick * 16);
-    setRGB2(poly, tick * 4, tick * 8, tick * 16);
-    setRGB3(poly, tick * 4, tick * 8, tick * 16);
+    setRGB0(poly, tick * s_Rgb[k][0], tick * s_Rgb[k][1], tick * s_Rgb[k][2]);
+    setRGB1(poly, tick * s_Rgb[k][0], tick * s_Rgb[k][1], tick * s_Rgb[k][2]);
+    setRGB2(poly, tick * s_Rgb[k][0], tick * s_Rgb[k][1], tick * s_Rgb[k][2]);
+    setRGB3(poly, tick * s_Rgb[k][0], tick * s_Rgb[k][1], tick * s_Rgb[k][2]);
     addPrim(&g_CurrentBuffer->ot[OTSIZE - 1], poly);
     g_GpuUsage.gt4++;
 }

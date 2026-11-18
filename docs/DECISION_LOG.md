@@ -1031,3 +1031,13 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - **Tints:** blue, red and green for partners 0, 1 and 2, drawn when a body shares its character with player 1 or with another partner here.
 - **Weapon swings:** the window's palette rows are per partner and hand (72 rows), leaving 152 rows of tiles (from 200).
 - Options considered: a second copy of each partner build per extra partner (about 230 KB each: no RAM left); swapping a build's whole data (100–135 KB: most of a frame); identifying each changing static by hand (fragile). The split by object file is checked by each partner build's linker script (statics under 20 KB) and by the two-Richters test.
+
+**D215: With three or four players, each rule of play picks the partner it's about** (2026-11-18; agent-default, M17 step 5)
+- **Shared rooms:** whoever was in the room first runs it, of everyone sharing it (a tie: the lower player number); the rest are its guests. Two games that settle on the same role, or guests left with nobody running the room, go by player number. Each game's host takes a partner's room snapshot only from the one running its room, and a partner's hits, spawns and drops taken only while that partner is in its room.
+- **Enemies aim at the nearest** player sharing the room; **a boss** goes for each player fighting in its room in turn.
+- **Arrivals, pulls, scene holds and revives** follow one partner at a time: one fighting a boss, else one leading a scene, else one in this room, else one alive. So a fallen player revives at a living partner, and waits while one fights a boss.
+- **Progress:** a partner heard from again after 5 s (one rejoining, or joining for the first time) gets everything sent again, as with two.
+- **HUD:** an HP bar and a map cursor for each partner, in their colour.
+- Two players: every rule is partner 0's, as before (the gate).
+- Not yet for three: the bat carry, standing on a partner, PvP (partner 0 only).
+- Options considered: one "main partner" for everything (shared rooms need all of them); a vote among guests for the authority (more messages, and the first-in rule already settles it).

@@ -148,12 +148,18 @@ static const u16 s_ShapeWidths[4] = {0, 294, 392, 0};
 
 u16 WidescreenShape(void) { return (g_CoopLink.options & OPT_WIDE_MASK) >> OPT_WIDE_SHIFT; }
 
-// The width the stage's entity windows are for: this player's view, or the partner's if wider, so
+// The width the stage's entity windows are for: this player's view, or a partner's if wider, so
 // that in a shared room the authority keeps enemies alive across the guest's whole view.
 static s32 WindowsWidth(s32 w) {
-    s32 theirs = s_ShapeWidths[(g_CoopLink.partner.aggroSwitches >> 14) & 3];
+    s32 theirs, k;
 
-    return g_CoopLink.partnerAge < PARTNER_LINKED_FRAMES && theirs > w ? theirs : w;
+    for (k = 0; k < COOP_PARTNERS; k++) { // M17: the widest of every partner's
+        theirs = s_ShapeWidths[(PARTNER_PRESENCE(k)->aggroSwitches >> 14) & 3];
+        if (PARTNER_AGE(k) < PARTNER_LINKED_FRAMES && theirs > w) {
+            w = theirs;
+        }
+    }
+    return w;
 }
 
 void WidescreenFrame(void) {

@@ -107,3 +107,111 @@ def rules_enemy_hp_three_players(run):
     run.step(11 * 60)
     run.expect(hp() == base * 2, "C silent for 10 s: 2x", hp=hp())
 
+
+# --- step 5: shared rooms, progression and joining, for every partner ----------------------------
+
+@session_scenario(starts=("entrance",) * 3, full=True)
+def shared_rooms_three_players(run):
+    """Criterion 1: A walks into the entrance hall first (the authority); B and C arrive beside it.
+    Both are guests, each with exactly A's stage entities and their HP."""
+    from bots import walker
+    from link.mailbox import ROLE_AUTHORITY, ROLE_GUEST
+    from session_progress import arrive
+    from session_shared import HALL, stage_entities
+    a, b, c = run.s.games
+    bot = walker("left", attack_every=0)
+    for i in range(1500):
+        run.step(1, lambda t, *s: (bot(a.snapshot(), i), "", ""))
+        if a.snapshot()["room"] == HALL and i > 200:
+            break
+    run.step(120)
+    p = a.mailbox("self_presence")
+    for g, dx in ((b, 24), (c, 48)):
+        arrive(run, g, p.stage, p.room_id, p.ground_x + dx, p.ground_y)
+    run.step(60)
+    roles = [g.mailbox("self_presence").role for g in run.s.games]
+    run.expect(roles == [ROLE_AUTHORITY, ROLE_GUEST, ROLE_GUEST], "A runs the hall, B and C are its guests", roles=roles)
+    ea = stage_entities(a)
+    enemies = {s for s, e in ea.items() if e[3] > 0}
+    run.expect(enemies, "the hall has enemies", entities=len(ea))
+    for g in (b, c):
+        eg = stage_entities(g)
+        run.expect(set(eg) == set(ea), f"{g.name} has exactly A's stage entities",
+                   only_a=sorted(set(ea) - set(eg))[:8], only_them=sorted(set(eg) - set(ea))[:8])
+        run.expect(all(eg[s][3] == ea[s][3] for s in enemies if s in eg), f"{g.name}'s enemies have A's HP")
+
+
+@session_scenario(starts=("entrance",) * 3, full=True)
+def gold_pooled_three_players(run):
+    """Criterion 1: one purse for three. C's gold change reaches A and B, once each; then B's
+    spending reaches A and C."""
+    from session_progress import GOLD, STATUS, status
+    games = run.s.games
+    run.step(5)
+    g0 = status(run.s.a)["gold"]
+    run.s.c.write(STATUS, g0 + 400, "<i", GOLD)
+    run.step(10)
+    golds = [status(g)["gold"] for g in games]
+    run.expect(golds == [g0 + 400] * 3, "C +400: all three at +400", golds=golds)
+    run.s.b.write(STATUS, golds[1] - 150, "<i", GOLD)
+    run.step(10)
+    golds = [status(g)["gold"] for g in games]
+    run.expect(golds == [g0 + 250] * 3, "B -150: all three at +250", golds=golds)
+
+
+CASTLE_FLAG = 0x2F0  # a castle flag nothing in the entrance uses
+
+
+@session_scenario(starts=("entrance",) * 3, full=True)
+def castle_flags_rejoin_three_players(run):
+    """Criterion 3: C is away (its links cut) while A finds something (a castle flag); B gets it at
+    once, and C when it comes back, with nothing lost or doubled; enemy HP follows the players."""
+    a, b, c = run.s.games
+    run.step(30)
+    c.partition(True)
+    run.step(11 * 60)
+    a.write("g_CastleFlags", 1, "<B", CASTLE_FLAG)
+    run.step(30)
+    run.expect(b.read("g_CastleFlags", "<B", CASTLE_FLAG) == 1, "B has A's find at once")
+    run.expect(c.read("g_CastleFlags", "<B", CASTLE_FLAG) == 0, "C, away, doesn't yet")
+    c.partition(False)
+    run.step(120)
+    flags = [g.read("g_CastleFlags", "<B", CASTLE_FLAG) for g in run.s.games]
+    run.expect(flags == [1, 1, 1], "C back: it has A's find too", flags=flags)
+    all_flags = [g.read_bytes("g_CastleFlags", 0x300) for g in run.s.games]
+    run.expect(all_flags[0] == all_flags[1] == all_flags[2], "every castle flag is the same in all three")
+
+
+def _slogra():
+    """The debug start in front of Slogra and Gaibon."""
+    from coop_env import TOOLS
+    return str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Boss - Slogra and Gaibon.state")
+
+
+@session_scenario(starts=(_slogra(),) * 3, full=True)
+def boss_aggro_three_players(run):
+    """Criterion 1: Slogra and Gaibon with three players in the arena. Their HP is 2.75x the
+    castle's for one, and in the game running the room they go for every player in turn: itself
+    and both partners (module/boss.c g_CoopAggroSeen)."""
+    from bots import walker
+    from link.mailbox import CONTROL_AGGRO_SHIFT, ROLE_AUTHORITY
+    from module import stage_symbol
+    from session_m11 import ENEMY_DEF_SIZE
+    from session_rules import DEF_HP
+    games = run.s.games
+    for g in games:
+        g.mailbox("set_control", 0xFF << CONTROL_AGGRO_SHIFT)  # a switch at nearly every chance
+    run.step(60)
+    defs = stage_symbol("dra", "g_EnemyDefs")
+    run.expect(run.s.a.read(defs, "<h", 243 * ENEMY_DEF_SIZE + DEF_HP) == 200 * 275 // 100, "Slogra at 2.75x")
+    bots = [walker("left", attack_every=20) for _ in games]  # through the door (launcher/bossstarts.py: walk left)
+    seen = 0
+    for i in range(3600):
+        run.step(1, lambda t, *s: tuple(bot(g.snapshot(), i) for bot, g in zip(bots, games)))
+        if i % 60 == 0:
+            for g in games:
+                if g.mailbox("self_presence").role == ROLE_AUTHORITY:
+                    seen = g.read(symbols()["g_CoopAggroSeen"])
+            if seen & 7 == 7:
+                break
+    run.expect(seen & 7 == 7, "the bosses went for each of the three", seen=bin(seen), frames=i)
