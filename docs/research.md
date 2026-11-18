@@ -92,6 +92,28 @@ Richter mode replaces `ARC_F` + servant + weapons (`8013C000–8017FFFF`) with `
 ## 8 MB RAM
 Enabled by writing the RAM_SIZE register at `0x1F801060`. Most modern emulators offer it, and modders commonly put a jump in the original code and new code in the 8 MB area.
 
+What co-op keeps there (2026-11-17, main after 1.2.0; the addresses are in `coop_api.h`, `link.h` and `offhand.c`):
+
+| From | To | What |
+|---|---|---|
+| 0x80200000 | 0x80280000 | Saturn Maria's partner build |
+| 0x80280000 | 0x802DB010 | The module (text 0x15790, data and bss 0x45880); `coop.ld` stops it at 0x80300000. **Free: 0x802DC000-0x80300000, 144 KB** |
+| 0x80300000 | 0x804C0000 | Character blobs. Maria's, Saturn Maria's and Ultimate Richter's together are 1.75 MB: full |
+| 0x804C0000 | 0x80500000 | Ultimate Maria's partner build |
+| 0x80500000 | 0x80540000 | Our Richter (COOPRIC.BIN) |
+| 0x80540000 | 0x80571BEC | Alucard's sprites (ARC_F.BIN, 203,756 bytes). **Free to 0x80580000: 57 KB** |
+| 0x80580000 | 0x805C0000 | Alucard's F_GAME strips |
+| 0x805C0000 | 0x80680000 | Our Richter's and Maria's code and BSS, one address each |
+| 0x80680000 | 0x806C2000 | F_GAME2 (Richter's graphics) |
+| 0x806C2000 | 0x806CE400 | Alucard's F_GAME palettes, the portraits, the familiar pictures and what they cover. **Free: 0x806D0000-0x80700000, 192 KB** |
+| 0x80700000 | 0x8070C000 | Hand weapon sheets (2 x 16 KB), Richter's left-hand save (16 KB). **Free to 0x80710000: 16 KB** |
+| 0x80710000 | 0x80730000 | Weapon copies: self, partner (0x10000 each) |
+| 0x80730000 | 0x80730084 | The partner's status. **Free to 0x80740000: 64 KB** |
+| 0x80740000 | 0x807C0000 | Richter's and Maria's partner builds (0x40000 each) |
+| 0x807C0000 | 0x80800000 | Familiar copies: self, partner (0x20000 each; Maria's HUD set at 0x807D8000) |
+
+**For 3+ players (M17 step 2):** each more partner needs its weapon copy (0x10000), its familiar copy (the overlay, sheet and palettes are 0x10400 of the 0x20000) and its status (0x84): about 0x20600, 130 KB. Two more partners need 260 KB. The free gaps total about 470 KB, but only the 192 KB one holds a whole partner, so the second spare partner splits across gaps or takes the module's 144 KB margin. Partner builds are per character, not per partner, so they need no more RAM. Two partners playing the same character share one build, and its statics are swapped per body.
+
 ## The decomp's PC port
 Work in progress on PsyZ, with no release date. It can jump into a stage (`--stage`), run boss demos (`--demo N`), and `src/pc/replay.c` records inputs with a periodic state check. Our code is shared C, so it can move over when a true port exists (D8).
 
