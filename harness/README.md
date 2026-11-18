@@ -10,7 +10,6 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `commands.py` | Registers the launcher checks, UI flows and patcher test with the runner. |
 | `coop_env.py` | Loads `env.example.toml` and `env.toml`. |
 | `core_check.py` | **Manual.** Checks a SwanStation core build on this machine. |
-| `data/` | Reference data for the tests. |
 | `emu.py` | One headless, frame-stepped game on SwanStation. |
 | `fixtures_m12.py` | Builds the savestates the coverage tests start from. |
 | `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
@@ -29,12 +28,14 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `scenarios_m12.py` | One-game coverage: Maria's guardians, test castles and more. |
 | `scenarios_m13.py` | One-game tests of the partner as a real player. |
 | `scenarios_m8.py` | One-game tests of Richter and Maria in Alucard's castle. |
-| `scenarios_movement.py` | Checks Richter and Maria move at least as far as Alucard at each relic step. |
 | `scenarios_relics.py` | Relics, per character. |
 | `scenarios_ultimate.py` | Other mods' characters: Ultimate Maria in the castle, her sub-weapons, and as the partner. |
+| `scenarios_widescreen.py` | Widescreen in one game: the shape option, fades, every stage's windows, a red door that comes back, no judder near a room's edge. |
 | `session.py` | Runs two linked games, on the couch or online. |
 | `session_bossrush.py` | Boss rush, end to end. |
 | `session_inverted.py` | Inverted castle: travel and what partners share there. |
+| `session_endings.py` | Both games play an ending through to the title: Dracula's and Richter's, one mixed pair each. |
+| `session_widescreen.py` | Widescreen with two games: each player's own shape, the partner drawn in the wider view. |
 | `session_m11.py` | Castles, solo and the shared level. |
 | `session_m12.py` | Cutscenes, bosses and story scenes together. |
 | `session_m15.py` | PvP. |
@@ -42,15 +43,10 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `session_netplay.py` | Online play on the game's own route, with a playtest-like connection. |
 | `session_rooms.py` | What the 0.14 playtest's reports found: doors, camera limits, the partner's body, scene votes. |
 | `session_carry.py` | Hanging onto Bat Alucard, a castle rule. |
-| `session_edges.py` | Two players, two rooms, at the same moment: opposite doors, one doorway, teleports, pauses, deaths, pulls; couch, online and with Richter. |
-| `session_crawl.py` | Every room of both castles with both players walking through it, one test per area. |
-| `roommap.py` | Rooms' collision from the extracted stage files: where a player can stand. |
-| `session_inverted_rooms.py` | The inverted castle with both players: through doors together, and into each boss at once, with a hand-over ending mid stage load. |
 | `session_rules.py` | Each castle rule, turned off or moved, in two games. |
 | `session_m4b.py` | Fixes from the first playtest. |
 | `session_m5.py` | Bosses together. |
 | `session_m8.py` | Mixed-character teams. |
-| `session_mods.py` | Co-op on the randomizer: a smoke test and a randomized find per built preset. |
 | `session_m9.py` | Android's way of running a game, online with a PC. |
 | `session_online.py` | Online PC co-op: connect codes and version checks. |
 | `session_progress.py` | Shared progression. |
@@ -75,7 +71,7 @@ Run these with the venv: `.env/src/sotn-decomp/.venv/bin/python <script>`. How t
 | `../scripts/redux_check.sh` | The same module check in the Windows PCSX-Redux, headless, via `redux_check.lua`. |
 
 ## Writing a scenario
-Name it for what it checks (no milestone prefix): `<feature>_<what>`, pairings `_<A>_and_<B>` (`_vs_` for PvP). `@scenario(..., full=True)` / `@session_scenario(..., full=True)` puts it in `--full` only: for soaks and for more pairings of what its category already covers. Its name must match a category in `categories.py` (`run.py --list` shows each test's). Add it to `categories.EVERYDAY` (the PR gate) only if it covers something no gate test does.
+Name it for what it checks (no milestone prefix): `<feature>_<what>`, pairings `_<A>_and_<B>` (`_vs_` for PvP). `@scenario(..., full=True)` / `@session_scenario(..., full=True)` puts it in `--full` only: for a slow test still worth keeping. Test one pairing (a mixed one), and another only where it runs different code (D212). Its name must match a category in `categories.py` (`run.py --list` shows each test's). Add it to `categories.EVERYDAY` (the PR gate) only if it covers something no gate test does.
 ```python
 @scenario(start="entrance")                  # savestate name; disc=... for a co-op build
 def my_test(run):

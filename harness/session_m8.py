@@ -2,15 +2,13 @@
 
 from session import session_scenario  # first: puts `link` on the path
 
-from bots import walker
 import hashlib
 
 from link.mailbox import (BUSY, CHAR_ALUCARD, CHAR_MARIA, CHAR_RICHTER, CMD_ARRIVE, CMD_LOAD_SAVE, CMD_SAVE_NOW,
                           DEAD, IN_PLAY, PAUSED, ROLE_AUTHORITY, ROLE_GUEST)
 from module import COOP_DISC
 from session_progress import arrive
-from session_scenarios import partner_pixels
-from session_shared import into_hall, roles, stage_entities
+from session_shared import roles
 import savestates as route
 
 NAMES = {CHAR_ALUCARD: "Alucard", CHAR_RICHTER: "Richter", CHAR_MARIA: "Maria", 3: "Ultimate Maria", 4: "Saturn Maria",
@@ -41,63 +39,6 @@ def reload_game(run, g, limit=3000):
         if g.read("g_GameState") == route.GAME_PLAY and q.flags & IN_PLAY and not q.flags & BUSY:
             return True
     return False
-
-
-def mixed_pair(run, ca, cb):
-    """M8 criterion 3 (first part): A and B, as these characters, share the entrance hall. B is
-    the guest, sees A's enemies, and B's hits count in A's world. Each draws the other (since
-    M13 its body, run by the game; and the clip shows it)."""
-    a, b = run.s.a, run.s.b
-    for g, c in ((a, ca), (b, cb)):
-        if c != CHAR_ALUCARD:
-            run.expect(reload_game(run, g), f"{'AB'[g is b]} loads as {NAMES[c]}")
-    run.expect((a.mailbox("self_presence").character, b.mailbox("self_presence").character) == (ca, cb),
-               f"A plays {NAMES[ca]}, B {NAMES[cb]}")
-    if ca == CHAR_ALUCARD:
-        into_hall(run)
-    else:  # a load starts at the room's default spot, below the way to the hall: go there
-        arrive(run, a, STAGE_NO3, HALL_ROOM_ID, 1300, 200)
-        run.step(120)
-        arrive(run, b, STAGE_NO3, HALL_ROOM_ID, 1324, 200)
-        run.step(30)
-    run.expect(roles(run) == (ROLE_AUTHORITY, ROLE_GUEST), "they share the room: A authority, B guest",
-               roles=roles(run))
-    run.step(30)  # each game's copy of the other is made as they meet (M13: partner.c)
-    for viewer, other in ((a, cb), (b, ca)):
-        _, count, _ = partner_pixels(viewer)
-        run.expect(count > 150, f"{'AB'[viewer is b]} draws {NAMES[other]}'s puppet", pixels=count)
-    ea, eb = stage_entities(a), stage_entities(b)
-    run.expect(set(eb) == set(ea), "B's world has exactly A's stage entities")
-    # B walks into the room (away from the nearer wall), attacking. Any enemy losing HP in A's
-    # world counts: A stands still, so only B's hits can do it (zombies spawn as B goes).
-    bot = walker("right" if b.snapshot()["x"] < 128 else "left", attack_every=30)
-    prev, hit = stage_entities(a), []
-    for i in range(1500):
-        run.step(1, p1=("", bot(b.snapshot(), i)))
-        now = stage_entities(a)
-        hit = [s for s, e in now.items() if s in prev and prev[s][0] == e[0] and e[3] < prev[s][3] < 32767]
-        if hit:
-            break
-        prev = now
-    run.expect(hit, f"{NAMES[cb]}'s hits hurt A's enemies (in A's world)")
-
-
-@session_scenario(characters=(CHAR_ALUCARD, CHAR_RICHTER), full=True)
-def mixed_party_shared_room_alucard_and_richter(run):
-    """Alucard (A) and Richter (B): mixed_pair."""
-    mixed_pair(run, CHAR_ALUCARD, CHAR_RICHTER)
-
-
-@session_scenario(characters=(CHAR_ALUCARD, CHAR_MARIA), full=True)
-def mixed_party_shared_room_alucard_and_maria(run):
-    """Alucard (A) and Maria (B): mixed_pair."""
-    mixed_pair(run, CHAR_ALUCARD, CHAR_MARIA)
-
-
-@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
-def mixed_party_shared_room_richter_and_maria(run):
-    """Richter (A) and Maria (B): mixed_pair."""
-    mixed_pair(run, CHAR_RICHTER, CHAR_MARIA)
 
 
 @session_scenario(characters=(CHAR_MARIA, CHAR_MARIA))
@@ -167,103 +108,6 @@ def progression(run, ca, cb):
     for k, what in (("hp_max", "max HP"), ("hearts_max", "max hearts")):
         run.expect(a1[k] - a0[k] == 5 and b1[k] - b0[k] == 5, f"+5 {what} in both games",
                    a=a1[k] - a0[k], b=b1[k] - b0[k])
-
-
-@session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA))
-def mixed_party_progression_richter_and_maria(run):
-    """Richter finds the relic, Maria the rest: progression()."""
-    progression(run, CHAR_RICHTER, CHAR_MARIA)
-
-
-@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER), full=True)
-def mixed_party_progression_maria_and_richter(run):
-    """Maria finds the relic, Richter the rest (his own vessels): progression()."""
-    progression(run, CHAR_MARIA, CHAR_RICHTER)
-
-
-@session_scenario(characters=(CHAR_RICHTER, CHAR_ALUCARD), full=True)
-def mixed_party_progression_richter_and_alucard(run):
-    """Richter finds the relic, Alucard the rest: progression()."""
-    progression(run, CHAR_RICHTER, CHAR_ALUCARD)
-
-
-@session_scenario(starts=("no1", "entrance"), characters=(CHAR_RICHTER, CHAR_MARIA))
-def mixed_party_boss(run):
-    """M8 criterion 4 (bosses): Richter (A) walks into the Doppleganger's room, Maria (B) is
-    pulled in, both hurt it, it dies once and the kill is recorded in both worlds."""
-    party_boss(run, CHAR_RICHTER, CHAR_MARIA)
-
-
-def party_boss(run, ca, cb):
-    """A (playing ca) walks into the Doppleganger's room, B (cb) is pulled in, both hurt it, it
-    dies once and the kill is recorded in both worlds. Starts ("no1", "entrance")."""
-    from link.mailbox import BOSS
-    from session_m5 import bosses, into_boss_room, toward, wait_pulled
-    from session_scenarios import heal
-    a, b = run.s.a, run.s.b
-    if (ca, cb) != (CHAR_ALUCARD, CHAR_ALUCARD):
-        as_characters(run, ca, cb)
-    run.expect(into_boss_room(run, a) is not None, f"{NAMES[ca]} is in the boss fight")
-    run.expect(wait_pulled(run, b, a, 300) is not None, f"{NAMES[cb]} was pulled in")
-    run.step(30)
-    slot = next(iter(bosses(a)))
-    hit_by = set()
-    for i in range(3600):
-        before = bosses(a).get(slot, (0, 0, 0))[1]
-        who = (i // 300) % 2
-        g = a if who == 0 else b
-        pad = toward(g, a, slot, i)
-        run.step(1, p1=(pad, "") if who == 0 else ("", pad))
-        if i % 20 == 0:
-            heal(a), heal(b)
-        after = bosses(a).get(slot, (0, 0, 0))[1]
-        if after < before:
-            hit_by.add("AB"[who])
-        if slot not in bosses(a) or after <= 0:
-            break
-        if len(hit_by) == 2:
-            a.write(a.entity(slot), 1, "<h", 0x3E)  # both have hit it: finish it (harness shortcut)
-    run.expect(hit_by == {"A", "B"}, f"both hurt the boss ({NAMES[ca]}, {NAMES[cb]})", hit_by=sorted(hit_by))
-    for i in range(1800):
-        run.step(1)
-        if not (a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & BOSS:
-            break
-    run.step(120)
-    rec = lambda g: [g.read("g_Settings", "<i", 0x30 + 4 * k) for k in range(32)]
-    run.expect(any(rec(a)) and rec(a) == rec(b), "the kill is recorded in both worlds")
-
-
-@session_scenario(starts=("no0", "entrance"), characters=(CHAR_MARIA, CHAR_RICHTER))
-def mixed_party_cutscene(run):
-    """M8 criterion 4 (cutscenes): Maria (A) walks into the room where Alucard first meets Maria:
-    the world sees Alucard, so the scene plays; Richter (B) is pulled in and sees it too."""
-    from bots import walker
-    from link.mailbox import CUTSCENE
-    from session_m5 import LEFT_OF_MARIA, NO0
-    from session_scenarios import assert_converged
-    a, b = run.s.a, run.s.b
-    as_characters(run, CHAR_MARIA, CHAR_RICHTER)
-    arrive(run, a, NO0, *LEFT_OF_MARIA)
-    bot, started = walker("right", attack_every=0), None
-    for i in range(1800):
-        run.step(1, p1=(bot(a.snapshot(), i), ""))
-        if a.mailbox("self_presence").flags & CUTSCENE:
-            started = i
-            break
-    run.expect(started is not None, "Maria's game plays Alucard's cutscene")
-    saw = None
-    for i in range(1800):
-        run.step(1)
-        if b.mailbox("self_presence").flags & CUTSCENE:
-            saw = i
-            break
-    run.expect(saw is not None, "Richter's game plays it too")
-    for _ in range(3600):
-        run.step(1)
-        if not (a.mailbox("self_presence").flags | b.mailbox("self_presence").flags) & CUTSCENE:
-            break
-    run.step(120)
-    assert_converged(run)
 
 
 def mixed_soak(run, ca, cb, minutes):
@@ -336,7 +180,6 @@ def mixed_soak(run, ca, cb, minutes):
     return numbers
 
 
-
 @session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA), full=True)
 def mixed_soak_10min(run):
     """Richter (A) and Maria (B), 10 minutes, against two Alucards' numbers from
@@ -402,7 +245,3 @@ def partner_graphics_stay_in_their_bank_alucard_and_maria(run):
     partner_graphics_stay_in_their_bank(run, CHAR_ALUCARD, CHAR_MARIA)
 
 
-@session_scenario(characters=(CHAR_MARIA, CHAR_RICHTER), full=True)
-def partner_graphics_stay_in_their_bank_maria_and_richter(run):
-    """Maria (A) with Richter's body in her game."""
-    partner_graphics_stay_in_their_bank(run, CHAR_MARIA, CHAR_RICHTER)

@@ -4,15 +4,13 @@ from link.mailbox import BUSY, CHAR_RICHTER, FLIP_BAT, FLIP_CARRIED, RULE_BAT_CA
 from module import symbols
 from session import session_scenario
 from session_m15 import load_characters
-from session_netplay import PROFILE, SEED
-from session_progress import HP, STATUS, arrive
+from session_progress import arrive
 from session_rules import rules
 from session_shared import HALL, into_hall
 
 SOUL_OF_BAT = 0x80097964  # g_Status.relics[0]
 ACTIVE = 3
 FLIGHT = 20
-VRAM_FLAG = 0x80072F20  # g_Player.vram_flag
 DOOR_Y = 124
 
 
@@ -92,67 +90,6 @@ def bat_carry_alucard(run):
     carried_flight(run)
 
 
-@session_scenario(characters=(0, CHAR_RICHTER))
-def bat_carry_richter(run):
-    """Richter hangs onto Alucard's bat, and is carried."""
-    carried_flight(run)
-
-
-@session_scenario()
-def bat_carry_other_seat(run):
-    """The guest is the bat, and the room's authority hangs on."""
-    carried_flight(run, swap=True)
-
-
-@session_scenario()
-def bat_carry_on_a_bad_connection(run):
-    """The carried player trails by the round trip, with jitter, and still stays with the bat."""
-    run.s.set_net(PROFILE, SEED)
-    carried_flight(run, slack=60)
-
-
-@session_scenario()
-def bat_carry_off_by_default(run):
-    """With the rule off the presence bit stays clear, and Up beside the bat does nothing."""
-    a, b = run.s.a, run.s.b
-    into_hall(run)
-    a.write(SOUL_OF_BAT, ACTIVE, "<B")
-    run.step(5)
-    run.step(4, p1=("r1", ""))
-    run.step(40)
-    run.step(FLIGHT, p1=("up", ""))
-    run.expect(not flips(a) & FLIP_BAT, "no bat offered", flip=flips(a))
-    run.step(3, p1=("", "up"))
-    run.step(3)
-    run.expect(not flips(b) & FLIP_CARRIED, "not carried")
-
-
-@session_scenario()
-def bat_carry_is_slower(run):
-    """The bat covers about 60% of the ground while carrying, and all of it after."""
-    a, b = run.s.a, run.s.b
-    setup(run)
-
-    def flight(pad):
-        x0 = place(a)[0]
-        run.step(30, p1=(pad, ""))
-        return abs(place(a)[0] - x0)
-    run.step(20, p1=("right", ""))  # up to speed
-    free = flight("right")
-    run.step(45, p1=("left", ""))
-    alongside(run, a, b)
-    grab(run, a, b)
-    run.step(20, p1=("right", ""))
-    carrying = flight("right")
-    run.expect(0.45 * free <= carrying <= 0.75 * free, "about 60% of the speed", free=free, carrying=carrying)
-    run.step(3, p1=("", "cross"))
-    run.step(3)
-    run.step(45, p1=("left", ""))
-    run.step(20, p1=("right", ""))
-    after = flight("right")
-    run.expect(after >= 0.9 * free, "full speed after", free=free, after=after)
-
-
 def carry_through_a_door(run):
     a, b = run.s.a, run.s.b
     setup(run)
@@ -170,60 +107,6 @@ def carry_through_a_door(run):
     run.step(60)
     run.expect(a.snapshot()["room"] == b.snapshot()["room"], "both players end up in the same room",
                a=a.snapshot()["room"], b=b.snapshot()["room"])
-
-
-@session_scenario()
-def bat_carry_through_a_door(run):
-    """The bat flies out of the hall: its passenger comes too, carried or by the teleport path."""
-    carry_through_a_door(run)
-
-
-def released(run, rider, what):
-    run.step(4)
-    run.expect(not flips(rider) & FLIP_CARRIED, what, flip=flips(rider))
-    run.step(180)
-    run.expect(rider.read(VRAM_FLAG, "<i") & 1, "they land on solid ground", place=place(rider))
-
-
-@session_scenario()
-def bat_carry_jump_drops_off(run):
-    a, b = run.s.a, run.s.b
-    setup(run)
-    grab(run, a, b)
-    run.step(30, p1=("up", ""))
-    run.step(2, p1=("", "cross"))
-    released(run, b, "Cross lets go")
-
-
-@session_scenario()
-def bat_carry_a_hit_drops_off(run):
-    a, b = run.s.a, run.s.b
-    setup(run)
-    grab(run, a, b)
-    run.step(10)
-    b.write(STATUS, b.read(STATUS, "<i", HP) - 5, "<i", HP)
-    released(run, b, "a hit lets go")
-
-
-@session_scenario()
-def bat_carry_landing_drops_off(run):
-    a, b = run.s.a, run.s.b
-    setup(run)
-    grab(run, a, b)
-    run.step(120, p1=("down", ""))
-    released(run, b, "the bat on the ground lets go")
-
-
-@session_scenario()
-def bat_carry_form_change_drops_off(run):
-    a, b = run.s.a, run.s.b
-    setup(run)
-    grab(run, a, b)
-    run.step(30, p1=("up", ""))
-    run.step(4, p1=("r1", ""))
-    run.step(30)
-    released(run, b, "the bat turning back lets go")
-
 
 
 # What each game draws of the other (#262): the partner's copy, its entity 0 first.

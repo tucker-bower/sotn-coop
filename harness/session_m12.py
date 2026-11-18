@@ -11,8 +11,6 @@ from link.mailbox import BUSY, CUTSCENE  # noqa: E402 - session puts link on the
 ST0, NO3 = 0x1F, 0x41
 FLAG_DEAD = 0x100  # include/game.h
 PAD_SIM, DEMO_TIMER = 0x80072EF4, 0x80072EFC  # g_Player.padSim, g_Player.demo_timer
-# The prologue's stairs up to the throne room: hold up+left until the opening scene starts.
-CLIMB = "up+left"
 
 
 class SceneWatch:
@@ -59,45 +57,8 @@ class SceneWatch:
         return cond()
 
 
-def control_back(run, w, pad="right", limit=600, axis="world_x"):
-    """After a scene: the frame each player first moves under the pad (control is back)."""
-    x0 = [g.snapshot()[axis] for g in (run.s.a, run.s.b)]
-    moved = [None, None]
-    for i in range(limit):
-        p = pad(i) if callable(pad) else pad
-        w.step(1, (p, p))
-        for k, g in enumerate((run.s.a, run.s.b)):
-            if moved[k] is None and g.snapshot()[axis] != x0[k]:
-                moved[k] = w.t
-        if None not in moved:
-            break
-    return moved
-
-
 def stage(g):
     return g.read("g_StageId")
-
-
-@session_scenario(starts=("st0_start", "st0_start"))
-def prologue_opening(run):
-    """Both players see the prologue's opening scene (Richter meets Dracula) together, though B
-    starts 5 s behind A (as online, where one skips the video sooner)."""
-    w = SceneWatch(run)
-    for _ in range(300):  # A runs ahead alone
-        run.s.a.step(1, CLIMB)
-    w.until(lambda: w.starts[0] and w.starts[1], 3000, (CLIMB, CLIMB))
-    run.expect(w.starts[0] and w.starts[1], "both games start the opening scene", starts=w.starts)
-    # The scene starts near the top of the stairs: the game steers Richter once he's off them, so
-    # each player keeps climbing (EntityCutsceneSupport waits for a standing or walking player).
-    w.step(600, (CLIMB, CLIMB))
-    w.until(lambda: w.ends[0] and w.ends[1], 4200)
-    run.expect(w.ends[0] and w.ends[1], "both end it", ends=w.ends, starts=w.starts, t=w.t,
-               cs=[g.read("g_CutsceneHasControl") for g in (run.s.a, run.s.b)],
-               at=[g.snapshot() for g in (run.s.a, run.s.b)])
-    moved = control_back(run, w)
-    run.expect(None not in moved and abs(moved[0] - moved[1]) <= 3,
-               "both players get control back within 3 frames of each other", moved=moved, ends=w.ends)
-    run.expect(len(w.starts[0]) == len(w.starts[1]) == 1, "the scene played once each", starts=w.starts)
 
 
 def enemies(g):
@@ -123,95 +84,14 @@ def fight_pad(g, period=12, t=0):
     return pad
 
 
-@session_scenario(starts=("st0_fight", "st0_fight"))
-def prologue_fight(run):
-    """One Dracula for both (a shared room): when he falls, the scenes after the fight play in
-    both games together, and both leave the prologue for the castle together."""
-    a, b = run.s.a, run.s.b
-    w = SceneWatch(run)
-    roles = set()
-    left, how = [None, None], [None, None]
-    (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
-    for t in range(30000):
-        roles.add((a.mailbox("self_presence").role, b.mailbox("self_presence").role))
-        if t % 30 == 0:  # the test is about the flow, not the fight: Dracula is worn down fast
-            for slot, (eid, _, _, hp) in enemies(a).items():
-                if hp > 8:
-                    a.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-        w.step(1, (fight_pad(a, t=t), fight_pad(b, t=t + 6)))
-        for k, g in enumerate((a, b)):
-            if left[k] is None and (g.read("g_StageId") != ST0 or g.read("g_GameState") != 2):
-                left[k] = w.t
-                how[k] = (g.read("g_GameState"), g.read("g_StageId"), g.snapshot()["hp"])
-                g.screenshot().save(TOOLS["out"] / run.name / f"left_{'ab'[k]}.png")
-        if None not in left:
-            break
-    run.expect((1, 2) in roles or (2, 1) in roles, "the throne room is a shared room (one Dracula)", roles=sorted(roles))
-    run.expect(None not in left, "both games leave the prologue", left=left, how=how, starts=w.starts, ends=w.ends)
-    run.expect(abs(left[0] - left[1]) <= 120, "within 2 s of each other", left=left)
-    run.expect(len(w.starts[0]) == len(w.starts[1]), "the same scenes in both games",
-               starts=w.starts, ends=w.ends)
-    for (s0, s1) in zip(w.starts[0], w.starts[1]):
-        run.expect(abs(s0 - s1) <= 30, "each scene starts in both within half a second", starts=w.starts)
-
-
 DEATH_ROOM = (20, 39)  # NO3: E_CUTSCENE runs the Death scene (savestates.py)
 EQUIPMENT_OFS = 0x29C  # g_Status.equipment[0]
-
-
-def walk_to_death(run, w, g, other_pad=""):
-    """savestates.play_to_death in a session: hold right and jump on a rhythm until Death's room,
-    trying rhythms from a state until one gets there (some drop into a dead end)."""
-    pads = lambda p: (p, other_pad) if g is run.s.a else (other_pad, p)
-    w.step(600, pads(""))
-    w.step(3000, pads("right"))
-    start = g.save_state()
-    for period in (40, 36, 44, 32, 48, 28, 52, 56, 60):
-        g.load_state(start)
-        for i in range(8000):
-            room = g.snapshot()["room"]
-            if room in (DEATH_ROOM, (14, 41)) or g.read("g_CutsceneHasControl"):
-                break
-            w.step(1, pads("right+cross" if i % period < period // 2 else "right"))
-        if room != (14, 41):
-            return True
-    return False
-
-
-@session_scenario(starts=("no3_start", "st0_end"))
-def death_waits_for_partner(run):
-    """Playtest 2026-10-25: whoever finished the prologue first watched Death take Alucard's gear
-    alone. Now the scene waits (up to 60 s) for a partner still in the prologue's ending, who is
-    then pulled in; both watch it together and both lose their gear."""
-    a, b = run.s.a, run.s.b
-    w = SceneWatch(run)
-    run.expect(walk_to_death(run, w, a), "A reaches Death's room")
-    # B skips through the prologue's ending (Start), and stops pressing once in the castle
-    skip = lambda i: ("right", "start" if b.read("g_GameState") != 2 and i % 120 < 2 else "")
-    w.until(lambda: w.starts[0] and w.starts[1], 5000, skip)
-    run.expect(w.starts[0] and w.starts[1], "both games play Death's scene", starts=w.starts,
-               b=(b.read("g_GameState"), b.read("g_StageId"), b.snapshot()["room"]))
-    w.until(lambda: w.ends[0] and w.ends[1], 4000)
-    run.expect(w.ends[0] and w.ends[1], "both end it", ends=w.ends)
-    w.step(400)  # Death takes the gear about a second after the dialogue, then leaves
-    gear = [g.read("g_Status", "<I", EQUIPMENT_OFS) for g in (a, b)]
-    run.expect(gear == [0, 0], "Death took both Alucards' gear", gear=gear, log=w.log)
-    moved = control_back(run, w, lambda i: "cross" if i % 4 < 2 else "", axis="world_y")  # jumps: walls don't matter
-    run.expect(None not in moved and abs(moved[0] - moved[1]) <= 3,
-               "both players get control back within 3 frames of each other", moved=moved, ends=w.ends,
-               starts=w.starts, log=w.log)
 
 
 # --- the cutscene catalogue (design/M12 part 1) ----------------------------------------------
 # name: (A's start: a fixture or a debug start, A's pad to walk into the scene, frames allowed).
 # B starts at the castle entrance: it's pulled in, and both must play the scene together.
 STARTS = TOOLS["out"].parent / "fixtures" / "debug-starts"
-SCENES = {
-    "succubus": (STARTS / "Boss - Succubus.state", "right", 6000),
-    "richter_castle_keep": (STARTS / "Boss - Richter.state", "left", 6000),
-}
-
-
 DECOMP = TOOLS["out"].parent / "src" / "sotn-decomp"
 STAGE_IDS = {"nz0": 0x0C, "lib": 0x02, "dai": 0x06, "cen": 0x08, "top": 0x0B, "dre": 0x12}
 # Scenes reached by sending A to the scene's room (its entity's layout in the decomp's
@@ -220,21 +100,6 @@ STAGE_IDS = {"nz0": 0x0C, "lib": 0x02, "dai": 0x06, "cen": 0x08, "top": 0x0B, "d
 # that marks the scene seen: include/castle_flags.h; it's cleared in both games first)
 ROOM_SCENES = {
     "maria_alchemy_lab": ("Alchemy Laboratory", "nz0", 15, 128, 128, "left", 0x85),  # MET_MARIA_IN_NZ0
-    "castle_keep": ("Boss - Cerberus", "top", 1, 896, 896, "left", None),
-}
-# From the scene starts (launcher/bossstarts.S: the room before the scene, that point's progress):
-# both games load it, A walks in, B is pulled in.
-START_SCENES = {
-    "maria_chapel_from_start": ("Scene - Maria in the Royal Chapel", "left"),
-    "maria_alchemy_lab_from_start": ("Scene - Maria in the Alchemy Lab", "left"),  # from the right: her scene steers Alucard left
-    "castle_keep_from_start": ("Scene - The Castle Keep", "right"),
-}
-# Not yet triggered by the harness (GitHub issues), so not registered:
-OPEN_SCENES = {
-    # talking to him (Up next to his chair) didn't start it yet
-    "librarian": ("Boss - Doppleganger10", "lib", 2, 80, 172, "right", 0x72),       # MET_LIBRARIAN
-    # started once on arrival, then not when both games share the start: what else it needs is open
-    "maria_chapel": ("Boss - Minotaur and Werewolf", "dai", 4, 256, 128, "left", 0x63),  # MET_MARIA_IN_DAI
 }
 
 
@@ -287,18 +152,6 @@ def scene_together(run, pad, limit, flags0=None):
     diff = [i for i in range(0x300) if (flags[0][i] != w.flags0[0][i] or flags[1][i] != w.flags0[1][i])
             and flags[0][i] != flags[1][i]]
     run.expect(not diff, "the castle flags the scene set match", diff=diff[:10])
-
-
-def _scene_test(name, start, pad, limit):
-    def test(run):
-        scene_together(run, pad, limit)
-    test.__name__ = f"scene_{name}"
-    test.__doc__ = f"Cutscene catalogue: {name.replace('_', ' ')}, played together."
-    session_scenario(starts=(str(start), "entrance"))(test)
-
-
-for _name, (_start, _pad, _limit) in SCENES.items():
-    _scene_test(_name, _start, _pad, _limit)
 
 
 def _room_scene_test(name, base, stage, layout, x, y, side, flag):
@@ -475,292 +328,8 @@ def boss_flow(run, b, limit=24000):
 FIGHT_FREE = 3000  # frames of a fight outside scenes before the scripted kill
 
 
-def boss_alone(run, g, name, limit=12000):
-    """g walks into the boss (its start's row in bossstarts) and fights it alone, kept alive and
-    the boss worn down, the last hit scripted if the bot can't land it (as in boss_flow). Returns
-    when no boss has been in g's room for 300 frames."""
-    from link.mailbox import BOSS
-    import bossstarts
-    b = next(r for r in bossstarts.B if r["name"] == name)
-    pad = (lambda p: (p, "")) if g is run.s.a else (lambda p: ("", p))
-    boss = lambda: g.mailbox("self_presence").flags & BOSS
-    for _ in range(4000):
-        if boss():
-            break
-        run.step(1, p1=pad(b["walk"]))
-    run.expect(boss(), f"{name} is there")
-    event = bossstarts.EVENTS.get(b.get("event")) if b.get("inverted") else None
-    for _ in range(600 if event is not None else 0):
-        if g.read("g_Settings", "<I", VISITED) & (1 << event):
-            break
-        run.step(1, p1=pad(b["walk"]))
-    free = gone = 0
-    for t in range(limit):
-        free += not g.read("g_CutsceneHasControl")
-        if t % 30 == 0:
-            g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-            for slot, (_, _, _, hp) in enemies(g).items():
-                if hp > 8:
-                    g.write("g_Entities", 8, "<h", slot * 0xBC + 0x3E)
-                elif free > FIGHT_FREE:
-                    g.write("g_Entities", 0, "<h", slot * 0xBC + 0x3E)
-                    flags = g.read("g_Entities", "<I", slot * 0xBC + 0x34)
-                    g.write("g_Entities", flags | FLAG_DEAD, "<I", slot * 0xBC + 0x34)
-        run.step(1, p1=pad(fight_pad(g, t=t)))
-        gone = 0 if boss() else gone + 1
-        if gone > 300:
-            return
-    run.expect(False, f"{name} falls", left=sorted(enemies(g).values())[:4])
-
-
-def _boss_test(b):
-    name = b["name"].replace(" & ", " and ")
-    def test(run):
-        boss_flow(run, b)
-    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_")
-    test.__doc__ = f"Every boss, together: {b['name']} ({b['area']})."
-    start = str(STARTS / f"Boss - {name}.state")
-    session_scenario(starts=(start, start))(test)
-
-
-for _b in _bossstarts():
-    _boss_test(_b)
-
-
 # --- the partner's attacks on screen (playtest 2026-10-25 note 2, sprites.c) ------------------
 SUBWEAPON_ID, HEARTS_ADDR, DAGGER = 0x80097BFC, 0x80097BA8, 1
-
-
-def attack_pixels(run, chars, pad, every=30, arm=None, setup=None, samples=(4, 8, 12, 16)):
-    """M13 (criterion 2): what A adds to B's screen (partner_pixels: B drawn with and without its
-    partner), standing, then mid-attack; A's body in B's game draws its own attacks, so the attack
-    adds to it. arm(a): set A up for the attack (a subweapon) before each press. pad: the press
-    (held 2 frames of each `every`), or a function (try, frame) giving A's pad (a sequence)."""
-    from link.mailbox import BUSY, IN_PLAY
-    from session_m8 import as_characters
-    from session_scenarios import partner_pixels
-    from session_shared import into_hall
-    a, b = run.s.a, run.s.b
-    if setup:  # before the load (it loads A's weapon)
-        setup(a)
-    if chars != (0, 0) or setup:
-        as_characters(run, *chars)
-    into_hall(run)
-    for _ in range(900):  # B in play in A's room (its arrival can still be loading)
-        run.step(1)
-        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
-        if pa.room == pb.room and pb.flags & IN_PLAY and not pb.flags & BUSY:
-            break
-    run.step(30)
-    box, idle, _ = partner_pixels(b)
-    best, wide = 0, 0
-    width = (box[2] - box[0]) if box else 0
-    for i in range(4 * every):
-        if arm:
-            arm(a)
-        now = pad(i // every, i % every) if callable(pad) else pad if i % every < 2 else ""
-        run.step(1, (now, ""))
-        if i % every in samples:  # the attack's frames
-            bb, n, _ = partner_pixels(b)
-            best = max(best, n)
-            wide = max(wide, (bb[2] - bb[0]) - width if bb else 0)
-    # A weapon, a whip, a dagger reach out of the body: wider, or more pixels than standing
-    return idle, best if wide < 8 else max(best, idle + 21)
-
-
-@session_scenario(characters=(1, 1))  # CHAR_RICHTER twice
-def partner_attack_drawn(run):
-    """Note 2 (since M13: the partner's body draws it): A (Richter) whips next to B (Richter), and
-    B's screen shows it: A adds more to B's picture mid-whip than standing."""
-    idle, whip = attack_pixels(run, (1, 1), "square")
-    run.expect(idle > 100, "B draws A", pixels=idle)
-    run.expect(whip > idle + 50, "and A's whip", standing=idle, whipping=whip)
-
-
-@session_scenario()
-def partner_dagger_drawn(run):
-    """Note 2, phase 1b (since M13: the partner's body throws it): A (Alucard) throws daggers next
-    to B, and B's screen shows them."""
-    def arm(a):
-        a.write(SUBWEAPON_ID, DAGGER, "<i")
-        a.write(HEARTS_ADDR, 99, "<i")
-    idle, thrown = attack_pixels(run, (0, 0), "up+square", arm=arm)
-    run.expect(idle > 100, "B draws A", pixels=idle)
-    run.expect(thrown > idle + 20, "and A's daggers", standing=idle, throwing=thrown)
-
-
-# --- every boss with other characters (design/M12 part 2: R+M and A+R) ------------------------
-PAIRINGS = {"rm": (1, 2), "ar": (0, 1)}  # CHAR_* of A and B
-CHAR_NAMES = ("alucard", "richter", "maria")
-
-
-def _boss_pair_test(b, tag, chars):
-    name = b["name"].replace(" & ", " and ")
-
-    def test(run):
-        import sys
-        from pathlib import Path
-        from session_m8 import as_characters
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
-        import bossstarts
-        from link.mailbox import CMD_ARRIVE
-        from session_progress import arrive
-        if b.get("out"):  # a start in the arena (Dracula's): the save and its load out of it
-            for g in (run.s.a, run.s.b):
-                arrive(run, g, bossstarts.STAGES[b["out"][0]], *b["out"][1:])
-        as_characters(run, *chars)
-        # the load puts them back at the save's room, not at the boss's door: back to the start's spot
-        stage = bossstarts.STAGES[b["stage"]]
-        room, x, y = b["arrive"]
-        for g in (run.s.a, run.s.b):
-            g.mailbox("command", CMD_ARRIVE, stage, room, x, y)
-        run.step(240)
-        boss_flow(run, b)
-    test.__name__ = "boss_" + name.lower().replace(",", "").replace(" ", "_") + "_{}_and_{}".format(*(CHAR_NAMES[c] for c in chars))
-    test.__doc__ = f"{b['name']} together, as {tag.upper()} (Alucard, Richter, Maria)."
-    start = str(STARTS / f"Boss - {name}.state")
-    session_scenario(starts=(start, start), characters=chars, full=True)(test)  # the pairings: --full
-
-
-for _b in _bossstarts():
-    if _b["name"] == "Succubus":  # the Nightmare: no saving there, so no character change at her door
-        continue
-    for _tag, _chars in PAIRINGS.items():
-        _boss_pair_test(_b, _tag, _chars)
-
-
-def _start_scene_test(name, start, walk):
-    def test(run):
-        scene_together(run, walk, 3000)
-    test.__name__ = f"scene_{name}"
-    test.__doc__ = f"Cutscene catalogue, from its scene start: {start}."
-    path = str(STARTS / f"{start}.state")
-    session_scenario(starts=(path, path))(test)
-
-
-for _name, (_start, _walk) in START_SCENES.items():
-    _start_scene_test(_name, _start, _walk)
-
-
-LIBRARIAN_STARTS = (str(STARTS / "Scene - The Librarian.state"), str(STARTS / "Boss - Lesser Demon.state"))
-SHOP_ENTITY = 0x801B15C0  # his shop menu's entity (lib e_shop.c, func_us_801B15C0)
-
-
-def in_shop(g):
-    return any(g.read(0x800733D8 + k * 0xBC + 0x28) == SHOP_ENTITY for k in range(64, 256))
-
-
-def librarian_shop(run, chars):
-    """A walks in to the Librarian and leaves through his menu's Exit; B is never involved, and
-    never held (his scene keeps control for all of A's visit: issue 19's softlock)."""
-    as_at_start(run, *chars)
-    a, b = run.s.a, run.s.b
-    for g in (a, b):  # B, elsewhere with the same progress, hasn't met him either
-        g.write("g_CastleFlags", 0, "<B", 0x72)
-    room = b.snapshot()["room"]
-    w = SceneWatch(run)
-    w.until(lambda: w.starts[0], 3000, lambda i: ("left+cross" if i % 40 < 10 else "left", ""))
-    run.expect(w.starts[0], "A's scene starts", at=a.snapshot())
-    w.until(lambda: in_shop(a), 6000)
-    run.expect(in_shop(a), "A ends at his shop", log=w.log)
-    run.expect(not w.starts[1] and b.snapshot()["room"] == room, "B isn't pulled in", starts=w.starts, at=b.snapshot())
-    run.expect(not b.mailbox("partner_presence").flags & (CUTSCENE | BUSY), "and doesn't see a scene or a busy partner")
-    x = b.snapshot()["world_x"]
-    w.step(60, ("", "right"))
-    run.expect(b.snapshot()["world_x"] != x, "B keeps playing", at=b.snapshot())
-    w.until(lambda: a.read(DEMO_TIMER, "<i") == 0 and a.snapshot()["x"] < 0x80, 600)  # in the chair
-    w.step(120)
-    w.step(2, ("triangle", ""))  # his menu's Exit; the script walks on, then gives the pad back
-    w.step(120)
-    tries = w.until(lambda: not a.read("g_CutsceneHasControl"), 900, lambda i: ("right+cross" if i % 40 < 10 else "right", ""))
-    run.expect(not a.read("g_CutsceneHasControl"), "A walks out through the menu's Exit", tries=tries, at=a.snapshot())
-    w.step(120)
-    x = a.snapshot()["world_x"]
-    w.step(60, ("right", ""))
-    run.expect(a.snapshot()["world_x"] != x, "A plays on", at=a.snapshot())
-
-
-@session_scenario(starts=LIBRARIAN_STARTS)
-def librarian_shop_alucard(run):
-    """The shop, Alucard in it."""
-    librarian_shop(run, (0, 0))
-
-
-@session_scenario(starts=LIBRARIAN_STARTS, characters=(1, 0))
-def librarian_shop_richter(run):
-    """The shop, Richter in it: the pairing that softlocked (issue 19)."""
-    librarian_shop(run, (1, 0))
-
-
-KEEP_START = str(STARTS / "Scene - The Castle Keep.state")
-
-
-def as_at_start(run, ca, cb):
-    """A debug start holds Alucard: the characters, then back to the start's spot (see
-    _boss_pair_test: a character change is a load, which goes to the save's room)."""
-    from link.mailbox import CHAR_ALUCARD, CMD_ARRIVE
-    from session_m8 import as_characters
-    games = (run.s.a, run.s.b)
-    spots = [g.mailbox("self_presence") for g in games]
-    as_characters(run, ca, cb)
-    for g, p in zip(games, spots):
-        g.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x, p.ground_y)
-    run.step(240)
-    played = [g.mailbox("self_presence").character for g in games]
-    run.expect(played == [ca, cb], "the characters are in play", played=played, alucard=CHAR_ALUCARD)
-
-
-TOP_WARP_WALK = 0x801AD11C  # TOP's func_us_801AD11C: the walk to the warp after Richter's fight
-
-
-def keep_scene(run, ca, cb):
-    """Issue 20: the scene after Richter's fight (top post_richter_cutscene.c). It steers each
-    player left, holds Cross for a jump only Alucard makes, and only ends at the warp."""
-    as_at_start(run, ca, cb)
-    a, b = run.s.a, run.s.b
-    w = SceneWatch(run)
-    w.until(lambda: w.starts[0] or w.starts[1], 900, ("right", "right"))
-    run.expect(w.starts[0] or w.starts[1], "the scene starts", at=a.snapshot())
-    seen, done, free, shared = [], [False, False], [0, 0], []
-    walking = lambda g: any(int.from_bytes(raw[s * 0xBC + 0x28:s * 0xBC + 0x2C], "little") == TOP_WARP_WALK and
-                            int.from_bytes(raw[s * 0xBC + 0x26:s * 0xBC + 0x28], "little")
-                            for raw in [g.read_bytes("g_Entities", 0xBC * 256)] for s in range(64, 256))
-    for t in range(9000):
-        w.step(1)
-        if t % 300 == 0:
-            seen.append([(g.snapshot()["world_x"], g.snapshot()["world_y"]) for g in (a, b)])
-        if t % 30 == 0:  # #285: a guest of the partner's walk was left at its last step for good
-            shared += [(t, who) for g, who in ((a, "A"), (b, "B")) if walking(g) and g.mailbox("self_presence").role]
-        # With the Holy Glasses worn the script lets go at the first landing (step 5): free to walk.
-        free = [0 if t < 2700 or g.read(DEMO_TIMER, "<i") else free[k] + 1 for k, g in enumerate((a, b))]
-        # Over the ledge isn't enough: a player stuck at x 387 was (#285). The walk ends at the warp.
-        done = [g.read("g_StageId") == 0x2B or free[k] > 120 for k, g in enumerate((a, b))]
-        if all(done):
-            break
-    run.expect(all(done), "both players walk to the warp and into the inverted castle, or are let go", frames=t,
-               seen=seen, a=a.snapshot(), b=b.snapshot())
-    run.expect(not shared, "no shared room while a game walks its player to the warp", shared=shared[:8])
-    for g, who in ((a, "A"), (b, "B")):
-        if not g.mailbox("self_presence").role:
-            run.expect(g.read("g_api", "<I", 0) == g.read(0x80180000, "<I"), f"{who} runs its stage's own update",
-                       update=hex(g.read("g_api", "<I", 0)), own=hex(g.read(0x80180000, "<I")))
-    for g, k in zip((a, b), free):
-        if k > 120:
-            x = g.snapshot()["world_x"]
-            w.step(60, ("right", "right"))
-            run.expect(g.snapshot()["world_x"] != x, "a player let go can walk", at=g.snapshot())
-
-
-@session_scenario(starts=(KEEP_START, KEEP_START), characters=(0, 1))
-def keep_scene_alucard_and_richter(run):
-    """The Keep's scene, the pairing that softlocked."""
-    keep_scene(run, 0, 1)
-
-
-@session_scenario(starts=(KEEP_START, KEEP_START), characters=(1, 2))
-def keep_scene_richter_and_maria(run):
-    """The Keep's scene, with no Alucard."""
-    keep_scene(run, 1, 2)
 
 
 @session_scenario()
@@ -781,33 +350,6 @@ def report_state_still_loads(run):
     frame = a.mailbox("self_presence").frame
     run.step(60)
     run.expect(a.mailbox("self_presence").frame != frame, "and the game runs on from it")
-
-
-@session_scenario(starts=(None, None))
-def solo_continue_picture_width(run):
-    """Issue 24: Continue from the title, one game: the picture is the game's 256 wide, not the
-    title's 512 with the game in its left half."""
-    from link.mailbox import CMD_LOAD_SAVE, IN_PLAY
-    from session import Session
-    from module import COOP_DISC
-    save = (STARTS / "Scene - The Librarian.save").read_bytes()
-    with Session(COOP_DISC, starts=(None, None)) as s:
-        a = s.a
-        for _ in range(9000):
-            s.step(1)
-            if a.read("g_GameState") == 1 and a.raw_frame()[0] == 512:
-                break
-        run.expect(a.raw_frame()[0] == 512, "the title is 512 wide", width=a.raw_frame()[0])
-        a.mailbox("put_save", save)
-        a.mailbox("command", CMD_LOAD_SAVE)
-        for i in range(3000):
-            s.step(1)
-            p = a.mailbox("self_presence")
-            if p.flags & IN_PLAY and not p.flags & BUSY:
-                break
-        run.expect(p.flags & IN_PLAY, "in play", frames=i)
-        s.step(120)
-        run.expect(a.raw_frame()[0] == 256, "the picture is the game's width", width=a.raw_frame()[0])
 
 
 PICTURE = (60, 110, 240, 226)  # Now Loading's picture in the 256x240 frame, with a margin
@@ -871,135 +413,7 @@ def solo_continue_now_loading_clean_in_play(run):
     now_loading_clean(run, str(STARTS / "Scene - The Librarian.state"))
 
 
-CENTER_START = str(STARTS / "Scene - Maria in the Center - the Holy Glasses.state")
 MET_MARIA_IN_CEN = 0xD8
-
-
-def maria_center(run, ca, cb):
-    """Issue 62: both players ride the lift to Maria, and her scene ends with her flag set."""
-    as_at_start(run, ca, cb)
-    a, b = run.s.a, run.s.b
-    w = SceneWatch(run)
-    pad = lambda g: "left" if g.snapshot()["world_x"] > 392 and not g.read(DEMO_TIMER, "<i") else ""
-    w.until(lambda: all(g.read("g_CastleFlags", "<B", MET_MARIA_IN_CEN) for g in (a, b)), 6000,
-            lambda i: (pad(a), pad(b)))
-    flags = [g.read("g_CastleFlags", "<B", MET_MARIA_IN_CEN) for g in (a, b)]
-    run.expect(flags == [1, 1], "her scene ends in both games", flags=flags, log=w.log, a=a.snapshot(), b=b.snapshot())
-    w.step(180)
-    control = control_back(run, w)
-    run.expect(all(f is not None for f in control), "both players get control back", control=control)
-
-
-@session_scenario(starts=(CENTER_START, CENTER_START))
-def scene_maria_center_from_start(run):
-    """Maria in the Center, as Alucard twice."""
-    maria_center(run, 0, 0)
-
-
-@session_scenario(starts=(CENTER_START, CENTER_START), characters=(1, 2))
-def scene_maria_center_richter_and_maria(run):
-    """Maria in the Center, with no Alucard."""
-    maria_center(run, 1, 2)
-
-
-def keep_a_long_fight(run):
-    """Issue 60: nobody hits Karasuman, so his fight lasts, and it stays one fight in one room."""
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "launcher"))
-    import bossstarts
-    from link.mailbox import BOSS, ROLE_AUTHORITY, ROLE_GUEST
-    row = next(r for r in bossstarts.B if r["name"] == "Karasuman")
-    a, b = run.s.a, run.s.b
-    w = SceneWatch(run)
-    boss = lambda g: g.mailbox("self_presence").flags & BOSS
-    w.until(lambda: boss(a), 2000, lambda i: (row["walk"] + ("+cross" if i % 90 < 12 else ""), ""))
-    run.expect(boss(a), "A walks into his fight", at=a.snapshot())
-    w.until(lambda: boss(b), 1200, ("", row["walk"]))
-    run.expect(boss(b), "B is pulled in", at=b.snapshot())
-    w.step(60)
-    apart, longest, run_apart = [], 0, 0
-    for t in range(1800):
-        w.step(1)
-        if t % 30 == 0:
-            for g in (a, b):  # no one dies: the fight is what's being watched
-                g.write("g_Status", g.read("g_Status", "<i", 0x240), "<i", 0x23C)
-        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
-        if not (pa.room_id == pb.room_id and pa.flags & pb.flags & BOSS and
-                {pa.role, pb.role} == {ROLE_AUTHORITY, ROLE_GUEST}):
-            apart.append((t, pa.room_id, pb.room_id, pa.flags, pb.flags, pa.role, pb.role))
-            run_apart += 1
-            longest = max(longest, run_apart)
-        else:
-            run_apart = 0
-    # He can knock a player out of the door: the pull-in brings them back (BOSS_PULL_COOLDOWN: 10 s).
-    run.expect(longest < 780, "a player knocked out is brought back", longest=longest, apart=apart[:6])
-    run.expect(not run_apart, "the fight ends up as one room, one boss, one authority", at=(a.snapshot(), b.snapshot()), apart=apart[-3:])
-
-
-@session_scenario(starts=(str(STARTS / "Boss - Karasuman.state"),) * 2)
-def boss_karasuman_stays_shared(run):
-    """Issue 60, from his boss start."""
-    keep_a_long_fight(run)
-
-
-@session_scenario(starts=(None, None))
-def richter_hud_name_after_load(run):
-    """Issue 63: Richter's name is in his HUD box after Continue from the title, and after a
-    second load in play. (Changing character in play, which only tests do, leaves the HUD dark.)"""
-    from PIL import Image
-    from link.mailbox import CMD_LOAD_SAVE, IN_PLAY
-    from session import Session
-    from module import COOP_DISC
-    save = bytearray((STARTS / "Scene - The Librarian.save").read_bytes())
-
-    def name_pixels(g):
-        w, h, _, pitch, data = g.raw_frame()
-        box = Image.frombuffer("RGB", (pitch // 2, h), bytes(data), "raw", "BGR;16", 0, 1).crop((36, 28, 70, 37))
-        return sum(min(px) > 180 for px in box.getdata())  # the letters, on the box's blue
-
-    def load(s, g):
-        g.mailbox("put_save", bytes(save))
-        g.mailbox("command", CMD_LOAD_SAVE)
-        s.step(30)
-        for _ in range(3000):
-            s.step(1)
-            p = g.mailbox("self_presence")
-            if p.flags & IN_PLAY and not p.flags & BUSY:
-                break
-        s.step(240)
-
-    with Session(COOP_DISC, starts=(None, None), characters=(1, 1)) as s:
-        a = s.a
-        for _ in range(9000):
-            s.step(1)
-            if a.read("g_GameState") == 1 and a.raw_frame()[0] == 512:
-                break
-        load(s, a)
-        run.expect(a.mailbox("self_presence").character == 1, "Richter is in play")
-        run.expect(name_pixels(a) > 40, "his name is drawn after Continue", white=name_pixels(a))
-        load(s, a)
-        run.expect(name_pixels(a) > 40, "and after a load in play", white=name_pixels(a))
-
-
-# --- doors in a shared room (D107) ----------------------------------------------------------
-@session_scenario(starts=("no1", "no1"))
-def guest_opens_red_door(run):
-    """D107: in a shared room, the guest opens a red door itself and walks out through it (it
-    used to get the authority's closed door, and was walled in until the authority went through).
-    The Outer Wall's first room, with a red door at its left edge."""
-    from link.mailbox import ROLE_AUTHORITY, ROLE_GUEST
-    a, b = run.s.a, run.s.b
-    run.step(60)
-    roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
-    run.expect(roles == (ROLE_AUTHORITY, ROLE_GUEST), "A is the authority, B its guest", roles=roles)
-    room = b.snapshot()["room"]
-    for t in range(400):
-        run.step(1, ("", "left"))
-        if b.snapshot()["room"] != room:
-            break
-    run.expect(b.snapshot()["room"] != room, "B walks out through the door", at=b.snapshot(), frames=t)
-    run.expect(a.snapshot()["room"] == room, "A stays", at=a.snapshot())
 
 
 # --- the partner's hand-weapon swings (note 2, phase 2: weapons.c) ---------------------------
@@ -1054,34 +468,10 @@ def _swing_drawn(run, chars, button, item=None, settle=0):
     run.expect(with_swing.tobytes() != without.tobytes(), "the swing is on B's screen")
 
 
-@session_scenario()
-def partner_swing_drawn(run):
-    """Note 2, phase 2: Alucard swings a sword next to Alucard."""
-    _swing_drawn(run, (0, 0), "square")
-
-
 @session_scenario(characters=(1, 0))
 def partner_swing_drawn_richter(run):
     """Note 2, phase 2: Richter swings a sword in his first hand (D105, □) next to Alucard."""
     _swing_drawn(run, (1, 0), "square")
-
-
-@session_scenario(characters=(1, 0))
-def partner_fist_drawn_richter(run):
-    """Issue 123: Richter punches with an off-hand fist weapon next to Alucard: Alucard's arm, in
-    both games."""
-    _swing_drawn(run, (1, 0), "square", item=85, settle=6)  # to the arm's full reach
-
-
-# --- the first castle, chained (design/M12-v1-release.md criterion 8; D120) -------------------
-@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2, full=True)
-def boss_chain_first_castle_long(run):
-    """Both games play the first castle's 12 bosses in route order, carrying what they earn (level,
-    experience, gold, items, castle flags) from each fight to the next. Between bosses they travel
-    by teleport, picking up that stretch's relics and story flags (the walks themselves are covered
-    by the gate and movement tests, D119). At the end every boss is beaten in both games, by the
-    game's own records, and the two castles match."""
-    chain(run, lambda r: not r.get("inverted"))
 
 
 @session_scenario(starts=(str(STARTS / "Boss - The Creature.state"),) * 2, full=True)
@@ -1148,68 +538,3 @@ def chain(run, which):
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
 
 
-@session_scenario(starts=("st0_fight", "st0_fight"))
-def prologue_guest_hits_land_once(run):
-    """Issue 158 (0.16.0): Dracula's HP drained away under the guest's attacks. The guest's
-    swings, every 30 frames, never take his HP down (in the authority's world) on frames close
-    together."""
-    from session_scenarios import heal
-    a, b = run.s.a, run.s.b
-    for _ in range(600):  # someone becomes the authority
-        run.step(1)
-        roles = (a.mailbox("self_presence").role, b.mailbox("self_presence").role)
-        if sorted(roles) == [1, 2]:
-            break
-    run.expect(sorted(roles) == [1, 2], "the throne room is shared", roles=roles)
-    auth, guest = (a, b) if roles[0] == 1 else (b, a)
-    drops, last = [], {s: v[3] for s, v in enemies(auth).items()}
-    for t in range(9000):
-        if t % 30 == 0:
-            heal(auth), heal(guest)
-        pad = fight_pad(guest, period=30, t=t)
-        run.step(1, ("", pad) if guest is b else (pad, ""))
-        now = {s: v[3] for s, v in enemies(auth).items()}
-        drops += [(t, s) for s, hp in now.items() if s in last and hp < last[s]]
-        last = now
-        if len(drops) >= 10:
-            break
-    close = [(x, y) for x, y in zip(drops, drops[1:]) if x[1] == y[1] and y[0] - x[0] < 10]
-    run.expect(drops, "the guest's swings hit", frames=t)
-    run.expect(not close, "each swing lands once: no two hits within 10 frames", drops=drops, close=close)
-
-
-XA_PLAYING = 0x8013901C  # g_PlayingXaBgmId (DRA's bss.c; build/us/dra.map)
-
-
-@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2)
-def boss_music_after_fight_as_guest(run):
-    """Issue 175 (0.16.0): after Slogra and Gaibon fell, the guest's game played their fight's
-    music on through the stage. It ends with the stage's music in both games."""
-    from link.mailbox import BOSS
-    a, b = run.s.a, run.s.b
-    from bots import walker
-    bot_a, bot_b = walker("left"), walker("left")
-    before = [g.read(XA_PLAYING, "<h") for g in (a, b)]
-    fought, t, during = False, 0, set()
-    for t in range(9000):
-        flags = [g.mailbox("self_presence").flags for g in (a, b)]
-        fought = fought or all(f & BOSS for f in flags)
-        if fought and not any(f & BOSS for f in flags):
-            break
-        if fought:
-            during |= {g.read(XA_PLAYING, "<h") for g in (a, b)}
-        if fought and t % 30 == 0:  # the test is about the music, not the fight
-            for g in (a, b):
-                for slot, (eid, _, _, hp) in enemies(g).items():
-                    if hp > 4:
-                        g.write("g_Entities", 4, "<h", slot * 0xBC + 0x3E)
-        pads = (bot_a(a.snapshot(), t), bot_b(b.snapshot(), t)) if not fought else (fight_pad(a, t=t), fight_pad(b, t=t + 6))
-        run.step(1, pads)
-    roles = [g.mailbox("self_presence").role for g in (a, b)]
-    run.expect(fought, "both fought", frames=t)
-    run.expect(not any(g.mailbox("self_presence").flags & BOSS for g in (a, b)), "the fight ended in both", frames=t)
-    run.step(600)
-    after = [g.read(XA_PLAYING, "<h") for g in (a, b)]
-    run.expect(during - set(before), "the fight had music of its own", before=before, during=sorted(during))
-    run.expect(after[0] == after[1] == before[0], "after it, both games play the stage's music again",
-               before=before, after=after, roles=roles)

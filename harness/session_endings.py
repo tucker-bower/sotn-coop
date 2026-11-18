@@ -61,6 +61,5 @@ def _ending_test(boss, start, characters, full):
 
 DRACULA = str(STARTS / "Boss - Dracula.state")
 RICHTER = str(STARTS / "Boss - Richter.state")
-for _c, _full in (((0, 0), False), ((0, 1), False), ((1, 2), False), ((2, 2), True), ((1, 1), True)):
-    _ending_test("Dracula", DRACULA, _c, _full)
-    _ending_test("Richter", RICHTER, _c, _full)
+_ending_test("Dracula", DRACULA, (0, 1), False)  # one mixed pair per ending: the others never failed alone
+_ending_test("Richter", RICHTER, (1, 2), False)
