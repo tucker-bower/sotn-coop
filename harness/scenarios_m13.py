@@ -6,7 +6,8 @@ and determinism."""
 import struct
 from pathlib import Path
 
-from module import symbols
+from module import COOP_DISC, symbols
+from scenario import scenario
 
 PAD = {"": 0, "right": 0x2000, "left": 0x8000, "cross": 0x40}  # PAD_* (include/game.h)
 
