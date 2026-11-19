@@ -20,6 +20,7 @@
 #include "character.h"
 #include "solid.h"
 #include "vram.h"
+#include <sfx.h>
 
 s32 AllocPrimitives(u8 type, s32 count); // DRA
 void FreePrimitives(s32 index);          // DRA
@@ -45,7 +46,38 @@ typedef struct {
     u32 killed[8]; // g_unkGraphicsStruct.D_80097428: the room's layout entities already killed
     u16 fgTiles;   // the room's foreground tile layer follows (after the BSS), or 0: unchanged
     u16 vramBytes; // then the stage's VRAM uploads this frame (vram.c)
+    u16 nSfx;      // after the solid calls: the sounds the stage's entities asked for this frame
 } SnapHeader;
+
+// The stage's sounds (#294): a guest doesn't run the room's enemies, whose code asks for their
+// sounds, so it heard none of them (a boss fought together was silent in one game). The
+// authority's stage update is wrapped to note what it adds to DRA's sound ring, and the guest
+// adds the same to its own.
+#define STAGE_SFX_MAX 8
+#define SFX_RING 0x100
+extern SfxRingBufferItem g_SfxRingBuffer[SFX_RING]; // DRA
+extern s16 g_sfxRingBufferWritePos;                 // DRA
+static SfxRingBufferItem s_StageSfx[STAGE_SFX_MAX];
+static s32 s_NStageSfx;
+
+static void AuthorityStageUpdate(void) {
+    s16 pos = g_sfxRingBufferWritePos;
+
+    ((const Overlay*)0x80180000)->Update();
+    for (; pos != g_sfxRingBufferWritePos && s_NStageSfx < STAGE_SFX_MAX; pos = (pos + 1) & (SFX_RING - 1)) {
+        s_StageSfx[s_NStageSfx++] = g_SfxRingBuffer[pos];
+    }
+}
+
+static void PlayStageSfx(const u8* r, s32 n) {
+    SfxRingBufferItem it;
+
+    for (; n > 0; n--, r += sizeof(SfxRingBufferItem)) {
+        __builtin_memcpy(&it, r, sizeof(it));
+        g_SfxRingBuffer[g_sfxRingBufferWritePos] = it;
+        g_sfxRingBufferWritePos = (g_sfxRingBufferWritePos + 1) & (SFX_RING - 1);
+    }
+}
 
 // The room's foreground tiles: doors, breakable walls and the like change them (and so what's
 // solid). The guest doesn't run those, so it gets the authority's tiles: a door closed in the
@@ -425,7 +457,8 @@ static void BecomeGuest(void) {
         s_HitHold[i] = 0;
     }
     // (never the stubs themselves: put back, they'd stop the room for good)
-    s_OrigUpdate = g_api.o.Update != GuestUpdate ? g_api.o.Update : ((const Overlay*)STAGE_CODE)->Update;
+    s_OrigUpdate = g_api.o.Update != GuestUpdate && g_api.o.Update != AuthorityStageUpdate ? g_api.o.Update
+                                                                                         : ((const Overlay*)STAGE_CODE)->Update;
     s_OrigSpawner = g_api.o.UpdateRoomPosition != Stub ? g_api.o.UpdateRoomPosition
                                                          : ((const Overlay*)STAGE_CODE)->UpdateRoomPosition;
     s_AppliedSeq = g_CoopLink.snapInSeq;
@@ -839,6 +872,10 @@ static void ApplySnapshot(void) {
         s_Solid = (const SolidCall*)r;
         s_NSolid = h->nSolid;
     }
+    r += h->nSolid * sizeof(SolidCall);
+    if (h->nSfx <= STAGE_SFX_MAX && r + h->nSfx * sizeof(SfxRingBufferItem) <= end) {
+        PlayStageSfx(r, h->nSfx);
+    }
     OwnOrb();
 }
 
@@ -938,6 +975,12 @@ static void CaptureSnapshot(void) {
     w += h->vramBytes;
     h->nSolid = SolidTake((SolidCall*)w, (end - w) / sizeof(SolidCall));
     w += h->nSolid * sizeof(SolidCall);
+    h->nSfx = 0;
+    if (w + s_NStageSfx * sizeof(SfxRingBufferItem) <= end) {
+        __builtin_memcpy(w, s_StageSfx, s_NStageSfx * sizeof(SfxRingBufferItem));
+        h->nSfx = s_NStageSfx;
+        w += h->nSfx * sizeof(SfxRingBufferItem);
+    }
     g_CoopLink.snapOutSize = w - g_CoopLink.snapOut;
     g_CoopLink.snapOutSeq++;
 }
@@ -1375,6 +1418,7 @@ void SharedUpdate(void) {
         VramPatch();
     }
     DecideRole();
+    s_NStageSfx = 0;
     VramRecord(s_Role == ROLE_AUTHORITY);
     SolidRecord(s_Role == ROLE_AUTHORITY);
     if (s_Role == ROLE_GUEST) {
@@ -1382,6 +1426,9 @@ void SharedUpdate(void) {
         ApplySnapshot();
     } else {
         RestoreOwnUpdate();
+        if (g_api.o.Update == ((const Overlay*)STAGE_CODE)->Update) {
+            g_api.o.Update = AuthorityStageUpdate;
+        }
     }
 }
 

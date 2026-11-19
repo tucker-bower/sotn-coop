@@ -579,3 +579,4 @@ def boss_life_up_once_alucard_and_richter(run):
     gained = {g.name: status(g)["hp_max"] - before[g.name] for g in (a, b)}
     run.expect(any(seen.values()) or any(gained.values()), "the boss left a Life Max Up", seen=seen, gained=gained)
     run.expect(gained == {"A": 5, "B": 5}, "each player's max HP +5 from it, once", gained=gained, seen=seen)
+
