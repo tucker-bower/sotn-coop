@@ -8,5 +8,6 @@ The Android app: its entry point, build and device tools.
 | `device.py` | **Manual.** Installs the APK, copies the disc and switches signing keys on a USB device. |
 | `main.py` | The app's entry point: sets up the device, then starts the launcher. |
 | `recipes/` | Our python-for-android recipes. |
+| `test_first_run.py` | Opens a fresh install on the emulator: still running after 30 s, no Python error. `scripts/release.py --android` runs it. |
 | `test_key_switch.py` | **Manual.** Checks a debug install's data survives the switch to the release key, on an emulator. |
 | `test_pair.py` | **Manual.** Plays two Android emulators together; currently fails from the emulators' test setup. |

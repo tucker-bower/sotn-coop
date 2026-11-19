@@ -42,6 +42,15 @@ def made_up_art(folder):
         pygame.image.save(s, str(Path(folder) / f"{name}.png"))
 
 
+class UnevenFont:
+    """As pygame 2.6's own font, the one Android uses: "@" and "_" a pixel taller than the rest."""
+
+    def render(self, letter, antialias, colour):
+        s = pygame.Surface((7, 12 if letter in "@_" else 11), pygame.SRCALPHA)
+        s.fill((*colour, 255), (1, 10, 5, 2) if letter == "_" else (1, 1, 5, 8))
+        return s
+
+
 class Display:
     def __init__(self):
         self.pixels = pygame.Surface((480, 270))
@@ -116,6 +125,18 @@ def main():
     check([move(0, "up", 4), move(3, "down", 4), move(1, "down", 4)] == [3, 0, 2], "a list wraps round at its ends")
     check([scroll(0, 5, 4, 10), scroll(3, 1, 4, 10), scroll(6, 9, 4, 10), scroll(5, 2, 4, 3)] == [2, 1, 6, 0],
           "a list scrolls just enough to show the selected row")
+
+    sheet, real = None, pygame.font.SysFont
+    pygame.font.SysFont = lambda *a, **k: UnevenFont()
+    try:
+        sheet = th.plain_font()
+    except ValueError as e:
+        print(f"     {e}")
+    finally:
+        pygame.font.SysFont = real
+    check(sheet is not None and sheet.subsurface((120, 24, 8, 8)).get_bounding_rect().bottom == 8
+          and sheet.subsurface((8, 16, 8, 8)).get_bounding_rect().h > 0,
+          "the plain font, from one whose letters come out at different heights (Android's: #323)")
 
     with tempfile.TemporaryDirectory() as d:
         check(not th.Theme(d).ok, "a folder with no art: the theme says it isn't ready")
