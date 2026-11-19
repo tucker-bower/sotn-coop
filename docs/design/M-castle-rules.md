@@ -17,10 +17,10 @@ Tucker, 2026-11-01: every feature that changes vanilla game logic is a toggleabl
 ## The rules
 | Rule | Kind | Default |
 |---|---|---|
-| XP gain, damage dealt, damage taken | 25–400% | 100% |
-| Enemy HP with a partner | 50–400% | 200% |
-| Enemy HP alone | 50–400% | 100% |
-| Boss aggro | 0–100% | 50% |
+| Difficulty: Easy, Medium, Hard, Nightmare, Custom (D213) | choice | Medium |
+| XP gain, damage taken (Custom only) | 25–400% | 100% |
+| Enemy HP for one player, times 1 / 2 / 2.75 / 3.5 for 1–4 players (Custom only) | 25–400% | 100% |
+| Boss aggro (Custom only) | 0–100% | 50% |
 | One shared level, one purse, revive at your partner, partner's faerie revives | toggle | on |
 | Bosses bring your partner, scenes bring your partner, teleport from the map, enemies pick the nearer player | toggle | on |
 | Richter and Maria level up, use Alucard's stats (their attacks at Alucard's damage a second, STR, INT, defense, resistances, poison and poison water: #160, #190), relics teach them, extra jumps, off-hand weapons, their familiars, their gear effects (Healing Mail, Blood Cloak) | toggle | on |

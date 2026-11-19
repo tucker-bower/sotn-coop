@@ -261,13 +261,18 @@ def main():
               and rows["button:0:l1"]["value"].startswith("L1 /"), "Your settings › buttons: the glyph for the button and for the controller's bound one")
 
         got, r, applied, ui = settings([["right"], ["back"]])
-        check(got is None and castle_rules.difficulty(r) == "Hard" and (r["enemy_hp_pct"], r["taken_pct"], r["exp_pct"]) == (300, 150, 50)
+        check(got is None and castle_rules.difficulty(r) == "Hard" and (r["enemy_hp_player_pct"], r["taken_pct"], r["exp_pct"]) == (150, 150, 50)
               and applied[-1] == r and ui.names == ["Castle settings"], "Difficulty is the first row: right is Hard, and its sliders move at once")
         got, r, _, _ = settings([["left"], ["left"], ["left"], ["back"]])
         check(castle_rules.difficulty(r) == "Easy", "left stops at Easy")
-        got, r, _, _ = settings([["down"], ["down"], ["right"], ["back"]])
-        check(r["enemy_hp_pct"] == 225 and castle_rules.difficulty(r) == "Custom",
-              "Balance is the first page: Difficulty, Back to the defaults, the sliders; moving one by hand makes it Custom")
+        from ui.screens.castle_settings import table
+        kinds = [k for k, _ in table(castle_rules.clean({}), False, None, False)]
+        custom = [k for k, _ in table(castle_rules.clean({"difficulty": "Custom"}), False, None, False)]
+        check("slider" not in kinds and custom.count("slider") == len(castle_rules.SLIDERS),
+              "the sliders are hidden unless the difficulty is Custom (#316)")
+        got, r, _, _ = settings([["right"]] * 4 + [["down"], ["down"], ["right"], ["back"]])
+        check(r["enemy_hp_player_pct"] == 225 and castle_rules.difficulty(r) == "Custom",
+              "Custom is after Nightmare and starts from its values; the sliders follow Back to the defaults")
         got, r, _, _ = settings([["page_next"], ["ok"], ["back"]])
         check(r["shared_level"] is False, "R1 / E: the Sharing page; OK on its first rule switches it")
         got, r, _, _ = settings([["page_next"], ["right"], ["back"]])
@@ -276,8 +281,8 @@ def main():
         check(off is False and r["shared_level"] is True, "a switch: right turns it OFF, left turns it ON, as it's drawn")
         got, r, _, _ = settings([["page_prev"], ["ok"], ["back"]])
         check(r["bat_carry"] is not castle_rules.clean({})["bat_carry"], "L1 / Q from the first page: the last page, Extras")
-        got, r, _, _ = settings([["page_next"]] * len(castle_rules.GROUPS) + [["down"], ["down"], ["right"], ["back"]])
-        check(r["enemy_hp_pct"] == 225, f"the pages go round: {len(castle_rules.GROUPS)} on, Balance again")
+        got, r, _, _ = settings([["right"]] * 4 + [["page_next"]] * len(castle_rules.GROUPS) + [["down"], ["down"], ["right"], ["back"]])
+        check(r["enemy_hp_player_pct"] == 225, f"the pages go round: {len(castle_rules.GROUPS)} on, Balance again")
         got, r, applied, _ = settings([["right"], ["down"], ["ok"], ["back"]])
         check(r == castle_rules.clean({}) and applied[-1] == r, "Back to the defaults (under Difficulty) restores every setting")
         got, r, applied, _ = settings([["page_next"], ["ok"], ["page_prev"], ["down"], ["ok"], ["back"]])

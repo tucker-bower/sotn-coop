@@ -430,11 +430,12 @@ def _couch(pg, quit_at_end=True):
         ("screen", "Castle settings"), ("shot", "castle-settings"),
         ("expect", lambda d: __import__("rules").difficulty(d.view.rules) == "Medium", "a new castle is on Medium"),
         ("key", pg.K_RIGHT), ("wait", 3),  # Difficulty: Medium -> Hard
-        ("expect", lambda d: (d.view.rules["enemy_hp_pct"], d.view.rules["taken_pct"], d.view.rules["exp_pct"]) == (300, 150, 50),
+        ("expect", lambda d: (d.view.rules["enemy_hp_player_pct"], d.view.rules["taken_pct"], d.view.rules["exp_pct"]) == (150, 150, 50),
          "Hard, chosen in a game, sets enemy HP, damage taken and XP at once, in the game"),
-        ("key", pg.K_LEFT), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-settings-custom"),  # back to Medium; past the defaults row, XP gain is the fourth slider
-        ("expect", lambda d: d.view.rules["exp_pct"] == 125 and d.view.playthrough.info["rules"]["exp_pct"] == 125,
-         "a slider moved in a game goes to the game and into the castle"),
+        ("key", pg.K_RIGHT), ("key", pg.K_RIGHT), *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3), ("shot", "castle-settings-custom"),  # Nightmare, Custom; past the defaults row, XP gain is the third slider
+        ("expect", lambda d: d.view.rules["exp_pct"] == 75 and d.view.playthrough.info["rules"]["exp_pct"] == 75
+         and d.view.playthrough.info["rules"]["difficulty"] == "Custom",
+         "Custom shows the sliders: one moved in a game goes to the game and into the castle"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"),
         *[("key", pg.K_UP)] * 4, ("key", pg.K_RETURN),  # Save and go back to the menu
         ("screen", "Home"), ("shot", "home-again"),
@@ -570,8 +571,10 @@ def _menus(pg):
         return Castle(d.castle.dir).info.get("rules") or {}
     steps += [("menu", "rules"), ("screen", "Castle settings"), ("key", pg.K_RETURN), ("screen", "Home"),  # no castle yet
               ("call", a_castle), ("menu", "rules"), ("screen", "which castle"), ("key", pg.K_RETURN),
-              ("screen", "Castle settings"), ("shot", "rules"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT), ("wait", 3),  # XP gain
-              ("expect", lambda d: saved_rules(d).get("exp_pct") == 125, "Options > Open settings: a slider saves to the castle"),
+              ("screen", "Castle settings"), ("shot", "rules"), *[("key", pg.K_RIGHT)] * 3,  # Medium, Hard, Nightmare, Custom
+              *[("key", pg.K_DOWN)] * 4, ("key", pg.K_RIGHT), ("wait", 3),  # XP gain: Nightmare's 50, then 75
+              ("expect", lambda d: saved_rules(d).get("exp_pct") == 75 and saved_rules(d).get("difficulty") == "Custom",
+               "Options > Open settings: Custom shows the sliders, and a slider saves to the castle"),
               ("key", pg.K_e), ("key", pg.K_RETURN), ("wait", 3), ("shot", "rules-sharing"),  # E: the Sharing page, One shared level
               ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
               ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
@@ -641,7 +644,10 @@ def _online_host(pg, code_file):
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
             ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
             # the game pauses itself to say the partner left (gameview.partner_gone): no Esc
-            ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+            ("screen", "Paused"),
+            ("expect", lambda d: d.launcher.room_code and f"Room code: {d.launcher.room_code}" in d.view.pause_items,
+             "the host's pause menu shows the room code (#317)"),
+            ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
@@ -665,7 +671,10 @@ def _online_join(pg, code_file):
              "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
             *(_rush_online_join() if RUSH else []),
             *_android_picture("join-playing"),
-            ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+            ("key", pg.K_ESCAPE), ("screen", "Paused"),
+            ("expect", lambda d: not any(i.startswith("Room code") for i in d.view.pause_items),
+             "a joiner's pause menu has no room code"),
+            ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
 
 
