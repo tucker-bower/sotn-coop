@@ -1019,3 +1019,14 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - **Enemy HP is one number, for one player.** The game multiplies it by the players it has heard from in the last 10 s, itself included: 1, 2, 2.75, 3.5 times (the M17 design's curve; `module/boss.c` PLAYERS_HP, `launcher/rules.py` the same). So it follows players arriving and leaving, between boss fights as before (never mid-fight: a boss's HP decides its phases). Two players at Medium is the old 200%, one is the original game.
 - Old castles: HP alone becomes the per-player figure; a castle with only "HP with a partner" changed gets half of it.
 - Options considered: keeping the two HP sliders and adding more per player count (four sliders nobody would tune); a linear N times (4 players' 400% makes fights drag: each extra player adds less, as their hits overlap); rescaling enemies already alive when a player arrives (an enemy's HP can drive its behaviour, and a fresh room uses the new figure anyway).
+
+**D216: Streamer mode hides codes where text is drawn** (Tucker asked for it, 2026-11-19, #327; how: agent-default)
+- With the setting on, every text the app draws goes through one filter (`launcher/streamer.py`): room codes (any case, with or without the dash), connect codes and IP addresses become "(hidden)", and a code box shows dots. The code is still copied to the clipboard, and the host's pause menu offers "Copy the room code" instead of showing it.
+- Options considered: hiding the code at each screen that shows it (misses the next screen someone adds), or a separate "streamer" build of each screen. One filter where text is drawn covers screens that don't exist yet.
+- Not done: posting the address lists with ntfy's `Cache: no`. A leaked code is still the risk it guards, and the cost is a joiner waiting up to 20 s for the host's next post.
+
+**D217: A Life or Heart Max Up that isn't a placed find is one find for both** (2026-11-19, #296; agent-default)
+- A boss's Life Max Up (`src/st/e_life_up.h`) has no castle flag, so it travels as EV_GRANT, and both games can make one. The partner's grant clears this game's still lying in the same stage, and two taken within 3 s are the same one. Options considered: no grant at all, each player taking their own (in a shared fight only the authority's game has one), or a castle flag of our own per boss (a table to keep).
+
+**D218: Richter and Maria get Alucard's curse, not yet his stone** (2026-11-19, #102; the details: agent-default)
+- A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off. Stone (mash to break free) is still to do.

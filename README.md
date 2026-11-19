@@ -59,12 +59,13 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Castle rules:** each castle has its own ruleset: XP, damage and boss HP sliders. And every non-vanilla feature is toggle-able.
 
 ## Tips
-- **Teleport to your partner:** press Select for the map, then Cross. Your partner's cursor is blue.
+- **Teleport to your partner:** press Select for the map, then Cross (the map says so). Your partner's cursor is blue.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
 - **Maria:** drop your *Dracula X Chronicles* `.iso` on the launcher, or choose it in Discs & mods. It adds both Marias: Co-op Maria, with Alucard's gear and relics, and Ultimate Maria, [SOTN Ultimate](https://github.com/renanbianchi/sotn-ultimate)'s PSP Maria as that mod plays her, with two sub-weapons (Circle swaps them).
 - **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` on the launcher, or choose it in Discs & mods. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
 - **The window:** F11 for fullscreen, and the View menu changes the layout. On the couch, F1 picks which game plays the music.
 - **Online:** you both need the same version. If you can't connect, the lobby says why, and Help › Online troubleshooting has what to try.
+- **Streaming?** Turn on Streamer mode in Options: room codes and addresses never show on screen, and the code is still copied for you to send.
 
 ## Docs
 - [`docs/TECHNICAL_SUMMARY.md`](docs/TECHNICAL_SUMMARY.md): how it all works
