@@ -29,6 +29,7 @@ static u16 s_LastAt[STAGE_SLOTS]; // ...and when
 static u16 s_Frame;
 static u8 s_StandSlot;        // guest: 1 + the slot it stood on this frame
 static bool s_PartnerStood;   // authority: an entity was told the partner's weight is the player's
+static bool s_PadsShared;     // authority: both players on it: it read the partner's buttons too
 static f32 s_PosX, s_PosY, s_VelX, s_VelY, s_ShoveX, s_ShoveY; // PLAYER then
 static s32 s_DemoTimer;
 static u32 s_PadSim;
@@ -115,6 +116,11 @@ static u8 Collide(Entity* self, u16 w, u16 h, u16 flags) {
 }
 
 void SolidPartnerDone(void) {
+    if (s_PadsShared) {
+        s_PadsShared = false;
+        g_pads[0].pressed = s_Pressed;
+        g_pads[0].tapped = s_Tapped;
+    }
     if (!s_PartnerStood) {
         return;
     }
@@ -158,6 +164,16 @@ u8 CoopPlayerCollision(Entity* self, u16 w, u16 h, u16 flags) {
         s_NCalls++;
     }
     hit = Collide(self, w, h, flags);
+    if (hit == ON_TOP && PartnerStandsOn(slot, flags)) {
+        // Both on it (#297: the two in the Alchemy Lab's elevator): it answers either player's
+        // buttons, so the guest can send it up or down too. It moves this game's player as ever.
+        s_PadsShared = true;
+        s_Pressed = g_pads[0].pressed;
+        s_Tapped = g_pads[0].tapped;
+        g_pads[0].pressed |= g_CoopLink.partnerPad;
+        g_pads[0].tapped |= g_CoopLink.partnerPad & ~s_PartnerPadWas;
+        return hit;
+    }
     if (hit || !PartnerStandsOn(slot, flags)) {
         return hit;
     }
