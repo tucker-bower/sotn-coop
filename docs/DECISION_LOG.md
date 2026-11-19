@@ -1051,3 +1051,9 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D218: Richter and Maria get Alucard's curse, not yet his stone** (2026-11-19, #102; the details: agent-default)
 - A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off. Stone (mash to break free) is still to do.
+
+**D219: 3-4 players in the app: drop-in rooms, and castle slots that follow players** (Tucker, 2026-11-18: a slot per player, drop-in joining; the details: agent-default, M17 step 6)
+- Host and Join by room code always make a Room (`link/mesh.py`), even for two: seats go in join order and the host's seat stays open while it plays. ip:port and connect codes still link two players directly.
+- A player is known by a lasting id (`settings.json` `player_id`, sent in HELO), not their seat, which changes with join order. The castle file keeps each slot's id (format 2; format 1 still reads, slot 1 this machine's player as before).
+- A save asks every partner; each answer is kept under its player's id, so each machine keeps what it heard (the host all of them). The host's load gives each player their own slot, or a copy of its own to someone new; a player who drops in, or comes back, out of play, gets theirs after 5 s and arrives beside the host.
+- Options considered: slots by seat (a returning player could get someone else's save), the host's file only (joiners couldn't host later: M11).
