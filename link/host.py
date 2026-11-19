@@ -122,6 +122,10 @@ class Host:
         self.hello["castle"] = meta
         return True
 
+    def set_player_id(self, pid):
+        """3+ players (M17): this player's lasting id, so a castle gives them back their own slot."""
+        self.hello["pid"] = pid
+
     def set_mod(self, mod):
         """The randomizer seed this game's disc was made from, in words ("seed abc · casual
         (26.07.13)"), or None for the plain co-op disc (design/M20-randomizer.md). Told in every

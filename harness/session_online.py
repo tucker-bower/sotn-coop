@@ -234,3 +234,69 @@ def online_room_three_players_drop_in(run):
                 for n, s in enumerate(sessions)}
         run.expect(all(a < 30 for v in ages.values() for a in v), "every game hears both its partners",
                    ages=ages, frames=i)
+
+
+@session_scenario()
+def online_room_saves_follow_players(run):
+    """M17 step 6 (Tucker, 2026-11-18: a castle slot per player, every joiner keeps a copy): three
+    players save together; each castle file holds what its player knows, the host's all three by
+    player id. Next time they join in another order, and the host's load gives each their own save
+    (their own max HP), not the seat's."""
+    import os
+    from link.connect import FileRelay
+    from link.jointsave import read_ids
+    from session_progress import HP_MAX, STATUS
+    os.environ["COOP_NO_PORTMAP"] = "1"
+    tmp = Path(tempfile.mkdtemp(prefix="coop-saves-"))
+    files = [tmp / f"castle{n}.coop" for n in range(3)]
+    pids = ["pidzero", "pidone", "pidtwo"]
+    kw = dict(stun_servers=(), resolve=False)
+
+    def room(order, code):
+        """The three sessions, joining in this order of players (0 always hosts)."""
+        relay = FileRelay(tempfile.mkdtemp(prefix="coop-relay-"))
+        ss = {}
+        for seat, who in enumerate(order):
+            ss[who] = OnlineSession(COOP_DISC, start="entrance", rank=seat, bind_host="127.0.0.1",
+                                    session_file=files[who]).__enter__()
+            ss[who].start_room(code, seat == 0, pid=pids[who], relay=relay, **kw)
+            for i in range(900):
+                for s in ss.values():
+                    s.step(1)
+                if len(ss[order[0]].room_status(False)["players"]) == seat + 1 and \
+                        (seat == 0 or ss[who].room_status(False)["me"] == seat):
+                    break
+        for _ in range(120):
+            for s in ss.values():
+                s.step(1)
+        return ss
+
+    ss = room([0, 1, 2], make_room_code())
+    try:
+        for who, s in ss.items():
+            s.local.write(STATUS, 100 + 10 * who, "<i", HP_MAX)
+        ss[0].joint.request(0)
+        for _ in range(600):
+            for s in ss.values():
+                s.step(1)
+        ids = read_ids(files[0])
+        run.expect(ids is not None and sorted(ids) == sorted(pids), "the host's castle holds all three, by player id",
+                   ids=ids)
+        for who in (1, 2):
+            mine = read_ids(files[who])
+            run.expect(mine and mine[0] == pids[who] and "pidzero" in mine, f"player {who}'s copy: theirs first, the host's too",
+                       ids=mine)
+    finally:
+        for s in ss.values():
+            s.__exit__(None, None, None)
+    ss = room([0, 2, 1], make_room_code())  # back, in another order: player 2 takes seat 1
+    try:
+        ss[0].joint.resume()
+        for _ in range(900):
+            for s in ss.values():
+                s.step(1)
+        got = {who: s.local.read(STATUS, "<i", HP_MAX) for who, s in ss.items()}
+        run.expect(got == {0: 100, 1: 110, 2: 120}, "each player gets their own save back, whatever their seat", got=got)
+    finally:
+        for s in ss.values():
+            s.__exit__(None, None, None)

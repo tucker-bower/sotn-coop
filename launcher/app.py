@@ -2530,6 +2530,14 @@ class Launcher:
             waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
 
+    def player_id(self):
+        """This player's lasting id (M17): a castle gives them back their own slot by it."""
+        if not self.settings.get("player_id"):
+            import secrets
+            self.settings["player_id"] = secrets.token_hex(6)
+            save_settings(self.settings)
+        return self.settings["player_id"]
+
     def room_line(self, s, waiting):
         """partner_line for a room of up to four (M17): connected once anyone's in."""
         st = s.room_status(True)
@@ -2573,7 +2581,7 @@ class Launcher:
             s.local.host("set_rules", castle_rules.encode(rules), rules)  # the castle's: for the session (D162)
             room = self.room_code = self.castle_room(playthrough, make_room_code)
             self._clip_put(room)
-            s.start_room(room, True, app=VERSION)  # 3+ players: anyone with the code drops in (M17)
+            s.start_room(room, True, pid=self.player_id(), app=VERSION)  # 3+ players: anyone with the code drops in (M17)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
@@ -2646,7 +2654,7 @@ class Launcher:
                 continue
             with self.online_session(None, None, rank=1) as s:
                 if kind == "room":
-                    s.start_room(target, False, app=VERSION)
+                    s.start_room(target, False, pid=self.player_id(), app=VERSION)
                     waiting = f"Room\n{target}\nlooking for your partner…"
                 else:
                     s.connect(target)

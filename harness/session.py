@@ -110,6 +110,8 @@ class _Worker:
             if args:
                 self.room.tick(game_running=False)
             return self.room.status()
+        elif cmd == "control":  # joint saves with 3+ players (M17): to and from every partner's link
+            return self.control(*args)
         elif cmd == "connect":
             self.transport.connect(args)
         elif cmd == "connect_k":  # M17: partner k's link
@@ -171,7 +173,8 @@ class _Worker:
                 import logging
                 logging.getLogger("link").exception("the host's frame failed (%d so far)", self.link_errors)
 
-    HOST_SETTINGS = {"set_player", "set_mod", "set_castle", "set_rules", "set_fresh", "set_portraits", "set_hello"}
+    HOST_SETTINGS = {"set_player", "set_mod", "set_castle", "set_rules", "set_fresh", "set_portraits", "set_hello",
+                     "set_player_id"}
 
     def link_hosts(self):
         if self.room is not None:
@@ -179,6 +182,25 @@ class _Worker:
         else:
             for h in self.hosts:
                 h.after_frame()
+
+    def control(self, what, msg=None, to=None):
+        """send: a control message to partner `to` (a player number), or every partner; take: what
+        came, as (player number, message); players: {number: {"pid", "slot"}} of the linked ones."""
+        from link.mesh import slot
+        room = self.room
+        if what == "send":
+            for n, h in (room.hosts.items() if room else ((1, self.host),)):
+                if to is None or to == n:
+                    h.send_control(msg)
+            return None
+        if what == "take":
+            return [(n, m) for n, h in (room.hosts.items() if room else ((1, self.host),)) for m in h.take_control()]
+        if what == "players":
+            if room is None:
+                return {1: {"pid": (self.host.partner_hello or {}).get("pid"), "slot": 0}}
+            return {n: {"pid": (h.partner_hello or {}).get("pid"), "slot": slot(room.me, n)}
+                    for n, h in room.hosts.items() if h.partner_hello and room.me is not None}
+        raise ValueError(what)
 
     def start_room(self, code, hosting, kw):
         """From here on this game's partners are a Room's (link/mesh.py): player 0 hosting, or a
@@ -388,6 +410,23 @@ class HostProxy:
         return lambda *a, **kw: self.game.host(name, *a, **kw)
 
 
+class RoomProxy:
+    """A worker game's room, for JointSave with 3+ players (M17): control messages to and from
+    each partner by player number."""
+
+    def __init__(self, game):
+        self.game = game
+
+    def send(self, msg, to=None):
+        self.game._ask("control", ("send", msg, to))
+
+    def take(self):
+        return self.game._ask("control", ("take",))
+
+    def players(self):
+        return self.game._ask("control", ("players",))
+
+
 class Session:
     def __init__(self, disc, starts=("entrance", "entrance"), session_file=None, audio=False,
                  characters=None, blob=None):
@@ -557,10 +596,16 @@ class OnlineSession:
         self.peer = peer
         self.local._ask("connect", peer)
 
-    def start_room(self, code, hosting, **kw):
-        """3+ players (M17 step 6): join or host a room of up to four by its code (link/mesh.py)."""
+    def start_room(self, code, hosting, pid=None, **kw):
+        """3+ players (M17 step 6): join or host a room of up to four by its code (link/mesh.py).
+        pid: this player's lasting id (their castle slot follows it)."""
+        if pid:
+            self.local.host("set_player_id", pid)
         self.local._ask("room", (code, hosting, kw))
         self.room_on = True
+        if self.joint is not None:
+            self.joint.room = RoomProxy(self.local)
+            self.joint.pid = pid
 
     def room_status(self, tick=True):
         """The room: this game's number, who's in, each partner's link. tick: also run the
