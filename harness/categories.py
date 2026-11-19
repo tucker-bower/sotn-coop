@@ -95,7 +95,7 @@ PATHS = {
 # and the few quick ones kept so every category has a check (2026-11-17: the suite was cut to them, D212).
 EVERYDAY = {
     # other characters and their gear
-    "bat_carry_alucard", "boss_arena_edge_richter_and_maria", "damage_rate_richter",
+    "bat_carry_alucard", "boss_arena_edge_richter_and_maria", "boss_life_up_once_alucard_and_richter", "damage_rate_richter",
     "familiar_faerie_potion_richter", "familiar_graphics_maria", "hit_shows_its_number_maria",
     "in_the_castle_maria", "in_the_castle_richter", "level_up_stats_maria", "maria_owl_with_a_weapon_in_hand",
     "maria_scene_richter_on_the_throne", "mist_step_never_stuck_maria",

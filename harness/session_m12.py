@@ -3,6 +3,7 @@
 scenes, nor for the scene after it)."""
 
 import os
+import struct
 
 from coop_env import TOOLS
 from session import session_scenario
@@ -538,3 +539,43 @@ def chain(run, which):
     (TOOLS["out"] / run.name / "records.txt").write_text(f"bosses without a time-attack record: {sorted(missing)}\n")
 
 
+
+
+LIFE_UP_DROP = 23  # ITEMDROP_LIFE_VESSEL: a boss's Life Max Up (src/st/e_life_up.h), an E_PRIZE_DROP
+
+
+def _life_ups(g):
+    """[(slot, entity x, y in the room)] of the Life Max Ups lying in g's room."""
+    raw = g.read_bytes("g_Entities", 0xBC * 256)
+    out = []
+    for slot in range(64, 256):
+        e = raw[slot * 0xBC:(slot + 1) * 0xBC]
+        eid, params = struct.unpack_from("<H", e, 0x26)[0], struct.unpack_from("<H", e, 0x30)[0]
+        if eid == 3 and params & 0x7FFF == LIFE_UP_DROP and struct.unpack_from("<H", e, 0x2C)[0] < 5:
+            out.append((slot, struct.unpack_from("<h", e, 2)[0], struct.unpack_from("<h", e, 6)[0]))
+    return out
+
+
+@session_scenario(starts=(str(STARTS / "Boss - Slogra and Gaibon.state"),) * 2, characters=(0, 1))
+def boss_life_up_once_alucard_and_richter(run):
+    """#296 (1.1.1 playtest, Alchemy Lab: "item max up dup"): a boss leaves a Life Max Up when it
+    falls. The two games each made one, each player took the one in their game, and each game sent
+    its +5 to the partner: +10 each. Each player gets +5 from it, once."""
+    from session_progress import status
+    a, b = run.s.a, run.s.b
+    before = {g.name: status(g)["hp_max"] for g in (a, b)}
+    boss_flow(run, next(r for r in _bossstarts() if r["name"].startswith("Slogra")))
+    seen = {g.name: 0 for g in (a, b)}
+    for t in range(1800):
+        for g in (a, b):
+            ups = _life_ups(g)
+            seen[g.name] = max(seen[g.name], len(ups))
+            if ups and t % 20 == 0:  # the player steps onto it (the room's own coordinates)
+                sx, sy = g.read("g_Tilemap", "<h", 0xA), g.read("g_Tilemap", "<h", 0xE)
+                _, x, y = ups[0]
+                g.write("g_Entities", x, "<h", 2)
+                g.write("g_Entities", y, "<h", 6)
+        run.step(1)
+    gained = {g.name: status(g)["hp_max"] - before[g.name] for g in (a, b)}
+    run.expect(any(seen.values()) or any(gained.values()), "the boss left a Life Max Up", seen=seen, gained=gained)
+    run.expect(gained == {"A": 5, "B": 5}, "each player's max HP +5 from it, once", gained=gained, seen=seen)
