@@ -25,6 +25,15 @@ SYMBOLS = {"<": 224, "^": 226, ">": 228, "v": 230, "o": 232, "x": 233, "s": 234,
 NEEDS = ("font", "logo", "alucard", "richter", "maria", "icons", "switch_on", "switch_off")
 
 
+def _hide(text):
+    """Streamer mode (#327): codes and addresses never drawn (launcher/streamer.py)."""
+    try:
+        import streamer
+    except ImportError:  # (drawn outside the launcher: the trailer's diagrams)
+        return text
+    return streamer.hide(text)
+
+
 def glyphs(text):
     """text as the font's places: [(place in the sheet, tinted?)]. {x} and the like are symbols."""
     out, i = [], 0
@@ -151,6 +160,7 @@ class Theme:
 
     def text(self, surface, text, x, y, colour=INK):
         """Draws one line; returns the x after it."""
+        text = _hide(text)
         self._fits(surface, text, x, y, x + width(text))
         tinted, plain = self._font(colour), self.pictures["font"]
         for place, tint in glyphs(text):
@@ -170,13 +180,16 @@ class Theme:
         return min(len(parts), lines)
 
     def text_right(self, surface, text, right, y, colour=INK):
+        text = _hide(text)
         self.text(surface, text, right - width(text), y, colour)
 
     def text_centre(self, surface, text, centre, y, colour=INK):
+        text = _hide(text)
         self.text(surface, text, centre - width(text) // 2, y, colour)
 
     def text_big(self, surface, text, centre, y, colour=INK, scale=2):
         """One line at a whole multiple of the font's size (a room code), centred on centre."""
+        text = _hide(text)
         line = pygame.Surface((width(text), GLYPH), pygame.SRCALPHA)
         self.text(line, text, 0, 0, colour)
         line = pygame.transform.scale(line, (line.get_width() * scale, GLYPH * scale))

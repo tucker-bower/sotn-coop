@@ -116,6 +116,36 @@ static bool EnemyDrop(void) { return CollectingA(E_EQUIP_ITEM_DROP) && !(g_Curre
 // the flag also comes with a reconnect, so a find a player made and didn't save isn't lost (#154).
 static bool PlacedFind(void) { return CollectingA(E_PERSISTENT_ITEM_DROP); }
 
+// A Life or Heart Max Up that isn't a placed find: the one a boss leaves (src/st/e_life_up.h),
+// a prize drop that never fades (params 0x8000). No castle flag records it, so it reaches the
+// partner as EV_GRANT. Both games can make one (#296: +10 each after Slogra and Gaibon): the
+// partner's grant clears this game's, and two taken at once are one find.
+#define ITEMDROP_HEART_VESSEL 0x0C
+#define ITEMDROP_LIFE_VESSEL 0x17
+#define SAME_VESSEL_FRAMES 180 // taken here this recently, the partner's is the same one
+static s32 s_Frame;
+static s32 s_VesselAt = -SAME_VESSEL_FRAMES;
+
+static bool IsVesselDrop(Entity* e) {
+    u16 item = e->params & 0x7FFF;
+
+    return e->entityId == E_PRIZE_DROP && (e->params & 0x8000) &&
+           (item == ITEMDROP_LIFE_VESSEL || item == ITEMDROP_HEART_VESSEL);
+}
+
+static void DespawnVessels(void) {
+    Entity* e;
+
+    if (g_CoopLink.partner.stage != g_CoopStage) {
+        return; // the partner's was somewhere else
+    }
+    for (e = &g_Entities[STAGE_ENTITY_START]; e < &g_Entities[TOTAL_ENTITY_COUNT]; e++) {
+        if (e->step && e->step < 5 && IsVesselDrop(e)) {
+            DestroyEntity(e);
+        }
+    }
+}
+
 static void AddToInventoryWrap(u16 id, EquipKind kind) {
     s_AddToInventory(id, kind);
     if (!s_Applying && !EnemyDrop() && !PlacedFind()) {
@@ -153,6 +183,9 @@ static s32 GrantWrap(s32 amount, s32 type) {
     if (!s_Applying && ret == 0 && !PlacedFind() &&
         (type == GRANT_LIFE_UP || type == GRANT_HEART_UP || type == GRANT_RELIC)) {
         Emit(EV_GRANT, type, amount);
+        if (type != GRANT_RELIC) {
+            s_VesselAt = s_Frame;
+        }
     }
     if (kill && !s_Applying && (s32)g_Status.exp > exp && !RULE_OFF(RULE_NO_SHARED_LEVEL)) {
         Emit(EV_EXP, 0, g_Status.exp - exp);
@@ -525,6 +558,12 @@ static void Apply(const CoopEvent* ev) {
         BossKilled(ev->a, ev->b);
         break;
     case EV_GRANT:
+        if (ev->a == GRANT_LIFE_UP || ev->a == GRANT_HEART_UP) {
+            if (s_Frame - s_VesselAt < SAME_VESSEL_FRAMES) {
+                break; // both games took it at once: one find, and this player has it
+            }
+            DespawnVessels();
+        }
         func_800FE044(ev->b, ev->a);
         // Like the relic orb does: familiar cards arrive switched off.
         if (ev->a == GRANT_RELIC && ev->b >= RELIC_SWORD_CARD && ev->b < RELIC_FAERIE_CARD) {
@@ -662,6 +701,7 @@ void ProgressUpdate(void) {
     bool inPlay = g_GameState == Game_Play && g_GameStep == Play_Default;
     s32 k;
 
+    s_Frame++;
     WrapApi();
     if (!inPlay) {
         s_InPlay = false;

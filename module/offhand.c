@@ -288,6 +288,11 @@ static void Use(s32 hand) {
     case ITEM_ELIXIR:
         heal = g_Status.hpMax;
         break;
+    case ITEM_UNCURSE:
+        CharacterCureCurse();
+        PlaySfx(SFX_HEALTH_PICKUP);
+        ReduceWeapon(hand);
+        return;
     case ITEM_ANTIVENOM:
         CharacterCurePoison();
         PlaySfx(SFX_HEALTH_PICKUP);
@@ -689,6 +694,13 @@ static bool Holds(s32 hand) {
 
     return g_Status.equipment[hand] == ITEM_LIBRARY_CARD || (IsWeapon(c) && WeaponOvl(hand) != 0xFF) ||
            c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF);
+}
+
+// The hand holds something used, not swung (a cursed player can still use it: character.c).
+bool OffhandUsesItem(s32 hand) {
+    u8 c = Category(hand);
+
+    return g_Status.equipment[hand] == ITEM_LIBRARY_CARD || c == ITEM_FOOD || (c == ITEM_MEDICINE && WeaponOvl(hand) == 0xFF);
 }
 
 // That hand's button. g_Player.unk46: an attack of their own is under way, and the hand waits for

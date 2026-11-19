@@ -67,12 +67,12 @@ from session import SESSION_SCENARIOS, run_session_scenario
 # Tests that use real sockets, a room-code relay or LAN broadcasts (fixed port 47811): one at a
 # time, in their own lane, so two of them never hear each other.
 NETWORK_MODULES = {"session_online", "session_m9", "session_m11", "spec_test"}
-NETWORK = {"ui_online", "ui_online_boss_rush"}
+NETWORK = {"ui_online", "ui_online_boss_rush", "ui_online_streamer"}
 # Tests that run in real time (the host's p99 per frame, the app's first picture, two launchers
 # online): after the rest, side by side with each other only, as a full machine's load would be
 # in their numbers (2026-10-31: ui_online_boss_rush's joiner stayed at the title under full load).
 SOLO = {"mixed_soak_short", "mixed_soak_10min", "mixed_soak_baseline_10min", "ui_startup", "ui_online",
-        "ui_online_boss_rush"}
+        "ui_online_boss_rush", "ui_online_streamer"}
 # Tests that read another's output: (first, then) run in that order, in one lane.
 CHAINS = [("mixed_soak_baseline_10min", "mixed_soak_10min")]
 TEST_TIMEOUT = 1800  # seconds: a test that hangs fails instead of holding up the run

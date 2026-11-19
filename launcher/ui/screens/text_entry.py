@@ -47,6 +47,9 @@ def text_entry(m, heading, about, initial="", paste=None, limit=64, pad="", keys
             pygame.draw.rect(s, (0, 0, 16), field)
             pygame.draw.rect(s, INK, field, 1)
             shown, at = line.window((field.w - 12) // 8)
+            if paste:  # a room code or address: dots in streamer mode (#327)
+                import streamer
+                shown = streamer.typed(shown)
             t.text(s, shown, field.x + 5, field.y + 5, INK)
             draw_caret(s, field.x + 4 + 8 * at, field.y + 3, 12, INK)
             m.footer(pad or "{x} done   {o} back", keys or "Type   Enter: done   Esc: back")

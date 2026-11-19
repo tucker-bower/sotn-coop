@@ -15,4 +15,5 @@ void OffhandRicRestore(void); // ...back after a left-hand item's load over them
 // A weapon entity's bank (0x10-0x13), palette and hand as its overlay set them (weapons.c)
 bool OffhandOriginal(Entity* e, s32* set, u16* palette, s32* hand);
 
+bool OffhandUsesItem(s32 hand); // a potion, food or the Library Card: used, not swung
 #endif

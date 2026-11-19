@@ -836,3 +836,43 @@ def familiar_list_pictures(run, ch):
     run.step(10)
     run.expect(e.read("g_GameEngineStep") == 1, "the menu closed")
     run.expect(e.vram_rect(x, y, w, h) == before_pics and pal() == before_pal, "closed: their own VRAM is back")
+
+
+ELEMENT_CURSE, CURSE_MARK, SFX_WRITE = 0x100, 0x80097BF8, 0x80139000  # D_80097BF8; g_sfxRingBufferWritePos
+
+
+def _curse_hit(run, e, element=ELEMENT_CURSE):
+    e.write(e.entity(0) + HIT_POINTS, 3, "<h")
+    e.write(e.entity(0) + HIT_PARAMS, 2 | element, "<H")
+    run.step(150)  # the hit reaction and invincibility
+
+
+def _swing_sounds(run, e, presses=6):
+    before = e.read(SFX_WRITE, "<h")
+    for _ in range(presses):
+        run.step(4, "square")
+        run.step(30, "")
+    return (e.read(SFX_WRITE, "<h") - before) & 0xFF
+
+
+@per_character
+def curse_stops_attacks(run, ch):
+    """Issue 102: curse as Alucard has it. A curse hit keeps their attacks from coming out (□ swings
+    nothing) for his time, and then they're back; immunity keeps it off."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, 200, "<i")
+    start = e.save_state()
+    free = _swing_sounds(run, e)
+    run.expect(free > 0, "uncursed, □ swings (with its sound)", sounds=free)
+    e.load_state(start)
+    _curse_hit(run, e)
+    cursed = _swing_sounds(run, e)
+    run.expect(cursed * 4 < free and e.read(CURSE_MARK, "<I") & 1, "cursed: □ swings nothing", sounds=cursed, free=free, mark=e.read(CURSE_MARK, "<I"))
+    run.step(0x400)
+    back = _swing_sounds(run, e)
+    run.expect(back * 4 >= free * 3, "it wears off: □ swings again", sounds=back, free=free)
+    e.load_state(start)
+    e.write(ELEMENTS_IMMUNE, ELEMENT_CURSE, "<H")
+    _curse_hit(run, e)
+    run.expect(_swing_sounds(run, e) * 4 >= free * 3, "immune: no curse")
