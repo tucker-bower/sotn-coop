@@ -12,8 +12,9 @@
 3. gh release create v<version> --draft, with the installer uploaded as SOTN-Coop-setup.exe (a
    fixed name, so the README's .../releases/latest/download/SOTN-Coop-setup.exe always works),
    and SHA256SUMS.txt.
-4. With --android (not yet: Tucker playtests it first): android/build.sh (it checks the app holds
-   no game data), the APK uploaded as SOTN-Coop.apk (a fixed name too) and in SHA256SUMS.txt.
+4. With --android: android/build.sh (it checks the app holds no game data), then
+   android/test_first_run.py (a fresh install opens on the emulator and stays open: #323), the APK
+   uploaded as SOTN-Coop.apk (a fixed name too) and in SHA256SUMS.txt.
 The release stays a draft: Tucker tests it and publishes it (D76). Publishing is one click on
 GitHub, or: gh release edit v<version> --draft=false"""
 
@@ -129,6 +130,7 @@ def main():
         if not apk.exists():
             raise SystemExit(f"no Android app: {apk} (android/build.sh {v})")
         check_apk_key(apk)
+        sh(sys.executable, MOD / "android" / "test_first_run.py", apk)  # a new player's first start (#323)
         assets.append(tmp / "SOTN-Coop.apk")
         shutil.copyfile(apk, assets[-1])
     sums = tmp / "SHA256SUMS.txt"

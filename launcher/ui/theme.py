@@ -73,7 +73,10 @@ def shorten(text, columns):
 def plain_font():
     """A stand-in for the game's font, from a system one: the same 8x8 places, the letters only.
     Each letter is drawn large, cut to the band every letter's ink fits in (tails too), and that
-    band is shrunk to 8 pixels: whatever the font's own spacing, nothing is cut off."""
+    band is shrunk to 8 pixels: whatever the font's own spacing, nothing is cut off.
+    The letters' pictures needn't be the same height: pygame's own font (Android has no system
+    fonts) draws "@" and "_" a pixel taller than the rest, so each is copied into the band rather
+    than cut from it (#323)."""
     sheet = pygame.Surface((128, 128), pygame.SRCALPHA)
     pygame.font.init()
     font = pygame.font.SysFont("consolas,dejavusansmono,liberationmono,couriernew,monospace", 16)
@@ -87,7 +90,8 @@ def plain_font():
         ink = glyph.get_bounding_rect()
         if not ink.w:
             continue
-        cut = glyph.subsurface((ink.x, top, ink.w, band))
+        cut = pygame.Surface((ink.w, band), pygame.SRCALPHA)  # (a blit clips; RGBA_MAX onto nothing copies as it is)
+        cut.blit(glyph, (-ink.x, -top), special_flags=pygame.BLEND_RGBA_MAX)
         w = max(1, min(GLYPH, round(ink.w * GLYPH / band)))
         small = pygame.transform.smoothscale(cut.convert_alpha() if pygame.display.get_surface() else cut, (w, GLYPH))
         sheet.blit(small, (place % 16 * GLYPH + (GLYPH - w) // 2, place // 16 * GLYPH))

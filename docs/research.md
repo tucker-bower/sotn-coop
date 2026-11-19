@@ -2,6 +2,9 @@
 
 What we've learned that the code and `TECHNICAL_SUMMARY.md` don't say: game internals, tools, and lessons that were expensive to learn. Search it rather than reading it through.
 
+## Fonts on Android
+pygame on Android finds no system fonts (`android/main.py` turns its fc-list search off), so every `SysFont` is pygame's own freesansbold, at 0.6875 of the size asked. In the APK's pygame (2.6.1), `@` and `_` come out a pixel taller than the other letters, so code that assumes a font's letters share a height breaks only there: every APK from 0.18.0 to 1.2.0 closed itself on a fresh install's first screen (#323). Test devices never saw it, because they already had the game's own font from their disc. `android/test_first_run.py` opens a fresh install on the emulator, and `release.py --android` runs it. A desktop venv with `pygame==2.6.1` (not pygame-ce) reproduces the APK's font rendering.
+
 ## Lessons
 **Testing**
 - **Test the path players use.** Android's Python has no CA certificates, so every request to the room-code relay failed silently, and the Android tests never caught it because they joined by `ip:port`. `android/test_pair.py --room` now uses the real relay.
