@@ -215,3 +215,33 @@ def boss_aggro_three_players(run):
             if seen & 7 == 7:
                 break
     run.expect(seen & 7 == 7, "the bosses went for each of the three", seen=bin(seen), frames=i)
+
+
+@session_scenario(starts=("nz0",) * 4, full=True)
+def online_4p_lossy(run):
+    """M17 criterion 6: four games, every link on the playtest's network (30 ms, jitter, loss,
+    spikes), walking about the Alchemy Lab for 30 s while each now and then finds some gold. Gold
+    is one purse: all four end with the same, and every game still hears all three partners."""
+    from link.mailbox import IN_PLAY
+    games = run.s.games
+    for i, g in enumerate(games):
+        for k in range(3):
+            g._ask("call", (f"transport{k}", "set_netsim", ("playtest", 7 * i + k), {}))
+        g._ask("call", ("hosts", "set_playout", (True,), {}))
+    run.step(60)
+    gold = lambda g: g.read("g_Status", "<i", 0x28C)
+    start = gold(games[0])
+    pads = ("left", "right", "", "left")
+    for t in range(1800):
+        flip = (t // 90) % 2
+        run.step(1, tuple(p if flip else ("right" if p == "left" else "left") for p in pads))
+        if t % 300 == 100:
+            g = games[(t // 300) % 4]
+            g.write("g_Status", gold(g) + 100, "<i", 0x28C)
+    run.step(300, ("",) * 4)  # settle
+    purses = [gold(g) for g in games]
+    run.expect(len(set(purses)) == 1 and purses[0] == start + 600, "one purse: every find counted once, in all four",
+               purses=purses, start=start)
+    ages = [[g.mailbox("partner_age", k) for k in range(3)] for g in games]
+    run.expect(all(a < 30 for row in ages for a in row), "every game hears all three partners", ages=ages)
+    run.expect(all(g.mailbox("self_presence").flags & IN_PLAY for g in games), "all four still in play")
