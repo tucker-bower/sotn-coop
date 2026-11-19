@@ -163,3 +163,29 @@ def shared_room_elevator_richter_and_alucard(run):
     for g in (a, b):  # each stands on its own game's elevator, where it stopped
         y, cage = g.snapshot()["world_y"], _elevator(g)[1]
         run.expect(abs(y - (cage + 39)) <= 3, f"{g.name} rode it down", y=y, elevator=cage)
+
+
+@session_scenario(starts=("nz0", "nz0"), characters=(0, 1))
+def shared_room_lift_on_lag_alucard_and_richter(run):
+    """#292 (1.1.1 playtest: "Desync affects gameplay, Richter can Moon Jump"): on the playtest's
+    network, a guest standing on a rising lift (the Alchemy Lab's elevator, sent up by the
+    authority) fell through it when a late snapshot moved it several frames' worth at once.
+    Richter (the guest) rides it all the way up, standing on it every frame."""
+    from session_progress import arrive
+    a, b = run.s.a, run.s.b
+    run.step(60)
+    room = room_id(a, 17, 28)
+    arrive(run, a, NZ0, room, 144, 560)
+    arrive(run, b, NZ0, room, 144, 560)
+    run.s.set_net("playtest")
+    run.step(120)
+    roles = [g.mailbox("self_presence").role for g in (a, b)]
+    run.expect(roles == [1, 2], "Alucard runs the room, Richter is the guest", roles=roles)
+    start = _elevator(b)[1]
+    run.step(10, ("up", ""))
+    gaps = []
+    for t in range(700):
+        run.step(1)
+        gaps.append(b.snapshot()["world_y"] - _elevator(b)[1])
+    run.expect(_elevator(b)[1] < start - 400, "the elevator went up", start=start, now=_elevator(b)[1])
+    run.expect(max(gaps) - min(gaps) <= 3, "Richter stood on it all the way", gaps=sorted(set(gaps))[:8])
