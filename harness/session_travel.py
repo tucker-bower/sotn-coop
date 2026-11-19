@@ -227,3 +227,23 @@ def warp_with_partner_in_the_warp_room(run):
             shot = other.screenshot().convert("L")
             bright = sum(shot.getdata()) / (shot.width * shot.height)
             run.expect(bright < 160, "...and the partner left behind isn't on a white screen", brightness=round(bright))
+
+
+BOTTOM_TEXT_TIMER = 0x80097410  # g_unkGraphicsStruct.BottomCornerTextTimer
+
+
+@session_scenario(starts=("entrance", "nz0"))
+def map_shows_the_teleport_prompt(run):
+    """Tucker (1.2.1): the map screen says what ✕ does. With the partner in reach, opening the map
+    shows "✕ Go to partner" in the game's text box; closing it takes it away."""
+    a = run.s.a
+    run.step(120)
+    run.expect(not a.read(BOTTOM_TEXT_TIMER, "<i"), "no prompt in play")
+    run.step(1, ("select", ""))
+    run.step(40)
+    shown = a.read(BOTTOM_TEXT_TIMER, "<i")
+    run.capture()
+    run.expect(shown, "the map shows the prompt", timer=shown)
+    run.step(1, ("select", ""))
+    run.step(40)
+    run.expect(not a.read(BOTTOM_TEXT_TIMER, "<i"), "closing the map takes it away")

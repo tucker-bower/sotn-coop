@@ -287,6 +287,16 @@ static void ArriveUpdate(void) {
 
 // --- teleport: ✕ on the map screen goes to the partner
 
+// The map screen says what ✕ does, while the partner can be reached (Tucker, 1.2.1).
+static void TeleportPrompt(void) {
+    if (InNormalPlay() && g_GameEngineStep == Engine_Map && !ArriveBusy() && !RULE_OFF(RULE_NO_MAP_TELEPORT) &&
+        g_CoopLink.partnerAge <= 60 && !BossHere() && PartnerReachable()) {
+        CoopPrompt(MESSAGE_CROSS " Go to partner");
+    } else {
+        CoopPromptOff();
+    }
+}
+
 static void TeleportInput(void) {
     const CoopPresence* p = &g_CoopLink.partner;
 
@@ -880,6 +890,7 @@ bool ArriveFrame(void) {
         return false;
     }
     CommandUpdate();
+    TeleportPrompt();
     TeleportInput();
     CutsceneTrack();
     SkipVote();
