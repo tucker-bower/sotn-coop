@@ -46,6 +46,12 @@ def main():
     serial = boot("coopA", 5554)
     try:
         adb(serial, "uninstall", PKG, check=False)
+        # Right after the emulator boots, an uninstall can leave the app's external folder (its
+        # launcher.log, settings) owned by the old install's user: the new one can't write there.
+        external = f"/storage/emulated/0/Android/data/{PKG}"
+        adb(serial, "shell", "rm", "-rf", external, check=False)
+        if adb(serial, "shell", "ls", "-d", external, check=False).strip() == external:
+            raise SystemExit(f"{external} is left from an earlier install: not a fresh start")
         adb(serial, "install", "-r", str(apk))
         adb(serial, "logcat", "-c")
         adb(serial, "shell", "monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1")
