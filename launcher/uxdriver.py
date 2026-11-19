@@ -688,6 +688,8 @@ def _online_join(pg, code_file, late=False):
             ("key", pg.K_ESCAPE), ("screen", "Paused"),
             ("expect", lambda d: not any(i.startswith("Room code") for i in d.view.pause_items),
              "a joiner's pause menu has no room code"),
+            *([("expect", lambda d: "In the room: you and 2 partners" in d.view.pause_items,
+                "the pause menu says who's in (M17)")] if PLAYERS == 3 and not late else []),
             ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"),
             *(([("expect", lambda d: any("Rejoin" in t for t in __import__("streamer").drawn), "Rejoin is offered")]) if STREAMER else []),

@@ -756,7 +756,10 @@ class GameView:
         while True:
             import streamer  # streamer mode (#327): no code on screen; OK copies it all the same
             label = "Copy the room code" if streamer.on else f"Room code: {code}"
-            rows = [("resume", "Resume"), ("code", label) if code else None,
+            room = self.games[0].room_status() if self.online and getattr(self.s, "room_on", False) else None
+            n = len(room["players"]) if room else 0
+            who = (f"In the room: you and {n - 1} partners" if n > 2 else None)  # 3+ players (M17)
+            rows = [("resume", "Resume"), ("code", label) if code else None, ("who", who) if who else None,
                     ("layout", f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}"),
                     ("help", "How to play"), ("rules", "Castle rules"), ("player", "Your settings"),
                     ("report", "Report a problem (F9)"), ("menu", "Save and go back to the menu")]
@@ -798,6 +801,8 @@ class GameView:
                     key = rows[sel][0]
                     if key == "resume":
                         return "resume"
+                    if key == "who":
+                        continue
                     if key == "code":
                         if self.launcher:
                             self.launcher._clip_put(code)
