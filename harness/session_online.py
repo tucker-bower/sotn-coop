@@ -193,3 +193,44 @@ def online_partner_leaves(run):
             if s0.local.host("status")["partner_left"]:
                 break
         run.expect(s0.local.host("status")["partner_left"], "told within half a second", frames=i)
+
+
+@session_scenario()
+def online_room_three_players_drop_in(run):
+    """M17 step 6 (Tucker, 2026-11-18: drop-in joining): three of the app's online sessions on one
+    room code. Two play; the third joins while they do and is seated as player 2; every game then
+    hears both its partners, each in its own slot (link/mesh.py slot())."""
+    import os
+    from link.connect import FileRelay
+    from link.mesh import slot
+    os.environ["COOP_NO_PORTMAP"] = "1"
+    relay = FileRelay(tempfile.mkdtemp(prefix="coop-relay-"))
+    kw = dict(relay=relay, stun_servers=(), resolve=False)
+    room = make_room_code()
+    with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1") as s0, \
+         OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1") as s1, \
+         OnlineSession(COOP_DISC, start="entrance", rank=2, bind_host="127.0.0.1") as s2:
+        s0.start_room(room, True, **kw)
+        s1.start_room(room, False, **kw)
+        both = lambda: s0.room_status(False)["players"] == [0, 1]
+        for i in range(900):
+            step_pair(s0, s1, 1)
+            if both() and s1.room_status(False)["me"] == 1:
+                break
+        run.expect(both(), "the first joiner is seated as player 1, while both play", players=s0.room_status(False))
+        step_pair(s0, s1, 120)
+        s2.start_room(room, False, **kw)  # drop in, mid-game
+        sessions = (s0, s1, s2)
+        for i in range(1800):
+            for s in sessions:
+                s.step(1)
+            if all(len(s.room_status(False)["players"]) == 3 for s in sessions) and s2.room_status(False)["me"] == 2:
+                fresh = [[s.local.mailbox("partner_age", k=k) for k in range(2)] for s in sessions]
+                if all(a < 30 for row in fresh for a in row):
+                    break
+        run.expect(s2.room_status(False)["me"] == 2, "the late joiner is seated as player 2",
+                   status=[s.room_status(False)["players"] for s in sessions])
+        ages = {n: [s.local.mailbox("partner_age", k=slot(n, m)) for m in range(3) if m != n]
+                for n, s in enumerate(sessions)}
+        run.expect(all(a < 30 for v in ages.values() for a in v), "every game hears both its partners",
+                   ages=ages, frames=i)

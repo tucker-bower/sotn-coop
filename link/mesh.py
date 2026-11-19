@@ -102,10 +102,13 @@ class Room:
     new_transport(): a fresh UdpTransport (online: on any free port, the router's kind of socket).
     connect_kw: Host.start_connect's other arguments (relay, stun_servers, ...)."""
 
-    def __init__(self, mailbox, code, hosting, new_transport, max_players=4, pair_timeout=30.0, **connect_kw):
+    def __init__(self, mailbox, code, hosting, new_transport, max_players=4, pair_timeout=30.0, make_host=None,
+                 **connect_kw):
+        """make_host(view, transport, rank): a Host set up as the app's (its castle, rules, character);
+        a plain one by default."""
         from .host import Host
         from .mailbox import Partners
-        self._Host = Host
+        self._Host = make_host or Host
         self.code, self.new_transport, self.connect_kw = code, new_transport, connect_kw
         self.max_players, self.pair_timeout = max_players, pair_timeout
         self.partners = Partners(mailbox)
@@ -205,3 +208,21 @@ class Room:
     def relayed(self):
         """The players this game reaches only through player 0."""
         return sorted(n for n, t in self.mesh.links.items() if isinstance(t, RelayTransport))
+
+    def status(self):
+        """The room as the app's lobby shows it: this game's number, who's in, and each partner's
+        link (its HELO, ping, connect state)."""
+        out = {"me": self.me, "players": list(self.players) if self.me == 0 else
+               list((self.hosts[0].partner_hello or {}).get("players") or []) if 0 in self.hosts else [],
+               "partners": {}}
+        for n, h in self.hosts.items():
+            st = h.connect_status() or {}
+            out["partners"][n] = {**h.status(), "state": st.get("state", "connected")}
+        waiting = self._first if self.me is None else None
+        if waiting is not None:
+            out["waiting"] = {**waiting.status(), **(waiting.connect_status() or {})}
+        return out
+
+    def goodbye(self):
+        for h in self.all_hosts():
+            h.goodbye()

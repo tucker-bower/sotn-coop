@@ -70,8 +70,13 @@ class _Worker:
             self.transports.append(t)
             self.hosts.append(Host(view, t, rank, patch_crc=patch_crc, playout=learn_peer))
         self.transport, self.host = self.transports[0], self.hosts[0]
+        self.portraits = portraits.read(disc)
         for host in self.hosts:
-            host.set_portraits(portraits.read(disc))
+            host.set_portraits(self.portraits)
+        self.room = None  # M17 step 6: a Room's links instead, once "room" starts one
+        self.host_settings = {}
+        self.bind_host, self.patch_crc = bind_host, patch_crc
+        self.fake_clock = not audio and not os.environ.get("COOP_REALTIME")
         self.linked = True
         self.host_ms = collections.deque(maxlen=3600)  # the host's time per frame (never waits)
 
@@ -85,8 +90,7 @@ class _Worker:
                 self.clock["t"] += self.clock["dt"]
                 if self.linked:
                     t0 = time.perf_counter()
-                    for h in self.hosts:
-                        h.after_frame()
+                    self.link_hosts()
                     self.host_ms.append((time.perf_counter() - t0) * 1000)
             return emu.snapshot()
         if cmd == "host_ms":
@@ -97,6 +101,13 @@ class _Worker:
             self.clock["dt"] = 1 / args
         elif cmd == "stall":  # this PC hitches: time passes, the game doesn't run
             self.clock["t"] += args / 60
+        elif cmd == "room":  # M17 step 6: 3-4 players from one room code (link/mesh.py Room)
+            code, hosting, kw = args
+            self.start_room(code, hosting, dict(kw))
+        elif cmd == "room_status":  # the lobby, each frame before the game runs: handshakes too
+            if args:
+                self.room.tick(game_running=False)
+            return self.room.status()
         elif cmd == "connect":
             self.transport.connect(args)
         elif cmd == "connect_k":  # M17: partner k's link
@@ -114,6 +125,10 @@ class _Worker:
             self.linked = True
         elif cmd == "call":  # any Emu, Mailbox, Host, or UdpTransport method
             target, name, a, kw = args
+            if target == "host" and name in self.HOST_SETTINGS:  # every partner's link gets them (M17)
+                self.host_settings[name] = (a, kw)
+                for h in self.room.all_hosts() if self.room else ():
+                    getattr(h, name)(*a, **kw)
             if target == "hosts":  # M17: every partner's Host, the same call
                 return [getattr(h, name)(*a, **kw) for h in self.hosts]
             obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport}.get(target)
@@ -147,15 +162,51 @@ class _Worker:
         (the partner stalls, at worst), and the first few failures go to the worker's log, for F9
         reports. Tests step with "step", which raises."""
         try:
-            for h in self.hosts:
-                h.after_frame()
+            self.link_hosts()
         except Exception:  # noqa: BLE001 - a player's session is worth more than the link's frame
             self.link_errors = getattr(self, "link_errors", 0) + 1
             if self.link_errors <= self.LINK_ERRORS_LOGGED:
                 import logging
                 logging.getLogger("link").exception("the host's frame failed (%d so far)", self.link_errors)
 
+    HOST_SETTINGS = {"set_player", "set_mod", "set_castle", "set_rules", "set_fresh", "set_portraits", "set_hello"}
+
+    def link_hosts(self):
+        if self.room is not None:
+            self.room.tick(game_running=True)
+        else:
+            for h in self.hosts:
+                h.after_frame()
+
+    def start_room(self, code, hosting, kw):
+        """From here on this game's partners are a Room's (link/mesh.py): player 0 hosting, or a
+        joiner. The transport made at start is the first link (the LAN broadcast's port)."""
+        from link.host import Host
+        from link.mesh import Room
+        from link.transport import UdpTransport
+        first = [self.transport]
+
+        def new_transport():
+            t = first.pop() if first else UdpTransport(port=0, host="127.0.0.1", bind_host=self.bind_host)
+            if t not in self.transports:
+                self.transports.append(t)
+            if self.fake_clock:
+                t.clock = lambda: self.clock["t"]
+            return t
+
+        def make_host(view, t, rank):
+            h = Host(view, t, rank, patch_crc=self.patch_crc, playout=True)
+            h.set_portraits(self.portraits)
+            for name, (a, k) in self.host_settings.items():
+                getattr(h, name)(*a, **k)
+            return h
+        self.hosts = []
+        self.room = Room(self.mailbox, code, hosting, new_transport, make_host=make_host, **kw)
+        self.host = (self.room.all_hosts() or [self.host])[0]
+
     def close(self):
+        if self.linked and self.room is not None:
+            self.room.goodbye()
         if self.linked:
             for h in self.hosts:
                 h.goodbye()
@@ -458,7 +509,7 @@ class OnlineSession:
         if self.in_process:
             w = _Worker(str(self.disc), self.start, self.rank, self.audio, None, self.bind_host,
                         self.req_port, self.patch_crc, self.learn_peer)
-            return self._started(InProcessGame("AB"[self.rank], w), w.transport.port)
+            return self._started(InProcessGame("ABCD"[self.rank], w), w.transport.port)
         ctx = mp.get_context("spawn")
         shm_name = None
         if self.audio:
@@ -473,7 +524,7 @@ class OnlineSession:
                   self.bind_host, self.req_port, self.patch_crc, self.learn_peer),
         )
         proc.start()
-        game = Game("AB"[self.rank], parent, proc)
+        game = Game("ABCD"[self.rank], parent, proc)
         game.shm = self._shms[-1] if shm_name else None
         status, value = game.conn.recv()
         if status != "ok":
@@ -499,6 +550,15 @@ class OnlineSession:
     def connect(self, peer):
         self.peer = peer
         self.local._ask("connect", peer)
+
+    def start_room(self, code, hosting, **kw):
+        """3+ players (M17 step 6): join or host a room of up to four by its code (link/mesh.py)."""
+        self.local._ask("room", (code, hosting, kw))
+
+    def room_status(self, tick=True):
+        """The room: this game's number, who's in, each partner's link. tick: also run the
+        handshakes (the lobby, before the game runs)."""
+        return self.local._ask("room_status", tick)
 
     def step(self, n=1, pad="", each=None):
         s = None
