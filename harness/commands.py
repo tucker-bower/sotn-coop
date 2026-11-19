@@ -27,6 +27,7 @@ for _flow in UI_FLOWS:
 COMMANDS["ui_online"] = ([str(ROOT / "launcher" / "uxdriver.py"), "online", "--out", "{out}"], {})
 COMMANDS["ui_online_boss_rush"] = (COMMANDS["ui_online"][0], {"COOP_UX_RUSH": "1"})
 COMMANDS["ui_online_streamer"] = (COMMANDS["ui_online"][0], {"COOP_UX_STREAMER": "1"})
+COMMANDS["ui_online_three_players"] = (COMMANDS["ui_online"][0], {"COOP_UX_PLAYERS": "3"})
 
 
 def run_command(name):

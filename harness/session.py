@@ -105,6 +105,8 @@ class _Worker:
             code, hosting, kw = args
             self.start_room(code, hosting, dict(kw))
         elif cmd == "room_status":  # the lobby, each frame before the game runs: handshakes too
+            if self.room is None:
+                return None
             if args:
                 self.room.tick(game_running=False)
             return self.room.status()
@@ -282,6 +284,10 @@ class Game:
 
     def host(self, name, *a, **kw):
         return self._ask("call", ("host", name, a, kw))
+
+    def room_status(self, tick=False):
+        """3+ players (M17): the game's room, or None when it has a single partner's link."""
+        return self._ask("room_status", tick)
 
     def transport(self, name, *a, **kw):
         return self._ask("call", ("transport", name, a, kw))
@@ -554,6 +560,7 @@ class OnlineSession:
     def start_room(self, code, hosting, **kw):
         """3+ players (M17 step 6): join or host a room of up to four by its code (link/mesh.py)."""
         self.local._ask("room", (code, hosting, kw))
+        self.room_on = True
 
     def room_status(self, tick=True):
         """The room: this game's number, who's in, each partner's link. tick: also run the

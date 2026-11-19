@@ -218,7 +218,7 @@ class Room:
         for n, h in self.hosts.items():
             st = h.connect_status() or {}
             out["partners"][n] = {**h.status(), "state": st.get("state", "connected")}
-        waiting = self._first if self.me is None else None
+        waiting = self._first if self.me is None else self._pending if self.me == 0 else None
         if waiting is not None:
             out["waiting"] = {**waiting.status(), **(waiting.connect_status() or {})}
         return out

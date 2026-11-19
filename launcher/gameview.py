@@ -899,7 +899,10 @@ class GameView:
             else:
                 rtt, loss = hst.get("rtt_ms"), hst.get("loss_pct")
                 word = "" if rtt is None else (" (good)" if rtt < 150 else " (ok)" if rtt < 300 else " (laggy)")
-                link = f"Partner connected · ping {rtt if rtt is not None else '?'} ms{word}"
+                room = g.room_status() if getattr(self.s, "room_on", False) else None
+                n = len(room["players"]) if room else 2
+                link = (f"{n - 1} partners connected" if n > 2 else "Partner connected") + \
+                    f" · ping {rtt if rtt is not None else '?'} ms{word}"
                 if loss:
                     link += f" · {loss:.0f}% lost"
             return (f"{link}   ·   {'Together' if together else 'Apart'}   ·   F9: report a problem   ·   "

@@ -2510,6 +2510,8 @@ class Launcher:
 
     def partner_line(self, s, waiting):
         """For the lobby's partner card: (text, connected). Raises ConnectFailed."""
+        if getattr(s, "room_on", False):
+            return self.room_line(s, waiting)
         st = s.local.host("handshake_tick")
         c = s.local.host("connect_status") or {}
         if st.get("mismatch"):
@@ -2524,6 +2526,28 @@ class Launcher:
             step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
                     "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
             if c.get("relay_error") and c.get("state") == "waiting":  # say so now, not in five minutes
+                step = "Can't reach the room-code server\nLooking on this Wi-Fi"
+            waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
+        return waiting, False
+
+    def room_line(self, s, waiting):
+        """partner_line for a room of up to four (M17): connected once anyone's in."""
+        st = s.room_status(True)
+        partners = {n: p for n, p in st["partners"].items() if p.get("partner_hello") and p["state"] == "connected"}
+        if partners:
+            rtts = [p.get("rtt_ms") for p in partners.values() if p.get("rtt_ms") is not None]
+            ping = f"ping {max(rtts)} ms" if rtts else "measuring the ping…"
+            n = len(st["players"])
+            return f"Connected!\n{n} players\n{ping}" if n > 2 else f"Connected!\n{ping}", True
+        c = st.get("waiting") or {}
+        if c.get("mismatch") and st["me"] is None:
+            raise ConnectFailed(c["mismatch"], c.get("partner_hello"))
+        if c.get("state") == "failed" and st["me"] is None:
+            raise ConnectFailed(c.get("reason") or "")
+        if c.get("left_s") is not None:
+            step = {"starting": "Finding my address", "waiting": "Waiting for your partner's game",
+                    "punching": "Found your partner: reaching them"}.get(c.get("state"), "Still looking")
+            if c.get("relay_error") and c.get("state") == "waiting":
                 step = "Can't reach the room-code server\nLooking on this Wi-Fi"
             waiting += f"\n{step}: {c['left_s'] // 60}:{c['left_s'] % 60:02d} left"
         return waiting, False
@@ -2549,7 +2573,7 @@ class Launcher:
             s.local.host("set_rules", castle_rules.encode(rules), rules)  # the castle's: for the session (D162)
             room = self.room_code = self.castle_room(playthrough, make_room_code)
             self._clip_put(room)
-            s.local.host("start_connect", room, "host", app=VERSION)
+            s.start_room(room, True, app=VERSION)  # 3+ players: anyone with the code drops in (M17)
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
@@ -2622,7 +2646,7 @@ class Launcher:
                 continue
             with self.online_session(None, None, rank=1) as s:
                 if kind == "room":
-                    s.local.host("start_connect", target, "join", app=VERSION)
+                    s.start_room(target, False, app=VERSION)
                     waiting = f"Room\n{target}\nlooking for your partner…"
                 else:
                     s.connect(target)
