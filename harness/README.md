@@ -15,6 +15,7 @@ Headless SOTN games for testing, plus the tests that drive them.
 | `lockstep.py` | **Manual.** Checks determinism: two processes, same inputs, RAM hashes compared. |
 | `editor_hacks.js` | **Manual.** Applies SOTN Editor hacks for `mods.py` and `make_hack_patches.py`. |
 | `make_hack_patches.py` | **Manual.** Makes `patcher/mods/hacks.json` from the pinned SOTN Editor: each tested hack's bytes, checked against the editor's own builds. |
+| `m17_measure.py` | **Manual.** What two, three and four linked games cost per frame (emulation and the link), for M17's caps. |
 | `mods.py` | **Manual.** Builds the randomizer's presets with co-op layered on, and their savestates. Keeps only the tested presets' discs (540 MB each); `--test` checks every preset one disc at a time. |
 | `module.py` | Reads the co-op module's symbols and state from RAM. |
 | `playtest.py` | **Manual.** Bots play two games for minutes and flag anything odd. |
