@@ -58,6 +58,11 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **PvP:** optional, and off by default.
 - **Castle rules:** each castle has its own ruleset: XP, damage and boss HP sliders. And every non-vanilla feature is toggle-able.
 
+## How it works
+![Each player's PC runs the app with a SwanStation PS1 emulator inside it. STUN, ntfy.sh and hole punching (or a typed ip:port) connect the two games, then a direct link carries the play. Both players need the same game disc, made from their own disc, the co-op patch and any mods.](docs/media/coop-architecture.png)
+
+The [technical summary](docs/TECHNICAL_SUMMARY.md) has the details.
+
 ## Tips
 - **Teleport to your partner:** press Select for the map, then Cross. Your partner's cursor is blue.
 - **Relics for Richter and Maria:** Leap Stone gives the second jump, Gravity Boots the high jump, Soul of Wolf the slide, Echo of Bat item crashes, and Form of Mist lets you walk through grates.
