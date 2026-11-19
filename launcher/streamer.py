@@ -16,9 +16,10 @@ on = False
 HIDDEN = "(hidden)"
 _MORE = (
     re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])"),            # an IPv4 address alone
+    re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){1,7}:(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?(?![0-9A-Fa-f:])"),  # IPv6, with ::
     re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])"),  # IPv6
 )
-drawn = None  # tests: a list that collects every text as drawn (launcher/test_streamer.py, uxdriver)
+drawn = None  # tests: a set that collects every text as drawn (launcher/test_streamer.py, uxdriver)
 
 
 def hide(text):
@@ -28,7 +29,7 @@ def hide(text):
         for pattern in (_FIND[0], _FIND[2], *_MORE, *_rooms()):
             text = pattern.sub(HIDDEN, text)
     if drawn is not None and text:
-        drawn.append(text)
+        drawn.add(text)
     return text
 
 

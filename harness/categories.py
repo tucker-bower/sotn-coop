@@ -105,7 +105,7 @@ EVERYDAY = {
     "stage_palettes_maria", "ultimate_richter_in_the_castle",
     # bosses and cutscenes
     "boss_trio_authority_changes", "boss_trio_partner_locked_out", "online_boss_rush",
-    "scene_skips_once_both_players_ask", "ui_online_boss_rush",
+    "scene_skips_once_both_players_ask", "ui_online_boss_rush", "launcher_streamer",
     # progression
     "castle_solo_play", "exactly_once_partition", "gold_pooled", "map_shared", "red_door_guest_copy_in_place",
     "relic_shared", "save_room_real", "widescreen_red_door_comes_back",
