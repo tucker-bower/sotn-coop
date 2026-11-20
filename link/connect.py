@@ -291,9 +291,20 @@ class Connector:
                 self.relay.publish(self.topic, msg)
                 self._published = now
             other = "join" if self.role == "host" else "host"
-            msgs = [m for m in self.relay.poll(self.topic)
+            polled = self.relay.poll(self.topic)
+            msgs = [m for m in polled
                     if m.get("role") == other and m.get("token") == room_token(self.room)
                     and m.get("id") not in self.exclude]
+            full = [m for m in polled if self.role == "join" and m.get("role") == "full"
+                    and m.get("token") == room_token(self.room)]
+            if full and self.state == "waiting":  # #332: newer than any open seat's message
+                said = max(full, key=lambda m: m.get("nonce", 0))
+                if not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs):
+                    self.reason = (f"The room is full ({said.get('players', '?')} of {said.get('max', '?')} players). "
+                                   "The host can raise Max players in the castle's settings.")
+                    self._done("failed")
+                    log.warning("connect join: the room is full: %s", said)
+                    return self.state
             if msgs:
                 newest = max(msgs, key=lambda m: m.get("nonce", 0))
                 self.their_id = newest.get("id")

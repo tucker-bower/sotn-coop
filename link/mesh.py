@@ -120,6 +120,7 @@ class Room:
         self._first = None    # a guest: its Host to player 0, before its seat is known
         self._started = {}    # a guest: player -> when its pair began finding each other
         self._seated = set()  # player 0: the seated joiners' relay ids (the next seat skips them)
+        self._full_said, self._relay = None, None  # player 0: "the room is full" on the relay (#332)
         self._seated_sids = set()  # ...and their HELO sids (the next seat refuses them)
         if hosting:
             self._open_seat()
@@ -132,6 +133,21 @@ class Room:
         if transport is None:
             self.mesh.add(who, t)
         return self._Host(self.partners.view(k), t, rank=self.me if rank is None else rank)
+
+    def _say_full(self):
+        """#332: every seat taken (the castle's Max players, D221): say so on the room's relay topic
+        now and then, so a joiner with the code hears "The room is full" rather than waiting. A seat
+        that opens again posts a host message, newer, which the joiner takes instead."""
+        from .connect import REPUBLISH_S, default_relay, room_token, room_topic
+        clock = next(iter(self.hosts.values())).transport.clock
+        now = clock()
+        if self._full_said is not None and now - self._full_said < REPUBLISH_S:
+            return
+        self._full_said = now
+        if self._relay is None:
+            self._relay = self.connect_kw.get("relay") or default_relay()
+        self._relay.publish(room_topic(self.code), {"role": "full", "token": room_token(self.code), "nonce": now,
+                                                    "players": len(self.players), "max": self.max_players})
 
     def _open_seat(self):
         seat = len(self.players)
@@ -167,6 +183,8 @@ class Room:
             elif p is not None and p.connector and p.connector.state == "failed":
                 self.mesh.links.pop(len(self.players), None)
                 self._open_seat()  # that joiner couldn't reach us: wait for the next
+            elif p is None and self.hosts:
+                self._say_full()
             return
         first = self._first
         if self.me is None and first.partner_hello and isinstance(first.partner_hello.get("seat"), int):
