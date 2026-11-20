@@ -14,8 +14,6 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `discs.py` | Which disc a file is (PlayStation, PSP or Saturn), by what's in it. |
 | `display.py` | The window: menus, games and their layout. |
 | `ui/` | The menus in the game's own style: the theme, the menu toolkit and one file per screen. |
-| `discord_status.py` | Discord's "Playing SoTN Co-op": Rich Presence over the local Discord app's pipe (needs the app's Discord client id). |
-| `test_discord_status.py` | Checks the Discord status against a fake Discord. |
 | `streamer.py` | Streamer mode: hides room codes, connect codes and IP addresses from every text the app draws. |
 | `test_streamer.py` | Checks what streamer mode hides, and that both menus' text goes through it. |
 | `test_ui.py` | Checks the menus' font, lists and screens with a controller, the keyboard and the mouse, on made-up art. |

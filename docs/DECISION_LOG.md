@@ -1065,9 +1065,8 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D221: Up to 4 players is a castle setting, 2 by default** (Tucker, 2026-11-19: "compromises only felt by castles with max players 3 or 4"; the default: agent-default)
 - Castle settings' "Max players" (2, 3, 4) caps the room the host makes; a two-player castle never seats a third, so nothing three or four bodies cost (frame time, savestate size, room traffic) reaches it. Options considered: a global option (applies to castles that never wanted it), always 4 (a stranger's drop-in in every castle).
 
-**D222: Discord shows "Playing SoTN Co-op"** (Tucker, 2026-11-19; the details: agent-default)
-- Rich Presence over Discord's local IPC (`launcher/discord_status.py`), our own 150 lines rather than a library: no dependency, no network of ours, nothing when Discord isn't running. It shows what (menus, online, couch, solo, boss rush), the castle's name, the room's size and elapsed time; never a room code or address. An Options switch, "Show on Discord", on by default; not on Android (Discord there doesn't take local presence).
-- Needs the "SoTN Co-op" application id from Discord's developer portal (Tucker's account); without it the feature is off.
+**D222: No Discord status** (Tucker, 2026-11-19)
+- A Rich Presence status ("Playing SoTN Co-op") was built and then dropped before release: it needed a Discord application of ours to register. It's in git (coop-m17, 6a71453) if wanted later.
 
 **D223: An off-hand weapon swing lasts 28-40 frames for Richter and Maria** (2026-11-19, #310; agent-default)
 - Their swings ran on their own animation (Richter's about 60 frames, Maria's 16) and a press mid-swing brought out the whip or owl as well, so they out-damaged Alucard. Clamped to his length, and presses during a swing are the swing's: within 0.7-1.1x his damage a second (`damage_rate_first_hand_*`).

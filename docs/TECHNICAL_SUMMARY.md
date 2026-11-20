@@ -65,7 +65,6 @@ A **joint save** (`link/jointsave.py`) holds both games' memory cards in one fil
 - **NAT traversal:** STUN from the game's own socket, UDP hole punching to every candidate, UPnP-IGD and NAT-PMP port mapping, and a LAN broadcast so two games in one house find each other without the internet (D96). This is the way Slippi connects: no relays (D113, D123). When nothing works, the lobby says which step failed and what to try.
 - **Jitter buffer:** `link/playout.py` plays the partner's presences and snapshots back at an even pace with an adaptive delay of at most 0.1 s (D170), interpolating across a lost presence, so the partner and the shared enemies don't stutter. `netplay_partner_lag` measures how far behind each game shows the other.
 - **Rooms of 3-4 (M17):** a room code makes a Room (`link/mesh.py`): player 0 hosts, joiners are seated in order, every pair links directly or through player 0. The castle's Max players (2 by default, D221) caps the seats, so a castle for two never pays for a third.
-- **Discord status:** `launcher/discord_status.py` sets Rich Presence over Discord's local IPC pipe: what the player is doing, the castle, the room's size; never a code or address (D222).
 - **Testing the network:** `link/netsim.py` and `link/natsim.py` simulate latency, loss, reordering and router types in tests.
 
 ## Distribution: no game data, ever
