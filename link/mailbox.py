@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 15
+LINK_VERSION = 16
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -14,6 +14,27 @@ FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
 STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
+
+# M17 (3+ players): partners 1 and 2 (link.h's CoopPartnerIn, CoopLink.more) and their copies in the
+# 8 MB; partner 0 is the fields and addresses above.
+COOP_PARTNERS = 3
+MORE, MORE_SIZE = 0x225C8, 0x8E0
+_MORE = {"presence": 0, "age": 0x2C, "pad": 0x30, "sprites": 0x34, "prims": 0x218, "hits": 0x81C}
+
+
+def weapon_partner(k, hand):
+    """Where partner k's copy of that hand's weapon goes (link.h WEAPON_MORE_ADDR)."""
+    if k == 0:
+        return WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
+    return 0x80731000 + hand * 0x7400 if k == 1 else (0x80572000 if hand else 0x806F2000)
+
+
+def familiar_partner(k):
+    return (FAMILIAR_PARTNER, 0x806D0000, 0x806E1000)[k]
+
+
+def status_partner(k):
+    return STATUS_PARTNER + k * 0x100
 
 IN_PLAY, SPRITE, PAUSED, BUSY, DEAD, BOSS, CUTSCENE, CS_FOLLOWER = 1, 2, 4, 8, 16, 32, 64, 128  # CoopPresence.flags
 
@@ -28,6 +49,8 @@ EV_FLAG, EV_MAP, EV_ITEM, EV_GRANT, EV_GOLD = 1, 2, 3, 4, 5
 EV_HIT, EV_HIT2, EV_SPAWN, EV_SPAWN2, EV_SPAWN3, EV_RECORD, EV_TAKEN, EV_EXP = 6, 7, 8, 9, 10, 11, 12, 13
 EV_USED = 14  # M13: an item used up (the fairy revive's Life Apple)
 EV_KILLED = 15  # a boss died in that game, the partner's dies too (Richter)
+# What a guest's game did to the room it shares (module/shared.c): only for the game running that room (M17)
+ROOM_EVENTS = frozenset((EV_HIT, EV_HIT2, EV_SPAWN, EV_SPAWN2, EV_SPAWN3, EV_TAKEN))
 FLIP_TELEPORT_IN = 0x80  # Presence.flip_x bit 7: just came in by teleport (a revive; M13)
 CMD, CMD_DONE, SAVE_SEQ, SAVE_OUT, SAVE_IN = 0x107C, 0x108C, 0x1090, 0x1094, 0x2260
 SAVE_DATA_SIZE = 0x11CC
@@ -76,7 +99,7 @@ SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players 
 def scene_speed(presences, solo):
     """How fast a game's scene runs: fast when every player in it asked to skip (issue 107)."""
     scene = [p for p in presences if p.flags & CUTSCENE]
-    return SCENE_SPEED if scene and (solo or len(scene) == 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
+    return SCENE_SPEED if scene and (solo or len(scene) >= 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
 
 
 def spell_options(spells):
@@ -166,13 +189,20 @@ class Mailbox:
         p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PAD, 4))[0]
         return p
 
-    def partner_presence(self):
-        p = Presence.unpack(self.adapter.read_bytes(self.address + PARTNER, Presence.SIZE))
-        p.pad = struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_PAD, 4))[0]
+    def _p(self, k, field):
+        """The address of partner k's field (presence, age, pad, sprites, prims, hits)."""
+        if k == 0:
+            return self.address + {"presence": PARTNER, "age": PARTNER_AGE, "pad": PARTNER_PAD,
+                                   "sprites": PARTNER_SPRITES, "prims": PARTNER_PRIMS, "hits": PARTNER_HITS}[field]
+        return self.address + MORE + (k - 1) * MORE_SIZE + _MORE[field]
+
+    def partner_presence(self, k=0):
+        p = Presence.unpack(self.adapter.read_bytes(self._p(k, "presence"), Presence.SIZE))
+        p.pad = struct.unpack("<I", self.adapter.read_bytes(self._p(k, "pad"), 4))[0]
         return p
 
-    def partner_age(self):
-        return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_AGE, 4))[0]
+    def partner_age(self, k=0):
+        return struct.unpack("<I", self.adapter.read_bytes(self._p(k, "age"), 4))[0]
 
     def self_sprites(self):
         """This game's sprites for the partner (sprites.c): raw CoopSprite records."""
@@ -184,31 +214,31 @@ class Mailbox:
         n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_PRIMS, 4))[0], N_PRIMS)
         return self.adapter.read_bytes(self.address + SELF_PRIMS + 4, n * PRIM_SIZE) if n else b""
 
-    def write_partner_prims(self, data):
+    def write_partner_prims(self, data, k=0):
         n = min(len(data) // PRIM_SIZE, N_PRIMS)
         if n:
-            self.adapter.write_bytes(self.address + PARTNER_PRIMS + 4, data[:n * PRIM_SIZE])
-        self.adapter.write_bytes(self.address + PARTNER_PRIMS, struct.pack("<I", n))
+            self.adapter.write_bytes(self._p(k, "prims") + 4, data[:n * PRIM_SIZE])
+        self.adapter.write_bytes(self._p(k, "prims"), struct.pack("<I", n))
 
     def self_hits(self):
         """This game's player's attack hitboxes for the partner (pvp.c, M15): raw CoopHit records."""
         n = min(struct.unpack("<I", self.adapter.read_bytes(self.address + SELF_HITS, 4))[0], N_HITS)
         return self.adapter.read_bytes(self.address + SELF_HITS + 4, n * HIT_SIZE) if n else b""
 
-    def write_partner_hits(self, data):
+    def write_partner_hits(self, data, k=0):
         n = min(len(data) // HIT_SIZE, N_HITS)
         if n:
-            self.adapter.write_bytes(self.address + PARTNER_HITS + 4, data[:n * HIT_SIZE])
-        self.adapter.write_bytes(self.address + PARTNER_HITS, struct.pack("<I", n))
+            self.adapter.write_bytes(self._p(k, "hits") + 4, data[:n * HIT_SIZE])
+        self.adapter.write_bytes(self._p(k, "hits"), struct.pack("<I", n))
 
-    def partner_sprite_count(self):
-        return struct.unpack("<I", self.adapter.read_bytes(self.address + PARTNER_SPRITES, 4))[0]
+    def partner_sprite_count(self, k=0):
+        return struct.unpack("<I", self.adapter.read_bytes(self._p(k, "sprites"), 4))[0]
 
-    def write_partner_sprites(self, data):
+    def write_partner_sprites(self, data, k=0):
         n = min(len(data) // SPRITE_SIZE, N_SPRITES)
         if n:
-            self.adapter.write_bytes(self.address + PARTNER_SPRITES + 4, data[:n * SPRITE_SIZE])
-        self.adapter.write_bytes(self.address + PARTNER_SPRITES, struct.pack("<I", n))
+            self.adapter.write_bytes(self._p(k, "sprites") + 4, data[:n * SPRITE_SIZE])
+        self.adapter.write_bytes(self._p(k, "sprites"), struct.pack("<I", n))
 
     # --- hand weapons (module/weapons.c): each game's copy, and the partner's -----------------
     def self_weapon_seq(self, hand):
@@ -219,11 +249,11 @@ class Mailbox:
     def self_weapon(self, hand):
         return self.adapter.read_bytes(WEAPON_SELF + hand * WEAPON_HAND_SIZE, WEAPON_SIZE)
 
-    def write_partner_weapon(self, hand, blob):
+    def write_partner_weapon(self, hand, blob, k=0):
         """The partner's copy (header last: the game checks its magic)."""
         if len(blob) != WEAPON_SIZE:
             return
-        base = WEAPON_PARTNER + hand * WEAPON_HAND_SIZE
+        base = weapon_partner(k, hand)
         self.adapter.write_bytes(base + 0x20, blob[0x20:])
         self.adapter.write_bytes(base, blob[:0x20])
 
@@ -236,28 +266,28 @@ class Mailbox:
     def self_familiar(self):
         return self.adapter.read_bytes(FAMILIAR_SELF, FAMILIAR_SIZE)
 
-    def write_partner_familiar(self, blob):
+    def write_partner_familiar(self, blob, k=0):
         """The partner's copy (header last: the game checks its magic)."""
         if len(blob) != FAMILIAR_SIZE:
             return
-        self.adapter.write_bytes(FAMILIAR_PARTNER + 0x20, blob[0x20:])
-        self.adapter.write_bytes(FAMILIAR_PARTNER, blob[:0x20])
+        self.adapter.write_bytes(familiar_partner(k) + 0x20, blob[0x20:])
+        self.adapter.write_bytes(familiar_partner(k), blob[:0x20])
 
     def self_status(self):
         """This game's player status (stats, level, equipment): g_Status's two ranges."""
         return b"".join(self.adapter.read_bytes(a, n) for a, n in STATUS_RANGES)
 
-    def write_partner_status(self, blob):
+    def write_partner_status(self, blob, k=0):
         """The partner's status, for its body (module/partner.c); magic last."""
         if len(blob) != sum(n for _, n in STATUS_RANGES):
             return
-        self.adapter.write_bytes(STATUS_PARTNER + 4, blob)
-        self.adapter.write_bytes(STATUS_PARTNER, struct.pack("<I", STATUS_MAGIC))
+        self.adapter.write_bytes(status_partner(k) + 4, blob)
+        self.adapter.write_bytes(status_partner(k), struct.pack("<I", STATUS_MAGIC))
 
-    def write_partner(self, presence):
-        self.adapter.write_bytes(self.address + PARTNER, presence.pack())
-        self.adapter.write_bytes(self.address + PARTNER_PAD, struct.pack("<I", presence.pad))
-        self.adapter.write_bytes(self.address + PARTNER_AGE, struct.pack("<I", 0))
+    def write_partner(self, presence, k=0):
+        self.adapter.write_bytes(self._p(k, "presence"), presence.pack())
+        self.adapter.write_bytes(self._p(k, "pad"), struct.pack("<I", presence.pad))
+        self.adapter.write_bytes(self._p(k, "age"), struct.pack("<I", 0))
 
     # --- event rings (module/link.h). Each event is its raw 8 bytes: the host only relays them.
 
@@ -366,3 +396,44 @@ class Mailbox:
         self.adapter.write_bytes(self.address + SNAP_IN, data)
         self.adapter.write_bytes(self.address + SNAP_IN_SEQ, struct.pack("<II", seq + 1, len(data)))
 
+
+
+class Partners:
+    """One game's mailbox shared by its links to several partners (M17, 3+ players): a Host per
+    partner, each given view(k). The game's out ring is read once and every view gets each event;
+    what a view writes about its partner goes to partner k's fields and copies."""
+
+    _PARTNER = {"partner_presence", "partner_age", "write_partner", "write_partner_prims", "write_partner_hits",
+                "partner_sprite_count", "write_partner_sprites", "write_partner_weapon", "write_partner_familiar",
+                "write_partner_status"}
+
+    def __init__(self, mailbox):
+        self.mailbox = mailbox
+        self._pending = {}
+
+    def view(self, k):
+        if not 0 <= k < COOP_PARTNERS:
+            raise ValueError(f"partner {k}: a game shows {COOP_PARTNERS} at most")
+        self._pending.setdefault(k, [])
+        return _PartnerView(self, k)
+
+    def _take_events(self, k):
+        fresh = self.mailbox.take_events()
+        for pending in self._pending.values():
+            pending += fresh
+        mine, self._pending[k] = self._pending[k], []
+        return mine
+
+
+class _PartnerView:
+    def __init__(self, partners, k):
+        self._partners, self.k = partners, k
+
+    def take_events(self):
+        return self._partners._take_events(self.k)
+
+    def __getattr__(self, name):
+        attr = getattr(self._partners.mailbox, name)
+        if name in Partners._PARTNER:
+            return lambda *a, **kw: attr(*a, k=self.k, **kw)
+        return attr

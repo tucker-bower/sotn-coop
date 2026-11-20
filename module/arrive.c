@@ -117,12 +117,48 @@ bool ArriveHeld(void) {
     return (g_CoopLink.control & CONTROL_HOLD) && g_GameState == Game_Play;
 }
 
+// M17 step 5: the partner this game's arrivals, pulls, scene holds and revives are about this
+// frame (s_F: CoopLink's partner k). With two players, always partner 0. With more: one fighting a
+// boss, else one leading a scene, else one in this room, else one alive, else one heard from.
+static s32 s_F;
+#define FOCUS PARTNER_PRESENCE(s_F)
+
+static s32 FocusScore(s32 k) {
+    const CoopPresence* p = PARTNER_PRESENCE(k);
+    bool alive = !(p->flags & PRESENCE_DEAD);
+
+    if (PARTNER_AGE(k) > 30) {
+        return 0;
+    }
+    if (!(p->flags & PRESENCE_IN_PLAY)) {
+        return 1;
+    }
+    return alive && (p->flags & PRESENCE_BOSS)                                         ? 6
+           : alive && (p->flags & PRESENCE_CUTSCENE) && !(p->flags & PRESENCE_CS_FOLLOWER) ? 5
+           : alive && p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left &&
+                   p->roomTop == g_Tilemap.top                                          ? 4
+           : alive                                                                      ? 3
+                                                                                        : 2;
+}
+
+static void PickFocus(void) {
+    s32 k, best = 0, score = FocusScore(0), sk;
+
+    for (k = 1; k < COOP_PARTNERS; k++) {
+        if ((sk = FocusScore(k)) > score) {
+            best = k;
+            score = sk;
+        }
+    }
+    s_F = best;
+}
+
 static bool PartnerFresh(void) {
-    return g_CoopLink.partnerAge <= 30 && (g_CoopLink.partner.flags & PRESENCE_IN_PLAY);
+    return PARTNER_AGE(s_F) <= 30 && (FOCUS->flags & PRESENCE_IN_PLAY);
 }
 
 static bool PartnerReachable(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
     // Nobody teleports into or out of the prologue (it's together, but it's Richter's).
     return PartnerFresh() && !(p->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) &&
            SAME_WORLD(p) && p->stage != STAGE_ST0 && g_StageId != STAGE_ST0;
@@ -131,21 +167,20 @@ static bool PartnerReachable(void) {
 // The partner's game is running but not in play yet (title, opening video, loading), or is
 // still in the prologue while this game has left it: it's coming.
 static bool PartnerOnItsWay(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    if (g_CoopLink.partnerAge > 30) {
+    const CoopPresence* p = FOCUS;
+    if (PARTNER_AGE(s_F) > 30) {
         return false;
     }
     return !(p->flags & PRESENCE_IN_PLAY) || (p->stage == STAGE_ST0 && g_StageId != STAGE_ST0);
 }
 
 static bool SameRoomAsPartner(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
     return p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
 static bool PartnerInBossFight(void) {
-    return PartnerFresh() && (g_CoopLink.partner.flags & PRESENCE_BOSS) &&
-           !(g_CoopLink.partner.flags & PRESENCE_DEAD);
+    return PartnerFresh() && (FOCUS->flags & PRESENCE_BOSS) && !(FOCUS->flags & PRESENCE_DEAD);
 }
 
 u16 CurrentRoomId(void) {
@@ -298,7 +333,7 @@ static void TeleportPrompt(void) {
 }
 
 static void TeleportInput(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (!InNormalPlay() || g_GameEngineStep != Engine_Map || !(g_pads[0].tapped & PAD_CROSS) ||
         ArriveBusy() || RULE_OFF(RULE_NO_MAP_TELEPORT)) {
@@ -320,7 +355,7 @@ static void TeleportInput(void) {
 }
 
 void ArriveFollow(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (!ArriveBusy() && !BossHere() && PartnerReachable()) {
         Arrive(p->stage, p->roomId, p->groundX, p->groundY);
@@ -362,7 +397,7 @@ static void TeleportIn(void) {
 // in the shared bag, revives this player where it fell instead of at the partner. The apple goes,
 // in both games (EV_USED).
 static bool FairyRevive(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
     const CoopFamiliar* f = (const CoopFamiliar*)FAMILIAR_PARTNER_ADDR;
 
     if (!PartnerFresh() || (p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) || p->character != CHAR_ALUCARD ||
@@ -390,7 +425,7 @@ static void Revive(void) {
 
 // Returns false to hold this frame's game update (dead, waiting for the host).
 static bool DeathUpdate(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (g_GameState != Game_Play || g_GameEngineStep != Engine_10 ||
         g_MenuStep != MENU_STEP_INIT) {
@@ -533,7 +568,7 @@ static bool WallBetween(s32 x0, s32 x1, s32 y) {
 
 static void LockedOutRescue(void) {
     static u16 s_Out;
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
     Entity* pl = &PLAYER;
     s32 x = pl->posX.i.hi, y = pl->posY.i.hi;
     s32 gx = p->groundX - g_Tilemap.scrollX.i.hi, gy = p->groundY - g_Tilemap.scrollY.i.hi;
@@ -571,7 +606,7 @@ static bool CanBePulled(bool sameRoom) {
 }
 
 static void PullIn(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (s_BossPullCooldown) {
         s_BossPullCooldown--;
@@ -618,7 +653,7 @@ static void PullIn(void) {
 
 // Before PullIn: the edges of this game's own cutscenes.
 static void CutsceneTrack(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
     bool on = ArriveSharedScene();
 
     if (s_CsCooldown) {
@@ -672,7 +707,7 @@ static bool PrologueCrawlSkip(void) {
 }
 
 static void SkipVote(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (PrologueCrawlSkip() || !ArriveSharedScene()) {
         s_SkipVote = s_SkipNoted = false;
@@ -691,7 +726,7 @@ static void SkipVote(void) {
 // True while the leader holds its scene for the partner, or a game whose scene ended waits for
 // the partner's to end (this frame's game update is skipped).
 static bool CutsceneHold(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = FOCUS;
 
     if (s_CsEndHold) {
         if (!PartnerFresh() || !(p->flags & PRESENCE_CUTSCENE) || !SameRoomAsPartner() ||
@@ -705,7 +740,7 @@ static bool CutsceneHold(void) {
     if (!s_CsHold) {
         return false;
     }
-    if (g_CoopLink.partnerAge > 30 || (p->flags & PRESENCE_DEAD) ||
+    if (PARTNER_AGE(s_F) > 30 || (p->flags & PRESENCE_DEAD) ||
         s_CsHold >= (PartnerOnItsWay() ? CS_HOLD_WAY_MAX : CS_HOLD_MAX) ||
         ((p->flags & PRESENCE_CUTSCENE) && SameRoomAsPartner())) {
         s_CsHold = 0; // the partner's copy runs (or it can't come): go
@@ -873,6 +908,7 @@ void ArrivePresence(CoopPresence* p) {
 
 // Once per frame, before UpdateGame. Returns false to skip this frame's game update.
 bool ArriveFrame(void) {
+    PickFocus();
     if (s_TeleportIn) {
         s_TeleportIn--;
     }

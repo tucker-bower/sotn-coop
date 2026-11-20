@@ -71,21 +71,74 @@ static const Region s_Regions[] = {
 // Saturn Maria's sprite table is longer (0x568 bytes, to 0x8013C588), and her code rewrites it as
 // it unpacks her images: her partner's header is that much, taken again at each swap-in
 #define HDR_SIZE_SAT 0x588
-static u32 s_Hdr[HDR_SIZE_SAT / 4];
-static u32 s_HdrWords = HDR_SIZE / 4;
-static const u32* s_LiveHdr; // her partner build's own header, which her code writes to
 #define BANKS 8 // sprite banks 0x10-0x17: Richter's 0x10-0x13, Maria's 0x10-0x16, the off-hand's 0x17
-static u32 s_Banks[BANKS];
-static u32 s_Char;    // CHAR_* of the body
-static bool s_Code;   // it runs its own player code (not DRA's Alucard)
-static bool s_AluHere; // an Alucard partner in another character's game (DRA's Alucard, ARC_F swapped in)
-static bool s_OtherChar; // another character than player 1 (its own afterimage slots: Swap)
-static Unkstruct_8006C3C4 s_PalOps[LEN(D_8006C3C4)]; // DRA's palette operations, kept from it
-static bool s_Banked; // its graphics are in VRAM's second bank (another character than ours)
+// M17 step 4: one body per partner (partner k: CoopLink's partner for 0, more[k - 1] after), each
+// with everything that was this file's one body. B is the body whose turn it is (s_K its partner).
+#define PRIMS 96     // its primitives, up to (its own drawing: FindPrims)
+#define FLASHES 8    // its screen flashes, hidden (HideFlashes)
+#define ALU_SHEETS 218
+#define ALU_BATS 6
+typedef struct {
+    u32 hdr[HDR_SIZE_SAT / 4];
+    u32 hdrWords;
+    const u32* liveHdr; // Saturn Maria's partner build's own header, which her code writes to
+    u32 banks[BANKS];
+    u32 chr;            // CHAR_* of the body
+    bool code;          // it runs its own player code (not DRA's Alucard)
+    bool aluHere;       // an Alucard partner in another character's game (DRA's Alucard, ARC_F swapped in)
+    bool otherChar;     // another character than player 1 (its own afterimage slots: Swap)
+    bool banked;        // its graphics are in its VRAM bank (another character than ours)
+    bool reloaded;      // the stage reloaded since Make (its primitives are gone with it)
+    bool made;
+    bool justMade;      // made this frame: its update and drawing start next frame
+    bool teleportSeen;  // the partner's FLIP_TELEPORT_IN, last frame
+    bool bodyDied;      // dead here while the partner isn't: made again
+    u8 bank;            // its VRAM bank (M17: partner k's is k + 1)
+    u8 formApart;
+    u16 prevPad;
+    s16 scrollX, scrollY; // the camera when the copy was last swapped out
+    s16 driftFrames;
+    u32 bankLoaded;     // CHAR_* whose graphics are in its bank (0xFF: none)
+    u32 partnerSeed;
+    s32 partnerHp;      // its HP, as its status last said (a drop: it was hit in its game)
+    Unkstruct_8006C3C4 palOps[LEN(D_8006C3C4)]; // DRA's palette operations, kept from it
+    u32 aluBats[ALU_BATS];
+    s16 prims[PRIMS];
+    u8 primHidden[PRIMS]; // hidden by us from the game's pass (it hadn't hidden it itself)
+    s32 primCount;
+    s16 flash[FLASHES];
+    s32 flashCount;
+} Body;
+static Body s_Bodies[COOP_PARTNERS];
+static Body* B = s_Bodies;
+static s32 s_K; // B's partner
+static bool s_BodiesSet;
+
+static void SetBodies(void) {
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        s_Bodies[k].hdrWords = HDR_SIZE / 4;
+        s_Bodies[k].bankLoaded = 0xFF;
+        s_Bodies[k].partnerSeed = 1;
+        s_Bodies[k].partnerHp = -1;
+        s_Bodies[k].bank = k + 1;
+    }
+    s_BodiesSet = true;
+}
+
+// Partner s_K's side of the link
+static const CoopPresence* Presence(void) {
+    return s_K ? &g_CoopLink.more[s_K - 1].presence : &g_CoopLink.partner;
+}
+static u32 Age(void) { return s_K ? g_CoopLink.more[s_K - 1].age : g_CoopLink.partnerAge; }
+static u32 PadIn(void) { return s_K ? g_CoopLink.more[s_K - 1].pad : g_CoopLink.partnerPad; }
+static const CoopStatus* StatusIn(void) {
+    return (const CoopStatus*)(s_K ? STATUS_MORE_ADDR(s_K) : STATUS_PARTNER_ADDR);
+}
+
 static s32 s_SavedChar;
 static u32 s_SavedRandom;
-static u32 s_BankLoaded = 0xFF; // CHAR_* whose graphics are in the second bank
-static bool s_Reloaded; // the stage reloaded since Make (its primitives are gone with it)
 CdlFILE g_CoopRicPartnerFile; // CoopBoot: COOPRICP.BIN (coop_api.h)
 extern u32 g_randomNext; // DRA's Random()
 
@@ -98,7 +151,6 @@ extern u32 g_randomNext; // DRA's Random()
 #define RAND_A_INV 0xEEB9EB65u // RAND_A * RAND_A_INV == 1 (mod 2^32)
 int rand(void); // main.exe
 u32* g_CoopRandSeed;        // the BIOS's seed (NULL: not found, so not kept; tests read it)
-static u32 s_PartnerSeed = 1;
 static bool s_RandLooked;
 
 // Once, at boot (coop.c: its first frame, while the logos show): a 64KB scan is too slow for a
@@ -110,6 +162,9 @@ void PartnerBoot(void) {
         return;
     }
     s_RandLooked = true;
+    for (x = 0; x < COOP_PARTNERS - 1; x++) { // the partners after the first: none yet (boss.c counts them)
+        g_CoopLink.more[x].age = 0xFFFF;
+    }
     x = rand();
     y = rand();
     for (w = (u32*)0x80000000; w < (u32*)0x80010000; w++) {
@@ -131,8 +186,8 @@ static void RandOff(void) {
 
     if (g_CoopRandSeed) {
         t = *g_CoopRandSeed;
-        *g_CoopRandSeed = s_PartnerSeed;
-        s_PartnerSeed = t;
+        *g_CoopRandSeed = B->partnerSeed;
+        B->partnerSeed = t;
     }
 }
 
@@ -141,18 +196,15 @@ static void RandOn(void) {
 
     if (g_CoopRandSeed) {
         t = *g_CoopRandSeed;
-        *g_CoopRandSeed = s_PartnerSeed;
-        s_PartnerSeed = t;
+        *g_CoopRandSeed = B->partnerSeed;
+        B->partnerSeed = t;
     }
 }
-u32 g_CoopSpikeBody[BODY_SIZE / 4]; // the partner's copy, while player 1's is in RAM (its entity 0 first)
-static bool s_Made;
-static u16 s_PrevPad;
-static s16 s_ScrollX, s_ScrollY; // the camera when the copy was last swapped out
+u32 g_CoopSpikeBody[COOP_PARTNERS][BODY_SIZE / 4]; // each partner's copy, while player 1's is in RAM (its entity 0 first)
+#define BODY_BUF g_CoopSpikeBody[s_K]
 #define SNAP_PX 96   // further than this from its real spot: put there (#291: 48 was a running Richter's knockback)
 #define DRIFT_PX 8   // nearer than this: left alone (the link's lag; its own code moves it)
 #define DRIFT_FRAMES 60 // off for longer than this (a second), easing back: put there
-static s16 s_DriftFrames;
 
 // A frame's pull back toward the real spot: an eighth of the way, at least a pixel, none when near.
 static s32 Ease(s32 d) {
@@ -166,7 +218,6 @@ u32 g_CoopSpikePad;   // harness: the partner's buttons (PAD_*)
 u32 g_CoopSpikeLines; // the last partner frame's cost, in scanlines (263 a frame)
 u32 g_CoopSpikeMax;   // the most it has cost
 u32 g_CoopMakeLines;  // what making the body last cost, in scanlines (tests)
-static bool s_JustMade; // made this frame: its update and drawing start next frame
 static bool s_AfterLoad; // a load, its Engine_Init not run yet: no body
 
 // The game's one copy of each hand weapon's overlay (0x8017A000, 0x8017D000) and of the familiar's
@@ -213,7 +264,7 @@ static void WeaponsOn(void) {
 }
 
 // Graphics a partner's own code queues for DRA's loader (Maria's guardians, HUD): their entries
-// (its own data) get the bank bit in their y, so the loader puts them in the second bank. An
+// (its own data) get the body's bank in their y, so the loader puts them there. An
 // entry's xy holds y in its low half and x in its high one (LoadPendingGfx passes xy >> 16 as x;
 // GFX_ENTRY's first argument is the y). The bit once went in the high half: x bit 9, already set
 // for x 0x200 and up, so her HUD and guardians went over player 1's HUD name and sheet (#165).
@@ -234,7 +285,7 @@ static void GfxAfter(void) {
     for (i = 0; i < LEN(g_GfxLoad); i++) {
         if (!s_GfxBusy[i] && g_GfxLoad[i].kind != GFX_BANK_NONE) {
             for (e = g_GfxLoad[i].next; e->xy != GFX_TERMINATE(); e++) {
-                e->xy = (u_long*)((u32)e->xy | VRAM_BANK);
+                e->xy = (u_long*)(((u32)e->xy & ~VRAM_BANK_OF(3)) | VRAM_BANK_OF(B->bank));
             }
         }
     }
@@ -270,7 +321,7 @@ static void PartnerSounds(void) {
     g_SoundCommandRingBufferWritePos = s_CmdPos;
     for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
         it = &g_SfxRingBuffer[pos];
-        if (s_Char != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
+        if (B->chr != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
             it->sndVol = 0;
             continue;
         }
@@ -282,22 +333,22 @@ static void PartnerSounds(void) {
 
 // Exchanges the game's copy with the partner's, a word at a time (region 0 first: the slots).
 static void Swap(void) {
-    u32* body = g_CoopSpikeBody;
+    u32* body = BODY_BUF;
     s32 i;
     u32 k, t;
 
-    if (s_Code || s_AluHere) {
+    if (B->code || B->aluHere) {
         u32* ram = (u32*)HDR_ADDR;
-        for (k = 0; k < s_HdrWords; k++) {
+        for (k = 0; k < B->hdrWords; k++) {
             t = ram[k];
-            ram[k] = s_Hdr[k];
-            s_Hdr[k] = t;
+            ram[k] = B->hdr[k];
+            B->hdr[k] = t;
         }
         ram = (u32*)g_api.o.spriteBanks + 16;
         for (k = 0; k < BANKS; k++) {
             t = ram[k];
-            ram[k] = s_Banks[k];
-            s_Banks[k] = t;
+            ram[k] = B->banks[k];
+            B->banks[k] = t;
         }
     }
     // the 64 player slots: only those in use on either side (most are empty), and always the
@@ -310,7 +361,7 @@ static void Swap(void) {
     for (i = 0; i < 64; i++, body += 0xBC / 4) {
         u32* ram = (u32*)&g_Entities[i];
         if (i && i <= E_AFTERIMAGE_3) {
-            if (!s_OtherChar) { // slot 1's id is a counter: 0 is no sign of an empty slot
+            if (!B->otherChar) { // slot 1's id is a counter: 0 is no sign of an empty slot
                 continue;
             }
         } else if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
@@ -337,11 +388,15 @@ static bool PartnerLive(void);
 static void SwapOut(void);
 
 // A partner build's 'FAR1' trailer (characters/richter-ps1/ric_partner.ld, characters/maria-dx/maria_partner.ld): where the
-// BSS starts, so it's kept before the first Make zeroes it. Maria's has a sixth word, her init.
+// BSS starts, so it's kept before the first Make zeroes it, and where each body's own statics are
+// (M17: Statics). Maria's has an eighth word, her init.
 typedef struct {
     u32 magic, nearSize, farSize, bssSize, farAddr;
+    u32 statics;   // each body's own data, from here to farAddr...
+    u32 sharedBss; // ...and BSS, from its start to here (the rest, her palettes' copy, is shared)
     void (*init)(u16); // Maria's partner init (coop_maria.c); not in Richter's
 } FarTrailer;
+#define TRAILER_WORDS 7 // without an init
 static bool Trailer(u32 base, u32 size, u32 words, FarTrailer* out) {
     const FarTrailer* t;
 
@@ -353,7 +408,7 @@ static bool Trailer(u32 base, u32 size, u32 words, FarTrailer* out) {
         return false;
     }
     *out = *t;
-    if (words < 6) {
+    if (words <= TRAILER_WORDS) {
         out->init = NULL;
     }
     return true;
@@ -363,7 +418,7 @@ static bool Trailer(u32 base, u32 size, u32 words, FarTrailer* out) {
 static const FarTrailer* PartnerRic(void) {
     static FarTrailer s_Trailer;
 
-    if (!s_Trailer.magic && !Trailer(PARTNER_RIC_ADDR, g_CoopRicPartnerFile.size, 5, &s_Trailer)) {
+    if (!s_Trailer.magic && !Trailer(PARTNER_RIC_ADDR, g_CoopRicPartnerFile.size, TRAILER_WORDS, &s_Trailer)) {
         return NULL;
     }
     return &s_Trailer;
@@ -372,27 +427,26 @@ static const FarTrailer* PartnerRic(void) {
 // The partner's Maria, from her blob (the launcher's, in every game where someone plays her: its
 // last part), put where it runs once.
 // Each Maria's partner build has a place of its own (module/coop_api.h): code copied over another's
-// may go unnoticed by the recompiler. Saturn Maria's has Richter's trailer: her init is her
-// table's (5 words).
+// may go unnoticed by the recompiler. So each is copied there once, and kept (M17: partners on
+// two Marias run both). Saturn Maria's has Richter's trailer: her init is her table's.
 static const FarTrailer* PartnerMar(u32 character) {
-    static FarTrailer s_Trailer;
-    static u32 s_Which;
-    const CharBlob* b = CharacterBlob(character);
+    static FarTrailer s_Trailers[3]; // Co-op Maria's, Ultimate Maria's, Saturn Maria's
+    const CharBlob* b;
     bool sat = character == CHAR_SAT_MARIA;
+    FarTrailer* tr = &s_Trailers[sat ? 2 : character == CHAR_ULT_MARIA];
     u32 addr = sat ? PARTNER_SAT_ADDR : character == CHAR_ULT_MARIA ? PARTNER_ULT_ADDR : PARTNER_MAR_ADDR;
     const u32* src;
     u32* dst;
     u32 n;
 
-    if (s_Trailer.magic && s_Which == character) {
-        return &s_Trailer;
+    if (tr->magic) {
+        return tr;
     }
-    s_Trailer.magic = 0;
+    b = CharacterBlob(character);
     if (!b || !b->partnerSize ||
         b->partnerSize > (sat ? PARTNER_SAT_SIZE : character == CHAR_ULT_MARIA ? PARTNER_ULT_SIZE : PARTNER_PLAYER_SIZE)) {
         return NULL;
     }
-    s_Which = character;
     src = (const u32*)((const u8*)(b + 1) + ((b->ovlSize + 3) & ~3) + ((b->vhSize + 3) & ~3) +
                        ((b->vbSize + 3) & ~3));
     dst = (u32*)addr;
@@ -400,11 +454,11 @@ static const FarTrailer* PartnerMar(u32 character) {
         *dst++ = *src++;
     }
     FlushCache(); // new code (D17)
-    if (!Trailer(addr, b->partnerSize, sat ? 5 : 6, &s_Trailer) || (!sat && !s_Trailer.init)) {
-        s_Trailer.magic = 0;
+    if (!Trailer(addr, b->partnerSize, sat ? TRAILER_WORDS : TRAILER_WORDS + 1, tr) || (!sat && !tr->init)) {
+        tr->magic = 0;
         return NULL;
     }
-    return &s_Trailer;
+    return tr;
 }
 
 // Ultimate Richter as the partner runs our Richter's partner build (his code is retail Richter's,
@@ -421,7 +475,7 @@ static void UltRichterSheet(void) {
     }
     file = (const u32*)(b + 1);
     for (k = 8; k < 8 + RIC_SHEET_WORDS; k++) {
-        s_Hdr[k] = file[k] - HDR_ADDR + (u32)file;
+        B->hdr[k] = file[k] - HDR_ADDR + (u32)file;
     }
 }
 
@@ -432,7 +486,115 @@ static const FarTrailer* PartnerCode(u32 character) {
                                                                       : NULL;
 }
 
-// A character's graphics file in VRAM's second bank, where the game puts its own in the first:
+// M17: partners on one character run one build (PartnerCode: one per character), so each body
+// keeps that build's statics of its own: its data from the trailer's statics to its code, its BSS
+// to the trailer's sharedBss (her palettes' copy after it is shared: at worst one's flash shows on
+// the other), and Saturn Maria's live sprite table (her code rewrites it as it unpacks her
+// images). The build holds the statics of the body that ran it last (s_Holder); another body's
+// frame exchanges its own (kept in a buffer: s_BufOf) with those. Two of a kind: two exchanges a
+// frame. Three bodies on one build keep two apart, so two buffers are enough.
+#define STATICS_MAX 0x5000 // bytes; each partner build's linker script checks it fits
+#define BUFFERS (COOP_PARTNERS - 1)
+#define BUILDS 4 // Richter's (Ultimate Richter's too), Co-op Maria's, Ultimate Maria's, Saturn Maria's
+static u32 s_Statics[BUFFERS][STATICS_MAX / 4];
+static s8 s_Holder[BUILDS] = {-1, -1, -1, -1};     // the body whose statics the build holds (-1: none)
+static s8 s_BufOf[COOP_PARTNERS] = {-1, -1, -1}; // the buffer holding body k's (-1: none)
+enum { STATICS_SAVE, STATICS_LOAD, STATICS_EXCHANGE };
+
+static s32 BuildOf(u32 chr) {
+    return chr == CHAR_RICHTER || chr == CHAR_ULT_RICHTER ? 0
+           : chr == CHAR_ULT_MARIA                        ? 2
+           : chr == CHAR_SAT_MARIA                        ? 3
+           : CHAR_IS_MARIA(chr)                           ? 1
+                                                          : -1;
+}
+
+// Build b's statics (B's character runs it) and buffer i: to the buffer, from it, or exchanged.
+static void Statics(s32 b, s32 i, s32 op) {
+    static const u32 bases[BUILDS] = {PARTNER_RIC_ADDR, PARTNER_MAR_ADDR, PARTNER_ULT_ADDR, PARTNER_SAT_ADDR};
+    const FarTrailer* t = PartnerCode(B->chr);
+    u32 spans[3][2], *buf = s_Statics[i], *end = s_Statics[i] + STATICS_MAX / 4, *w, n, k, x;
+
+    if (!t) {
+        return;
+    }
+    spans[0][0] = bases[b]; // Saturn Maria's live sprite table (B->liveHdr)
+    spans[0][1] = b == 3 ? HDR_SIZE_SAT : 0;
+    spans[1][0] = t->statics;
+    spans[1][1] = t->farAddr - t->statics;
+    spans[2][0] = t->farAddr + t->farSize;
+    spans[2][1] = t->sharedBss - spans[2][0];
+    for (k = 0; k < 3; k++) {
+        w = (u32*)spans[k][0];
+        for (n = spans[k][1] / 4; n-- && buf < end; w++, buf++) {
+            x = *w;
+            if (op != STATICS_SAVE) {
+                *w = *buf;
+            }
+            if (op != STATICS_LOAD) {
+                *buf = x;
+            }
+        }
+    }
+}
+
+static s32 FreeBuffer(void) {
+    s32 i, k;
+
+    for (i = 0; i < BUFFERS; i++) {
+        for (k = 0; k < COOP_PARTNERS && s_BufOf[k] != i; k++) {
+        }
+        if (k == COOP_PARTNERS) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Before the body's code runs: its statics in its build, and the last holder's kept.
+static void StaticsIn(void) {
+    s32 b = BuildOf(B->chr), j, i;
+
+    if (b < 0 || (j = s_Holder[b]) == s_K) {
+        return;
+    }
+    i = s_BufOf[s_K];
+    if (j >= 0 && i >= 0) {
+        Statics(b, i, STATICS_EXCHANGE);
+        s_BufOf[j] = i;
+    } else if (j >= 0 && (i = FreeBuffer()) >= 0) { // ours were never kept apart: we take its
+        Statics(b, i, STATICS_SAVE);
+        s_BufOf[j] = i;
+    } else if (i >= 0) { // nobody's in the build (its holder went to another character)
+        Statics(b, i, STATICS_LOAD);
+    }
+    s_BufOf[s_K] = -1;
+    s_Holder[b] = s_K;
+}
+
+// A body made: it starts from its build as it is (as a body made again always has), and whoever
+// held it keeps theirs. What it kept of another build is nobody's now.
+static void StaticsMade(void) {
+    s32 b = BuildOf(B->chr), j, i, k;
+
+    for (k = 0; k < BUILDS; k++) {
+        if (s_Holder[k] == s_K) {
+            s_Holder[k] = -1;
+        }
+    }
+    s_BufOf[s_K] = -1;
+    if (b < 0) {
+        return;
+    }
+    j = s_Holder[b];
+    if (j >= 0 && (i = FreeBuffer()) >= 0) {
+        Statics(b, i, STATICS_SAVE);
+        s_BufOf[j] = i;
+    }
+    s_Holder[b] = s_K;
+}
+
+// A character's graphics file in the body's VRAM bank, where the game puts its own in the first:
 // 32 strips of 32x128 for x 0x200-0x3FF, y 0x100-0x1FF (src/dra/cd.c), then palettes 0x100-0x1FF
 // (x 0-0xFF, y 0xF0-0xFF).
 static void LoadGraphics(const u8* file, const u8* palettes) {
@@ -441,18 +603,18 @@ static void LoadGraphics(const u8* file, const u8* palettes) {
 
     for (i = 0; i < 0x20; i++) {
         r.x = D_800AC958[i];
-        r.y = (i & 2 ? 0x180 : 0x100) | VRAM_BANK;
+        r.y = (i & 2 ? 0x180 : 0x100) | VRAM_BANK_OF(B->bank);
         r.w = 0x20;
         r.h = 0x80;
         if (i == 0x1A) { // as the game does: its first row is a palette (0x380, 0x180)
-            r.y = 0x181 | VRAM_BANK;
+            r.y = 0x181 | VRAM_BANK_OF(B->bank);
             r.h = 0x7F;
         }
         LoadImage(&r, (u_long*)(file + i * 0x2000));
         DrawSync(0);
     }
     r.x = 0;
-    r.y = 0xF0 | VRAM_BANK;
+    r.y = 0xF0 | VRAM_BANK_OF(B->bank);
     r.w = 0x100;
     r.h = 0x10;
     LoadImage(&r, (u_long*)palettes);
@@ -462,32 +624,29 @@ static void LoadGraphics(const u8* file, const u8* palettes) {
 // Alucard's ARC_F.BIN as DRA reads it, from CoopBoot's copy (linked at 0x8013C000): its header
 // words point at the sprite table (0x8013C020, swapped in as it is), except the bat's table, and
 // the 218 sprite and 6 bat sprite pointers are rebased onto the copy.
-#define ALU_SHEETS 218
-#define ALU_BATS 6
-static u32 s_AluBats[ALU_BATS];
 
 static void AluHeader(void) {
     const u32* arc = (const u32*)ARC_F_ADDR;
     u32 delta = ARC_F_ADDR - HDR_ADDR, k;
 
-    s_HdrWords = HDR_SIZE / 4;
-    s_LiveHdr = NULL;
+    B->hdrWords = HDR_SIZE / 4;
+    B->liveHdr = NULL;
     for (k = 0; k < HDR_SIZE / 4; k++) {
-        s_Hdr[k] = arc[k];
+        B->hdr[k] = arc[k];
     }
     for (k = 8; k < 8 + ALU_SHEETS; k++) {
-        if (s_Hdr[k]) {
-            s_Hdr[k] += delta;
+        if (B->hdr[k]) {
+            B->hdr[k] += delta;
         }
     }
     for (k = 0; k < ALU_BATS; k++) {
-        s_AluBats[k] = ((const u32*)(arc[1] + delta))[k] + delta;
+        B->aluBats[k] = ((const u32*)(arc[1] + delta))[k] + delta;
     }
-    s_Hdr[1] = (u32)s_AluBats;
+    B->hdr[1] = (u32)B->aluBats;
 }
 
 // DRA's own palette load for Alucard (op 0x16: palettes 0x100-0x10D, src/dra/4A538.c), into the
-// second bank, as his init would have them in the first.
+// body's bank, as his init would have them in the first.
 extern u_long* D_800A3BB8[]; // DRA
 static void AluPalettes(void) {
     const u_long* op = D_800A3BB8[0x16];
@@ -501,7 +660,7 @@ static void AluPalettes(void) {
     for (k = 0; k < op[2] / 16; k++) {
         u16 clut = g_ClutIds[first + k];
         r.x = (clut & 0x3F) * 16;
-        r.y = ((clut >> 6) & 0x1FF) | VRAM_BANK;
+        r.y = ((clut >> 6) & 0x1FF) | VRAM_BANK_OF(B->bank);
         r.w = 16;
         r.h = 1;
         LoadImage(&r, (u_long*)(colors + k * 16));
@@ -513,20 +672,18 @@ static void AluPalettes(void) {
 #define DRAW_OFS (64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)) // g_PlayerDraw in the copy
 
 #define PLAYER_HIT_MARGIN 1000
-static bool s_TeleportSeen; // the partner's FLIP_TELEPORT_IN, last frame
-static bool s_BodyDied;     // dead here while the partner isn't: made again
-static s32 s_PartnerHp = -1; // its HP, as its status last said (a drop: it was hit in its game)
 u32 g_CoopBodyHits; // hits given to the body (tests read it: coop.map)
 u32 g_CoopBodyOff; // tests: no partner body (it's drawn by nothing then)
 u32 g_CoopBodyTeleports; // bodies made with the partner's teleport-in (tests read it: coop.map)
+u32 g_CoopBodiesMade; // M17: bit k, partner k's body is made (tests read it: coop.map)
 
 static void Make(void) {
-    u32* body = g_CoopSpikeBody;
+    u32* body = BODY_BUF;
     PlayerDraw* draw;
     s32 i;
     u32 k;
     // just revived: its init plays its character's teleport-in (arrive.c's TeleportIn)
-    s32 how = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) ? 6 : 0;
+    s32 how = PartnerLive() && (Presence()->flipX & FLIP_TELEPORT_IN) ? 6 : 0;
     s32 saved;
 
     g_CoopBodyTeleports += how != 0;
@@ -537,43 +694,44 @@ static void Make(void) {
             *body++ = ram[k];
         }
     }
-    ((Entity*)g_CoopSpikeBody)->posX.i.hi += 32;
-    s_Char = PartnerLive() ? g_CoopLink.partner.character : CHAR_ALUCARD;
-    s_Code = s_Char != CHAR_ALUCARD;
-    s_AluHere = !s_Code && CharacterLoaded() != CHAR_ALUCARD;
-    // A partner build's own uploads always go to the second bank (coop_ric.h): it draws from there.
-    s_Banked = s_Code || s_Char != CharacterLoaded();
-    s_OtherChar = s_Char != CharacterLoaded();
-    s_Reloaded = false;
-    s_PartnerHp = -1; // its first status here isn't a hit
-    s_ScrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
-    s_ScrollY = g_Tilemap.scrollY.i.hi;
-    if (s_Banked && s_BankLoaded != s_Char) { // before the init: Maria's uploads her palettes
-        if (s_Char == CHAR_ALUCARD) {
+    ((Entity*)BODY_BUF)->posX.i.hi += 32;
+    B->chr = PartnerLive() ? Presence()->character : CHAR_ALUCARD;
+    B->code = B->chr != CHAR_ALUCARD;
+    StaticsMade();
+    B->aluHere = !B->code && CharacterLoaded() != CHAR_ALUCARD;
+    // A partner build's own uploads always go to the body's bank (coop_ric.h): it draws from there.
+    B->banked = B->code || B->chr != CharacterLoaded();
+    B->otherChar = B->chr != CharacterLoaded();
+    B->reloaded = false;
+    B->partnerHp = -1; // its first status here isn't a hit
+    B->scrollX = g_Tilemap.scrollX.i.hi; // for SwapIn: no camera move to apply to the copy
+    B->scrollY = g_Tilemap.scrollY.i.hi;
+    if (B->banked && B->bankLoaded != B->chr) { // before the init: Maria's uploads her palettes
+        if (B->chr == CHAR_ALUCARD) {
             LoadGraphics((const u8*)FGAME_GFX_ADDR, (const u8*)FGAME_PAL_ADDR);
             AluPalettes();
         } else {
             LoadGraphics((const u8*)FGAME2_ADDR, (const u8*)FGAME2_ADDR + 0x40000); // Richter's; Maria's runs on it too
-            if (s_Char == CHAR_ULT_RICHTER && CharacterBlob(CHAR_ULT_RICHTER)) { // his coat's colours and arm
-                CharacterRicCoat((const u8*)(CharacterBlob(CHAR_ULT_RICHTER) + 1), true);
+            if (B->chr == CHAR_ULT_RICHTER && CharacterBlob(CHAR_ULT_RICHTER)) { // his coat's colours and arm
+                CharacterRicCoat((const u8*)(CharacterBlob(CHAR_ULT_RICHTER) + 1), B->bank);
             }
         }
-        s_BankLoaded = s_Char;
-        FamiliarReload(); // the strips held the partner's familiar too
+        B->bankLoaded = B->chr;
+        FamiliarReload(s_K); // the strips held the partner's familiar too
     }
-    if (!s_Code) { // DRA's Alucard, from his own init, with nothing of player 1's (slots 1-63
+    if (!B->code) { // DRA's Alucard, from his own init, with nothing of player 1's (slots 1-63
                    // hold player 1's afterimages, familiar, weapons: their primitives are player 1's)
-        Entity* pl = (Entity*)g_CoopSpikeBody;
+        Entity* pl = (Entity*)BODY_BUF;
         s16 x = pl->posX.i.hi, y = pl->posY.i.hi;
 
-        if (s_AluHere) {
+        if (B->aluHere) {
             AluHeader();
             for (k = 0; k < BANKS; k++) {
-                s_Banks[k] = ((u32*)g_api.o.spriteBanks)[16 + k];
+                B->banks[k] = ((u32*)g_api.o.spriteBanks)[16 + k];
             }
         }
         for (k = 0xBC / 4; k < 64 * 0xBC / 4; k++) {
-            g_CoopSpikeBody[k] = 0;
+            BODY_BUF[k] = 0;
         }
         SwapIn();
         saved = D_80097C98; // player 1's (it may be set during a load)
@@ -584,8 +742,8 @@ static void Make(void) {
         pl->posX.i.hi = x; // where the copy was (the partner's spot, below, when it's live)
         pl->posY.i.hi = y;
     }
-    if (s_Code) { // their own code, started by its own init, with nothing of player 1's
-        const FarTrailer* t = PartnerCode(s_Char);
+    if (B->code) { // their own code, started by its own init, with nothing of player 1's
+        const FarTrailer* t = PartnerCode(B->chr);
         const u32* hdr = (const u32*)(t->farAddr - t->nearSize);
         u32* bss = (u32*)(t->farAddr + t->farSize);
         u32* banks = (u32*)g_api.o.spriteBanks + 16;
@@ -593,19 +751,19 @@ static void Make(void) {
         for (k = 0; k < t->bssSize / 4; k++) { // fresh statics (the trailer is in the first words)
             bss[k] = 0;
         }
-        s_HdrWords = (s_Char == CHAR_SAT_MARIA ? HDR_SIZE_SAT : HDR_SIZE) / 4;
-        s_LiveHdr = s_Char == CHAR_SAT_MARIA ? hdr : NULL;
-        for (k = 0; k < s_HdrWords; k++) {
-            s_Hdr[k] = hdr[k];
+        B->hdrWords = (B->chr == CHAR_SAT_MARIA ? HDR_SIZE_SAT : HDR_SIZE) / 4;
+        B->liveHdr = B->chr == CHAR_SAT_MARIA ? hdr : NULL;
+        for (k = 0; k < B->hdrWords; k++) {
+            B->hdr[k] = hdr[k];
         }
-        if (s_Char == CHAR_ULT_RICHTER) {
+        if (B->chr == CHAR_ULT_RICHTER) {
             UltRichterSheet();
         }
         for (k = 0; k < BANKS; k++) {
-            s_Banks[k] = banks[k];
+            B->banks[k] = banks[k];
         }
         for (k = 0xBC / 4; k < 64 * 0xBC / 4; k++) { // slots 1-63: player 1's (their primitives too)
-            g_CoopSpikeBody[k] = 0;
+            BODY_BUF[k] = 0;
         }
         SwapIn();
         saved = D_80097C98;
@@ -618,18 +776,18 @@ static void Make(void) {
         D_80097C98 = saved;
         SwapOut();
     }
-    // Its sprites go to VRAM's second bank, where player 1's would be (RenderEntities loads each
-    // player-sprite frame into its g_PlayerDraw slot as it draws, and clears its edges): y bit 9
-    // for the uploads and fills, texpage bit 14 for the drawing (our SwanStation build:
+    // Its sprites go to its VRAM bank, where player 1's would be (RenderEntities loads each
+    // player-sprite frame into its g_PlayerDraw slot as it draws, and clears its edges): y bits 9-10
+    // for the uploads and fills, texpage bits 14-15 for the drawing (our SwanStation build:
     // patches/swanstation.patch).
-    draw = (PlayerDraw*)((u8*)g_CoopSpikeBody + DRAW_OFS);
+    draw = (PlayerDraw*)((u8*)BODY_BUF + DRAW_OFS);
     for (i = 0; i < 16; i++, draw++) {
-        draw->rect0.y |= VRAM_BANK;
-        draw->rect1.y |= VRAM_BANK;
-        draw->rect2.y |= VRAM_BANK;
-        draw->tpage |= TPAGE_BANK;
+        draw->rect0.y |= VRAM_BANK_OF(B->bank);
+        draw->rect1.y |= VRAM_BANK_OF(B->bank);
+        draw->rect2.y |= VRAM_BANK_OF(B->bank);
+        draw->tpage |= TPAGE_BANK_OF(B->bank);
     }
-    s_Made = true;
+    B->made = true;
 }
 
 // Entity positions are on screen (relative to the camera), and the camera moved while the copy
@@ -659,13 +817,17 @@ static u8 HpNumbers(void) {
 }
 
 static void SwapIn(void) {
-    s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
+    s16 dx = B->scrollX - g_Tilemap.scrollX.i.hi, dy = B->scrollY - g_Tilemap.scrollY.i.hi;
     s32 i;
     u32 k;
 
-    if (s_Code && s_LiveHdr) { // Saturn Maria's: her table as her code last left it
-        for (k = 0; k < s_HdrWords; k++) {
-            s_Hdr[k] = s_LiveHdr[k];
+    if (B->code) {
+        StaticsIn();
+        g_CoopPartnerVram = VRAM_BANK_OF(B->bank); // its build's uploads (coop_partner.c)
+    }
+    if (B->code && B->liveHdr) { // Saturn Maria's: her table as her code last left it
+        for (k = 0; k < B->hdrWords; k++) {
+            B->hdr[k] = B->liveHdr[k];
         }
     }
     s_NumsBefore = HpNumbers();
@@ -678,17 +840,17 @@ static void SwapIn(void) {
     s_CmdPos = g_SoundCommandRingBufferWritePos;
     WeaponsOff();
     RandOff();
-    g_CoopCharacter = s_Code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
-    if (!s_Code) { // his palette operations would work on player 1's palettes: none kept
+    g_CoopCharacter = B->code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
+    if (!B->code) { // his palette operations would work on player 1's palettes: none kept
         for (i = 0; i < LEN(D_8006C3C4); i++) {
-            s_PalOps[i] = D_8006C3C4[i];
+            B->palOps[i] = D_8006C3C4[i];
         }
     }
-    if (s_Code) {
+    if (B->code) {
         GfxBefore();
     }
     for (i = 0; i < 64; i++) {
-        if (i == 0 || (g_Entities[i].entityId && (i > E_AFTERIMAGE_3 || s_OtherChar))) { // not player 1's (Swap)
+        if (i == 0 || (g_Entities[i].entityId && (i > E_AFTERIMAGE_3 || B->otherChar))) { // not player 1's (Swap)
             g_Entities[i].posX.i.hi += dx;
             g_Entities[i].posY.i.hi += dy;
         }
@@ -698,8 +860,8 @@ static void SwapIn(void) {
 // The partner's own status (stats, level, equipment: link.h's CoopStatus, sent by its host) in
 // the copy, so it fights and casts as itself. Without it (an older partner), it keeps player 1's.
 static void PutStatus(void) {
-    const CoopStatus* st = (const CoopStatus*)STATUS_PARTNER_ADDR;
-    u8* body = (u8*)g_CoopSpikeBody + 64 * 0xBC;
+    const CoopStatus* st = StatusIn();
+    u8* body = (u8*)BODY_BUF + 64 * 0xBC;
     s32 i;
     u32 k;
 
@@ -721,17 +883,17 @@ static void PutStatus(void) {
 bool PartnerWeaponDiffers(s32 hand) { return true; }
 
 void PartnerBodyOffset(s16* dx, s16* dy) {
-    const Entity* body = (const Entity*)g_CoopSpikeBody;
+    const Entity* body = (const Entity*)BODY_BUF;
 
-    *dx = body->posX.i.hi + s_ScrollX - g_CoopLink.partner.x;
-    *dy = body->posY.i.hi + s_ScrollY - g_CoopLink.partner.y;
+    *dx = body->posX.i.hi + B->scrollX - Presence()->x;
+    *dy = body->posY.i.hi + B->scrollY - Presence()->y;
 }
 
 static void SwapOut(void) {
     g_Status.exp += s_KeptExp;
-    s_ScrollX = g_Tilemap.scrollX.i.hi;
-    s_ScrollY = g_Tilemap.scrollY.i.hi;
-    if (s_Code) {
+    B->scrollX = g_Tilemap.scrollX.i.hi;
+    B->scrollY = g_Tilemap.scrollY.i.hi;
+    if (B->code) {
         GfxAfter();
     }
     PartnerSounds(); // the body is still in RAM: its spot pans them
@@ -739,10 +901,10 @@ static void SwapOut(void) {
     WeaponsOn();
     g_CoopCharacter = s_SavedChar;
     g_randomNext = s_SavedRandom;
-    if (!s_Code) {
+    if (!B->code) {
         s32 i;
         for (i = 0; i < LEN(D_8006C3C4); i++) {
-            D_8006C3C4[i] = s_PalOps[i];
+            D_8006C3C4[i] = B->palOps[i];
         }
     }
     Swap();
@@ -761,22 +923,18 @@ static void SwapOut(void) {
 // Its body outlasts a stall of the link (it blinked in and out with each one: playtest 0.14), standing
 // still once its buttons stop coming.
 #define BODY_STALE_FRAMES 300
-static bool PartnerLive(void) { return g_CoopLink.partnerAge <= BODY_STALE_FRAMES; }
+static bool PartnerLive(void) { return Age() <= BODY_STALE_FRAMES; }
 
 // The partner is in this room, in play, as a character we can run: Alucard (DRA's code), Richter or
 // Maria (their partner builds), in any game.
 static bool PartnerHere(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p = Presence();
     return p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top &&
            (p->flags & PRESENCE_IN_PLAY) && g_PlayableCharacter == 0 &&
            (p->character == CHAR_ALUCARD || PartnerCode(p->character));
 }
 
 // The body's primitives (its entities' chains), for its own drawing pass. Up to PRIMS of them.
-#define PRIMS 96
-static s16 s_Prims[PRIMS];
-static u8 s_PrimHidden[PRIMS]; // hidden by us from the game's pass (it hadn't hidden it itself)
-static s32 s_PrimCount;
 
 // Slot i (the body's slots swapped in) holds primitives of the body's own: an entity's, or its
 // afterimages' (slot 1: no id) when they're its own (another character: Swap). Of player 1's
@@ -786,7 +944,7 @@ static bool OwnPrims(s32 i) {
         return false;
     }
     if (i && i <= E_AFTERIMAGE_3) { // no id (slot 1's is the afterimages' counter)
-        return s_OtherChar;
+        return B->otherChar;
     }
     return i == 0 || g_Entities[i].entityId;
 }
@@ -795,11 +953,11 @@ static void FindPrims(void) {
     Primitive* prim;
     s32 i;
 
-    s_PrimCount = 0;
+    B->primCount = 0;
     for (i = 0; i < 64; i++) {
         if (OwnPrims(i)) {
-            for (prim = &g_PrimBuf[g_Entities[i].primIndex]; prim && s_PrimCount < PRIMS; prim = prim->next) {
-                s_Prims[s_PrimCount++] = prim - g_PrimBuf;
+            for (prim = &g_PrimBuf[g_Entities[i].primIndex]; prim && B->primCount < PRIMS; prim = prim->next) {
+                B->prims[B->primCount++] = prim - g_PrimBuf;
             }
         }
     }
@@ -807,9 +965,6 @@ static void FindPrims(void) {
 
 // A primitive of the body's that covers the screen (its teleport-in's white flash): that's this
 // game's player's screen, not the body's to flash. Hidden from every pass, given back after.
-#define FLASHES 8
-static s16 s_Flash[FLASHES];
-static s32 s_FlashCount;
 
 // As big as most of the screen (the teleport's are two 0xC0 x 0xF0 tiles and a quad: EntityTeleport).
 static bool CoversScreen(const Primitive* p) {
@@ -823,11 +978,11 @@ static void HideFlashes(void) {
     Primitive* p;
     s32 i;
 
-    for (i = 0; i < s_PrimCount && s_FlashCount < FLASHES; i++) {
-        p = &g_PrimBuf[s_Prims[i]];
+    for (i = 0; i < B->primCount && B->flashCount < FLASHES; i++) {
+        p = &g_PrimBuf[B->prims[i]];
         if (!(p->drawMode & DRAW_HIDE) && CoversScreen(p)) {
             p->drawMode |= DRAW_HIDE;
-            s_Flash[s_FlashCount++] = s_Prims[i];
+            B->flash[B->flashCount++] = B->prims[i];
         }
     }
 }
@@ -836,23 +991,23 @@ static void HideFlashes(void) {
 static void ShowPrims(void) {
     s32 i;
 
-    for (i = 0; i < s_PrimCount; i++) {
-        if (s_PrimHidden[i]) {
-            g_PrimBuf[s_Prims[i]].drawMode &= ~DRAW_HIDE;
+    for (i = 0; i < B->primCount; i++) {
+        if (B->primHidden[i]) {
+            g_PrimBuf[B->prims[i]].drawMode &= ~DRAW_HIDE;
         }
     }
-    for (i = 0; i < s_FlashCount; i++) {
-        g_PrimBuf[s_Flash[i]].drawMode &= ~DRAW_HIDE;
+    for (i = 0; i < B->flashCount; i++) {
+        g_PrimBuf[B->flash[i]].drawMode &= ~DRAW_HIDE;
     }
-    s_PrimCount = 0;
-    s_FlashCount = 0;
+    B->primCount = 0;
+    B->flashCount = 0;
 }
 
 // The body leaves: its primitives go back to the game, unless a stage load freed them all.
 static void Drop(void) {
     s32 i;
 
-    if (s_Made && !s_Reloaded) {
+    if (B->made && !B->reloaded) {
         ShowPrims();
         SwapIn();
         for (i = 0; i < 64; i++) {
@@ -863,15 +1018,15 @@ static void Drop(void) {
         }
         SwapOut();
     }
-    s_Made = false;
-    s_PrimCount = 0;
+    B->made = false;
+    B->primCount = 0;
 }
 
 // The harness's spike test only (OPT_PARTNER_SIM, no partner): a copy of player 1 on g_CoopSpikePad.
-static bool Spike(void) { return (g_CoopOptions & OPT_PARTNER_SIM) && !PartnerLive(); }
+static bool Spike(void) { return !s_K && (g_CoopOptions & OPT_PARTNER_SIM) && !PartnerLive(); }
 
 bool PartnerSimulated(void) {
-    return s_Made && (Spike() || (PartnerLive() && PartnerHere()));
+    return B->made && (Spike() || (PartnerLive() && PartnerHere()));
 }
 
 static void Draw(void);
@@ -915,38 +1070,36 @@ static void KeepAfterimages(void) {
 #define ANIMSET_WOLF 15
 #define BUTTON_WOLF 4 // g_Settings.buttonMask's index of PAD_R2 (D_800ACE00)
 #define BUTTON_BAT 6  // of PAD_R1
-static u8 s_FormApart;
 u32 g_CoopBodyForms; // form buttons given to the body (tests read it: coop.map)
 
 static u16 FormButton(const CoopPresence* p) {
     s16 want = p->animSet, is = PLAYER.animSet;
     s32 button;
 
-    if (s_Code || want == is) {
-        s_FormApart = 0;
+    if (B->code || want == is) {
+        B->formApart = 0;
         return 0;
     }
     button = want == ANIMSET_BAT || is == ANIMSET_BAT     ? BUTTON_BAT
              : want == ANIMSET_WOLF || is == ANIMSET_WOLF ? BUTTON_WOLF
                                                           : -1;
-    if (button < 0 || ++s_FormApart < FORM_FRAMES) {
+    if (button < 0 || ++B->formApart < FORM_FRAMES) {
         return 0;
     }
-    s_FormApart = 0; // again after as long, if its code didn't take it
+    B->formApart = 0; // again after as long, if its code didn't take it
     g_CoopBodyForms++;
     return g_Settings.buttonMask[button];
 }
 
-// The partner's frame: its update and its drawing, in one swap. After player 1's RenderEntities.
-void PartnerFrame(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    Pad pad0;
-    u32 options;
-    Entity* cur;
-    s32 i;
-    s32 t0;
-    u16 pad;
+static void BodyFrame(void);
 
+// Each partner's frame: its update and its drawing, in one swap. After player 1's RenderEntities.
+void PartnerFrame(void) {
+    s32 k;
+
+    if (!s_BodiesSet) {
+        SetBodies();
+    }
     if (ArriveCardSaving()) {
         return; // the game is frozen while its card is written (the card and pads share the port)
     }
@@ -961,46 +1114,70 @@ void PartnerFrame(void) {
         s_AfterLoad = false;
     }
     if (s_AfterLoad) {
-        s_Reloaded = true;
-        s_Made = false;
-        s_PrimCount = 0;
-        s_FlashCount = 0;
+        g_CoopBodiesMade = 0;
+        for (k = 0; k < COOP_PARTNERS; k++) {
+            s_Bodies[k].reloaded = true;
+            s_Bodies[k].made = false;
+            s_Bodies[k].primCount = 0;
+            s_Bodies[k].flashCount = 0;
+        }
         return;
     }
     KeepAfterimages();
+    g_CoopBodiesMade = 0;
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        s_K = k;
+        B = &s_Bodies[k];
+        BodyFrame();
+        g_CoopBodiesMade |= B->made << k;
+    }
+    s_K = 0;
+    B = s_Bodies;
+}
+
+// Partner s_K's body (B): made, updated and drawn, or dropped.
+static void BodyFrame(void) {
+    const CoopPresence* p = Presence();
+    Pad pad0;
+    u32 options;
+    Entity* cur;
+    s32 i;
+    s32 t0;
+    u16 pad;
+
     if (g_CoopBodyOff) { // tests: no body (what a game does without one)
-        if (s_Made) {
+        if (B->made) {
             Drop();
         }
         return;
     }
-    if (s_Made && !Spike() &&
-        (!PartnerLive() || !PartnerHere() || g_CoopLink.partner.character != s_Char || s_BodyDied ||
-         ((g_CoopLink.partner.flipX & FLIP_TELEPORT_IN) && !s_TeleportSeen))) {
+    if (B->made && !Spike() &&
+        (!PartnerLive() || !PartnerHere() || Presence()->character != B->chr || B->bodyDied ||
+         ((Presence()->flipX & FLIP_TELEPORT_IN) && !B->teleportSeen))) {
         Drop(); // gone (from this room, or for good), or just revived: made again where they are
-        s_BodyDied = false;
+        B->bodyDied = false;
     }
-    s_TeleportSeen = PartnerLive() && (g_CoopLink.partner.flipX & FLIP_TELEPORT_IN);
+    B->teleportSeen = PartnerLive() && (Presence()->flipX & FLIP_TELEPORT_IN);
     if (!Spike() && !(PartnerLive() && PartnerHere())) {
         return;
     }
-    if (!s_Made) {
+    if (!B->made) {
         u16 m0 = VSync(1);
         Make();
         g_CoopMakeLines = (u16)(VSync(1) - m0);
-        s_ScrollX = g_Tilemap.scrollX.i.hi;
-        s_ScrollY = g_Tilemap.scrollY.i.hi;
+        B->scrollX = g_Tilemap.scrollX.i.hi;
+        B->scrollY = g_Tilemap.scrollY.i.hi;
         if (PartnerLive()) { // where they are (their presence is in room pixels)
-            ((Entity*)g_CoopSpikeBody)->posX.i.hi = p->x - g_Tilemap.scrollX.i.hi;
-            ((Entity*)g_CoopSpikeBody)->posY.i.hi = p->y - g_Tilemap.scrollY.i.hi;
+            ((Entity*)BODY_BUF)->posX.i.hi = p->x - g_Tilemap.scrollX.i.hi;
+            ((Entity*)BODY_BUF)->posY.i.hi = p->y - g_Tilemap.scrollY.i.hi;
         }
         // That's this frame's share: with its first update and drawing too, a frame of play ran
         // past its time (the game then skips a frame: player 1 moved a pixel less).
-        s_JustMade = true;
+        B->justMade = true;
         return;
     }
-    s_JustMade = false;
-    pad = !PartnerLive() ? g_CoopSpikePad : g_CoopLink.partnerAge <= PARTNER_STALE_FRAMES ? g_CoopLink.partnerPad : 0;
+    B->justMade = false;
+    pad = !PartnerLive() ? g_CoopSpikePad : Age() <= PARTNER_STALE_FRAMES ? PadIn() : 0;
     t0 = VSync(1);
     if (PartnerLive()) {
         PutStatus();
@@ -1009,31 +1186,31 @@ void PartnerFrame(void) {
     SwapIn();
     // Hit in its own game (its HP dropped): its own hit reaction here, its own code's knockback
     // and voice, from the same HP to the same HP (cosmetic: the body's status is the partner's).
-    if (PartnerLive() && ((const CoopStatus*)STATUS_PARTNER_ADDR)->magic == STATUS_MAGIC) {
-        s32 hp = ((const s32*)((const CoopStatus*)STATUS_PARTNER_ADDR)->a)[1]; // g_Status.hp
-        if (s_PartnerHp > hp && hp > 0) {
+    if (PartnerLive() && (StatusIn())->magic == STATUS_MAGIC) {
+        s32 hp = ((const s32*)(StatusIn())->a)[1]; // g_Status.hp
+        if (B->partnerHp > hp && hp > 0) {
             // Its own code's sums can differ from its game's, and a body that died here stayed dead
             // and unseen while the partner played on (playtest 0.14): it can't die of this.
-            g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + (s_PartnerHp - hp);
+            g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + (B->partnerHp - hp);
             PLAYER.hitParams = DAMAGEKIND_1;
-            PLAYER.hitPoints = s_PartnerHp - hp + g_Status.defenseEquip;
+            PLAYER.hitPoints = B->partnerHp - hp + g_Status.defenseEquip;
             g_CoopBodyHits++;
         }
-        s_PartnerHp = hp;
+        B->partnerHp = hp;
     }
     if (PartnerLive()) { // pulled to their real spot when it drifts
         s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
         s32 dx = x - PLAYER.posX.i.hi, dy = y - PLAYER.posY.i.hi;
         bool off = Ease(dx) || Ease(dy);
 
-        s_DriftFrames = off ? s_DriftFrames + 1 : 0;
-        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || s_DriftFrames > DRIFT_FRAMES) {
+        B->driftFrames = off ? B->driftFrames + 1 : 0;
+        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || B->driftFrames > DRIFT_FRAMES) {
             // A door, a teleport, or a drift the easing can't undo (a body on a floor below its
             // real spot falls back each frame): there at once.
             PLAYER.posX.i.hi = x;
             PLAYER.posY.i.hi = y;
             PLAYER.velocityX = PLAYER.velocityY = 0;
-            s_DriftFrames = 0;
+            B->driftFrames = 0;
         } else {
             // Drifting (its game's hit knocked it back, and not here): eased back, an eighth of the
             // way a frame. Snapped at 48 px, Richter running "jumped all over" (#291).
@@ -1049,16 +1226,21 @@ void PartnerFrame(void) {
     } else if (PartnerLive()) {
         pad |= FormButton(p);
     }
+    // Facing the partner's way (#274): a body made facing the other way kept it until the partner
+    // pressed left or right, and threw its sub-weapons backwards. Not while it turns itself.
+    if (PartnerLive() && !(pad & (PAD_LEFT | PAD_RIGHT)) && PLAYER.facingLeft != (p->flipX & 1)) {
+        PLAYER.facingLeft = p->flipX & 1;
+    }
     pad0 = g_pads[0];
     options = g_CoopOptions; // its one-button moves are on or off as the partner has them
     g_CoopOptions = (options & ~OPT_SHORTCUTS) | ((p->flipX & FLIP_SHORTCUTS) ? OPT_SHORTCUTS : 0);
     g_pads[0].pressed = pad;
-    g_pads[0].tapped = pad & ~s_PrevPad;
+    g_pads[0].tapped = pad & ~B->prevPad;
     g_pads[0].repeat = g_pads[0].tapped;
-    s_PrevPad = pad;
+    B->prevPad = pad;
     cur = g_CurrentEntity;
     g_CurrentEntity = &PLAYER;
-    if (s_Code) { // as DRA runs Richter's (src/dra/5087C.c)
+    if (B->code) { // as DRA runs Richter's (src/dra/5087C.c)
         ((PlayerOvl*)HDR_ADDR)->D_8013C000();
         ((PlayerOvl*)HDR_ADDR)->D_8013C008();
     } else {
@@ -1073,7 +1255,7 @@ void PartnerFrame(void) {
     g_CurrentEntity = cur;
     g_pads[0] = pad0;
     g_CoopOptions = options;
-    s_BodyDied = (g_Player.status & PLAYER_STATUS_DEAD) && !(p->flags & PRESENCE_DEAD);
+    B->bodyDied = (g_Player.status & PLAYER_STATUS_DEAD) && !(p->flags & PRESENCE_DEAD);
     Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
     SwapOut();
     g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter: its update and drawing
@@ -1088,24 +1270,24 @@ static bool HiddenWeapon(const Entity* e) {
     return e->entityId >= 0xD0; // none left after its update (WeaponsOff), but never drawn
 }
 
-// What the body just drew, from its character's graphics in the second bank: textures in
-// F_GAME's pages (x 0x200-0x3FF, y 0x100-0x1FF) and palettes in its rows (x 0-0xFF, y 0xF0-0xFF).
-static u16 BankTpage(u16 t) { return (t & 0xF) >= 8 && (t & 0x10) ? t | TPAGE_BANK : t; }
-static u16 BankClut(u16 c) {
+// What the body just drew, from its character's graphics in its bank: textures in F_GAME's
+// pages (x 0x200-0x3FF, y 0x100-0x1FF) and palettes in its rows (x 0-0xFF, y 0xF0-0xFF).
+static u16 BankTpage(u16 t, u32 bank) { return (t & 0xF) >= 8 && (t & 0x10) ? t | TPAGE_BANK_OF(bank) : t; }
+static u16 BankClut(u16 c, u32 bank) {
     u16 y = (c >> 6) & 0x1FF;
-    return y >= 0xF0 && y < 0x100 && (c & 0x3F) < 0x10 ? c | CLUT_BANK : c;
+    return y >= 0xF0 && y < 0x100 && (c & 0x3F) < 0x10 ? c | CLUT_BANK_OF(bank) : c;
 }
 
-u16 PartnerClut(u16 clut) { return s_Banked ? BankClut(clut) : clut; }
+u16 PartnerClut(u16 clut) { return B->banked ? BankClut(clut, B->bank) : clut; }
 
 static void BankPolys(u32 gt4, u32 gt3) {
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
-        g_CurrentBuffer->polyGT4[gt4].tpage = BankTpage(g_CurrentBuffer->polyGT4[gt4].tpage);
-        g_CurrentBuffer->polyGT4[gt4].clut = BankClut(g_CurrentBuffer->polyGT4[gt4].clut);
+        g_CurrentBuffer->polyGT4[gt4].tpage = BankTpage(g_CurrentBuffer->polyGT4[gt4].tpage, B->bank);
+        g_CurrentBuffer->polyGT4[gt4].clut = BankClut(g_CurrentBuffer->polyGT4[gt4].clut, B->bank);
     }
     for (; gt3 < g_GpuUsage.gt3; gt3++) {
-        g_CurrentBuffer->polyGT3[gt3].tpage = BankTpage(g_CurrentBuffer->polyGT3[gt3].tpage);
-        g_CurrentBuffer->polyGT3[gt3].clut = BankClut(g_CurrentBuffer->polyGT3[gt3].clut);
+        g_CurrentBuffer->polyGT3[gt3].tpage = BankTpage(g_CurrentBuffer->polyGT3[gt3].tpage, B->bank);
+        g_CurrentBuffer->polyGT3[gt3].clut = BankClut(g_CurrentBuffer->polyGT3[gt3].clut, B->bank);
     }
 }
 
@@ -1114,19 +1296,31 @@ void PartnerBankPolys(u32 gt4, u32 gt3) { BankPolys(gt4, gt3); }
 // The partner tinted, as the puppet was (M1 part 4; agent-default with M13 step 5): two players of
 // the same character are told apart. Its sprites drawn plain (raw texture: RenderEntities'
 // setShadeTex) are drawn modulated by the tint instead; those with colors of their own keep them.
-#define TINT_R 0x58
-#define TINT_G 0x68
-#define TINT_B 0xA8
+// M17: each partner a tint of its own (agent-default): blue, red, green.
+static const u8 s_Tints[COOP_PARTNERS][3] = {{0x58, 0x68, 0xA8}, {0xA8, 0x60, 0x58}, {0x60, 0xA0, 0x60}};
+// Another partner's body here is this one's character.
+static bool Twin(void) {
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (k != s_K && s_Bodies[k].made && s_Bodies[k].chr == B->chr) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void Tint(u32 gt4) {
+    const u8* c = s_Tints[s_K];
     POLY_GT4* q;
 
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
         q = &g_CurrentBuffer->polyGT4[gt4];
         if (q->code & 1) { // raw texture
             q->code &= ~1;
-            q->r0 = q->r1 = q->r2 = q->r3 = TINT_R;
-            q->g0 = q->g1 = q->g2 = q->g3 = TINT_G;
-            q->b0 = q->b1 = q->b2 = q->b3 = TINT_B;
+            q->r0 = q->r1 = q->r2 = q->r3 = c[0];
+            q->g0 = q->g1 = q->g2 = q->g3 = c[1];
+            q->b0 = q->b1 = q->b2 = q->b3 = c[2];
         }
     }
 }
@@ -1138,7 +1332,7 @@ static void Tint(u32 gt4) {
 // copies into their polygons; after it, PartnerAfterPrims gives those polygons the bank's palette
 // too and takes the tag off again. (A pass of our own, with every other primitive hidden and
 // shown again, cost some 40 scanlines a frame: the mixed soak missed frames.)
-static s16 s_Tagged[PRIMS];
+static s16 s_Tagged[PRIMS * COOP_PARTNERS]; // every body's (one pass draws them all)
 static s32 s_TagCount;
 
 static void TagPrims(void) {
@@ -1147,13 +1341,13 @@ static void TagPrims(void) {
 
     FindPrims();
     HideFlashes();
-    for (i = 0; i < s_PrimCount; i++) {
-        p = &g_PrimBuf[s_Prims[i]];
-        s_PrimHidden[i] = false;
-        if ((p->type == PRIM_GT4 || p->type == PRIM_GT3) && !(p->tpage & TPAGE_BANK) &&
-            BankTpage(p->tpage) != p->tpage) {
-            p->tpage |= TPAGE_BANK;
-            s_Tagged[s_TagCount++] = s_Prims[i];
+    for (i = 0; i < B->primCount; i++) {
+        p = &g_PrimBuf[B->prims[i]];
+        B->primHidden[i] = false;
+        if ((p->type == PRIM_GT4 || p->type == PRIM_GT3) && !(p->tpage & TPAGE_BANKS) &&
+            BankTpage(p->tpage, B->bank) != p->tpage && s_TagCount < LEN(s_Tagged)) {
+            p->tpage |= TPAGE_BANK_OF(B->bank);
+            s_Tagged[s_TagCount++] = B->prims[i];
         }
     }
 }
@@ -1165,17 +1359,19 @@ void PartnerAfterPrims(u32 gt4, u32 gt3) {
         return;
     }
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
-        if (g_CurrentBuffer->polyGT4[gt4].tpage & TPAGE_BANK) {
-            g_CurrentBuffer->polyGT4[gt4].clut = BankClut(g_CurrentBuffer->polyGT4[gt4].clut);
+        u16 t = g_CurrentBuffer->polyGT4[gt4].tpage;
+        if (t & TPAGE_BANKS) {
+            g_CurrentBuffer->polyGT4[gt4].clut = BankClut(g_CurrentBuffer->polyGT4[gt4].clut, TPAGE_BANK_IS(t));
         }
     }
     for (; gt3 < g_GpuUsage.gt3; gt3++) {
-        if (g_CurrentBuffer->polyGT3[gt3].tpage & TPAGE_BANK) {
-            g_CurrentBuffer->polyGT3[gt3].clut = BankClut(g_CurrentBuffer->polyGT3[gt3].clut);
+        u16 t = g_CurrentBuffer->polyGT3[gt3].tpage;
+        if (t & TPAGE_BANKS) {
+            g_CurrentBuffer->polyGT3[gt3].clut = BankClut(g_CurrentBuffer->polyGT3[gt3].clut, TPAGE_BANK_IS(t));
         }
     }
     for (i = 0; i < s_TagCount; i++) {
-        g_PrimBuf[s_Tagged[i]].tpage &= ~TPAGE_BANK;
+        g_PrimBuf[s_Tagged[i]].tpage &= ~TPAGE_BANKS;
     }
     s_TagCount = 0;
 }
@@ -1188,7 +1384,7 @@ static void Draw(void) {
     s32 i;
 
     frames[0] = PLAYER.animCurFrame;
-    PLAYER.animCurFrame = MAR_SAFE_FRAME(s_Char, &PLAYER);
+    PLAYER.animCurFrame = MAR_SAFE_FRAME(B->chr, &PLAYER);
     for (i = 1; i < 256; i++) {
         frames[i] = g_Entities[i].animCurFrame;
         if (i >= 64 || HiddenWeapon(&g_Entities[i])) {
@@ -1199,24 +1395,34 @@ static void Draw(void) {
     for (i = 0; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
     }
-    if (!s_OtherChar && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
+    if ((!B->otherChar || Twin()) && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
         Tint(gt4);
     }
-    if (s_Banked) {
+    if (B->banked) {
         BankPolys(gt4, gt3);
     }
-    if (s_Banked) { // its whip and effects, drawn by the game from the bank
+    if (B->banked) { // its whip and effects, drawn by the game from the bank
         TagPrims();
     } else { // the game draws them (the same graphics): only its screen flashes kept out
         FindPrims();
         HideFlashes();
-        s_PrimCount = 0; // nothing of ours to give back but the flashes
+        B->primCount = 0; // nothing of ours to give back but the flashes
     }
     if (PartnerLive()) { // its familiar, beside the body (in RAM now: the copy holds player 1)
-        FamiliarDraw(PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - g_CoopLink.partner.x,
-                     PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi - g_CoopLink.partner.y);
+        FamiliarDraw(s_K, PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - Presence()->x,
+                     PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi - Presence()->y);
     }
 }
 
 // Where the partner is (the harness checks it moves as its buttons say).
-const Entity* PartnerBody(void) { return s_Made ? (const Entity*)g_CoopSpikeBody : NULL; }
+const Entity* PartnerBody(void) { return B->made ? (const Entity*)BODY_BUF : NULL; }
+
+// Which partner's body the calls above are about (weapons.c draws each one's swings). PartnerFrame
+// leaves partner 0's.
+void PartnerSelect(s32 k) {
+    if (!s_BodiesSet) {
+        SetBodies();
+    }
+    s_K = k;
+    B = &s_Bodies[k];
+}

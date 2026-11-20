@@ -82,8 +82,11 @@ def main():
     check(rules.next_difficulty(r, 1) == "Custom" and rules.next_difficulty(rules.clean({"difficulty": "Easy"}), -1) == "Easy",
           "and they stop at the ends")
     grouped = [k for _, keys in rules.GROUPS for k in keys]
-    check(sorted(grouped) == sorted(k for k in rules.DEFAULTS if k not in ("remap_map", "difficulty")) and len(grouped) == len(set(grouped)),
+    check(sorted(grouped) == sorted(k for k in rules.DEFAULTS if k not in ("remap_map", "difficulty", "max_players")) and len(grouped) == len(set(grouped)),
           "every rule is in one group of the settings screen")
+    check(rules.clean({})["max_players"] == 2 and rules.clean({"max_players": 4})["max_players"] == 4 and
+          rules.clean({"max_players": 9})["max_players"] == 2 and "Up to 3 players" in rules.changed({"max_players": 3}),
+          "Max players: 2 by default, 3 or 4 by choice, shown when changed")
     check(rules.clean({"exp_pct": 100000, "difficulty": "Custom"})["exp_pct"] == 400 and rules.clean({"aggro": -5, "difficulty": "Custom"})["aggro"] == 0,
           "sliders stay in range")
     check(rules.clean({"pvp": "yes", "unknown": 1})["pvp"] is False and "unknown" not in rules.clean({"unknown": 1}),

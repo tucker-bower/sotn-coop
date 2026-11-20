@@ -20,7 +20,7 @@ import collections
 import os
 from collections import OrderedDict
 
-WIRE_VERSION = 13
+WIRE_VERSION = 14
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
 TAG_PRESENCE = b"PRES"  # payload: presence (0x2C), then _PRES_TAIL
 TAG_EVENTS = b"EVTS"    # payload: first seq (u32), then events
@@ -34,6 +34,8 @@ TAG_SPRT = b"SPRT"      # payload: the sender's sprites (CoopSprite records, spr
 TAG_HITS = b"HITS"      # payload: the sender's attack hitboxes (CoopHit records, pvp.c, M15)
 TAG_BYE = b"BYE "       # payload: the sender's HELO sid (JSON): it is leaving (the app closed, or back to its menu)
 TAG_HELLO = b"HELO"     # payload: JSON {"link": WIRE_VERSION, "patch": target CRC32 or null}, once a second
+TAG_FWD = b"FWD "       # payload: a player number (u8), then a whole datagram: to that player (sent to
+                        # player 0) or from them (sent by player 0), for a pair with no link of its own (M17, D211)
 
 PRESENCE_SIZE = 0x2C
 # After the presence: the newest snapshot id decoded (u32), the sender's clock (ms, u32), the
@@ -163,6 +165,7 @@ class UdpTransport:
         self.loss = 0.0           # fraction of packets randomly dropped (0.0 - 1.0)
         self.loss_drops = 0
         self._rng = random.Random(1)
+        self.on_forward = None  # M17: what to do with a TAG_FWD (link/mesh.py)
 
     def accept_peer(self, addr):
         """A valid HELO came from addr: that's the partner (or the partner's new address, when
@@ -326,6 +329,10 @@ class UdpTransport:
             addr = (str(addr[0]), int(addr[1]))
             if self.learn_peer and addr != self.peer and tag != TAG_HELLO:
                 continue  # not from the partner: only a HELO can become the partner
+            if tag == TAG_FWD:  # for or from another player, through player 0 (link/mesh.py)
+                if self.on_forward is not None and len(body) > _HEADER.size:
+                    self.on_forward(body[0], body[1:])
+                continue
             self.bytes_received += len(data) + 28
             self.last_rx_time = self.clock()
             if tag == TAG_SNPC:

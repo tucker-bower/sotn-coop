@@ -33,9 +33,11 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | — | Boss rush | Done | `boss-rush` |
 | — | Castle rules | Done | `M-castle-rules` |
 | M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice | #48 | `M16-saturn-characters` |
-| M17 | 3+ players, online then couch | #49 | `M17-more-players` |
+| M17 | 3-4 players online, a castle's Max players (couch stays two, D220) | Done: 1.3.0 | `M17-more-players` |
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |
 | M19 | Widescreen: 16:9 and 21:9, experimental, in 0.19.0 (32:9 later) | #51 | `M19-widescreen` |
 | M20 | Co-op on the randomizer, the first supported mod | #144 | `M20-randomizer` |
+| M21 | Co-op lobbies of 4 or 8 | #330 | `M21-big-lobbies` |
+| M22 | Battle royale, 8 to 32 players | #331 | `M22-battle-royale` |
 | — | Other mods' characters next to ours: Ultimate Maria, Saturn Maria (her HUD and sounds too) and Ultimate Richter | Done (#182, #185) | `character-mods` |
 

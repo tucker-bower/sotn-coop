@@ -194,7 +194,7 @@ static void CopyOverlay(const CharBlob* b) {
 // block's address where the file runs (0x8013C000); `file` is where it is now.
 #define RIC2_HDR_AT (0x170AC - 8)
 #define RIC2_MAGIC 0x32434952 // "RIC2"
-void CharacterRicCoat(const u8* file, bool partner) {
+void CharacterRicCoat(const u8* file, u32 bank) {
     const u32* hdr = (const u32*)(file + RIC2_HDR_AT);
     const u32* p;
     s32 n, i;
@@ -207,13 +207,13 @@ void CharacterRicCoat(const u8* file, bool partner) {
     p = (const u32*)(file + (hdr[1] - PLAYER_OVL_ADDR));
     for (n = *p++; n > 0; n--) {
         id = *p++;
-        if (!partner) { // the game's copy; a partner's palettes are only in the second bank
+        if (!bank) { // the game's copy; a partner's palettes are only in its body's bank
             for (i = 0; i < COLORS_PER_PAL; i++) {
                 g_Clut[1][(id - 0x100) * COLORS_PER_PAL + i] = ((const u16*)p)[i];
             }
         }
         rect.x = (g_ClutIds[id] & 0x3F) << 4;
-        rect.y = (g_ClutIds[id] >> 6) | (partner ? VRAM_BANK : 0);
+        rect.y = (g_ClutIds[id] >> 6) | VRAM_BANK_OF(bank);
         rect.w = COLORS_PER_PAL;
         rect.h = 1;
         LoadImage(&rect, (u_long*)p);
@@ -221,7 +221,7 @@ void CharacterRicCoat(const u8* file, bool partner) {
     }
     for (n = *p++; n > 0; n--) {
         rect.x = ((const u16*)p)[0];
-        rect.y = ((const u16*)p)[1] | (partner ? VRAM_BANK : 0);
+        rect.y = ((const u16*)p)[1] | VRAM_BANK_OF(bank);
         rect.w = ((const u16*)p)[2];
         rect.h = ((const u16*)p)[3];
         p += 2;
@@ -435,6 +435,49 @@ static void Curse(void) {
         g_Player.timers[T_HIT_PALETTE] = POISON_PULSE / 5;
     }
 }
+
+// Stone (issue 102): Alucard's rules (src/dra/71830.c PlayerStepStoned): a stone hit turns the
+// player to stone; mashing buttons breaks it, his count of presses (CON lowers it). Their own code
+// has no stone: here their buttons are taken while it lasts, each new press counts, and they show
+// the stone palette. The "Alucard's stats" rule turns it off.
+#define STONE_PRESSES 8
+static s16 s_Stone;      // presses left to break free, or 0
+static u16 s_StoneHeld;  // the buttons held last frame (the game's own memory sees our mask)
+
+static void Stone(void) {
+    u16 pressed, held = g_pads[0].pressed;
+
+    if (!CHAR_COOP(CharacterLoaded()) || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
+        !g_Status.hp) {
+        s_Stone = 0;
+        return;
+    }
+    if (g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    if (!s_Stone && PLAYER.hitParams & ELEMENT_STONE && !(g_Status.elementsImmune & ELEMENT_STONE)) {
+        s_Stone = STONE_PRESSES - g_Status.statsTotal[STAT_CON] / 16; // (CON shortens it, as his)
+        s_Stone = s_Stone > 3 ? s_Stone : 3;
+        g_api.PlaySfx(SFX_WALL_DEBRIS_B);
+        pressed = 0; // (the hit's own frame: nothing counts yet)
+    } else {
+        pressed = held & ~s_StoneHeld & ~(PAD_START | PAD_SELECT);
+    }
+    s_StoneHeld = held;
+    if (!s_Stone) {
+        return;
+    }
+    if (pressed && !--s_Stone) {
+        g_api.PlaySfx(SFX_WALL_DEBRIS_B);
+        return;
+    }
+    g_pads[0].pressed &= PAD_START | PAD_SELECT;
+    g_pads[0].tapped &= PAD_START | PAD_SELECT;
+    PLAYER.velocityX = 0;
+    PLAYER.palette = PAL_FLAG(PAL_CC_STONE_EFFECT);
+}
+
+bool CharacterStoned(void) { return s_Stone != 0; }
 
 // Heals that come as g_Player.healKind and healAmount (Healing Mail, src/dra/5F60C.c): only
 // Alucard's player code takes them (src/dra/692E8.c). Healing Mail's 1 HP every 128 frames also
@@ -765,7 +808,7 @@ void CharacterFrame(void) {
         if ((b = Blob(s_Loaded)) != NULL) {
             CopyOverlay(b);
             if (s_Loaded == CHAR_ULT_RICHTER) { // after F_GAME2, which his load always follows
-                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, false);
+                CharacterRicCoat((const u8*)PLAYER_OVL_ADDR, 0);
             }
         } else if (s_Loaded == CHAR_RICHTER && RicTrailer()) {
             PlaceFar((const u8*)COOPRIC_ADDR, g_CoopRicFile.size);
@@ -836,6 +879,7 @@ void CharacterFrame(void) {
     PoisonWater();
     Poison();
     Curse();
+    Stone();
     Heal();
     Growth();
     AlucardHud();

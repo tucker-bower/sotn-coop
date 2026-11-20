@@ -189,3 +189,64 @@ def shared_room_lift_on_lag_alucard_and_richter(run):
         gaps.append(b.snapshot()["world_y"] - _elevator(b)[1])
     run.expect(_elevator(b)[1] < start - 400, "the elevator went up", start=start, now=_elevator(b)[1])
     run.expect(max(gaps) - min(gaps) <= 3, "Richter stood on it all the way", gaps=sorted(set(gaps))[:8])
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(1, 0))
+def partner_body_faces_the_partners_way_richter_and_alucard(run):
+    """#274: a body made facing the other way kept it until the partner pressed left or right, so a
+    sub-weapon thrown with no direction flew backwards on the other screen. Richter (A) turns left
+    and stands; in Alucard's game (B) his body is turned the wrong way: it faces left again within
+    a few frames, as A does."""
+    from session_three import body
+    a, b = run.s.a, run.s.b
+    run.step(120)
+    run.step(20, ("left", ""))
+    run.step(60)
+    run.expect(a.read(a.entity(0), "<H", 0x14) == 1, "Richter faces left")
+    b.write(body(b, 0), 0, "<H", 0x14)  # B's copy of him, made facing right
+    run.step(10)
+    run.expect(b.read(body(b, 0), "<H", 0x14) == 1, "his body in Alucard's game faces left again",
+               facing=b.read(body(b, 0), "<H", 0x14))
+
+
+SKY = (30, 20, 200, 90)  # the entrance's sky, where the lightning strikes (screen pixels)
+
+
+def _sky(g):
+    from PIL import ImageStat
+    img = g.screenshot()
+    w = img.size[0] / 256  # (widescreen or not: the sky is in the left part)
+    box = tuple(int(v * (w if i % 2 == 0 else img.size[1] / 240)) for i, v in enumerate(SKY))
+    return img.crop(box), ImageStat.Stat(img.crop(box).convert("L")).mean[0]
+
+
+def _lightning_looks_the_same(run):
+    """#320: in a guest's game the authority's lightning drew as a pale grey rectangle. In the frames
+    where the authority's sky is lit, the guest's sky is lit the same, within a few frames (the
+    guest runs the room a link's delay behind)."""
+    a, b = run.s.a, run.s.b
+    run.step(240)
+    la, lb = [], []
+    for k in range(1200):
+        run.step(1)
+        sa, ma = _sky(a)
+        sb, mb = _sky(b)
+        la.append(ma)
+        lb.append(mb)
+    calm = min(la)
+    lag = 6
+    strikes = [k for k in range(lag, len(la) - lag) if la[k] > calm + 12]
+    worst = max((min(abs(la[k] - lb[j]) for j in range(k - lag, k + lag + 1)) for k in strikes), default=0)
+    run.expect(strikes, "lightning struck while we watched", calm=calm)
+    run.expect(worst < 6, "the guest's sky looks like the authority's in a strike", worst=round(worst, 1),
+               strikes=len(strikes))
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(0, 1))
+def shared_room_lightning_alucard_and_richter(run):
+    _lightning_looks_the_same(run)
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(0, 2))
+def shared_room_lightning_alucard_and_maria(run):
+    _lightning_looks_the_same(run)

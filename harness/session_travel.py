@@ -234,7 +234,7 @@ BOTTOM_TEXT_TIMER = 0x80097410  # g_unkGraphicsStruct.BottomCornerTextTimer
 
 @session_scenario(starts=("entrance", "nz0"))
 def map_shows_the_teleport_prompt(run):
-    """Tucker (1.2.1): the map screen says what ✕ does. With the partner in reach, opening the map
+    """Tucker (1.3.0): the map screen says what ✕ does. With the partner in reach, opening the map
     shows "✕ Go to partner" in the game's text box; closing it takes it away."""
     a = run.s.a
     run.step(120)

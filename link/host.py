@@ -8,7 +8,8 @@ import os
 import struct
 import time
 
-from .mailbox import CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_SIZE, WEAPON_SIZE, Presence
+from .mailbox import (CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_SIZE, ROLE_AUTHORITY, ROOM_EVENTS, WEAPON_SIZE,
+                      Presence)
 from .portraits import PORTRAIT_ADDR
 from .playout import Playout
 from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
@@ -65,6 +66,9 @@ class Host:
         self.blob = None  # a character's CharBlob for this game's 8MB RAM (launcher/characters.py)
         self.portraits = None
         self.rule_words = None  # the castle's rules, for the mailbox: None until a launcher sets them
+        # 3+ players (link/mesh.py): the HELO sids this link never takes as its partner, or the one
+        # it only takes (None: any)
+        self.refuse_sids, self.only_sid = set(), None
 
     def set_player(self, character=None, options=None, blob=None):
         """This game's player: CHAR_* (the game switches at its next load) and OPT_* settings.
@@ -118,6 +122,10 @@ class Host:
         self.hello["castle"] = meta
         return True
 
+    def set_player_id(self, pid):
+        """3+ players (M17): this player's lasting id, so a castle gives them back their own slot."""
+        self.hello["pid"] = pid
+
     def set_mod(self, mod):
         """The randomizer seed this game's disc was made from, in words ("seed abc · casual
         (26.07.13)"), or None for the plain co-op disc (design/M20-randomizer.md). Told in every
@@ -137,6 +145,14 @@ class Host:
         if rules is not None:
             self.hello["rules"] = rules
         return True
+
+    def _room_partner(self, authority=False):
+        """M17, a game with several partners (mailbox.Partners): this host's partner is in this
+        game's room (and runs it, with authority). With one partner: always (two players as before)."""
+        if not hasattr(self.mailbox, "k"):
+            return True
+        theirs, mine = self.mailbox.partner_presence(), self.mailbox.self_presence()
+        return theirs.room == mine.room and (not authority or theirs.role == ROLE_AUTHORITY)
 
     def start_connect(self, room, role, relay=None, **kw):
         """Find the partner for a room code (role "host" or "join"): link/connect.py."""
@@ -287,6 +303,8 @@ class Host:
                 return
         if theirs.get("sid") == self.hello["sid"]:
             return  # our own HELO, come back to us (a candidate that was this PC, or a LAN broadcast)
+        if theirs.get("sid") in self.refuse_sids or (self.only_sid and theirs.get("sid") != self.only_sid):
+            return  # 3+ players (link/mesh.py): another link's partner, or one already seated
         if (not self.hello.get("room") and theirs.get("room") and self.transport.peer
                 and addr is not None and tuple(addr) != tuple(self.transport.peer)):
             return  # joined by ip:port: another room's LAN broadcast (link/connect.py) isn't our partner
@@ -438,10 +456,12 @@ class Host:
             prims = inflate(prims_in, N_PRIMS * PRIM_SIZE)
             if prims is not None:
                 self.mailbox.write_partner_prims(prims)
-        if snap is not None:
+        if snap is not None and self._room_partner(authority=True):
             self.mailbox.put_snapshot(snap)
             self._note("in", f"snapshot ({len(snap)} bytes)")
         theirs = self.events.tick(reliable)
+        if theirs and not self._room_partner():  # M17: another room's hits and spawns aren't this game's
+            theirs = [ev for ev in theirs if ev[0] not in ROOM_EVENTS]
         for ev in theirs:
             self._note("in", "event %d a=%#x b=%#x" % struct.unpack("<BxHI", ev[:8]))
         self._inbox += theirs

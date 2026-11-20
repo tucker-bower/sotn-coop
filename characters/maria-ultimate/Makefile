@@ -56,9 +56,9 @@ $(BUILD)/ULTMAR.BIN: $(BUILD)/ultmar.elf
 	$(CROSS)objcopy -O binary $< $@
 	@echo "ULTMAR.BIN: $$(stat -c %s $@) bytes"
 
-$(BUILD)/ultmarp.elf: $(POBJS) $(BUILD)/symbols.txt ult_maria_partner.ld
+$(BUILD)/ultmarp.elf: $(POBJS) $(BUILD)/symbols.txt ult_maria_partner.ld ../richter-ps1/coop_player.ld
 	$(CROSS)ld -nostdlib -Map=$(BUILD)/ultmarp.map --build-id=none -T ult_maria_partner.ld \
-	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -o $@ $(POBJS)
+	    -T $(ROOT)/config/undefined_syms.$(VERSION).txt -T $(BUILD)/symbols.txt -T ../richter-ps1/coop_player.ld -o $@ $(POBJS)
 
 $(BUILD)/ULTMARP.BIN: $(BUILD)/ultmarp.elf
 	$(CROSS)objcopy -O binary $< $@

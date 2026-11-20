@@ -32,6 +32,8 @@ def table(rules, start, mode, read_only):
     for heading, keys in castle_rules.GROUPS:
         out.append(("head", heading))
         out += [("slider" if k in sliders else "toggle", k) for k in keys if custom or k not in sliders]
+        if heading == castle_rules.GROUPS[0][0]:
+            out.append(("players", ""))  # (the first page's last row: the rows above keep their places)
     if rules["remap"]:
         out += [("button", b) for b in castle_rules.REMAP_BUTTONS]
     return out
@@ -70,6 +72,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             return
         if kind == "difficulty":
             castle_rules.set_difficulty(rules, castle_rules.next_difficulty(rules, step or 1))
+        elif kind == "players":
+            n = castle_rules.MAX_PLAYERS
+            rules["max_players"] = n[(n.index(rules["max_players"]) + (step or 1)) % len(n)]
         elif kind == "slider" and step:
             low, high, each = sliders[key][4:]
             rules[key] = max(low, min(high, rules[key] + step * each))
@@ -164,6 +169,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
             elif kind == "difficulty":
                 now = castle_rules.difficulty(rules)
                 label, value, row_hint, plain = "Difficulty", now, DIFFICULTY_HINT, now == "Medium"
+            elif kind == "players":
+                now = rules["max_players"]
+                label, value, row_hint, plain = "Max players", str(now), castle_rules.MAX_PLAYERS_HINT, now == 2
             elif kind == "slider":
                 _, label, row_hint, default, low, high, _ = sliders[key]
                 plain = rules[key] == default
@@ -184,9 +192,9 @@ def castle_settings(m, name, rules, apply, read_only=False, start=False, mode=No
                 value, row_hint = castle_rules.button_label(rules["remap_map"].get(key, key)), "For both players."
             else:
                 label, row_hint = "Back to the defaults", ""
-            t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "defaults") else 14), ty, INK)
+            t.text(s, label, x + (6 if kind in ("start", "mode", "preset", "difficulty", "players", "defaults") else 14), ty, INK)
             if value is not None:
-                arrows = kind in ("mode", "preset", "difficulty") and on and not (read_only and kind == "difficulty")
+                arrows = kind in ("mode", "preset", "difficulty", "players") and on and not (read_only and kind in ("difficulty", "players"))
                 room = (LIST[2] - 32 - width(label)) // 8 - (8 if arrows else 0)  # (what's left of the row after its label)
                 t.text_right(s, ("{<} " if arrows else "") + shorten(str(value), room) + (" {>}" if arrows else ""), LIST[0] + LIST[2] - 12, ty, INK if plain else GREEN)
             if on:

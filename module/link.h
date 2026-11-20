@@ -5,7 +5,7 @@
 #ifndef LINK_H
 #define LINK_H
 
-#define COOP_LINK_VERSION 15
+#define COOP_LINK_VERSION 16
 
 #define PRESENCE_IN_PLAY 1 // in a stage, in control (not title, loading, or game over)
 #define PRESENCE_SPRITE 2  // the body sprite is drawable this frame
@@ -86,6 +86,14 @@ typedef struct {
 #define VRAM_BANK 0x200
 #define TPAGE_BANK 0x4000
 #define CLUT_BANK 0x8000
+// M17: banks 1-3, one per partner body (partner k's is k + 1: design/M17-more-players.md). Uploads
+// take the bank in y bits 9-10, textures in tpage bits 14-15, palettes CLUT bit 15 with bank - 1
+// in its x bits 4-5 (a banked palette's x is under 0x100). Bank 1 is the three above.
+#define VRAM_BANK_OF(b) ((b) << 9)
+#define TPAGE_BANK_OF(b) ((b) << 14)
+#define CLUT_BANK_OF(b) (CLUT_BANK | (((b) - 1) << 4))
+#define TPAGE_BANKS 0xC000                 // a tpage's bank bits
+#define TPAGE_BANK_IS(t) (((t) >> 14) & 3) // ...and its bank
 
 // M13: the partner's status (g_Status from spellsLearnt to statsTotal, and from subWeapon to the elements:
 // stats, level, equipment), for the partner's body (partner.c). The host reads it from the
@@ -214,6 +222,28 @@ typedef struct {
     u16 pad;
 } CoopCommand; // size = 0x10
 
+// M17 (3+ players, design/M17-more-players.md step 2): what the host writes for each partner after
+// the first (partner 0 is CoopLink's partner fields: PARTNER_* below reads either). Partners' bodies,
+// weapons and familiars read them all (step 4); the rest of the module, partner 0 only (step 5).
+#define COOP_PARTNERS 3
+typedef struct {
+    /* 0x00 */ CoopPresence presence;
+    /* 0x2C */ u32 age; // as partnerAge
+    /* 0x30 */ u32 pad; // as partnerPad
+    /* 0x34 */ u32 spriteCount;
+    /* 0x38 */ CoopSprite sprites[COOP_SPRITES];
+    /* 0x218 */ u32 primCount;
+    /* 0x21C */ u8 prims[COOP_PRIMS][COOP_PRIM_SIZE];
+    /* 0x81C */ u32 hitCount;
+    /* 0x820 */ CoopHit hits[COOP_HITS];
+} CoopPartnerIn; // size = 0x8E0
+// ...and their copies in the 8 MB (docs/research.md "8 MB RAM": the gaps that hold them), for
+// partner k = 1 or 2. Each hand's weapon copy is apart: no gap holds two for partner 2.
+#define WEAPON_MORE_ADDR(k, hand) \
+    ((k) == 1 ? 0x80731000 + (hand) * 0x7400 : (hand) ? 0x80572000 : 0x806F2000)
+#define FAMILIAR_MORE_ADDR(k) ((k) == 1 ? 0x806D0000 : 0x806E1000)
+#define STATUS_MORE_ADDR(k) (0x80730000 + (k) * 0x100)
+
 #define SAVE_DATA_SIZE 0x11CC // sizeof(SaveData)
 #define SNAP_MAX 0xF000      // a shared-room snapshot, at most (one UDP datagram)
 
@@ -266,7 +296,8 @@ typedef struct {
     /* 0x225C2 */ u16 enemyHpPct;   // enemies' HP for one player, % (0: 100); more players multiply it (#316)
     /* 0x225C4 */ u16 rulesPad2;
     /* 0x225C6 */ u16 rulesPad;
-} CoopLink; // size = 0x225C8
+    /* 0x225C8 */ CoopPartnerIn more[COOP_PARTNERS - 1]; // host writes: partners 1 and 2 (M17)
+} CoopLink; // size = 0x23788
 
 // Couch play: all games' sound goes to one speaker, and only one game may play music.
 #define OPT_NO_TINT 0x20000000 // options: two of a kind aren't told apart by a tint (partner.c)
@@ -359,5 +390,12 @@ typedef struct {
 #define CHAR_BLOBS_MAX 4 // Co-op Maria, Ultimate Maria, Saturn Maria, Ultimate Richter
 #define CHAR_BLOBS_END 0x804C0000 // PARTNER_ULT_ADDR (module/coop_api.h): the blobs end before it (1.75 MB)
 extern CoopLink g_CoopLink;
+// M17: partner k's side of the link (0: CoopLink's partner fields; 1 and 2: more[k - 1])
+#define PARTNER_PRESENCE(k) ((k) ? &g_CoopLink.more[(k) - 1].presence : &g_CoopLink.partner)
+#define PARTNER_AGE(k) ((k) ? g_CoopLink.more[(k) - 1].age : g_CoopLink.partnerAge)
+#define PARTNER_SPRITE_COUNT(k) ((k) ? g_CoopLink.more[(k) - 1].spriteCount : g_CoopLink.partnerSpriteCount)
+#define PARTNER_SPRITES(k) ((k) ? g_CoopLink.more[(k) - 1].sprites : g_CoopLink.partnerSprites)
+#define PARTNER_PRIM_COUNT(k) ((k) ? g_CoopLink.more[(k) - 1].primCount : g_CoopLink.partnerPrimCount)
+#define PARTNER_PRIMS(k) ((k) ? g_CoopLink.more[(k) - 1].prims : g_CoopLink.partnerPrims)
 
 #endif

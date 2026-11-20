@@ -139,6 +139,20 @@ class GameTexture:
         self.big.draw(dstrect=rect)
 
 
+def _window(title, size):
+    """The window. On Android, SDL's surface can come a moment after Python starts: "Could not fetch
+    native window" then, and the app closed on its first start, now and then (1.3.0's emulator
+    test, 2026-11-19). Asked again for up to 5 s."""
+    import time
+    for attempt in range(50):
+        try:
+            return Window(title, size=size, resizable=True)
+        except Exception as e:  # (pygame._sdl2.sdl2.error)
+            if "native window" not in str(e) or attempt == 49:
+                raise
+            time.sleep(0.1)
+
+
 class Display:
     def __init__(self, settings, title="SOTN Co-op"):
         self.settings = settings
@@ -149,7 +163,7 @@ class Display:
         # monitor, e.g. an ultrawide, would hang off the edges: design/M8 §5).
         sizes = pygame.display.get_desktop_sizes() or [(w, h)]
         w, h = min(w, max(s[0] for s in sizes) - 16), min(h, max(s[1] for s in sizes) - 80)
-        self.window = Window(title, size=(max(640, w), max(360, h)), resizable=True)
+        self.window = _window(title, (max(640, w), max(360, h)))
         icon = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
         self.icon = pygame.image.load(icon) if os.path.exists(icon) else None
         if self.icon:

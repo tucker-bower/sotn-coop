@@ -76,7 +76,11 @@ DIFFICULTIES = (
 )
 CUSTOM = "Custom"
 LEVELS = tuple(n for n, _ in DIFFICULTIES) + (CUSTOM,)
-DEFAULTS = {"difficulty": "Medium", **{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
+# Max players (Tucker, 2026-11-19): who can be in the castle's room online at once. 2 by default;
+# 3 and 4 (M17) are a choice, so a two-player castle plays as before.
+MAX_PLAYERS = (2, 3, 4)
+MAX_PLAYERS_HINT = "Online. With 3 or 4, anyone with the room code can drop in while you play."
+DEFAULTS = {"difficulty": "Medium", "max_players": 2, **{s[0]: s[3] for s in SLIDERS}, **{t[0]: t[3] for t in TOGGLES}, "remap_map": {}}
 # The settings screen's groups, in order: (heading, the rules under it)
 GROUPS = (
     ("Balance", ("enemy_hp_player_pct", "taken_pct", "exp_pct", "aggro")),
@@ -128,6 +132,8 @@ def clean(stored):
             out[key] = max(low, min(high, int(v)))
     level = stored.get("difficulty")
     out["difficulty"] = level if level in LEVELS else _matching(out)
+    if stored.get("max_players") in MAX_PLAYERS:
+        out["max_players"] = stored["max_players"]
     out.update(dict(DIFFICULTIES).get(out["difficulty"], {}))  # a preset's values are the preset's
     for t in TOGGLES:
         if isinstance(stored.get(t[0]), bool):
@@ -200,6 +206,8 @@ def changed(rules):
     rules = clean(rules)
     level = rules["difficulty"]
     out = [] if level == "Medium" else [f"{level} difficulty"]
+    if rules["max_players"] != 2:
+        out.append(f"Up to {rules['max_players']} players")
     if level == CUSTOM:
         out += [s[1] for s in SLIDERS if rules[s[0]] != s[3]]
     return out + [t[1] for t in TOGGLES if rules[t[0]] != t[3]]

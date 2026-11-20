@@ -165,7 +165,7 @@ class Connector:
     """Run by the host every frame (tick) until the partner is found."""
 
     def __init__(self, transport, room, role, relay, hello, stun_servers=STUN_SERVERS,
-                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, portmap=None):
+                 lan_ip=None, timeout=TIMEOUT_S, resolve=True, version=None, portmap=None, exclude=()):
         """role: "host" or "join". hello: () -> the HELO payload to punch with. version: {"link":
         wire version, "app": the launcher's}, posted with the candidates, so that two different
         versions are told so at once, instead of waiting for packets that can't be understood."""
@@ -177,6 +177,9 @@ class Connector:
         self.state = "starting"
         self.reason = None
         self.nonce = transport.clock()  # this attempt (the newest message of each side wins)
+        # M17 (3+ players): this side's id on the relay, and the other sides' ids to pass over
+        # (player 0's next seat skips the joiners it has seated: link/mesh.py)
+        self.id, self.exclude, self.their_id = os.urandom(4).hex(), exclude, None
         self.mine, self.theirs = [], []
         self.their_nat = None
         self.nat = None
@@ -282,16 +285,18 @@ class Connector:
             every = RETRY_S if getattr(self.relay, "post_error", None) else REPUBLISH_S
             if self._published is None or now - self._published > every:
                 msg = {"role": self.role, "nonce": self.nonce, "cands": self.mine,
-                       "nat": self.nat, "token": room_token(self.room), "ver": self.version}
+                       "nat": self.nat, "token": room_token(self.room), "ver": self.version, "id": self.id}
                 if self.predict:
                     msg["predict"] = list(self.predict)
                 self.relay.publish(self.topic, msg)
                 self._published = now
             other = "join" if self.role == "host" else "host"
             msgs = [m for m in self.relay.poll(self.topic)
-                    if m.get("role") == other and m.get("token") == room_token(self.room)]
+                    if m.get("role") == other and m.get("token") == room_token(self.room)
+                    and m.get("id") not in self.exclude]
             if msgs:
                 newest = max(msgs, key=lambda m: m.get("nonce", 0))
+                self.their_id = newest.get("id")
                 theirs = newest.get("ver") or {}  # none: a version from before 0.9.0
                 if self.version.get("link") is not None and theirs.get("link") != self.version["link"]:
                     self._done("failed")

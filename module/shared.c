@@ -282,11 +282,12 @@ static bool PostRichterWalk(void) {
     return false;
 }
 
-static bool PartnerShareable(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+// Partner k shares this room now (M17: any partner; two players: partner 0, as before).
+static bool PartnerShareable(s32 k) {
+    const CoopPresence* p = PARTNER_PRESENCE(k);
     s32 dx, dy;
 
-    if (g_CoopLink.partnerAge > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
+    if (PARTNER_AGE(k) > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
         (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD | PRESENCE_PAUSED)) || !SAME_WORLD(p)) {
         return false;
     }
@@ -316,12 +317,61 @@ static bool PartnerShareable(void) {
     return dx > -CAMERA_NEAR && dx < CAMERA_NEAR && dy > -CAMERA_NEAR && dy < CAMERA_NEAR;
 }
 
-static bool IAmAuthority(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    if (s_RoomFrames != p->roomFrames) {
-        return s_RoomFrames > p->roomFrames; // whoever was here first
+// Partner k's player number (the host's rank for this game is its own: link/mesh.py slot()).
+static u32 RankOf(s32 k) { return (u32)k < g_CoopLink.rank ? (u32)k : (u32)k + 1; }
+
+static bool AnyShareable(void) {
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PartnerShareable(k)) {
+            return true;
+        }
     }
-    return g_CoopLink.rank < 1; // a tie: rank 0
+    return false;
+}
+
+// This game was here first, of all who share the room (a tie: the lower player number).
+static bool IAmAuthority(void) {
+    const CoopPresence* p;
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        p = PARTNER_PRESENCE(k);
+        if (PartnerShareable(k) && (p->roomFrames > s_RoomFrames ||
+                                    (p->roomFrames == s_RoomFrames && RankOf(k) < g_CoopLink.rank))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Two games settled on the same role (they decided a frame apart): the lowest player number of
+// those that share the room runs it, if nobody else does (M17: with two, rank 0 runs it).
+static s32 Untangle(void) {
+    const CoopPresence* p;
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        p = PARTNER_PRESENCE(k);
+        if (PartnerShareable(k) && RankOf(k) < g_CoopLink.rank &&
+            (s_Role == ROLE_GUEST || p->role == ROLE_AUTHORITY)) {
+            return ROLE_GUEST;
+        }
+    }
+    return ROLE_AUTHORITY;
+}
+
+// The role of a partner sharing the room, if any has it.
+static bool SharerIs(s32 role) {
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PartnerShareable(k) && PARTNER_PRESENCE(k)->role == role) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static void BecomeGuest(void);
@@ -330,13 +380,15 @@ static void StopBeingGuest(void);
 static void DecideRole(void) {
     s32 want;
 
-    if (!PartnerShareable()) {
+    if (!AnyShareable()) {
         want = ROLE_NONE;
     } else if (s_Role != ROLE_NONE) {
         want = s_Role; // roles stay put while the room is shared...
-        if (g_CoopLink.partner.role == s_Role) {
-            // ...unless both games picked the same one (they decided a frame apart): rank decides
-            want = g_CoopLink.rank == 0 ? ROLE_AUTHORITY : ROLE_GUEST;
+        if ((s_Role == ROLE_AUTHORITY && SharerIs(ROLE_AUTHORITY)) ||
+            (s_Role == ROLE_GUEST && SharerIs(ROLE_GUEST) && !SharerIs(ROLE_AUTHORITY))) {
+            // ...unless two games picked the same one (they decided a frame apart), or the guests
+            // are left with nobody running it: the player number decides
+            want = Untangle();
         }
     } else {
         want = IAmAuthority() ? ROLE_AUTHORITY : ROLE_GUEST;
@@ -1277,9 +1329,10 @@ static void HitDetectionWrap(void) {
 
 // --- targeting: the stage's helpers aim at the nearer player
 
+// M17: the nearest of every partner sharing the room.
 static void NearestPlayer(s16* x, s16* y) {
-    const CoopPresence* p = &g_CoopLink.partner;
-    s32 px, py, ox, oy, dMe, dPartner;
+    const CoopPresence* p;
+    s32 px, py, ox, oy, dBest, d, k;
 
     *x = PLAYER.posX.i.hi;
     *y = PLAYER.posY.i.hi;
@@ -1288,15 +1341,22 @@ static void NearestPlayer(s16* x, s16* y) {
     if (s_Role != ROLE_AUTHORITY || RULE_OFF(RULE_NO_NEAR_TARGET) || IsScenery(FindOverlay(g_StageId), (u32)g_CurrentEntity->pfnUpdate)) {
         return;
     }
-    px = p->x - g_Tilemap.scrollX.i.hi; // partner, in this game's screen space
-    py = p->y - g_Tilemap.scrollY.i.hi;
     ox = g_CurrentEntity->posX.i.hi;
     oy = g_CurrentEntity->posY.i.hi;
-    dMe = ABS(*x - ox) + ABS(*y - oy);
-    dPartner = ABS(px - ox) + ABS(py - oy);
-    if (dPartner < dMe) {
-        *x = px;
-        *y = py;
+    dBest = ABS(*x - ox) + ABS(*y - oy);
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (!PartnerShareable(k)) {
+            continue;
+        }
+        p = PARTNER_PRESENCE(k);
+        px = p->x - g_Tilemap.scrollX.i.hi; // the partner, in this game's screen space
+        py = p->y - g_Tilemap.scrollY.i.hi;
+        d = ABS(px - ox) + ABS(py - oy);
+        if (d < dBest) {
+            dBest = d;
+            *x = px;
+            *y = py;
+        }
     }
 }
 

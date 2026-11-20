@@ -60,7 +60,7 @@ static s32 s_Records[TIMEATTACK_EVENT_END];
 static s32 s_Visited;
 #define RECORD_VISITED 0xFFFF // EV_RECORD a: the visited bits (D_8003CB00), not a record
 static bool s_InPlay;  // last frame was in play: the shadows are valid
-static bool s_PartnerGone; // no word from the partner for PARTNER_GONE_FRAMES
+static bool s_PartnerGone[COOP_PARTNERS]; // no word from partner k for PARTNER_GONE_FRAMES
 #define PARTNER_GONE_FRAMES 300
 static u16 s_Changed[16]; // castle flags the partner changed this frame
 static s32 s_NChanged;
@@ -154,7 +154,17 @@ static void AddToInventoryWrap(u16 id, EquipKind kind) {
 }
 
 // Duo balancing, like 2x boss HP (boss.c): a partner's game was heard from in the last 10 s
-static bool PartnerLinked(void) { return g_CoopLink.partnerAge < 600; }
+// A partner heard from in the last 10 s (M17: any of them)
+static bool PartnerLinked(void) {
+    s32 k;
+
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PARTNER_AGE(k) < 600) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static s32 GrantWrap(s32 amount, s32 type) {
     // anything else with an amount is a kill's XP (type: the enemy's level)
@@ -689,6 +699,7 @@ static void RobbedUpdate(void) {
 
 void ProgressUpdate(void) {
     bool inPlay = g_GameState == Game_Play && g_GameStep == Play_Default;
+    s32 k;
 
     s_Frame++;
     WrapApi();
@@ -702,12 +713,15 @@ void ProgressUpdate(void) {
         RobbedUpdate();
     }
     // A partner back after 5 s away may have restarted from an older save: send everything
-    // again, so they catch up on what was found meanwhile, or taken and not saved (#154).
-    if (g_CoopLink.partnerAge > PARTNER_GONE_FRAMES) {
-        s_PartnerGone = true;
-    } else if (s_PartnerGone && g_CoopLink.partnerAge <= 30) {
-        s_PartnerGone = false;
-        Resync();
+    // again, so they catch up on what was found meanwhile, or taken and not saved (#154). M17: a
+    // player joining mid-session is one back (every partner slot starts gone).
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PARTNER_AGE(k) > PARTNER_GONE_FRAMES) {
+            s_PartnerGone[k] = true;
+        } else if (s_PartnerGone[k] && PARTNER_AGE(k) <= 30) {
+            s_PartnerGone[k] = false;
+            Resync();
+        }
     }
     DetectFlags();
     DetectMap();

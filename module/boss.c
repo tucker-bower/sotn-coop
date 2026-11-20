@@ -63,13 +63,15 @@ static const u16 s_Bosses[] = {
 static bool s_HpRead;
 static bool s_BossHere; // a living boss is in this room
 
-// Aggro, per stage slot: the wrapped update, the target, when it was picked
+// Aggro, per stage slot: the wrapped update, the target (0: this game's player; k + 1: partner k,
+// M17), when it was picked
 static PfnEntityUpdate s_Update[STAGE_SLOTS];
-static u8 s_TargetPartner[STAGE_SLOTS];
+static u8 s_Target[STAGE_SLOTS];
 static u16 s_Picked[STAGE_SLOTS];
 static u32 s_Seed = 0x2545F491; // own generator: the game's rand() must stay untouched
 static u16 s_Frame;
 static u16 s_Switches; // target switches so far (presence.aggroSwitches: tests)
+u32 g_CoopAggroSeen; // M17: bit t, a boss here went for target t (0: this player; k + 1: partner k). Tests read it
 
 // Richter (BO6) and Dracula (RBO6) fall for both, like every boss. Killing either ends the game
 // (a death scene, then the ending) and no castle flag records it, so the partner's game would
@@ -120,15 +122,23 @@ static u32 Roll(void) {
     return (s_Seed >> 16) & 0xFF;
 }
 
-static bool PartnerLinked(void) {
-    return g_CoopLink.partnerAge < 60 && (g_CoopLink.partner.flags & PRESENCE_IN_PLAY);
+// Partner k is in this room, alive and in play (M17: any of them)
+static bool PartnerFighting(s32 k) {
+    const CoopPresence* p = PARTNER_PRESENCE(k);
+
+    return PARTNER_AGE(k) < 60 && (p->flags & PRESENCE_IN_PLAY) && !(p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) &&
+           p->stage == g_CoopStage && p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
 }
 
-static bool PartnerFighting(void) {
-    const CoopPresence* p = &g_CoopLink.partner;
+static bool AnyPartnerFighting(void) {
+    s32 k;
 
-    return PartnerLinked() && !(p->flags & (PRESENCE_DEAD | PRESENCE_BUSY)) && p->stage == g_CoopStage &&
-           p->roomLeft == g_Tilemap.left && p->roomTop == g_Tilemap.top;
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PartnerFighting(k)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // --- enemies' health: the castle's HP for one player (D162, #316), times the players in the session
@@ -138,7 +148,12 @@ static const s16 PLAYERS_HP[] = {100, 200, 275, 350}; // launcher/rules.py's PLA
 
 // The players this game has heard from in the last 10 s, itself included.
 static s32 PlayersHere(void) {
-    return 1 + (g_CoopLink.partnerAge < 600);
+    s32 n = 1 + (g_CoopLink.partnerAge < 600), k;
+
+    for (k = 0; k < COOP_PARTNERS - 1; k++) {
+        n += g_CoopLink.more[k].age < 600;
+    }
+    return n;
 }
 
 #define ENEMY_DEFS 400 // g_EnemyDefs (assets/dra/us/enemydefs.yaml)
@@ -175,15 +190,16 @@ static void UpdateHp(void) {
 
 // --- aggro (D47)
 
+// A switch goes to the next player in turn who's fighting here: with two, back and forth (M17).
 static void PickTarget(s32 slot, Entity* e) {
     u32 chance;
+    s32 t;
 
-    if (!PartnerFighting()) {
-        s_TargetPartner[slot] = false;
-        return;
+    if (s_Target[slot] && !PartnerFighting(s_Target[slot] - 1)) {
+        s_Target[slot] = 0; // its target left or fell: back to this game's player
     }
-    if (g_CoopLink.control & CONTROL_NO_AGGRO) {
-        s_TargetPartner[slot] = false;
+    if (!AnyPartnerFighting() || (g_CoopLink.control & CONTROL_NO_AGGRO)) {
+        s_Target[slot] = 0;
         return;
     }
     // "After each attack" (D47), approximated by time: bosses' state machines differ too much
@@ -192,7 +208,15 @@ static void PickTarget(s32 slot, Entity* e) {
     if ((u16)(s_Frame - s_Picked[slot]) >= AGGRO_PERIOD) {
         chance = (g_CoopLink.control >> CONTROL_AGGRO_SHIFT) & 0xFF;
         if (Roll() < (chance ? chance : AGGRO_SWITCH)) {
-            s_TargetPartner[slot] = !s_TargetPartner[slot];
+            for (t = s_Target[slot] + 1;; t++) {
+                if (t > COOP_PARTNERS) {
+                    t = 0;
+                }
+                if (!t || PartnerFighting(t - 1)) {
+                    break;
+                }
+            }
+            s_Target[slot] = t;
             s_Switches++;
         }
         s_Picked[slot] = s_Frame;
@@ -202,15 +226,17 @@ static void PickTarget(s32 slot, Entity* e) {
 static void BossUpdateWrap(Entity* e) {
     s32 slot = e - &g_Entities[STAGE_ENTITY_START];
     PfnEntityUpdate update = s_Update[slot];
-    const CoopPresence* p = &g_CoopLink.partner;
+    const CoopPresence* p;
     s16 x, y, fakeX, fakeY;
     u16 facing;
     s32 playerX, playerY;
 
     PickTarget(slot, e);
-    if (!s_TargetPartner[slot]) {
+    g_CoopAggroSeen |= 1 << s_Target[slot];
+    if (!s_Target[slot]) {
         update(e);
     } else {
+        p = PARTNER_PRESENCE(s_Target[slot] - 1);
         x = PLAYER.posX.i.hi;
         y = PLAYER.posY.i.hi;
         facing = PLAYER.facingLeft;
@@ -355,7 +381,7 @@ static void ScanBosses(void) {
         if (wrap && e->pfnUpdate != BossUpdateWrap) {
             s_Update[i] = e->pfnUpdate;
             e->pfnUpdate = BossUpdateWrap;
-            s_TargetPartner[i] = false;
+            s_Target[i] = 0;
             s_Picked[i] = s_Frame;
         } else if (!wrap && e->pfnUpdate == BossUpdateWrap) {
             e->pfnUpdate = s_Update[i];

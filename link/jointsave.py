@@ -22,6 +22,8 @@ from pathlib import Path
 from .mailbox import BUSY, CMD_ARRIVE, CMD_GAME_OVER, CMD_LOAD_SAVE, CMD_SAVE_NOW, CUTSCENE, DEAD, IN_PLAY, SAVE_DATA_SIZE
 
 MAGIC, VERSION = b"COOPSAVE", 1
+VERSION_IDS = 2  # 3+ players (M17): each slot's player id follows the slots
+PID_SIZE = 16
 _INFO = 0x200                      # SaveData.info (include/game.h)
 _STAGE, _ROOM_X, _ROOM_Y = 0x28, 0x2C, 0x2E  # within SaveInfo
 _NAME = 0x200                      # SaveInfo.name: 12 chars, typed at the game's name entry
@@ -71,14 +73,18 @@ def both_slots(blobs, shared_level=True):
     return [with_exp(b, exp) for b in blobs]
 
 
-def write_session(path, blobs):
+def write_session(path, blobs, ids=None):
+    """ids: each slot's player id (3+ players), or None (the two-player file, read by older versions)."""
     assert all(b is not None and len(b) == SAVE_DATA_SIZE for b in blobs)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Whole or not at all: written in place, a full disk left a cut-short save (#277)
     tmp = path.with_name(path.name + ".tmp")
     try:
-        tmp.write_bytes(MAGIC + struct.pack("<II", VERSION, len(blobs)) + b"".join(blobs))
+        tail = b"" if ids is None else b"".join((i or "").encode("ascii", "replace")[:PID_SIZE].ljust(PID_SIZE, b"\0")
+                                                for i in ids)
+        tmp.write_bytes(MAGIC + struct.pack("<II", VERSION if ids is None else VERSION_IDS, len(blobs)) +
+                        b"".join(blobs) + tail)
         os.replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -89,8 +95,18 @@ def read_session(path):
     data = Path(path).read_bytes()
     assert data[:8] == MAGIC, f"{path} is not a co-op session"
     version, n = struct.unpack_from("<II", data, 8)
-    assert version == VERSION
+    assert version in (VERSION, VERSION_IDS)
     return [data[16 + i * SAVE_DATA_SIZE:16 + (i + 1) * SAVE_DATA_SIZE] for i in range(n)]
+
+
+def read_ids(path):
+    """Each slot's player id ("" where unknown), from a 3+ player file; None for a two-player one."""
+    data = Path(path).read_bytes()
+    version, n = struct.unpack_from("<II", data, 8)
+    if version != VERSION_IDS:
+        return None
+    at = 16 + n * SAVE_DATA_SIZE
+    return [data[at + i * PID_SIZE:at + (i + 1) * PID_SIZE].split(b"\0")[0].decode("ascii", "replace") for i in range(n)]
 
 
 class JointSave:
@@ -115,6 +131,9 @@ class JointSave:
         self._arrive = []     # [mailbox, frames in play since its save loaded, start]
         self.partner_crashed = False  # the partner's app said its game stopped (issue 113)
         self._load_msg = None  # the host's load, until this game is running: its boot wipes one written sooner (issue 61)
+        self.room = None  # 3+ players (M17): harness.session.RoomProxy; then each partner by player number
+        self.pid = None   # this player's lasting id: their slot follows it
+        self._out = {}    # player 0: frames each partner has been heard but out of play
 
     def _write(self, blobs):
         """blobs: [slot 1 (this machine's player), slot 2 or None (keep the file's)]."""
@@ -197,6 +216,9 @@ class JointSave:
             self.host.send_control({"op": "load_save", "yours": b64(blobs[1]), "mine": b64(blobs[0]), "start": None})
 
     def _tick_online(self):
+        if self.room is not None:
+            self._tick_room()
+            return
         m = self.mb[0]
         self._bring_partner(m)
         seq = m.save_seq()
@@ -311,6 +333,12 @@ class JointSave:
         self.sent_load = True
         blobs = both_slots(read_session(self.path), self.shared_level)
         self._arrive = [[m, None, tuple(self.start)] for m in self.mb] if self.start else []
+        if self.room is not None:
+            self.mb[0].put_save(blobs[0])
+            self.mb[0].command(CMD_LOAD_SAVE)
+            for n, p in self.room.players().items():
+                self._load_for(n, p, list(self.start) if self.start else None)
+            return
         if self.host is not None:
             self.mb[0].put_save(blobs[0])
             self.mb[0].command(CMD_LOAD_SAVE)
@@ -321,3 +349,127 @@ class JointSave:
         for m, blob in zip(self.mb, blobs):
             m.put_save(blob)
             m.command(CMD_LOAD_SAVE)
+
+    # --- 3+ players (M17 step 6): every partner by player number; slots follow player ids
+
+    def _slots(self):
+        """{player id: blob} of the castle's file (slot 1 is this player's, whatever its id)."""
+        if self.path is None or not self.path.exists():
+            return {}
+        blobs, ids = read_session(self.path), read_ids(self.path)
+        if ids is None:  # a two-player castle: slot 1 is ours, slot 2 the partner's, id unknown
+            ids = [self.pid or "me", "partner"][:len(blobs)]
+        ids[0] = self.pid or ids[0] or "me"
+        return dict(zip(ids, blobs))
+
+    def _write_ids(self, new):
+        """Writes the castle's file with these players' saves ({player id: blob}) over what it had."""
+        if self.path is None:
+            return
+        slots = self._slots()
+        slots.update(new)
+        me = self.pid or "me"
+        order = [me] + [i for i in slots if i != me]
+        if me not in slots:
+            return
+        blobs = [slots[i] for i in order]
+        try:
+            write_session(self.path, blobs, order)
+        except OSError as e:
+            logging.getLogger("launcher").warning("joint save not written: %s", e)
+            self.error = e
+            return
+        self.saves += 1
+        if self.on_write:
+            self.on_write(blobs[:2])
+
+    def _load_for(self, n, info, start=None):
+        """Player 0: player n's castle load: their own slot, or a copy of ours for a new player."""
+        slots = self._slots()
+        mine = slots.get(self.pid or "me")
+        if mine is None:
+            return
+        yours = slots.get(info.get("pid")) or mine
+        if self.shared_level:
+            yours, mine = both_slots([yours, mine])
+        b64 = lambda b: base64.b64encode(b).decode("ascii")
+        self.room.send({"op": "load_save", "yours": b64(yours), "mine": b64(mine), "start": start}, to=n)
+
+    def _tick_room(self):
+        m = self.mb[0]
+        players = self.room.players()
+        linked = {n for n, p in players.items() if m.partner_age(p["slot"]) < LINKED_FRAMES}
+        if self.rank == 0 and self.path is not None and self.path.exists():  # a player dropped in, or came back: their load
+            for n, p in players.items():
+                here = m.partner_age(p["slot"]) <= 30
+                out = here and not m.partner_presence(p["slot"]).flags & IN_PLAY
+                self._out[n] = self._out.get(n, 0) + 1 if out else 0
+                if self._out[n] == RESEND_LOAD_FRAMES:
+                    me = m.self_presence()  # where they arrive: beside this player
+                    self._load_for(n, p, [me.stage, me.room_id, me.ground_x, me.ground_y] if me.flags & IN_PLAY else None)
+        seq = m.save_seq()
+        if seq < self.seen[0]:
+            self.seen[0] = seq
+        elif seq > self.seen[0]:
+            self.seen[0] = seq
+            blob = m.save_out()
+            me = self.pid or "me"
+            if self.pending and self.pending[0] == "remote":
+                n, theirs = self.pending[1], self.pending[2]
+                self._write_ids({me: blob, (players.get(n) or {}).get("pid") or f"player{n}": theirs})
+                self.pending = None
+                self.room.send({"op": "save_done", "blob": base64.b64encode(blob).decode("ascii")}, to=n)
+            elif not linked:
+                self._write_ids({me: blob})
+            else:
+                stage, x, y = save_room(blob)
+                self.pending = ("local", blob, set(linked), {})
+                self._pending_frames = 0
+                self.room.send({"op": "save_req", "stage": stage, "block": m.save_block(), "x": x, "y": y,
+                                "blob": base64.b64encode(blob).decode("ascii")})
+        for n, msg in self.room.take():
+            op = msg.get("op")
+            pid = (players.get(n) or {}).get("pid") or f"player{n}"
+            if op == "save_req":
+                self.pending = ("remote", n, base64.b64decode(msg["blob"]))
+                m.command(CMD_SAVE_NOW, msg["stage"], msg["block"], msg["x"], msg["y"])
+            elif op == "save_done" and self.pending and self.pending[0] == "local":
+                self.pending[3][pid] = base64.b64decode(msg["blob"])
+                self.pending[2].discard(n)
+                if not self.pending[2]:
+                    self._write_ids({self.pid or "me": self.pending[1], **self.pending[3]})
+                    self.pending = None
+            elif op == "load_save":
+                self._load_msg = msg
+            elif op == "game_over":
+                self.dead_frames = 0
+                m.command(CMD_GAME_OVER)
+            elif op == "crashed":
+                self.partner_crashed = True
+        if self._load_msg and m.ready() and m.self_presence().flags:
+            msg, self._load_msg = self._load_msg, None
+            self._load(m, msg)
+            if self.pid and self.path is not None:  # our copy, with ids: slot 1 ours
+                try:
+                    write_session(self.path, [base64.b64decode(msg["yours"]), base64.b64decode(msg["mine"])],
+                                  [self.pid, "host"])
+                except OSError:
+                    pass
+        if self.pending and self.pending[0] == "local":  # someone never answered: what we have
+            self._pending_frames += 1
+            if self._pending_frames > PARTNER_SAVE_FRAMES:
+                self._write_ids({self.pid or "me": self.pending[1], **self.pending[3]})
+                self.pending = None
+        self._both_dead_room(m, players, linked)
+
+    def _both_dead_room(self, m, players, linked):
+        """Everyone dead (or this player alone and dead): the castle's last save, for all."""
+        dead = bool(m.self_presence().flags & DEAD)
+        everyone = dead and all(m.partner_presence(players[n]["slot"]).flags & DEAD for n in linked)
+        self.dead_frames = self.dead_frames + 1 if everyone else 0
+        if self.dead_frames == BOTH_DEAD_FRAMES and self.rank == 0:
+            if (self.saves or self.resumed) and self.path and self.path.exists():
+                self.resume()
+            elif linked:
+                m.command(CMD_GAME_OVER)
+                self.room.send({"op": "game_over"})

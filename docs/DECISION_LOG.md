@@ -1007,6 +1007,11 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - `about.json` gets `last_hit` per game: the entity `PLAYER.unkB8` points at (slot, id, update function, stage, place, attack). `scripts/read_report.py` names the function from the stage's map.
 - Options considered: a key to toggle the viewer in play (not for players); drawing our own boxes (DRA's are the game's truth).
 
+**D211: 3+ players connect in pairs, each pair as two players do now** (2026-11-17; agent-default, M17 step 3)
+- Every game keeps a host and a UDP socket per partner (`mailbox.Partners` gives each host its partner's slot). The room's first player (the one who made the code) is player 0 and hands out the roster; each pair then finds each other as two players do today (STUN, the relay, hole punching), on a topic of its own: the room code and the pair's two numbers.
+- A pair that can't reach each other goes through player 0: the datagrams are wrapped and forwarded on the links both already have (design criterion 2).
+- Options considered: one socket shared by all partners, told apart by address (one NAT mapping for all, but the transport's STUN, punching, peer learning and simulated internet are per socket today: a rewrite of the part that took longest to get right). Per-pair sockets reuse all of it unchanged; the cost is a NAT mapping per partner, which home routers allow.
+
 **D212: The test suite is cut to the tests that pay** (Tucker, 2026-11-17; which tests stay is agent-default)
 - **From 630 tests (13 hours of test time; the release run about 2 hours) to 145 (104 minutes; about 15 with tests side by side).** Across every working copy's history (11,700 runs since 2026-11-07), 532 tests had never failed alone. 483 of them are deleted (91%). Of the 99 that had failed, 96 stay (3 more endings went, below). The 49 never-failed tests that stay are quick, and each guards something nothing else does: the link and launcher unit tests, the patcher, booting, the save room, the shared finds, the online handshake and leaving, PvP's switch, and the bat carry.
 - **What went:** the long runs (the 30- and 10-minute soaks, the chaos run, the long teleport fuzz, the first castle's boss chain), the room crawls, every boss one by one and in pairings, the PvP matrix, the two-rooms edge cases, the 72-weapon sweeps, and 8 of the 10 endings (one mixed pair per ending stays). Also the per-mod tests (`session_mods.py`): `mods.py --test` now builds and boots a mod and keeps no discs (2.7 GB less).
@@ -1020,6 +1025,22 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - Old castles: HP alone becomes the per-player figure; a castle with only "HP with a partner" changed gets half of it.
 - Options considered: keeping the two HP sliders and adding more per player count (four sliders nobody would tune); a linear N times (4 players' 400% makes fights drag: each extra player adds less, as their hits overlap); rescaling enemies already alive when a player arrives (an enemy's HP can drive its behaviour, and a fresh room uses the new figure anyway).
 
+**D214: Each partner's body has a VRAM bank, a tint and statics of its own** (2026-11-18; agent-default, M17 step 4)
+- **Banks:** partner k's body draws from VRAM bank k + 1 (`link.h` VRAM_BANK_OF and the others): its character's graphics, its sprite uploads, its familiar's sheet and palettes. A partner build's own uploads go to the bank the module names for that body's frame (`g_CoopPartnerVram`, a word in the module's fixed table). Two players: bank 1, as before.
+- **Two partners on one character share its partner build** (one per character), so each body keeps the build's statics of its own: the linker scripts put what never changes first (sprite frames, art, rodata), then each body's data, and the BSS; the trailer says where. The build holds the last body that ran it; another's frame exchanges its statics with them (two buffers of 20 KB in the module: three bodies on one build keep two apart). Maria's copy of her palettes (24 KB) stays shared: at worst one Maria's hit flash shows on the other.
+- **Tints:** blue, red and green for partners 0, 1 and 2, drawn when a body shares its character with player 1 or with another partner here.
+- **Weapon swings:** the window's palette rows are per partner and hand (72 rows), leaving 152 rows of tiles (from 200).
+- Options considered: a second copy of each partner build per extra partner (about 230 KB each: no RAM left); swapping a build's whole data (100–135 KB: most of a frame); identifying each changing static by hand (fragile). The split by object file is checked by each partner build's linker script (statics under 20 KB) and by the two-Richters test.
+
+**D215: With three or four players, each rule of play picks the partner it's about** (2026-11-18; agent-default, M17 step 5)
+- **Shared rooms:** whoever was in the room first runs it, of everyone sharing it (a tie: the lower player number); the rest are its guests. Two games that settle on the same role, or guests left with nobody running the room, go by player number. Each game's host takes a partner's room snapshot only from the one running its room, and a partner's hits, spawns and drops taken only while that partner is in its room.
+- **Enemies aim at the nearest** player sharing the room; **a boss** goes for each player fighting in its room in turn.
+- **Arrivals, pulls, scene holds and revives** follow one partner at a time: one fighting a boss, else one leading a scene, else one in this room, else one alive. So a fallen player revives at a living partner, and waits while one fights a boss.
+- **Progress:** a partner heard from again after 5 s (one rejoining, or joining for the first time) gets everything sent again, as with two.
+- **HUD:** an HP bar and a map cursor for each partner, in their colour.
+- Two players: every rule is partner 0's, as before (the gate).
+- Not yet for three: the bat carry, standing on a partner, PvP (partner 0 only).
+- Options considered: one "main partner" for everything (shared rooms need all of them); a vote among guests for the authority (more messages, and the first-in rule already settles it).
 **D216: Streamer mode hides codes where text is drawn** (Tucker asked for it, 2026-11-19, #327; how: agent-default)
 - With the setting on, every text the app draws goes through one filter (`launcher/streamer.py`): room codes (any case, with or without the dash), connect codes and IP addresses become "(hidden)", and a code box shows dots. The code is still copied to the clipboard, and the host's pause menu offers "Copy the room code" instead of showing it.
 - Options considered: hiding the code at each screen that shows it (misses the next screen someone adds), or a separate "streamer" build of each screen. One filter where text is drawn covers screens that don't exist yet.
@@ -1028,5 +1049,27 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D217: A Life or Heart Max Up that isn't a placed find is one find for both** (2026-11-19, #296; agent-default)
 - A boss's Life Max Up (`src/st/e_life_up.h`) has no castle flag, so it travels as EV_GRANT, and both games can make one. The partner's grant clears this game's still lying in the same stage, and two taken within 3 s are the same one. Options considered: no grant at all, each player taking their own (in a shared fight only the authority's game has one), or a castle flag of our own per boss (a table to keep).
 
-**D218: Richter and Maria get Alucard's curse, not yet his stone** (2026-11-19, #102; the details: agent-default)
-- A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off. Stone (mash to break free) is still to do.
+**D218: Richter and Maria get Alucard's curse and stone** (2026-11-19, #102; the details: agent-default)
+- A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off.
+- Stone holds them still until they press buttons 8 times (CON/16 fewer, at least 3), Start and Select aside. His own count (`GetStatusAilmentTimer`) came out near 1 for them, so one stray input broke it: a fixed count plays like his.
+
+**D219: 3-4 players in the app: drop-in rooms, and castle slots that follow players** (Tucker, 2026-11-18: a slot per player, drop-in joining; the details: agent-default, M17 step 6)
+- Host and Join by room code always make a Room (`link/mesh.py`), even for two: seats go in join order and the host's seat stays open while it plays. ip:port and connect codes still link two players directly.
+- A player is known by a lasting id (`settings.json` `player_id`, sent in HELO), not their seat, which changes with join order. The castle file keeps each slot's id (format 2; format 1 still reads, slot 1 this machine's player as before).
+- A save asks every partner; each answer is kept under its player's id, so each machine keeps what it heard (the host all of them). The host's load gives each player their own slot, or a copy of its own to someone new; a player who drops in, or comes back, out of play, gets theirs after 5 s and arrives beside the host.
+- Options considered: slots by seat (a returning player could get someone else's save), the host's file only (joiners couldn't host later: M11).
+
+**D220: Three or more players means online, each on their own PC or phone; couch stays two** (Tucker, 2026-11-19)
+- M17's couch 2×2 (four emulators and controllers in one window) is dropped. Couch co-op stays two players; three and more play online, one player per machine.
+
+**D221: Up to 4 players is a castle setting, 2 by default** (Tucker, 2026-11-19: "compromises only felt by castles with max players 3 or 4"; the default: agent-default)
+- Castle settings' "Max players" (2, 3, 4) caps the room the host makes; a two-player castle never seats a third, so nothing three or four bodies cost (frame time, savestate size, room traffic) reaches it. Options considered: a global option (applies to castles that never wanted it), always 4 (a stranger's drop-in in every castle).
+
+**D222: No Discord status** (Tucker, 2026-11-19)
+- A Rich Presence status ("Playing SoTN Co-op") was built and then dropped before release: it needed a Discord application of ours to register. It's in git (coop-m17, 6a71453) if wanted later.
+
+**D223: An off-hand weapon swing lasts 28-40 frames for Richter and Maria** (2026-11-19, #310; agent-default)
+- Their swings ran on their own animation (Richter's about 60 frames, Maria's 16) and a press mid-swing brought out the whip or owl as well, so they out-damaged Alucard. Clamped to his length, and presses during a swing are the swing's: within 0.7-1.1x his damage a second (`damage_rate_first_hand_*`).
+
+**D224: Richter and Maria get Alucard's mist form, with Form of Mist** (Tucker, 2026-11-20, #191)
+- Their way past the possessed Richter's Hydro Storm (it fills the screen, and they had no answer but an item crash). When Alucard's Form of Mist is found, they can turn to mist as he does, with his button, MP cost and rules; it replaces the Mist Step they borrowed for grates (D84's mapping, `design/M8b-character-balance.md`). Options considered: weakening Hydro Storm for them, invincibility frames on a dodge.

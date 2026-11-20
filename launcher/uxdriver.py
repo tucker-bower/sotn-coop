@@ -610,7 +610,7 @@ def _android_picture(name):
 
 def _connected(d):
     bar = d.launcher.display._bar_key
-    return bar and "Partner connected" in bar[0][0]
+    return bar and ("Partner connected" in bar[0][0] or "partners connected" in bar[0][0])
 
 
 def _online_host(pg, code_file):
@@ -628,6 +628,11 @@ def _online_host(pg, code_file):
                  ("screen", "Online co-op: host"), ("key", pg.K_RETURN), ("screen", "Name your castle"), ("key", pg.K_RETURN),
                  ("screen", "Castle settings"), ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Mode: Boss rush (D137), Start
               if RUSH else
+              [("call", lambda d: setattr(d, "real_settings", True)),
+               ("screen", "Online co-op: host"), ("key", pg.K_RETURN), ("screen", "Name your castle"), ("type", "Tucker"),
+               ("key", pg.K_RETURN), ("screen", "Castle settings"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT),  # Max players: 3 (under Start, Mode, Mod preset, Difficulty, Back to the defaults)
+               *[("key", pg.K_UP)] * 5, ("key", pg.K_RETURN)]
+              if PLAYERS == 3 else
               [("screen", "Online co-op: host"), ("key", pg.K_RETURN),       # New castle (D136)
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
@@ -636,6 +641,12 @@ def _online_host(pg, code_file):
             # Not after a set number of frames: a slower partner is still starting, and leaves later.
             ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "host-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the host sees its partner connected"),
+            ("call", lambda d: Path(code_file).with_name("playing.txt").write_text("1")),
+            *([("until", lambda d: "2 partners connected" in d.launcher.display._bar_key[0][0] or d.waited > 7200),
+               ("shot", "host-three"),
+               ("expect", lambda d: "2 partners connected" in d.launcher.display._bar_key[0][0],
+                "a third player drops in while the host plays (M17)"),
+               ("wait", 1800)] if PLAYERS == 3 else []),  # the third's game starts and plays before we go
             ("until", lambda d: re.fullmatch(r"\d+ ms", d.launcher.display.corner or "") or d.waited > 600),
             ("shot", "host-ping"),
             ("expect", lambda d: re.fullmatch(r"\d+ ms", d.launcher.display.corner or ""),
@@ -643,7 +654,7 @@ def _online_host(pg, code_file):
             *(_rush_online_host() if RUSH else []),
             *_android_picture("host-playing"),
             # The host stays until its partner leaves (a slower partner, a phone, checks later).
-            ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
+            ("until", lambda d: "onnected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
             # the game pauses itself to say the partner left (gameview.partner_gone): no Esc
             ("screen", "Paused"),
             ("expect", lambda d: d.launcher.room_code and (("Copy the room code" if STREAMER else f"Room code: {d.launcher.room_code}")
@@ -653,7 +664,7 @@ def _online_host(pg, code_file):
             ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), *after, ("menu", "quit")]
 
 
-def _online_join(pg, code_file):
+def _online_join(pg, code_file, late=False):
     A = pg.CONTROLLER_BUTTON_A
     before, after = _streamer_steps(lambda d: Path(code_file).read_text().strip() if Path(code_file).exists() else "")
     return [*first_run(pg),
@@ -665,10 +676,16 @@ def _online_join(pg, code_file):
             ("type_file", code_file), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("shot", "join-lobby"),
             # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
-            # controller (id 0)
-            ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
+            # controller (id 0). Not on the lobby's first frame: a press then was lost now and then
+            # (the joiner sat on "Press any button", 2026-11-19)
+            ("wait", 30), ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "join-playing"),
-            ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0] or
+             "2 partners connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
+            *([("until", lambda d: "2 partners connected" in d.launcher.display._bar_key[0][0] or d.waited > 7200),
+               ("expect", lambda d: "2 partners connected" in d.launcher.display._bar_key[0][0],
+                "the joiner hears both partners (M17)"),
+               ("wait", 60 if late else 1500)] if PLAYERS == 3 else []),  # the late one leaves first
             ("wait", 300),  # the host, a little behind, sees the partner too before this one leaves
             ("expect", lambda d: (_received_castle() or "").startswith("Boss rush_" if RUSH else "Tucker_"),
              "the joiner keeps a copy of the host's castle, with the name the host gave it (design/M11)"),
@@ -677,12 +694,15 @@ def _online_join(pg, code_file):
             ("key", pg.K_ESCAPE), ("screen", "Paused"),
             ("expect", lambda d: not any(i.startswith("Room code") for i in d.view.pause_items),
              "a joiner's pause menu has no room code"),
+            *([("expect", lambda d: "In the room: you and 2 partners" in d.view.pause_items,
+                "the pause menu says who's in (M17)")] if PLAYERS == 3 and not late else []),
             ("key", pg.K_UP), ("key", pg.K_RETURN),
             ("screen", "Online co-op"),
             *(([("expect", lambda d: any("Rejoin" in t for t in __import__("streamer").drawn), "Rejoin is offered")]) if STREAMER else []),
             ("key", pg.K_ESCAPE), ("screen", "Home"), *after, ("menu", "quit")]
 
 
+PLAYERS = int(os.environ.get("COOP_UX_PLAYERS", "2"))  # 3: a third launcher drops in (M17 step 6)
 RUSH = bool(os.environ.get("COOP_UX_RUSH"))  # online with a boss rush: uxdriver.py online, COOP_UX_RUSH=1 (D137)
 STREAMER = bool(os.environ.get("COOP_UX_STREAMER"))  # streamer mode on in both (#327): COOP_UX_STREAMER=1
 
@@ -937,7 +957,8 @@ def _randomizer(pg):
 
 SCRIPTS = {"randomizer": _randomizer, "couch": _couch, "boss_rush": _boss_rush, "startup": _startup, "hud": _hud, "perf": _perf, "window": _window, "menus": _menus,
            "online_host": lambda pg: _online_host(pg, os.environ["COOP_UX_CODE"]),
-           "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"])}
+           "online_join": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"]),
+           "online_join2": lambda pg: _online_join(pg, os.environ["COOP_UX_CODE"], late=True)}
 
 
 def online(out, retail_cue, python=sys.executable, real_relay=False):
@@ -948,17 +969,23 @@ def online(out, retail_cue, python=sys.executable, real_relay=False):
     if not real_relay:
         env["COOP_RELAY_DIR"] = str(tmp / "relay")
     procs = []
-    for role in ("host", "join"):
+    roles = ("host", "join", "join2")[:PLAYERS]
+    for role in roles:
         e = dict(env, COOP_DATA=str(tmp / role))
+        if role == "join2":  # drops in once the other two play (M17 step 6)
+            for _ in range(1500):
+                if (tmp / "playing.txt").exists() or procs[0].poll() is not None:
+                    break
+                time.sleep(0.2)
         procs.append(subprocess.Popen([python, __file__, f"online_{role}", "--out", str(out / role),
                                        "--disc", str(retail_cue)], env=e))
         for _ in range(600):  # the joiner starts once the host waits in its lobby (one disc folder)
-            if role == "join" or Path(env["COOP_UX_CODE"]).exists() or procs[0].poll() is not None:
+            if role != "host" or Path(env["COOP_UX_CODE"]).exists() or procs[0].poll() is not None:
                 break
             time.sleep(0.2)
-    codes = [p.wait(timeout=600) for p in procs]
-    ok = codes == [0, 0]
-    print(f"{'PASSED' if ok else 'FAILED'} online: host {codes[0]}, join {codes[1]}")
+    codes = [p.wait(timeout=900) for p in procs]
+    ok = all(c == 0 for c in codes)
+    print(f"{'PASSED' if ok else 'FAILED'} online: " + ", ".join(f"{r} {c}" for r, c in zip(roles, codes)))
     return ok
 
 

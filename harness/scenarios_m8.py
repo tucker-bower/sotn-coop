@@ -573,12 +573,14 @@ SHORT_SWORD = 19
 ALUCARD_RATE = 30  # damage_rate_alucard, measured
 
 
-def damage_a_second(run, e, mb, ch, seconds=10):
+def damage_a_second(run, e, mb, ch, seconds=10, hand=None):
     """Issue 114: mashing the plain attack at an enemy held on it, in the hall: swing rate,
     hitboxes and the target's invincibility, all counted the same way. Returns (damage a second,
     the most in one hit)."""
     from scenarios_m12 import pin_target
-    e.write(EQUIPMENT + (4 if ch else 0), SHORT_SWORD)  # Richter's, Maria's: the second hand, so □ is their own
+    if hand is None:
+        hand = 1 if ch else 0  # Richter's, Maria's: the second hand, so □ is their own
+    e.write(EQUIPMENT + 4 * hand, SHORT_SWORD)
     reload_as(run, mb, ch)
     mb.command(CMD_ARRIVE, NO3, HALL_ROOM, 1300, 200)
     wait(run, lambda: (lambda p: p.room_id == HALL_ROOM and p.flags & IN_PLAY and not p.flags & BUSY)(
@@ -700,7 +702,8 @@ def status_attack(run, ch):
     run.expect(square == own + strength, "empty hands: □ shows their own attack", square=square, str=strength)
     run.expect(circle == 0, "...and ○ shows nothing", circle=circle)
     s, c, _ = hands(LEATHER_SHIELD)
-    run.expect(s == square, "a shield in the first hand: □ stays their own attack", square=s)
+    run.expect(s < square, "a shield in the first hand: □ guards (#214), so it shows the shield's attack, not theirs",
+               square=s, own=square)
     for item, what in ((OFFHAND_ITEMS[0][0], "a short sword"), (SHURIKEN, "a thrown weapon")):
         s, c, _ = hands(0, item)
         run.expect(s == square, f"{what} in the second hand: □ stays their own attack", square=s)
@@ -915,3 +918,47 @@ def shield_guards(run, ch):
     x = e.snapshot()["x"]
     run.step(40, "right")
     run.expect(e.snapshot()["x"] != x, "and they walk again", x=x, now=e.snapshot()["x"])
+
+
+
+@per_character
+def damage_rate_first_hand(run, ch):
+    """#310: a Short Sword in the first hand, swung with □: Richter and Maria within Alucard's rate
+    (their swings ran their own time, and a press during one brought out the whip or owl too: 43
+    damage a second for Richter, 36 for Maria, his 30)."""
+    e, mb = run.emu, mailbox(run)
+    rate, top = damage_a_second(run, e, mb, ch, hand=0)
+    run.expect(ALUCARD_RATE * 0.7 < rate <= ALUCARD_RATE * 1.1,
+               f"{rate:.0f} damage a second, {top} a hit: near Alucard's {ALUCARD_RATE}, not over")
+
+
+ELEMENT_STONE = 0x200
+
+
+@per_character
+def stone_breaks_with_presses(run, ch):
+    """Issue 102: stone as Alucard has it. A stone hit holds them still (walking does nothing),
+    mashing buttons breaks it, and then they walk again; immunity keeps it off."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, 200, "<i")
+    run.step(60)
+    start = e.save_state()
+    e.write(e.entity(0) + HIT_POINTS, 3, "<h")
+    e.write(e.entity(0) + HIT_PARAMS, 2 | ELEMENT_STONE, "<H")
+    run.step(150)
+    x = e.snapshot()["x"]
+    run.step(40, "right")  # (holding it is one press)
+    run.expect(e.snapshot()["x"] == x, "stoned: walking does nothing", x=x, now=e.snapshot()["x"])
+    for _ in range(12):
+        run.step(2, "cross")
+        run.step(2, "")
+    x = e.snapshot()["x"]
+    run.step(40, "right")
+    run.expect(e.snapshot()["x"] != x, "mashing breaks it: they walk again", x=x, now=e.snapshot()["x"])
+    e.load_state(start)
+    e.write(ELEMENTS_IMMUNE, ELEMENT_STONE, "<H")
+    _curse_hit(run, e, ELEMENT_STONE)
+    x = e.snapshot()["x"]
+    run.step(40, "right")
+    run.expect(e.snapshot()["x"] != x, "immune: no stone", x=x, now=e.snapshot()["x"])
