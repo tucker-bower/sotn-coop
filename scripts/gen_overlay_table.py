@@ -35,7 +35,9 @@ HELPERS = ("GetSideToPlayer", "GetDistanceToPlayerX", "GetDistanceToPlayerY")
 # The warp rooms' machine too: it warps the game's own player when that player presses Up on it.
 # A guest's copy never warped its player, and showed the authority's fade to white, which left the
 # guest on a white screen when the authority warped (#290).
-DECOR = re.compile(r"Entity(RedDoor|SealedDoor|LockCamera|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
+# The entrance's lightning bolt too (#320): its copy drew from textures a Richter or Maria guest's
+# VRAM doesn't hold there, a pale rectangle in the sky; the flash and the cloud were already its own.
+DECOR = re.compile(r"Entity(RedDoor|SealedDoor|LockCamera|LightningThunder|Background(Bushes|Trees|PineTrees|Clouds|SkyLand|Lightning|CastleWall|Pillar|"
                    r"Vortex|Bookcase|Furniture|Gears|DoorRubble|Shadow)|Clouds|LightningCloud|"
                    r"DistantBackgroundTrees|ForegroundTree|3DBackgroundHouse|HouseShader|ClockTower3D|"
                    r"StainedGlass|StainedGlassBackground|CavernBackground\w*|NightSky|BgColumnsParallax\w*|"

@@ -930,3 +930,35 @@ def damage_rate_first_hand(run, ch):
     rate, top = damage_a_second(run, e, mb, ch, hand=0)
     run.expect(ALUCARD_RATE * 0.7 < rate <= ALUCARD_RATE * 1.1,
                f"{rate:.0f} damage a second, {top} a hit: near Alucard's {ALUCARD_RATE}, not over")
+
+
+ELEMENT_STONE = 0x200
+
+
+@per_character
+def stone_breaks_with_presses(run, ch):
+    """Issue 102: stone as Alucard has it. A stone hit holds them still (walking does nothing),
+    mashing buttons breaks it, and then they walk again; immunity keeps it off."""
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, ch)
+    e.write(HP_NOW, 200, "<i")
+    run.step(60)
+    start = e.save_state()
+    e.write(e.entity(0) + HIT_POINTS, 3, "<h")
+    e.write(e.entity(0) + HIT_PARAMS, 2 | ELEMENT_STONE, "<H")
+    run.step(150)
+    x = e.snapshot()["x"]
+    run.step(40, "right")  # (holding it is one press)
+    run.expect(e.snapshot()["x"] == x, "stoned: walking does nothing", x=x, now=e.snapshot()["x"])
+    for _ in range(12):
+        run.step(2, "cross")
+        run.step(2, "")
+    x = e.snapshot()["x"]
+    run.step(40, "right")
+    run.expect(e.snapshot()["x"] != x, "mashing breaks it: they walk again", x=x, now=e.snapshot()["x"])
+    e.load_state(start)
+    e.write(ELEMENTS_IMMUNE, ELEMENT_STONE, "<H")
+    _curse_hit(run, e, ELEMENT_STONE)
+    x = e.snapshot()["x"]
+    run.step(40, "right")
+    run.expect(e.snapshot()["x"] != x, "immune: no stone", x=x, now=e.snapshot()["x"])

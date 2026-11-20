@@ -436,6 +436,49 @@ static void Curse(void) {
     }
 }
 
+// Stone (issue 102): Alucard's rules (src/dra/71830.c PlayerStepStoned): a stone hit turns the
+// player to stone; mashing buttons breaks it, his count of presses (CON lowers it). Their own code
+// has no stone: here their buttons are taken while it lasts, each new press counts, and they show
+// the stone palette. The "Alucard's stats" rule turns it off.
+#define STONE_PRESSES 8
+static s16 s_Stone;      // presses left to break free, or 0
+static u16 s_StoneHeld;  // the buttons held last frame (the game's own memory sees our mask)
+
+static void Stone(void) {
+    u16 pressed, held = g_pads[0].pressed;
+
+    if (!CHAR_COOP(CharacterLoaded()) || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
+        !g_Status.hp) {
+        s_Stone = 0;
+        return;
+    }
+    if (g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    if (!s_Stone && PLAYER.hitParams & ELEMENT_STONE && !(g_Status.elementsImmune & ELEMENT_STONE)) {
+        s_Stone = STONE_PRESSES - g_Status.statsTotal[STAT_CON] / 16; // (CON shortens it, as his)
+        s_Stone = s_Stone > 3 ? s_Stone : 3;
+        g_api.PlaySfx(SFX_WALL_DEBRIS_B);
+        pressed = 0; // (the hit's own frame: nothing counts yet)
+    } else {
+        pressed = held & ~s_StoneHeld & ~(PAD_START | PAD_SELECT);
+    }
+    s_StoneHeld = held;
+    if (!s_Stone) {
+        return;
+    }
+    if (pressed && !--s_Stone) {
+        g_api.PlaySfx(SFX_WALL_DEBRIS_B);
+        return;
+    }
+    g_pads[0].pressed &= PAD_START | PAD_SELECT;
+    g_pads[0].tapped &= PAD_START | PAD_SELECT;
+    PLAYER.velocityX = 0;
+    PLAYER.palette = PAL_FLAG(PAL_CC_STONE_EFFECT);
+}
+
+bool CharacterStoned(void) { return s_Stone != 0; }
+
 // Heals that come as g_Player.healKind and healAmount (Healing Mail, src/dra/5F60C.c): only
 // Alucard's player code takes them (src/dra/692E8.c). Healing Mail's 1 HP every 128 frames also
 // needs the status bit only Alucard's walk sets: for Richter and Maria, while they walk or run on
@@ -836,6 +879,7 @@ void CharacterFrame(void) {
     PoisonWater();
     Poison();
     Curse();
+    Stone();
     Heal();
     Growth();
     AlucardHud();
