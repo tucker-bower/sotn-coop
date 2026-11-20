@@ -377,6 +377,26 @@ def main():
         check(got == "Randomizer", "after Back: the Randomizer, and the BIOS (until their own screens)")
         got, calls, _, _ = disc_screen([[], [("mouse", 8 + 157 + 20, 100, True)], ["back"]], have={"ps1": "sotn.cue"})
         check(calls == [("psp", None)], "the mouse: a click on the PSP slot browses for that disc")
+        # #337: a menu-bar shortcut (Navigate) on the first run's Discs screen closed the app
+        import ui.screens.discs as discs_mod
+        real, shown = discs_mod.discs, []
+
+        def fake_discs(*a, **kw):
+            shown.append(1)
+            if len(shown) == 1:
+                raise app.Navigate("controllers")
+            return "continue"
+        discs_mod.discs = fake_discs
+        try:
+            me = types.SimpleNamespace(plain_menus=lambda: None, disc_status=None, attach_disc=None, disc_art=None,
+                                       disc=lambda: "sotn.cue")
+            app.Launcher.discs_screen(me, first_run=True)
+            ok = len(shown) == 2
+        except app.Navigate:
+            ok = False
+        finally:
+            discs_mod.discs = real
+        check(ok, "first run: a shortcut on the Discs screen keeps the screen up, not a crash (#337)")
 
         # Options
         import types
