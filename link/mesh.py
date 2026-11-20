@@ -174,7 +174,9 @@ class Room:
             p = self._pending
             if p is not None and p.connector and p.connector.state == "connected":
                 seat = len(self.players)
-                self._seated.add(p.connector.their_id)
+                # the joiner's relay id: from its relay message, or its HELO (it may connect first
+                # another way, on a LAN, and the room's "full" must still name it: ui_online)
+                self._seated.add(p.connector.their_id or (p.partner_hello or {}).get("rid"))
                 self._seated_sids.add(p.partner_hello.get("sid"))
                 p.only_sid = p.partner_hello.get("sid")
                 self.hosts[seat] = p
