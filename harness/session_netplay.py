@@ -94,6 +94,8 @@ def netplay_partner_on_time_alucard_and_richter(run):
     the same run with rollback off; on a LAN, nothing runs ahead. A misses no more frames for it."""
     a, b = run.s.a, run.s.b
     body, sym = symbols()["g_CoopSpikeBody"], symbols()
+    from session_m8 import reload_game
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == 1, "B plays Richter")
     into_hall(run)
     run.step(120)
     pads = _runner(7)
