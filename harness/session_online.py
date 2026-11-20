@@ -300,3 +300,26 @@ def online_room_saves_follow_players(run):
     finally:
         for s in ss.values():
             s.__exit__(None, None, None)
+
+
+@session_scenario()
+def online_join_room_by_address(run):
+    """#326: a host that hosts a room code (link/mesh.py Room, as the app always does) takes a
+    partner who types its address instead (Join's ip:port), with no relay or STUN for either:
+    they link, and the partner's presence arrives."""
+    from link.connect import FileRelay
+    dead_relay = FileRelay(tempfile.mkdtemp(prefix="coop-relay-"))  # (nobody else posts there)
+    with OnlineSession(COOP_DISC, start="entrance", rank=0, bind_host="127.0.0.1") as s0, \
+         OnlineSession(COOP_DISC, start="entrance", rank=1, bind_host="127.0.0.1") as s1:
+        s0.start_room(make_room_code(), True, relay=dead_relay, stun_servers=(), resolve=False)
+        s1.connect(("127.0.0.1", s0.port))
+        seated = False
+        for i in range(900):
+            if not seated:  # the lobby's handshakes, as the app runs them until the partner is in
+                seated = len(s0.room_status(True)["players"]) > 1
+            step_pair(s0, s1, 1)
+            if s1.local.mailbox("partner_age") < 5 and s0.local.mailbox("partner_age") < 5:
+                break
+        run.expect(s1.local.mailbox("partner_age") < 5 and s0.local.mailbox("partner_age") < 5,
+                   "linked by address: each hears the other", frames=i,
+                   ages=(s0.local.mailbox("partner_age"), s1.local.mailbox("partner_age")))

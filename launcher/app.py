@@ -157,7 +157,8 @@ Can't connect? Only one of you needs to fix it:
 ·  Phone hotspots and some internet providers can't connect directly. Try another network.
 ·  Or forward UDP port 47811 on your router to your PC or phone.
 ·  Still stuck? Forward the port on the host's router. The joiner then types the host's address
-   (ip:port) instead of the room code. Help › About shows the port while hosting.
+   (ip:port) instead of the room code: the host's pause menu and Help › About show it.
+   On the same Wi-Fi that needs no internet at all.
 The status bar shows the ping. Under 150 ms plays great; up to 300 ms is fine."""
 
 KEYS_HELP = """Player 1:  arrows to move.  Z Cross,  X Square,  C Circle,  V Triangle,  A L1,  S R1,
@@ -616,7 +617,7 @@ class Launcher:
                          f"Version {VERSION} (link protocol {WIRE_VERSION}).\n"
                          "A co-op mod of Castlevania: Symphony of the Night, built on sotn-decomp.\n"
                          "No game data is included: the co-op disc is made from your own.\n"
-                         f"Your saves and bug reports: {paths.data_dir()}\n{self.room_info}")
+                         f"Your saves and bug reports: {paths.data_dir()}\n{self.room_info}{self.address_info()}")
         elif action == "rules":
             self.open_rules()
         elif action == "check_updates":
@@ -2590,6 +2591,7 @@ class Launcher:
             # anyone with the code drops in, up to the castle's Max players (M17: 2 unless it's chosen)
             s.start_room(room, True, pid=self.player_id(), app=VERSION, max_players=rules["max_players"])
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
+            self.hosting_session = s
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
                 if self.lobby(1, lambda: self.partner_line(s, f"Room code\n{room}\nIt's on your clipboard:\nsend it to them.{pvp_line}"),
@@ -2600,8 +2602,32 @@ class Launcher:
                 return
             finally:
                 self.room_info = ""
-            self.continue_castle(s, playthrough, fresh)
-            self.run_view(s, playthrough)
+            try:
+                self.continue_castle(s, playthrough, fresh)
+                self.run_view(s, playthrough)
+            finally:
+                self.hosting_session = None
+
+    def host_addresses(self):
+        """#326: while hosting, (LAN ip:port, internet ip:port or ""): a partner can Join by address."""
+        s = getattr(self, "hosting_session", None)
+        if s is None:
+            return None
+        from link.rendezvous import host_addresses
+        try:
+            room = s.room_status(False) if getattr(s, "room_on", False) else None
+        except Exception:  # noqa: BLE001 (the game's worker closing)
+            room = None
+        return host_addresses(s.port, (room or {}).get("waiting"))
+
+    def address_info(self):
+        got = self.host_addresses()
+        if not got:
+            return ""
+        lan, public = got
+        return (f"\nYour address on this network: {lan}" +
+                (f"\nOver the internet: {public} (with UDP port {lan.rsplit(':', 1)[1]} forwarded to this device)"
+                 if public else "") + "\nA partner can type it in Join instead of the room code.")
 
     def castle_room(self, castle, make):
         """The castle's room code: the one it was last hosted with, while that's recent, so a

@@ -352,7 +352,7 @@ class Connector:
         if not self.theirs and getattr(self.relay, "error", None):
             return ("Couldn't reach the room-code server (ntfy.sh), so your partner's game couldn't be "
                     "found. Check this device's internet connection. On the same Wi-Fi, ask your "
-                    "partner to host and join with the ip:port it shows in Help ▸ About.")
+                    "partner to host: Join takes the address its pause menu and Help › About show (ip:port).")
         if not self.theirs:
             return ("Your partner's game never showed up for this room code. Check the code, and that "
                     "both of you are online.")

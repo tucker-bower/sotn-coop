@@ -72,6 +72,7 @@ The [technical summary](docs/TECHNICAL_SUMMARY.md) has the details.
 - **Saturn Maria:** choose your *Akumajou Dracula X: Gekka no Yasoukyoku* (Sega Saturn, Japan) `.cue` on the launcher, or choose it in Discs & mods. She's SOTN Ultimate's Saturn Maria: kicks, dives, a backdash, a double jump and the Holy Beasts, with her own HUD and voice. The same disc adds **Ultimate Richter**: the PS1 Richter in the Saturn's long coat. The launcher makes their art and sounds from your own disc.
 - **The window:** F11 for fullscreen, and the View menu changes the layout. On the couch, F1 picks which game plays the music.
 - **Online:** you both need the same version. If you can't connect, the lobby says why, and Help › Online troubleshooting has what to try.
+- **No room code?** Join also takes the host's address: the host's pause menu and Help › About show it. On the same Wi-Fi it needs no internet at all; over the internet the host forwards UDP port 47811 to their device.
 - **Streaming?** Turn on Streamer mode in Options: room codes and addresses never show on screen, and the code is still copied for you to send.
 
 ## Docs

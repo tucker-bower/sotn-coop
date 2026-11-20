@@ -143,6 +143,25 @@ def local_ip():
         return "127.0.0.1"
 
 
+def host_addresses(port, status=None):
+    """#326: where a partner can join this host by address: (the LAN ip:port, the internet
+    ip:port or "" until STUN or the router has told us). status: the waiting seat's connector
+    status (link/connect.py Connector.status), whose candidates hold the public address."""
+    import ipaddress
+    lan = f"{local_ip()}:{port}"
+    public = ""
+    st = status or {}
+    for c in ([st["mapped"]] if st.get("mapped") else []) + list(st.get("mine") or []):
+        try:
+            ip = ipaddress.ip_address(c[0])
+        except (ValueError, TypeError, IndexError):
+            continue
+        if ip.version == 4 and ip.is_global:
+            public = f"{c[0]}:{c[1]}"
+            break
+    return lan, public
+
+
 def global_ip6():
     """This machine's global IPv6 address, or None (no IPv6, or only link-local and private ones).
     Nothing is sent: connecting a UDP socket only picks the route (issue 58)."""

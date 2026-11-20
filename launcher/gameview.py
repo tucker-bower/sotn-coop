@@ -759,7 +759,11 @@ class GameView:
             room = self.games[0].room_status() if self.online and getattr(self.s, "room_on", False) else None
             n = len(room["players"]) if room else 0
             who = (f"In the room: you and {n - 1} partners" if n > 2 else None)  # 3+ players (M17)
-            rows = [("resume", "Resume"), ("code", label) if code else None, ("who", who) if who else None,
+            got = (self.launcher.host_addresses() if code and not streamer.on and self.launcher
+                   and hasattr(self.launcher, "host_addresses") else None)
+            addr = (f"Or join by address: {got[0]}" + (f" / {got[1]}" if got[1] else "")) if got else None  # #326
+            rows = [("resume", "Resume"), ("code", label) if code else None, ("addr", addr) if addr else None,
+                    ("who", who) if who else None,
                     ("layout", f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}"),
                     ("help", "How to play"), ("rules", "Castle rules"), ("player", "Your settings"),
                     ("report", "Report a problem (F9)"), ("menu", "Save and go back to the menu")]
