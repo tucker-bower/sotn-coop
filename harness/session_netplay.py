@@ -28,13 +28,14 @@ def afterimages(g):
 
 
 def _body_track(run, frames, pads):
-    """B's body as A's game draws it, in world x, each frame, while pads(t) drive both."""
-    a, body = run.s.a, symbols()["g_CoopSpikeBody"]
+    """B's body as A's game draws it, in world x, each frame, while pads(t) drive both (a rollback's
+    correction slides out: it's drawn g_CoopRollDrawn from where the body is)."""
+    a, body, drawn = run.s.a, symbols()["g_CoopSpikeBody"], symbols()["g_CoopRollDrawn"]
     xs = []
     for t in range(frames):
         run.step(1, p1=pads(t))
         if a.mailbox("partner_presence").flags:
-            xs.append(a.read(body, "<h", 2) + a.read("g_Tilemap", "<h", 0xA))
+            xs.append(a.read(body, "<h", 2) + a.read("g_Tilemap", "<h", 0xA) + a.read(drawn, "<h"))
     return xs
 
 
@@ -45,6 +46,8 @@ def netplay_partner_runs_smoothly_alucard_and_richter(run):
     him back in his game but not his body in A's. On A's screen his body is eased back to his real
     spot: no step over 16 px (it was put there in one step once 48 px off: three 47-52 px jumps
     in this run). A drift that easing can't close is put right after a second, a step of about 12-16 px."""
+    from session_m8 import reload_game
+    run.expect(reload_game(run, run.s.b) and run.s.b.mailbox("self_presence").character == 1, "B plays Richter")
     into_hall(run)
     run.s.set_net(PROFILE, SEED)
     run.step(300)
