@@ -130,6 +130,7 @@ def mixed_soak(run, ca, cb, minutes):
     frames = int(minutes * 3600)
     ia, ib = list(random_inputs(41, frames)), list(random_inputs(42, frames))
     slow = played = 0
+    chunks = []  # missed frames in each 600
     together = shared = 0  # samples (every 60 frames) when the room is shareable, and of those, shared
     ms, vcount = [], []
 
@@ -156,6 +157,7 @@ def mixed_soak(run, ca, cb, minutes):
             if g.snapshot()["game_state"] == 2:
                 played += 600
                 slow += max(0, 600 - (g.read("g_Timer") - before))
+                chunks.append(max(0, 600 - (g.read("g_Timer") - before)))
         ms += a.host_ms() + b.host_ms()
         heal(a), heal(b)
         # Issue 184: both stay in the hall, whatever the random input does, so the two soaks being
@@ -170,7 +172,8 @@ def mixed_soak(run, ca, cb, minutes):
     vcount.sort()
     p99 = ms[int(len(ms) * 0.99)] if ms else 0
     numbers = {"dropped": slow, "of": played, "host_p99_ms": round(p99, 3), "shared": shared, "together": together,
-               "scanlines_p50": vcount[len(vcount) // 2], "scanlines_p99": vcount[int(len(vcount) * 0.99)]}
+               "scanlines_p50": vcount[len(vcount) // 2], "scanlines_p99": vcount[int(len(vcount) * 0.99)],
+               "chunks": chunks}
     run.expect(a.snapshot()["game_state"] == 2 and b.snapshot()["game_state"] == 2, "both still in play")
     samples = frames // 60
     run.expect(together >= samples // 3, "close together in the hall a third of the time or more", together=together, of=samples)

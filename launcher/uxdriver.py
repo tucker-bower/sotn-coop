@@ -676,8 +676,9 @@ def _online_join(pg, code_file, late=False):
             ("type_file", code_file), ("key", pg.K_RETURN),
             ("screen", "Press a button"), ("shot", "join-lobby"),
             # Tucker's presses on his PC (2026-10-22): A joins, Start readies, on the first real
-            # controller (id 0)
-            ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
+            # controller (id 0). Not on the lobby's first frame: a press then was lost now and then
+            # (the joiner sat on "Press any button", 2026-11-19)
+            ("wait", 30), ("pad", 0, A), ("pad", 0, pg.CONTROLLER_BUTTON_START),
             ("until", lambda d: d.heading == "Game"), ("until", _connected), ("shot", "join-playing"),
             ("expect", lambda d: "Partner connected" in d.launcher.display._bar_key[0][0] or
              "2 partners connected" in d.launcher.display._bar_key[0][0], "the joiner sees its partner connected"),
