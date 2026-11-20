@@ -617,10 +617,11 @@ def _online_host(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
 
     def write_code(d):
-        room = d.launcher.room_info.split("room ")[1].split(",")[0]
+        room = d.host_code = d.launcher.room_code
         Path(code_file).write_text(room)
+    before, after = _streamer_steps(lambda d: getattr(d, "host_code", ""))
     return [*first_run(pg),
-            ("count_inputs",),
+            ("count_inputs",), *before,
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_RETURN),                 # Host
             *(([("call", lambda d: setattr(d, "real_settings", True)),
@@ -645,16 +646,18 @@ def _online_host(pg, code_file):
             ("until", lambda d: "Partner connected" not in d.launcher.display._bar_key[0][0] or d.waited > 5000),
             # the game pauses itself to say the partner left (gameview.partner_gone): no Esc
             ("screen", "Paused"),
-            ("expect", lambda d: d.launcher.room_code and f"Room code: {d.launcher.room_code}" in d.view.pause_items,
-             "the host's pause menu shows the room code (#317)"),
+            ("expect", lambda d: d.launcher.room_code and (("Copy the room code" if STREAMER else f"Room code: {d.launcher.room_code}")
+                                                           in d.view.pause_items),
+             "the host's pause menu shows the room code (#317), or offers to copy it (streamer mode)"),
             ("key", pg.K_UP), ("key", pg.K_RETURN),
-            ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+            ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), *after, ("menu", "quit")]
 
 
 def _online_join(pg, code_file):
     A = pg.CONTROLLER_BUTTON_A
+    before, after = _streamer_steps(lambda d: Path(code_file).read_text().strip() if Path(code_file).exists() else "")
     return [*first_run(pg),
-            ("count_inputs",),
+            ("count_inputs",), *before,
             ("screen", "Home"), *_to_online(pg), ("key", pg.K_RETURN),
             ("screen", "Online co-op"), ("key", pg.K_DOWN), ("key", pg.K_RETURN),  # Join your partner
             ("screen", "Join your partner"),
@@ -675,10 +678,31 @@ def _online_join(pg, code_file):
             ("expect", lambda d: not any(i.startswith("Room code") for i in d.view.pause_items),
              "a joiner's pause menu has no room code"),
             ("key", pg.K_UP), ("key", pg.K_RETURN),
-            ("screen", "Online co-op"), ("key", pg.K_ESCAPE), ("screen", "Home"), ("menu", "quit")]
+            ("screen", "Online co-op"),
+            *(([("expect", lambda d: any("Rejoin" in t for t in __import__("streamer").drawn), "Rejoin is offered")]) if STREAMER else []),
+            ("key", pg.K_ESCAPE), ("screen", "Home"), *after, ("menu", "quit")]
 
 
 RUSH = bool(os.environ.get("COOP_UX_RUSH"))  # online with a boss rush: uxdriver.py online, COOP_UX_RUSH=1 (D137)
+STREAMER = bool(os.environ.get("COOP_UX_STREAMER"))  # streamer mode on in both (#327): COOP_UX_STREAMER=1
+
+
+def _streamer_on(d):
+    import streamer
+    d.launcher.settings["streamer"] = True
+    streamer.on, streamer.drawn = True, set()
+
+
+def _streamer_steps(code):
+    """Streamer mode: on from the start; at the end, no text drawn held the room code."""
+    if not STREAMER:
+        return [], []
+
+    def clean(d):
+        import streamer
+        c = code(d)
+        return c and not any(c in t or c.replace("-", "") in t for t in streamer.drawn)
+    return [("call", _streamer_on)], [("expect", clean, "streamer mode: the room code was never on screen (#327)")]
 
 
 def _rush_at(d, k):

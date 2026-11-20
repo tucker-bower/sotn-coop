@@ -638,6 +638,26 @@ static void Make(void) {
 // level's gains were swapped out with the stats, and Richter leveled with his growth rule off.
 static s32 s_KeptExp;
 
+// The HP numbers the partner's hits make (DRA's CreateHPNumMove, our CharacterDamageNumber) fly to
+// this player's HP meter, as if this player was hit (#299): the ones made during its turn go.
+#define NUM_FIRST 0x38
+#define NUM_END 0x40
+#define DRA_ENT_HPNUM 19
+#define COOP_ENT_HPNUM 0xCF
+static u8 s_NumsBefore;
+
+static u8 HpNumbers(void) {
+    u8 mask = 0;
+    s32 i;
+
+    for (i = NUM_FIRST; i < NUM_END; i++) {
+        if (g_Entities[i].entityId == DRA_ENT_HPNUM || g_Entities[i].entityId == COOP_ENT_HPNUM) {
+            mask |= 1 << (i - NUM_FIRST);
+        }
+    }
+    return mask;
+}
+
 static void SwapIn(void) {
     s16 dx = s_ScrollX - g_Tilemap.scrollX.i.hi, dy = s_ScrollY - g_Tilemap.scrollY.i.hi;
     s32 i;
@@ -648,6 +668,7 @@ static void SwapIn(void) {
             s_Hdr[k] = s_LiveHdr[k];
         }
     }
+    s_NumsBefore = HpNumbers();
     Swap();
     s_KeptExp = g_Status.exp;
     g_Status.exp = 0;
@@ -725,6 +746,16 @@ static void SwapOut(void) {
         }
     }
     Swap();
+    {
+        u8 made = HpNumbers() & ~s_NumsBefore;
+        s32 i;
+
+        for (i = NUM_FIRST; made; i++, made >>= 1) {
+            if (made & 1) {
+                DestroyEntity(&g_Entities[i]);
+            }
+        }
+    }
 }
 
 // Its body outlasts a stall of the link (it blinked in and out with each one: playtest 0.14), standing

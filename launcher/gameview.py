@@ -518,6 +518,9 @@ class GameView:
         c = self.canvas
         c.fill((0, 0, 0, 175))
         cx = c.get_width() // 2
+        import streamer
+        title, lines, items = streamer.hide(title), [streamer.hide(x) for x in lines], [streamer.hide(x) for x in items]
+        box_text = None if box_text is None else streamer.typed(box_text)
         t = self.big.render(title, True, (220, 200, 160))
         c.blit(t, (cx - t.get_width() // 2, 110))
         for k, line in enumerate(lines):
@@ -751,7 +754,9 @@ class GameView:
         # hosting online: the room code, for whoever joins next (#317); OK copies it
         code = getattr(self.launcher, "room_code", "") if self.online and not self.joiner else ""
         while True:
-            rows = [("resume", "Resume"), ("code", f"Room code: {code}") if code else None,
+            import streamer  # streamer mode (#327): no code on screen; OK copies it all the same
+            label = "Copy the room code" if streamer.on else f"Room code: {code}"
+            rows = [("resume", "Resume"), ("code", label) if code else None,
                     ("layout", f"Couch co-op layout: {LAYOUT_NAMES.get(st.get('layout', 'auto'), 'Automatic')}"),
                     ("help", "How to play"), ("rules", "Castle rules"), ("player", "Your settings"),
                     ("report", "Report a problem (F9)"), ("menu", "Save and go back to the menu")]
@@ -796,7 +801,7 @@ class GameView:
                     if key == "code":
                         if self.launcher:
                             self.launcher._clip_put(code)
-                        why = f"{code} is on your clipboard."
+                        why = "The room code is on your clipboard." if streamer.on else f"{code} is on your clipboard."
                         continue
                     if key == "layout":  # cycle the layout, as View in the menu bar
                         key, order = "layout", list(LAYOUT_NAMES)

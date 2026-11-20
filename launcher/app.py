@@ -149,6 +149,7 @@ HELP_ONLINE = """Hosting: you get a room code like BAT-7K2Q. Send it to your par
 Joining: type your partner's room code. You both need the same version of SOTN Co-op.
 Dropped out? Online co-op offers Rejoin, and a castle hosted again within 12 hours keeps its code.
 Hosting, the pause menu shows the room code.
+Streaming? Turn on Streamer mode (Options) so viewers can't see your room code or address.
 
 Can't connect? Only one of you needs to fix it:
 ·  If Windows asks about its firewall, choose Allow.
@@ -179,6 +180,17 @@ class ConnectFailed(Exception):
     def __init__(self, why, theirs=None):
         super().__init__(why)
         self.theirs = theirs or {}  # the partner's HELO, when they were refused (their game disc: "mod")
+
+
+def streamer_typed(text):
+    import streamer
+    return streamer.typed(text)
+
+
+def _hide(text):
+    """Streamer mode (#327): codes and addresses never drawn (streamer.py)."""
+    import streamer
+    return streamer.hide(text)
 
 
 class UI:
@@ -265,15 +277,15 @@ class UI:
         for y in range(0, SIZE[1], 4):  # a faint gradient, blood red at the top
             shade = max(0, 40 - y // 8)
             pygame.draw.line(s, (12 + shade, 8, 14), (0, y), (SIZE[0], y), 4)
-        t = self.title.render(TITLE, True, GOLD)
+        t = self.title.render(_hide(TITLE), True, GOLD)
         s.blit(t, ((SIZE[0] - t.get_width()) // 2, 24))
         pygame.draw.line(s, BLOOD, (120, 76), (SIZE[0] - 120, 76), 2)
         if heading:
-            h = self.big.render(heading, True, INK)
+            h = self.big.render(_hide(heading), True, INK)
             s.blit(h, ((SIZE[0] - h.get_width()) // 2, 92))
         if subtitle:
             for k, line in enumerate(self.wrap(subtitle, self.small, SIZE[0] - 120)):
-                t = self.small.render(line, True, DIM)
+                t = self.small.render(_hide(line), True, DIM)
                 s.blit(t, ((SIZE[0] - t.get_width()) // 2, 128 + k * 22))
         self._rects = []
 
@@ -303,17 +315,17 @@ class UI:
         rows = max(1, (SIZE[1] - 100 - top) // 38)  # long lists scroll with the selection
         first = 0 if hero or len(items) <= rows else min(max(0, sel - rows // 2), len(items) - rows)
         if first:
-            t = self.small.render("more above", True, DIM)
+            t = self.small.render(_hide("more above"), True, DIM)
             self.screen.blit(t, (left, y - 24))
         for k, (label, hint) in enumerate(items):
             if not hero and not first <= k < first + rows:
                 if k == first + rows:
-                    t = self.small.render("more below", True, DIM)
+                    t = self.small.render(_hide("more below"), True, DIM)
                     self.screen.blit(t, (left, y))
                 continue
             color = GOLD if k == sel else INK
             if hero and k == 0:
-                t = self.title.render(label, True, color)
+                t = self.title.render(_hide(label), True, color)
                 box = pygame.Rect(0, 0, max(t.get_width() + 60, 420), t.get_height() + 24)
                 box.center = (SIZE[0] // 2, y + box.height // 2)
                 pygame.draw.rect(self.screen, (60, 10, 18) if k == sel else (30, 14, 20), box, border_radius=8)
@@ -322,19 +334,19 @@ class UI:
                 self._rects.append((k, box))
                 y += box.height + 22
                 if k == sel and hint:
-                    h = self.small.render(hint, True, DIM)
+                    h = self.small.render(_hide(hint), True, DIM)
                     self.screen.blit(h, ((SIZE[0] - h.get_width()) // 2, SIZE[1] - 64))
                 continue
-            t = self.big.render(("›  " if k == sel else "   ") + label, True, color)
+            t = self.big.render(_hide(("›  " if k == sel else "   ") + label), True, color)
             self.screen.blit(t, (left, y))
             self._rects.append((k, pygame.Rect(left, y, max(widest, t.get_width()), 34)))
             y += 38
             if k == sel and hint:
-                h = self.small.render(hint, True, DIM)
+                h = self.small.render(_hide(hint), True, DIM)
                 self.screen.blit(h, ((SIZE[0] - h.get_width()) // 2, SIZE[1] - 64))
 
     def footer(self, text):
-        t = self.mono.render(text, True, DIM)
+        t = self.mono.render(_hide(text), True, DIM)
         self.screen.blit(t, ((SIZE[0] - t.get_width()) // 2, SIZE[1] - 30))
 
     def bar(self, done, total, y=280):
@@ -364,7 +376,7 @@ class UI:
         pygame.draw.line(s, DIM, (neck.right - 1, neck.top), (neck.right - 1, neck.bottom + 1), 2)
         pygame.draw.rect(s, (110, 72, 44), (cx - 17, y, 35, 14), border_radius=3)
         pygame.draw.line(s, (235, 230, 225), (body.left + 12, body.top + 18), (body.left + 12, body.bottom - 26), 2)
-        pct = self.small.render(f"{int(frac * 100)}%", True, DIM)
+        pct = self.small.render(_hide(f"{int(frac * 100)}%"), True, DIM)
         s.blit(pct, (body.right + 18, body.centery - pct.get_height() // 2))
 
     def menu(self, heading, items, subtitle="", footer="", hero=False, sel=0):
@@ -415,7 +427,7 @@ class UI:
                 self.page_top = min(max(self.page_top, 0), last)
             self.frame(heading)
             for k, line in enumerate(lines[self.page_top:self.page_top + rows]):
-                t = self.small.render(line, True, INK)
+                t = self.small.render(_hide(line), True, INK)
                 self.screen.blit(t, (90, PAGE_TOP + k * PAGE_LINE))
             if last:
                 t = self.small.render(f"Up / down to scroll ({self.page_top + 1}-{self.page_top + rows} of {len(lines)})", True, INK)
@@ -536,6 +548,8 @@ class Launcher:
     def __init__(self):
         pygame.init()
         self.settings = load_settings()
+        import streamer
+        streamer.on = bool(self.settings.get("streamer"))
         # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
         self.characters = [c if c in LOBBY and self.playable(c) else 2 if c == 3 and self.playable(2) else 0
                            for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
@@ -1858,18 +1872,18 @@ class Launcher:
         joined = dev is not None  # a controller's instance id can be 0
         pygame.draw.rect(s, (40, 16, 24) if joined else (24, 14, 20), box, border_radius=10)
         pygame.draw.rect(s, OK_GREEN if ready else (GOLD if joined else DIM), box, 2, border_radius=10)
-        t = ui.big.render(title, True, GOLD if joined else DIM)
+        t = ui.big.render(_hide(title), True, GOLD if joined else DIM)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
         if not joined:
             for k, line in enumerate(("Press any button", "on a controller", "", "(or Enter: keyboard)")):
-                t = ui.small.render(line, True, DIM)
+                t = ui.small.render(_hide(line), True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 80 + k * 24)))
             return
         name = "Keyboard" if dev == "kb" else names.get(dev, "Controller")
-        t = ui.small.render(name[:32], True, INK)
+        t = ui.small.render(_hide(name[:32]), True, INK)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 56)))
         cname, playable = CHARACTERS[char], self.playable(char)
-        t = ui.big.render(cname, True, INK if playable else DIM)
+        t = ui.big.render(_hide(cname), True, INK if playable else DIM)
         r = t.get_rect(midtop=(box.centerx, box.y + 104))
         s.blit(t, r)
         if not ready:  # arrows: the character can be changed
@@ -1877,19 +1891,19 @@ class Launcher:
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
         if playable and CHARACTER_NOTES[char]:
-            t = ui.small.render(CHARACTER_NOTES[char], True, DIM)
+            t = ui.small.render(_hide(CHARACTER_NOTES[char]), True, DIM)
             s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 140)))
         if not playable:  # a Maria without her disc
             for k, line in enumerate(NEEDS[char] + ("Cross / A: add it",)):
-                t = ui.small.render(line, True, DIM)
+                t = ui.small.render(_hide(line), True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
         if playable and not shortcuts:  # (no list of the character's shortcuts: they're optional)
-            t = ui.small.render("Shortcuts off (Triangle / Y)", True, DIM)
+            t = ui.small.render(_hide("Shortcuts off (Triangle / Y)"), True, DIM)
             s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 162)))
         if ready:
-            t = ui.big.render("Ready!", True, OK_GREEN)
+            t = ui.big.render(_hide("Ready!"), True, OK_GREEN)
         elif playable:
-            t = ui.small.render("Cross / A when ready", True, DIM)
+            t = ui.small.render(_hide("Cross / A when ready"), True, DIM)
         else:
             return
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 188)))
@@ -1898,11 +1912,11 @@ class Launcher:
         s, ui = self.screen, self.ui
         pygame.draw.rect(s, (24, 20, 30), box, border_radius=10)
         pygame.draw.rect(s, OK_GREEN if connected else DIM, box, 2, border_radius=10)
-        t = ui.big.render("Your partner", True, GOLD)
+        t = ui.big.render(_hide("Your partner"), True, GOLD)
         s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 14)))
         for k, part in enumerate(text.split("\n")):
             big = k == 1 and not connected and "-" in part and len(part) <= 9  # the room code
-            t = (ui.title if big else ui.small).render(part, True, GOLD if big else (OK_GREEN if connected and k == 0 else INK))
+            t = (ui.title if big else ui.small).render(_hide(part), True, GOLD if big else (OK_GREEN if connected and k == 0 else INK))
             s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 64 + k * 30 + (8 if k > 1 and not connected else 0))))
 
     # --- home
@@ -2435,7 +2449,7 @@ class Launcher:
                 box = pygame.Rect(SIZE[0] // 2 - 260, 230, 520, 52)
                 pygame.draw.rect(self.screen, (30, 18, 26), box, border_radius=6)
                 pygame.draw.rect(self.screen, GOLD, box, 2, border_radius=6)
-                self.screen.blit(self.ui.big.render(line.text, True, INK), (box.x + 16, box.y + 10))
+                self.screen.blit(self.ui.big.render(streamer_typed(line.text) if paste else line.text, True, INK), (box.x + 16, box.y + 10))
                 draw_caret(self.screen, box.x + 16 + self.ui.big.size(line.text[:line.caret])[0], box.y + 12,
                            self.ui.big.get_height() - 4, INK)
                 self.ui.footer(footer)
@@ -2936,6 +2950,7 @@ class Launcher:
                 switch("spell_triggers", "Spells on triggers", "Alucard: R2 or L2 with a face button casts a spell."),
                 switch("alucard_hud", "Alucard's health bar", "Richter and Maria get Alucard's display."),
                 switch("show_ping", "Show ping", "Online: your partner's ping, top right."),
+                switch("streamer", "Streamer mode", "Hides room codes and addresses on screen. They're still copied for you."),
                 head("Controls"),
                 action("controls", "Your settings", "Each player's buttons, shortcuts and spells. Also in the pause menu."),
                 action("controllers", "Who plays with which controller", "Give each controller a player."),
@@ -2989,6 +3004,8 @@ class Launcher:
             self.sound.refresh()
         save_settings(st)
         self.menubar.update(st)
+        import streamer
+        streamer.on = bool(st.get("streamer"))
 
     def options_screen(self):
         from ui.screens.options import options

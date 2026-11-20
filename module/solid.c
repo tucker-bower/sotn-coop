@@ -24,11 +24,14 @@
 static SolidCall s_Calls[SOLID_CALLS_MAX];
 static s32 s_NCalls;
 static bool s_Record;
-static s16 s_LastX[STAGE_SLOTS];  // guest: where each solid copy was (world x)...
+static s16 s_LastX[STAGE_SLOTS];  // guest: where each solid copy was (world x, y)...
+static s16 s_LastY[STAGE_SLOTS];
+static u8 s_Stood;            // guest: 1 + the slot it stood on last frame
 static u16 s_LastAt[STAGE_SLOTS]; // ...and when
 static u16 s_Frame;
 static u8 s_StandSlot;        // guest: 1 + the slot it stood on this frame
 static bool s_PartnerStood;   // authority: an entity was told the partner's weight is the player's
+static bool s_PadsShared;     // authority: both players on it: it read the partner's buttons too
 static f32 s_PosX, s_PosY, s_VelX, s_VelY, s_ShoveX, s_ShoveY; // PLAYER then
 static s32 s_DemoTimer;
 static u32 s_PadSim;
@@ -115,6 +118,11 @@ static u8 Collide(Entity* self, u16 w, u16 h, u16 flags) {
 }
 
 void SolidPartnerDone(void) {
+    if (s_PadsShared) {
+        s_PadsShared = false;
+        g_pads[0].pressed = s_Pressed;
+        g_pads[0].tapped = s_Tapped;
+    }
     if (!s_PartnerStood) {
         return;
     }
@@ -158,6 +166,16 @@ u8 CoopPlayerCollision(Entity* self, u16 w, u16 h, u16 flags) {
         s_NCalls++;
     }
     hit = Collide(self, w, h, flags);
+    if (hit == ON_TOP && PartnerStandsOn(slot, flags)) {
+        // Both on it (#297: the two in the Alchemy Lab's elevator): it answers either player's
+        // buttons, so the guest can send it up or down too. It moves this game's player as ever.
+        s_PadsShared = true;
+        s_Pressed = g_pads[0].pressed;
+        s_Tapped = g_pads[0].tapped;
+        g_pads[0].pressed |= g_CoopLink.partnerPad;
+        g_pads[0].tapped |= g_CoopLink.partnerPad & ~s_PartnerPadWas;
+        return hit;
+    }
     if (hit || !PartnerStandsOn(slot, flags)) {
         return hit;
     }
@@ -203,7 +221,7 @@ s32 SolidTake(SolidCall* out, s32 room) {
 }
 
 void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored) {
-    s32 i, slot, wx, dx;
+    s32 i, slot, wx, wy, dx, dy;
     Entity* e;
 
     s_Frame++;
@@ -215,6 +233,15 @@ void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored) {
             continue;
         }
         wx = e->posX.i.hi + g_Tilemap.scrollX.i.hi;
+        wy = e->posY.i.hi + g_Tilemap.scrollY.i.hi;
+        // Risen since last frame, with the guest on it: up with it first. A late snapshot moves a
+        // lift several frames' worth at once, past where Collide takes a player standing on top
+        // (#292: on lag, a guest fell through the Alchemy Lab's elevator as it went up).
+        dy = wy - s_LastY[slot];
+        if (s_Stood == slot + 1 && s_LastAt[slot] == (u16)(s_Frame - 1) && dy < 0 && dy > -32) {
+            PLAYER.posY.i.hi += dy;
+            g_unkGraphicsStruct.shoveY.i.hi += dy;
+        }
         if (Collide(e, calls[i].w, calls[i].h, calls[i].flags) == ON_TOP) {
             s_StandSlot = slot + 1;
             dx = wx - s_LastX[slot]; // ride along, as the platforms move their own player
@@ -224,6 +251,8 @@ void SolidApply(const SolidCall* calls, s32 n, const u8* mirrored) {
             }
         }
         s_LastX[slot] = wx;
+        s_LastY[slot] = wy;
         s_LastAt[slot] = s_Frame;
     }
+    s_Stood = s_StandSlot;
 }

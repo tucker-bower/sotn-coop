@@ -393,6 +393,49 @@ static void Poison(void) {
     }
 }
 
+// Curse (issue 102): Alucard's rules (src/dra/71830.c, 6E42C.c) for Richter and Maria too. A
+// curse hit lasts his time (CON shortens it); while it does, attacks don't come out (his weapon
+// only shows an outline): their attack buttons do nothing, so no whip, sub-weapon or off-hand,
+// and like poison it halves what does land. The player pulses the curse palette.
+#define STATUS_AILMENT_CURSE 1 // src/dra/dra.h
+#define CURSE_LASTS 0x400
+static s16 s_Curse;
+
+void CharacterCureCurse(void) { s_Curse = 0; }
+
+static void Curse(void) {
+    if (!CHAR_COOP(CharacterLoaded()) || g_GameState != Game_Play || RULE_OFF(OPT_NO_ALUCARD_STATS) ||
+        !g_Status.hp) {
+        s_Curse = 0;
+        return;
+    }
+    if (g_GameEngineStep != Engine_Normal) {
+        return;
+    }
+    if (PLAYER.hitParams & ELEMENT_CURSE && !(g_Status.elementsImmune & ELEMENT_CURSE)) {
+        s_Curse = GetStatusAilmentTimer(STATUS_AILMENT_CURSE, CURSE_LASTS);
+    }
+    if (!s_Curse) {
+        return;
+    }
+    if (!--s_Curse) {
+        if (!s_Poison) {
+            g_Status.D_80097BF8 &= ~POISON_MARK;
+        }
+        return;
+    }
+    {
+        u16 off = (OffhandUsesItem(0) ? 0 : PAD_SQUARE) | (OffhandUsesItem(1) ? 0 : PAD_CIRCLE); // Uncurse still works
+        g_pads[0].pressed &= ~off;
+        g_pads[0].tapped &= ~off;
+    }
+    g_Status.D_80097BF8 |= POISON_MARK; // attacks halved, as poison's
+    if (s_Curse % POISON_PULSE == 0 && !g_Player.timers[T_HIT_PALETTE]) {
+        PLAYER.palette = PAL_FLAG(PAL_CC_CURSE_EFFECT);
+        g_Player.timers[T_HIT_PALETTE] = POISON_PULSE / 5;
+    }
+}
+
 // Heals that come as g_Player.healKind and healAmount (Healing Mail, src/dra/5F60C.c): only
 // Alucard's player code takes them (src/dra/692E8.c). Healing Mail's 1 HP every 128 frames also
 // needs the status bit only Alucard's walk sets: for Richter and Maria, while they walk or run on
@@ -792,6 +835,7 @@ void CharacterFrame(void) {
     Familiar();
     PoisonWater();
     Poison();
+    Curse();
     Heal();
     Growth();
     AlucardHud();

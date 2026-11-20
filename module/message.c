@@ -9,6 +9,7 @@
 #include "overlay_table.h"
 
 #define MESSAGE_WAIT 600 // frames a message waits for the game to be able to show it
+#define CROSS_GLYPH 233   // the font's ✕ (launcher/ui/theme.py SYMBOLS)
 
 static const char* s_Pending;
 static const u8* s_PendingName; // the game's own text (an item's name), not ASCII
@@ -31,7 +32,7 @@ static void Show(const char* text, bool onTop) {
     }
     // The 8x8 font's encoding: ASCII - 0x20, ended by 0xFF 0x00 (src/st/popup.h)
     for (i = 0; text[i] && i < LEN(s_Text) - 2; i++) {
-        s_Text[i] = text[i] - 0x20;
+        s_Text[i] = text[i] == MESSAGE_CROSS[0] ? CROSS_GLYPH : text[i] - 0x20;
     }
     s_Text[i++] = 0xFF;
     s_Text[i] = 0;
@@ -61,6 +62,26 @@ void CoopMessageNow(const char* text) {
 }
 
 // An item's name, in the box the game shows it in.
+// A prompt shown until taken back (the map's "✕ Go to partner"): the text box's primitives, or 0.
+static s32 s_PromptPrims;
+
+void CoopPrompt(const char* text) {
+    if (!s_PromptPrims && g_GameState == Game_Play) {
+        Show(text, true);
+        s_PromptPrims = g_unkGraphicsStruct.BottomCornerTextPrims;
+    }
+}
+
+void CoopPromptOff(void) {
+    if (s_PromptPrims && g_unkGraphicsStruct.BottomCornerTextTimer &&
+        g_unkGraphicsStruct.BottomCornerTextPrims == s_PromptPrims) {
+        g_api.FreePrimitives(s_PromptPrims);
+        g_unkGraphicsStruct.BottomCornerTextTimer = 0;
+        g_unkGraphicsStruct.BottomCornerTextPrims = 0;
+    }
+    s_PromptPrims = 0;
+}
+
 void CoopMessageName(const u8* name) {
     s_PendingName = name;
     s_Wait = MESSAGE_WAIT;

@@ -95,7 +95,7 @@ PATHS = {
 # and the few quick ones kept so every category has a check (2026-11-17: the suite was cut to them, D212).
 EVERYDAY = {
     # other characters and their gear
-    "bat_carry_alucard", "boss_arena_edge_richter_and_maria", "damage_rate_richter",
+    "bat_carry_alucard", "boss_arena_edge_richter_and_maria", "boss_life_up_once_alucard_and_richter", "damage_rate_richter", "shared_room_elevator_richter_and_alucard", "shared_room_lift_on_lag_alucard_and_richter",
     "familiar_faerie_potion_richter", "familiar_graphics_maria", "hit_shows_its_number_maria",
     "in_the_castle_maria", "in_the_castle_richter", "level_up_stats_maria", "maria_owl_with_a_weapon_in_hand",
     "maria_scene_richter_on_the_throne", "mist_step_never_stuck_maria",
@@ -105,7 +105,7 @@ EVERYDAY = {
     "stage_palettes_maria", "ultimate_richter_in_the_castle",
     # bosses and cutscenes
     "boss_trio_authority_changes", "boss_trio_partner_locked_out", "online_boss_rush",
-    "scene_skips_once_both_players_ask", "ui_online_boss_rush",
+    "scene_skips_once_both_players_ask", "ui_online_boss_rush", "launcher_streamer", "map_shows_the_teleport_prompt",
     # progression
     "castle_solo_play", "exactly_once_partition", "gold_pooled", "map_shared", "red_door_guest_copy_in_place",
     "relic_shared", "save_room_real", "widescreen_red_door_comes_back",
