@@ -98,8 +98,12 @@ Enabled by writing the RAM_SIZE register at `0x1F801060`. Most modern emulators 
 | From | To | What |
 |---|---|---|
 | 0x80800000 | 0x80800400 | Each partner's buttons by frame (`link.h` CoopRollIn, 0x100 apart), and the snapshot clock for a guest's copies (0x808003F0) |
-| 0x80801000 | 0x80C20280 | Rollback snapshots: 32 frames for each of 3 partners, 44 KB each (the body, its statics, its primitives; `partner.c` RollSnap) |
-| 0x80C20280 | 0x81000000 | **Free: 3.9 MB** |
+| 0x80800400 | 0x80800488 | The partner sounds the host plays (`link.h` CoopSfxOut, #344) |
+| 0x80801000 | about 0x80E91000 | Rollback snapshots: 32 frames for each of 3 partners, about 70 KB each (the body, its statics, its primitives, its weapons; `partner.c` RollSnap) |
+| 0x80F00000 | 0x80F13800 | Each partner body's own weapon programs and palettes (#343: `partner.c` BODY_WEAPON, 0x3400 a hand) |
+| 0x80F13800 | 0x81000000 | **Free: 0.9 MB** (and about 0.4 MB before 0x80F00000; `partner.c` RollFits checks the snapshots end before it) |
+
+**Sound memory is full (#344).** The SPU's 512 KB holds the common bank (VAB 0, 0x1010-0x42CC0), the player's character bank (VAB 1, 0x42CC0-0x50E50: SD_ALK 57,696 bytes, SD_RIH 57,744), the second bank (VAB 2, to 0x60A40: the familiar's, or SD_MAR for Richter and Maria) and the stage's (from 0x60A40; the largest, ST/TE*/SD_ZKTE*.VB, 108,288 bytes, ends at 0x7B140). That leaves about 20 KB before the end, some of it the reverb's: another character's 57 KB bank can't be loaded beside one's own. So the partner's character sounds are played by the host instead (`link/partner_voices.py`).
 
 What co-op keeps there (2026-11-18, M17 step 4: three partners; the addresses are in `coop_api.h`, `link.h` and `offhand.c`):
 
