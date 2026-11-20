@@ -1,5 +1,5 @@
 diff --git a/src/core/bus.cpp b/src/core/bus.cpp
-index 9240377..2fbb5cf 100644
+index 9240377..4800327 100644
 --- a/src/core/bus.cpp
 +++ b/src/core/bus.cpp
 @@ -73,7 +73,7 @@ union MEMCTRL
@@ -11,7 +11,23 @@ index 9240377..2fbb5cf 100644
  static uint32_t m_ram_code_page_count = 0;
  uint8_t* g_ram = nullptr; // 2MB RAM
  uint32_t g_ram_size = 0;
-@@ -177,9 +177,13 @@ bool DoState(StateWrapper& sw)
+@@ -90,6 +90,7 @@ static std::vector<uint8_t> m_exp1_rom;
+ 
+ static MEMCTRL m_MEMCTRL = {};
+ static uint32_t m_ram_size_reg = 0;
++static uint32_t m_copy_regs[3] = {}; // co-op: the copy engine's (CopyEngineRun)
+ 
+ static std::string m_tty_line_buffer;
+ 
+@@ -169,6 +170,7 @@ void Reset()
+   m_MEMCTRL.exp2_delay_size.bits = 0x00070777;
+   m_MEMCTRL.common_delay.bits = 0x00031125;
+   m_ram_size_reg = UINT32_C(0x00000B88);
++  std::fill(std::begin(m_copy_regs), std::end(m_copy_regs), 0u); // co-op
+   m_ram_code_bits = {};
+   RecalculateMemoryTimings();
+ }
+@@ -177,9 +179,13 @@ bool DoState(StateWrapper& sw)
  {
    uint32_t ram_size = g_ram_size;
    sw.DoEx(&ram_size, 52, static_cast<uint32_t>(RAM_2MB_SIZE));
@@ -26,7 +42,7 @@ index 9240377..2fbb5cf 100644
      ReleaseMemory();
      if (!AllocateMemory(using_8mb_ram))
        return false;
-@@ -193,7 +197,9 @@ bool DoState(StateWrapper& sw)
+@@ -193,11 +199,17 @@ bool DoState(StateWrapper& sw)
    sw.Do(&m_bios_access_time);
    sw.Do(&m_cdrom_access_time);
    sw.Do(&m_spu_access_time);
@@ -37,7 +53,15 @@ index 9240377..2fbb5cf 100644
    sw.DoBytes(g_bios, BIOS_SIZE);
    sw.DoArray(m_MEMCTRL.regs, countof(m_MEMCTRL.regs));
    sw.Do(&m_ram_size_reg);
-@@ -264,15 +270,15 @@ bool AllocateMemory(bool enable_8mb_ram)
+   sw.Do(&m_tty_line_buffer);
++  if (sw.GetVersion() >= 60) // co-op: the copy engine's registers
++    sw.DoArray(m_copy_regs, countof(m_copy_regs));
++  else
++    std::fill(std::begin(m_copy_regs), std::end(m_copy_regs), 0u);
+   return !sw.HasError();
+ }
+ 
+@@ -264,15 +276,15 @@ bool AllocateMemory(bool enable_8mb_ram)
      return false;
  
    // Create the base views.
@@ -56,7 +80,7 @@ index 9240377..2fbb5cf 100644
    return true;
  }
  
-@@ -414,23 +420,12 @@ void UpdateFastmemViews(CPUFastmemMode mode)
+@@ -414,23 +426,12 @@ void UpdateFastmemViews(CPUFastmemMode mode)
      }
    };
  
@@ -86,7 +110,7 @@ index 9240377..2fbb5cf 100644
  }
  
  bool CanUseFastmemForAddress(VirtualMemoryAddress address)
-@@ -503,7 +498,8 @@ void SetCodePageFastmemProtection(uint32_t page_index, bool writable)
+@@ -503,7 +504,8 @@ void SetCodePageFastmemProtection(uint32_t page_index, bool writable)
      // mirrors...
      const uint32_t ram_address = page_index * HOST_PAGE_SIZE;
      for (uint32_t mirror_start : m_fastmem_ram_mirrors)
@@ -96,7 +120,7 @@ index 9240377..2fbb5cf 100644
    }
  }
  
-@@ -526,7 +522,8 @@ void ClearRAMCodePageFlags()
+@@ -526,7 +528,8 @@ void ClearRAMCodePageFlags()
      {
        const uint32_t addr = (i * HOST_PAGE_SIZE);
        for (uint32_t mirror_start : m_fastmem_ram_mirrors)
@@ -106,6 +130,68 @@ index 9240377..2fbb5cf 100644
      }
    }
  }
+@@ -680,9 +683,61 @@ static TickCount DoEXP1Access(uint32_t offset, uint32_t& value)
+   return 0;
+ }
+ 
++// co-op: a copy engine for the co-op module (its partner's rollback snapshots, module/partner.c),
++// at EXP2 + 0x100 (0x1F802100), where nothing is. Words: +0 destination, +4 source, +8 length in
++// bytes (whole words); writing +0xC runs it (1: copy, 2: exchange the two). Reading +0xC gives
++// 'COPY', so the module knows it's there (elsewhere it reads all ones and copies itself).
++static constexpr uint32_t COPY_OFFSET = 0x100, COPY_MAGIC = 0x59504F43;
++
++static TickCount CopyEngineRun(uint32_t op)
++{
++  const uint32_t dst = m_copy_regs[0] & CPU::PHYSICAL_MEMORY_ADDRESS_MASK,
++                 src = m_copy_regs[1] & CPU::PHYSICAL_MEMORY_ADDRESS_MASK;
++  const uint32_t len = m_copy_regs[2] & ~3u;
++  if ((op != 1 && op != 2) || !len || dst + len > g_ram_size || src + len > g_ram_size || dst + len < dst ||
++      src + len < src)
++    return 0;
++  for (uint32_t page = dst / HOST_PAGE_SIZE; page <= (dst + len - 1) / HOST_PAGE_SIZE; page++)
++    if (m_ram_code_bits[page])
++      CPU::CodeCache::InvalidateBlocksWithPageIndex(page);
++  if (op == 2)
++    for (uint32_t page = src / HOST_PAGE_SIZE; page <= (src + len - 1) / HOST_PAGE_SIZE; page++)
++      if (m_ram_code_bits[page])
++        CPU::CodeCache::InvalidateBlocksWithPageIndex(page);
++  if (op == 1)
++    std::memmove(&g_ram[dst], &g_ram[src], len);
++  else
++    for (uint32_t i = 0; i < len; i += 4)
++    {
++      uint32_t a, b;
++      std::memcpy(&a, &g_ram[dst + i], 4);
++      std::memcpy(&b, &g_ram[src + i], 4);
++      std::memcpy(&g_ram[dst + i], &b, 4);
++      std::memcpy(&g_ram[src + i], &a, 4);
++    }
++  return static_cast<TickCount>(len / 16); // a word every 4 cycles: far less than the CPU's own loop
++}
++
+ template<MemoryAccessType type, MemoryAccessSize size>
+ static TickCount DoEXP2Access(uint32_t offset, uint32_t& value)
+ {
++  if (offset >= COPY_OFFSET && offset < COPY_OFFSET + 0x10 && size == MemoryAccessSize::Word)
++  {
++    const uint32_t reg = (offset - COPY_OFFSET) / 4;
++    if constexpr (type == MemoryAccessType::Read)
++    {
++      value = reg == 3 ? COPY_MAGIC : m_copy_regs[reg];
++      return m_exp2_access_time[static_cast<uint32_t>(size)];
++    }
++    else
++    {
++      if (reg < 3)
++        m_copy_regs[reg] = value;
++      else
++        CPU::g_state.pending_ticks += CopyEngineRun(value);
++      return 0;
++    }
++  }
+   if constexpr (type == MemoryAccessType::Read)
+   {
+     // rx/tx buffer empty
 diff --git a/src/core/bus.h b/src/core/bus.h
 index 4f1b6bc..6fa0546 100644
 --- a/src/core/bus.h
