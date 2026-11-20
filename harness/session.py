@@ -161,7 +161,7 @@ class _Worker:
                 w, h, fmt, pitch, data = picture
                 self.shm.buf[:len(data)] = data
                 picture = (w, h, fmt, pitch, len(data))
-            return picture, self.voices.mix(emu.take_audio())
+            return picture, self.voice_mix(emu.take_audio())
         elif cmd == "screenshot":
             img = emu.screenshot()
             return None if img is None else (img.size, img.tobytes())
@@ -194,6 +194,14 @@ class _Worker:
             self.voices.poll(render)
         except Exception:  # noqa: BLE001
             self.voice_errors = getattr(self, "voice_errors", 0) + 1
+
+    def voice_mix(self, audio):
+        """The frame's sound with the partner's own sounds in it; as it was, if that fails."""
+        try:
+            return self.voices.mix(audio)
+        except Exception:  # noqa: BLE001
+            self.voice_errors = getattr(self, "voice_errors", 0) + 1
+            return audio
 
     def link_before(self, pad, suggest_only=False):
         """The buttons for the frame about to run, to every partner's host (rollback suggestions).
