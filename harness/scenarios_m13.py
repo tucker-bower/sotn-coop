@@ -159,3 +159,29 @@ def partner_vram_banks_draw(run):
         want = ((c & 0x1F) * 255 // 31, (c >> 5 & 0x1F) * 255 // 31, (c >> 10 & 0x1F) * 255 // 31)
         run.expect(any(max(abs(a - w) for a, w in zip(s, want)) <= 8 for s in seen),
                    f"palette bank {b}: drawn in bank {b}'s colour", want=want, seen=sorted(seen)[:4])
+
+
+@session_scenario(characters=(0, 1))
+def partner_sounds_alucard_and_richter(run):
+    """#344 (playtest 1.3.0: Richter couldn't be heard): Richter's own sounds (his bank, VAB 1) aren't
+    in Alucard's game's sound memory, which holds Alucard's. A hands them to its host, which plays
+    them from Richter's bank on the disc: each one A hands over is one the host can play."""
+    from session_m8 import reload_game
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == CHAR_RICHTER, "B plays Richter")
+    into_hall(run)
+    before = a.voices("check")[0]
+    for _ in range(8):  # Richter whips (□), and jumps
+        run.step(4, ("", "square"))
+        run.step(30, ("", ""))
+        run.step(6, ("", "cross"))
+        run.step(20, ("", ""))
+    played, kinds, rendered = a.voices("check")
+    sym = symbols()
+    run.expect(played - before >= 4, "A hands Richter's own sounds to its host", sounds=played - before, kinds=kinds,
+               out=a.read(sym["g_CoopSoundsOut"]), bodies=a.read(sym["g_CoopBodiesMade"]),
+               b_char=b.mailbox("self_presence").character, rooms=(a.snapshot()["room"], b.snapshot()["room"]))
+    run.expect(rendered == kinds, "the host plays every one of them from Richter's bank", kinds=kinds, rendered=rendered)
+    peak = a.voices("mix_check")
+    run.expect(peak > 1000, "mixed into A's sound, they're heard", peak=peak)

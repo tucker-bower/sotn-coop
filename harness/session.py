@@ -51,6 +51,8 @@ class _Worker:
         if start:  # a savestate library name, or a .state file (e.g. a launcher bookmark)
             emu.load_state_file(start if str(start).endswith(".state") else savestate(disc, start))
         self.mailbox = Mailbox(HarnessAdapter(emu), symbols()["g_CoopLink"])
+        from link.partner_voices import PartnerVoices
+        self.voices = PartnerVoices(self.mailbox.adapter, str(disc))  # #344: the partner's own sounds
         # Virtual time for the simulated internet (link/netsim.py): this game's frames / 60,
         # with the second game half a frame behind (the driver steps them alternately).
         # Real-time play (audio) keeps the wall clock.
@@ -89,6 +91,7 @@ class _Worker:
                 if self.linked:
                     self.link_before(p1)
                 emu.step(1, p1)
+                self.voice_frame(render=False)
                 self.clock["t"] += self.clock["dt"]
                 if self.linked:
                     t0 = time.perf_counter()
@@ -137,7 +140,8 @@ class _Worker:
                     getattr(h, name)(*a, **kw)
             if target == "hosts":  # M17: every partner's Host, the same call
                 return [getattr(h, name)(*a, **kw) for h in self.hosts]
-            obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport}.get(target)
+            obj = {"emu": emu, "mailbox": self.mailbox, "host": host, "transport": self.transport,
+                   "voices": self.voices}.get(target)
             if obj is None:  # "host1", "transport2": partner k's (M17)
                 kind, k = target.rstrip("0123456789"), int(target[len(target.rstrip("0123456789")):])
                 obj = {"host": self.hosts, "transport": self.transports}[kind][k]
@@ -152,11 +156,12 @@ class _Worker:
             if self.linked:
                 self.link_frame()
             picture = emu.raw_frame()
+            self.voice_frame()
             if picture and self.shm is not None:  # the pixels go through shared memory
                 w, h, fmt, pitch, data = picture
                 self.shm.buf[:len(data)] = data
                 picture = (w, h, fmt, pitch, len(data))
-            return picture, emu.take_audio()
+            return picture, self.voice_mix(emu.take_audio())
         elif cmd == "screenshot":
             img = emu.screenshot()
             return None if img is None else (img.size, img.tobytes())
@@ -182,6 +187,21 @@ class _Worker:
 
     HOST_SETTINGS = {"set_player", "set_mod", "set_castle", "set_rules", "set_fresh", "set_portraits", "set_hello",
                      "set_player_id"}
+
+    def voice_frame(self, render=True):
+        """The partner's sounds this game can't play (#344), after its frame: never in the frame's way."""
+        try:
+            self.voices.poll(render)
+        except Exception:  # noqa: BLE001
+            self.voice_errors = getattr(self, "voice_errors", 0) + 1
+
+    def voice_mix(self, audio):
+        """The frame's sound with the partner's own sounds in it; as it was, if that fails."""
+        try:
+            return self.voices.mix(audio)
+        except Exception:  # noqa: BLE001
+            self.voice_errors = getattr(self, "voice_errors", 0) + 1
+            return audio
 
     def link_before(self, pad, suggest_only=False):
         """The buttons for the frame about to run, to every partner's host (rollback suggestions).
@@ -333,6 +353,10 @@ class Game:
 
     def host(self, name, *a, **kw):
         return self._ask("call", ("host", name, a, kw))
+
+    def voices(self, name, *a, **kw):
+        """The partner's sounds this game hands to its host (link/partner_voices.py, #344)."""
+        return self._ask("call", ("voices", name, a, kw))
 
     def room_status(self, tick=False):
         """3+ players (M17): the game's room, or None when it has a single partner's link."""

@@ -13,6 +13,7 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `mesh.py` | 3+ players (M17, D211): a room's seats and roster, a transport and host per partner, and the way through player 0 for a pair that can't reach each other. |
 | `natsim.py` | A virtual internet with home routers, for connection tests. |
 | `netsim.py` | A simulated bad connection, for tests and for trying one at home. |
+| `partner_voices.py` | The partner's own character sounds this game's sound memory doesn't hold, played from that character's bank. |
 | `playout.py` | A jitter buffer that plays the partner's state back evenly. |
 | `rollback.py` | The partner's buttons by frame, and the frame it's at now, for its body's rollback in the game. |
 | `portmap.py` | Asks the home router to open the game's port. |

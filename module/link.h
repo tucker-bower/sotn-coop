@@ -275,6 +275,28 @@ typedef struct {
 #define ROLL_IN(k) ((volatile CoopRollIn*)(ROLL_ADDR + (k) * 0x100))
 // ...and for a guest's copies of a shared room (#292): the authority's frame the snapshot written
 // this frame was taken at, and the authority's frame now, by its clock (0, 0: not online).
+// The partner's sounds this game's sound memory doesn't hold (#344): a character's own bank (VAB 1:
+// Richter's whip and voice) and its second (VAB 2) are this game's player's, not the partner's.
+// The game lists them here each frame, and the host plays them from the partner character's bank,
+// read from the disc or its blob, into the game's sound (link/partner_voices.py).
+#define SFX_OUT_ADDR (ROLL_ADDR + 0x400)
+#define SFX_OUT_MAX 16
+typedef struct {
+    /* 0x00 */ u8 chr;  // CHAR_* of the partner whose sound it is
+    /* 0x01 */ u8 vab;  // 1 or 2
+    /* 0x02 */ u8 prog;
+    /* 0x03 */ u8 tone;
+    /* 0x04 */ u8 note;
+    /* 0x05 */ u8 vol;  // 0-127, the partner's volume setting applied
+    /* 0x06 */ s8 pan;  // -8 (left) to 8 (right)
+    /* 0x07 */ u8 pad;
+} CoopSfx; // size = 0x8
+typedef struct {
+    /* 0x00 */ u32 frame; // g_Timer when the list was started (the host plays each frame's once)
+    /* 0x04 */ u32 n;
+    /* 0x08 */ CoopSfx items[SFX_OUT_MAX];
+} CoopSfxOut; // size = 0x88
+#define SFX_OUT ((volatile CoopSfxOut*)SFX_OUT_ADDR)
 #define ROLL_SNAP_ADDR (ROLL_ADDR + 0x3F0)
 #define ROLL_SNAP ((volatile u32*)ROLL_SNAP_ADDR)
 

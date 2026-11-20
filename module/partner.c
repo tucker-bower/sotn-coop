@@ -108,6 +108,9 @@ typedef struct {
     s32 primCount;
     s16 flash[FLASHES];
     s32 flashCount;
+    u32 wpnSeq[2];   // #343: the partner's weapon copy (link.h CoopWeapon.seq) its own copy is of
+    bool wpnRun[2];  // this frame it runs that hand's weapon itself (BodyWeapons)
+    u16 wpnClutSum[2]; // its palettes as last put in its bank
 } Body;
 static Body s_Bodies[COOP_PARTNERS];
 static Body* B = s_Bodies;
@@ -245,10 +248,108 @@ static s32 NoWeaponId(void) { return 0; }
 static u32 s_WeaponHdr[2][WEAPON_HDR_WORDS];
 static void (*s_WeaponEntity)(Entity*);
 
+// #343: an Alucard body runs its partner's own hand weapons, so its swings come with its attacks
+// (they came from the partner's game, at the network's delay, after the body's attack started).
+// The game's one copy of each weapon's program (0x8017A000, 0x8017D000) is player 1's: for the
+// body's frame it's exchanged with the body's own (made from the partner's copy, link.h
+// CoopWeapon), and so is that hand's 24 palettes in g_Clut. Its sheet and palettes are in the
+// body's VRAM bank, where what it draws reads them. Not while the disc is busy: player 1's own
+// weapon may be on its way in (it would land in the body's copy).
+static bool PartnerLive(void);
+static void CopyWords(void* dst, const void* src, u32 len);
+static void ExchangeWords(void* a, void* b, u32 len);
+#define CD_IDLE 0 // CdStep_None (include/disk.h)
+#define BODY_WEAPON(k, hand) ((u32*)(0x80F00000 + ((k) * 2 + (hand)) * 0x3400)) // its program, then palettes
+#define BODY_WPN_OVL 0x3000
+#define BODY_WPN_CLUT 0x300
+#define WEAPON_ADDR(hand) ((u32*)((hand) ? 0x8017D000 : 0x8017A000))
+#define WEAPON_SHEET_X 0x240
+#define WEAPON_SHEET_Y(hand) ((hand) ? 0x180 : 0x100)
+#define WEAPON_PALS 0x110
+u32 g_CoopBodyWeaponFrames; // body frames run with a weapon of its own (tests read it: coop.map)
+static const CoopWeapon* PartnerWeapon(s32 hand) {
+    return (const CoopWeapon*)(s_K ? WEAPON_MORE_ADDR(s_K, hand) : WEAPON_PARTNER_ADDR + hand * WEAPON_HAND_SIZE);
+}
+static u16* ClutOfHand(s32 hand) { return (u16*)g_Clut + (WEAPON_PALS + hand * 24) * COLORS_PER_PAL; }
+static u16 Sum(const u16* p, s32 n) {
+    u16 x = 0;
+    while (n--) {
+        x = (x << 1 | x >> 15) ^ *p++;
+    }
+    return x;
+}
+static void BankPalettes(s32 hand, const u16* clut) {
+    RECT r;
+    s32 i;
+    u16 c;
+
+    for (i = 0; i < 24; i++) {
+        c = g_ClutIds[WEAPON_PALS + hand * 24 + i];
+        r.x = (c & 0x3F) * 16;
+        r.y = ((c >> 6) & 0x1FF) | VRAM_BANK_OF(B->bank);
+        r.w = 16;
+        r.h = 1;
+        LoadImage(&r, (u_long*)(clut + i * 16));
+    }
+    B->wpnClutSum[hand] = Sum(clut, BODY_WPN_CLUT / 2);
+}
+static void BodyWeaponsIn(void) {
+    const CoopWeapon* w;
+    RECT r;
+    s32 hand, i;
+
+    for (hand = 0; hand < 2; hand++) {
+        w = PartnerWeapon(hand);
+        B->wpnRun[hand] = !B->code && PartnerLive() && w->magic == WEAPON_MAGIC &&
+                          w->item == g_Status.equipment[hand] && !g_IsUsingCd && g_CdStep == CD_IDLE;
+        if (!B->wpnRun[hand]) {
+            continue;
+        }
+        if (B->wpnSeq[hand] != w->seq) { // a new weapon: its own copy, sheet and palettes
+            CopyWords(BODY_WEAPON(s_K, hand), w->ovl, BODY_WPN_OVL);
+            CopyWords(BODY_WEAPON(s_K, hand) + BODY_WPN_OVL / 4, w->clut, BODY_WPN_CLUT);
+            r.x = WEAPON_SHEET_X;
+            r.y = WEAPON_SHEET_Y(hand) | VRAM_BANK_OF(B->bank);
+            r.w = 0x40;
+            r.h = 0x80;
+            LoadImage(&r, (u_long*)w->sheet);
+            BankPalettes(hand, w->clut);
+            for (i = 1; i < 64; i++) { // the last weapon's entities are gone with it
+                if ((g_Entities[i].entityId & 0xF0) == 0xE0 + hand * 0x10) {
+                    DestroyEntity(&g_Entities[i]);
+                }
+            }
+            B->wpnSeq[hand] = w->seq;
+        }
+        ExchangeWords(WEAPON_ADDR(hand), BODY_WEAPON(s_K, hand), BODY_WPN_OVL);
+        ExchangeWords(ClutOfHand(hand), BODY_WEAPON(s_K, hand) + BODY_WPN_OVL / 4, BODY_WPN_CLUT);
+    }
+    g_CoopBodyWeaponFrames += B->wpnRun[0] || B->wpnRun[1];
+}
+static void BodyWeaponsOut(void) {
+    const u16* clut;
+    s32 hand;
+
+    for (hand = 0; hand < 2; hand++) {
+        if (!B->wpnRun[hand]) {
+            continue;
+        }
+        ExchangeWords(WEAPON_ADDR(hand), BODY_WEAPON(s_K, hand), BODY_WPN_OVL);
+        ExchangeWords(ClutOfHand(hand), BODY_WEAPON(s_K, hand) + BODY_WPN_OVL / 4, BODY_WPN_CLUT);
+        clut = (const u16*)(BODY_WEAPON(s_K, hand) + BODY_WPN_OVL / 4);
+        if (Sum(clut, BODY_WPN_CLUT / 2) != B->wpnClutSum[hand]) { // its code changed its colours
+            BankPalettes(hand, clut);
+        }
+    }
+}
+
 static void WeaponsOff(void) {
     s32 hand, k;
 
     for (hand = 0; hand < 2; hand++) {
+        if (B->wpnRun[hand]) { // its own (BodyWeaponsIn)
+            continue;
+        }
         for (k = 0; k < WEAPON_HDR_WORDS; k++) {
             s_WeaponHdr[hand][k] = WEAPON_HDR(hand)[k];
             WEAPON_HDR(hand)[k] = (u32)(k == 6 ? (void*)NoWeaponId : (void*)NoWeapon); // 6: GetWeaponId
@@ -265,6 +366,9 @@ static void WeaponsOn(void) {
     s32 hand, k;
 
     for (hand = 0; hand < 2; hand++) {
+        if (B->wpnRun[hand]) {
+            continue;
+        }
         for (k = 0; k < WEAPON_HDR_WORDS; k++) {
             if (WEAPON_HDR(hand)[k] == (u32)(k == 6 ? (void*)NoWeaponId : (void*)NoWeapon)) {
                 WEAPON_HDR(hand)[k] = s_WeaponHdr[hand][k];
@@ -358,6 +462,48 @@ static void SfxAgain(void) {
     s_Again = false;
 }
 
+// A partner's sound from a bank this game's sound memory holds for its own player (VAB 1: the
+// character's; VAB 2: Alucard's familiar, Richter's and Maria's second bank) would play this
+// player's sound instead (Alucard's grunt for Richter's whip). Those go to the host, which plays them
+// from the partner character's own bank (#344).
+static bool SameBank1(u32 a, u32 b) {
+    return a == b || ((a == CHAR_RICHTER || a == CHAR_ULT_RICHTER) && (b == CHAR_RICHTER || b == CHAR_ULT_RICHTER));
+}
+static bool OtherBank(u8 vab) {
+    u32 mine = CharacterLoaded();
+
+    if (vab == PLAYER_VAB) {
+        return !SameBank1(B->chr, mine);
+    }
+    if (vab == 2) { // Alucard's is his familiar's; Saturn Maria's is her own; the rest, SD_MAR
+        return (B->chr == CHAR_ALUCARD) != (mine == CHAR_ALUCARD) ||
+               (B->chr == CHAR_SAT_MARIA) != (mine == CHAR_SAT_MARIA);
+    }
+    return false;
+}
+u32 g_CoopSoundsOut; // partner sounds handed to the host (tests read it: coop.map)
+static void SoundOut(const Unkstruct_800BF554* d, s32 vol, s32 pan) {
+    volatile CoopSfxOut* out = SFX_OUT;
+    volatile CoopSfx* s;
+
+    if (out->frame != g_Timer) {
+        out->frame = g_Timer;
+        out->n = 0;
+    }
+    if (out->n >= SFX_OUT_MAX) {
+        return;
+    }
+    s = &out->items[out->n++];
+    s->chr = B->chr;
+    s->vab = d->vabid;
+    s->prog = d->prog;
+    s->tone = d->tone;
+    s->note = d->note;
+    s->vol = vol * (d->volume < 0 ? 0 : d->volume) / 127;
+    s->pan = pan;
+    g_CoopSoundsOut++;
+}
+
 static void PartnerSounds(void) {
     s32 pct = (g_CoopLink.control >> CONTROL_PARTNER_VOL_SHIFT) & 0xFF, vol, pan;
     SfxRingBufferItem* it;
@@ -376,12 +522,14 @@ static void PartnerSounds(void) {
     s_Again = false;
     for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
         it = &g_SfxRingBuffer[pos];
-        if (B->chr != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
+        vol = it->sndVol == 0xFFFF ? 0x7F : it->sndVol;
+        vol = (vol * pct / 100) & 0x7F;
+        if (OtherBank(g_SfxData[it->sndId].vabid)) { // not in our sound memory: the host plays it
+            SoundOut(&g_SfxData[it->sndId], vol, pan);
             it->sndVol = 0;
             continue;
         }
-        vol = it->sndVol == 0xFFFF ? 0x7F : it->sndVol;
-        it->sndVol = (vol * pct / 100) & 0x7F;
+        it->sndVol = vol;
         it->sndPan = pan;
     }
 }
@@ -926,6 +1074,7 @@ static void SwapIn(void) {
     s_SavedRandom = g_randomNext; // the partner's randomness doesn't change our game's
     s_SfxPos = g_sfxRingBufferWritePos;
     s_CmdPos = g_SoundCommandRingBufferWritePos;
+    BodyWeaponsIn();
     WeaponsOff();
     RandOff();
     g_CoopCharacter = B->code ? PLAYER_RICHTER : PLAYER_ALUCARD; // Maria's runs as Richter's too
@@ -968,7 +1117,8 @@ static void PutStatus(void) {
 }
 
 // Since the body never runs the weapons' code (WeaponsOff), its swings always come from the link.
-bool PartnerWeaponDiffers(s32 hand) { return true; }
+// A weapon the body runs itself is drawn with it (#343); the others, from the link (weapons.c).
+bool PartnerWeaponDiffers(s32 hand) { return !B->wpnRun[hand & 1]; }
 
 // Where the partner's own sprites and hitboxes (sent from its game: weapons.c, pvp.c) are drawn: moved
 // by where the body is drawn against where the partner stood when they were made. Rolling, that's
@@ -996,6 +1146,7 @@ static void SwapOut(void) {
     PartnerSounds(); // the body is still in RAM: its spot pans them
     RandOn();
     WeaponsOn();
+    BodyWeaponsOut();
     g_CoopCharacter = s_SavedChar;
     g_randomNext = s_SavedRandom;
     if (!B->code) {
@@ -1321,7 +1472,8 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
         UpdatePlayerEntities();
     }
     for (i = 1; i < 64; i++) { // its weapons' and familiar's entities: not its to run (WeaponsOff)
-        if (g_Entities[i].entityId >= 0xD0) {
+        u16 id = g_Entities[i].entityId;
+        if (id >= 0xD0 && !(id >= 0xE0 && B->wpnRun[(id - 0xE0) >> 4])) {
             DestroyEntity(&g_Entities[i]);
         }
     }
@@ -1355,9 +1507,10 @@ typedef struct {
     u32 statics[STATICS_MAX / 4];
     s16 primAt[PRIMS];
     Primitive prims[PRIMS];
+    u32 weapons[2][0x3400 / 4]; // its own weapons' programs and palettes (#343: BODY_WEAPON)
 } RollSnap;
 #define ROLL_RING(k) ((RollSnap*)(ROLL_ADDR + 0x1000) + (k) * ROLL_FRAMES)
-typedef char RollFits[ROLL_ADDR + 0x1000 + COOP_PARTNERS * ROLL_FRAMES * sizeof(RollSnap) <= 0x81000000 ? 1 : -1];
+typedef char RollFits[ROLL_ADDR + 0x1000 + COOP_PARTNERS * ROLL_FRAMES * sizeof(RollSnap) <= 0x80F00000 ? 1 : -1];
 u32 g_CoopRollFrames;   // tests (coop.map): frames run ahead
 u32 g_CoopRollRewinds;  // rollbacks
 u32 g_CoopRollAborts;   // rollbacks given up (a primitive it gave up was taken since)
@@ -1402,6 +1555,9 @@ static void Keep(u32 f, u16 pad, u8 guessed, s32 hit) {
     if (B->code) {
         StaticsIn();
         StaticsBuf(BuildOf(B->chr), r->statics, STATICS_SAVE);
+    }
+    if (B->wpnSeq[0] || B->wpnSeq[1]) {
+        CopyWords(r->weapons, BODY_WEAPON(s_K, 0), sizeof(r->weapons));
     }
     r->primCount = BodyPrims(r->primAt);
     for (i = 0; i < r->primCount; i++) {
@@ -1457,6 +1613,9 @@ static bool Restore(u32 f) {
     if (B->code) {
         StaticsIn();
         StaticsBuf(BuildOf(B->chr), r->statics, STATICS_LOAD);
+    }
+    if (B->wpnSeq[0] || B->wpnSeq[1]) {
+        CopyWords(BODY_WEAPON(s_K, 0), r->weapons, sizeof(r->weapons));
     }
     return true;
 }
@@ -1750,7 +1909,8 @@ static void BodyFrame(void) {
 // The body's own hand-weapon entities (DRA runs ids 0xE0-0xEF from hand 0's overlay, 0xF0-0xFF
 // from hand 1's) when the weapon isn't ours: not drawn (weapons.c draws the real swing).
 static bool HiddenWeapon(const Entity* e) {
-    return e->entityId >= 0xD0; // none left after its update (WeaponsOff), but never drawn
+    // none left after its update (WeaponsOff), but never drawn; but a weapon it runs (#343)
+    return e->entityId >= 0xD0 && !(e->entityId >= 0xE0 && B->wpnRun[(e->entityId - 0xE0) >> 4]);
 }
 
 // What the body just drew, from its character's graphics in its bank: textures in F_GAME's
@@ -1763,6 +1923,37 @@ static u16 BankClut(u16 c, u32 bank) {
 
 u16 PartnerClut(u16 clut) { return B->banked ? BankClut(clut, B->bank) : clut; }
 
+// An Alucard body in an Alucard game draws from player 1's graphics, but its own weapon's (#343)
+// from its bank: the polygons drawn with a weapon's palettes (0x110-0x13F).
+static bool WeaponClut(u16 c) {
+    s32 i;
+
+    for (i = 0; i < 48; i++) {
+        if (g_ClutIds[0x110 + i] == c) {
+            return true;
+        }
+    }
+    return false;
+}
+static void WeaponPolys(u32 gt4, u32 gt3) {
+    POLY_GT4* q;
+    POLY_GT3* t;
+
+    for (; gt4 < g_GpuUsage.gt4; gt4++) {
+        q = &g_CurrentBuffer->polyGT4[gt4];
+        if (WeaponClut(q->clut)) {
+            q->tpage = BankTpage(q->tpage, B->bank);
+            q->clut = BankClut(q->clut, B->bank);
+        }
+    }
+    for (; gt3 < g_GpuUsage.gt3; gt3++) {
+        t = &g_CurrentBuffer->polyGT3[gt3];
+        if (WeaponClut(t->clut)) {
+            t->tpage = BankTpage(t->tpage, B->bank);
+            t->clut = BankClut(t->clut, B->bank);
+        }
+    }
+}
 static void BankPolys(u32 gt4, u32 gt3) {
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
         g_CurrentBuffer->polyGT4[gt4].tpage = BankTpage(g_CurrentBuffer->polyGT4[gt4].tpage, B->bank);
@@ -1938,6 +2129,8 @@ static void Draw(void) {
     }
     if (B->banked) {
         BankPolys(gt4, gt3);
+    } else if (B->wpnRun[0] || B->wpnRun[1]) {
+        WeaponPolys(gt4, gt3);
     }
     if (B->banked) { // its whip and effects, drawn by the game from the bank
         TagPrims();

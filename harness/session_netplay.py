@@ -94,6 +94,8 @@ def netplay_partner_on_time_alucard_and_richter(run):
     the same run with rollback off; on a LAN, nothing runs ahead. A misses no more frames for it."""
     a, b = run.s.a, run.s.b
     body, sym = symbols()["g_CoopSpikeBody"], symbols()
+    from session_m8 import reload_game
+    run.expect(reload_game(run, b) and b.mailbox("self_presence").character == 1, "B plays Richter")
     into_hall(run)
     run.step(120)
     pads = _runner(7)
@@ -225,3 +227,72 @@ def netplay_room_enemies_steady_on_lag(run):
     run.expect(sum(s > 16 for s in steps1) == 0, "no copy jumps more than 16 px in a frame",
                jumps=sum(s > 16 for s in steps1), jumps_without=sum(s > 16 for s in steps0),
                eased=a.read(symbols()["g_CoopCopiesEased"]) + b.read(symbols()["g_CoopCopiesEased"]))
+
+
+def _weapon_pose(g, base, slots=64):
+    """(the frame a hand weapon's entity (ids 0xE0-0xFF) among these 64 slots draws, its x and y
+    from the player's), or None."""
+    raw = g.read_bytes(base, slots * ENTITY_SIZE)
+    px, py = (int.from_bytes(raw[o:o + 2], "little", signed=True) for o in (2, 6))
+    for i in range(1, slots):
+        e = raw[i * ENTITY_SIZE:(i + 1) * ENTITY_SIZE]
+        if 0xE0 <= int.from_bytes(e[ID_OFS:ID_OFS + 2], "little") <= 0xFF:
+            return (int.from_bytes(e[0x56:0x58], "little"),  # animCurFrame
+                    int.from_bytes(e[2:4], "little", signed=True) - px, int.from_bytes(e[6:8], "little", signed=True) - py)
+    return None
+
+
+def _swings_on_time(run, a_richter):
+    """#343: online, Alucard's swings were his own game's sprites, sent over the link, so in
+    Richter's game they played the network's delay behind his body's attack, start to end. Now his
+    body runs his own weapon (its own copy of his weapon's program, sheet and palettes), rolled
+    back with the body: from the frame a press reaches A, the swing A shows is the one B shows now,
+    frame for frame. (No swing can show before its press arrives.) A's own weapon is as it was."""
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    sym, body = symbols(), symbols()["g_CoopSpikeBody"]
+    if a_richter:
+        run.expect(reload_game(run, a) and a.mailbox("self_presence").character == 1, "A plays Richter")
+    b.write(0x80097C00, 19)  # g_Status.equipment[0]: a Short Sword, loaded by B's reload
+    run.expect(reload_game(run, b), "B has a Short Sword in his right hand")
+    into_hall(run)
+    clut = a.read_bytes("g_Clut", 0x600, 0x110 * 32)  # A's weapon palettes, both hands
+    run.s.set_net(PROFILE, SEED)
+    run.step(300)
+    mine, shown = [], []
+    for t in range(600):
+        run.step(1, p1=("", "square" if t % 60 < 3 else ""))
+        mine.append(_weapon_pose(b, "g_Entities"))
+        shown.append(_weapon_pose(a, body))
+        if shown[-1] is not None and not any(x is not None for x in shown[-6:-1]) and t > 200:
+            for k in range(3):  # a picture of the swing in A's game, a few frames in
+                run.step(1, p1=("", ""))
+            (TOOLS["out"] / run.name).mkdir(parents=True, exist_ok=True)
+            a.screenshot().save(TOOLS["out"] / run.name / f"swing_{t}.png")
+    def match(d):  # A's frame t against B's frame t - d
+        both = [(mine[t - d], shown[t]) for t in range(2, len(shown) - 2)
+                if shown[t] is not None and mine[t - d] is not None]
+        return sum(m == s for m, s in both), len(both)
+    offsets = {d: match(d) for d in (-1, 0, 1, 4)}
+    d = max((-1, 0, 1), key=lambda k: offsets[k][0] / max(1, offsets[k][1]))
+    same, both = offsets[d]
+    swings = sum(1 for i in range(1, len(mine)) if mine[i] is not None and mine[i - 1] is None)
+    run.expect(a.read(sym["g_CoopBodyWeaponFrames"]) > 0, "A's body of B runs B's own weapon",
+               frames=a.read(sym["g_CoopBodyWeaponFrames"]))
+    run.expect(swings >= 6 and both and same >= 0.85 * both, "the swing A shows is the one B shows then (within a frame)",
+               swings=swings, offset=d, by_offset=offsets)
+    run.expect(a.read_bytes("g_Clut", 0x600, 0x110 * 32) == clut, "A's own weapon palettes are untouched")
+    run.expect(a.snapshot()["hp"] > 0, "A plays on")
+
+
+@session_scenario(characters=(1, 0))
+def netplay_partner_swings_on_time_richter_and_alucard(run):
+    """#343, Alucard's body in Richter's game: drawn from its VRAM bank, his weapon too."""
+    _swings_on_time(run, a_richter=True)
+
+
+@session_scenario()
+def netplay_partner_swings_on_time_alucard_and_alucard(run):
+    """#343, Alucard's body in Alucard's game: drawn from player 1's graphics, but for its own
+    weapon's (its sheet and palettes are in the body's bank: partner.c WeaponPolys)."""
+    _swings_on_time(run, a_richter=False)
