@@ -117,6 +117,7 @@ EVERYDAY = {
     "link_spec_conformance", "online_connect_codes", "online_in_process", "online_partner_leaves",
     "online_version_mismatch", "ui_online", "netplay_partner_on_time_alucard_and_richter", "netplay_room_enemies_steady_on_lag",
     "netplay_partner_swings_on_time_richter_and_alucard", "partner_sounds_alucard_and_richter",
+    "partner_body_draws_its_own_pose_alucard_and_alucard",
     # rules and pvp
     "pvp_death", "pvp_off", "pvp_spawn_protection", "rules_reach_the_game",
     # launcher and mods
