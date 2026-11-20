@@ -170,11 +170,17 @@ class Pacer:
     def __init__(self, fps=60):
         self.period, self.next = 1 / fps, None
 
-    def wait(self):
+    def wait(self, poll=None, every=0.002):
+        """poll: called every `every` seconds while waiting (online: the buttons, for rollback's
+        suggestions), never past the deadline."""
         now = time.perf_counter()
         if self.next is None or now - self.next > 0.1:
             self.next = now
         self.next += self.period
+        while poll and self.next - now > every * 1.5:
+            time.sleep(every)
+            poll()
+            now = time.perf_counter()
         if self.next > now:
             time.sleep(self.next - now)
 
@@ -552,6 +558,21 @@ class GameView:
         self.script_on = True
         pad = self.script.pop(0)
         return [pad] * len(pads)
+
+    def suggest_buttons(self):
+        """Online, while waiting for the next frame: the player's buttons, if they changed since
+        the frame read them, go to the partner at once, as a guess for its rollback (Slippi's input
+        suggestions: link/rollback.py). Its picture of this player is that much nearer now."""
+        if self.script or not getattr(self, "pads_sent", None):
+            return
+        try:
+            pygame.event.pump()
+            pad = castle_rules.remapped(self.pads.mask(0, pygame.key.get_pressed()), self.rules)
+            if pad != self.pads_sent[0]:
+                self.pads_sent = [pad]
+                self.games[0].suggest(pad)
+        except Exception:  # noqa: BLE001 - a suggestion is never worth a frame
+            logging.getLogger(__name__).debug("suggestion", exc_info=True)
 
     def scene_speed_now(self):
         if not self.online:
@@ -990,6 +1011,7 @@ class GameView:
             keys = pygame.key.get_pressed()
             t0 = time.perf_counter()
             pads = [castle_rules.remapped(self.pads.mask(i, keys), self.rules) for i in range(len(self.games))]
+            self.pads_sent = pads
             if self.script:
                 pads = self.scripted(pads)
             self.inputs.append((self.frame, *pads))
@@ -1084,7 +1106,7 @@ class GameView:
                 last_cards = time.time()
             if self.frames and self.frame >= self.frames:
                 break
-            pacer.wait()
+            pacer.wait(self.suggest_buttons if self.online and len(self.games) == 1 else None)
             clock.tick()  # for the status bar's fps
         self.write_cards()
         self.moment("Quit")

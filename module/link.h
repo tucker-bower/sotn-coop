@@ -244,24 +244,34 @@ typedef struct {
 #define FAMILIAR_MORE_ADDR(k) ((k) == 1 ? 0x806D0000 : 0x806E1000)
 #define STATUS_MORE_ADDR(k) (0x80730000 + (k) * 0x100)
 
-// Rollback (#86, design/rollback.md): online, the host writes each partner's buttons by their frame
-// as they arrive, ahead of the played-out presence, and the frame the partner is at now. Partner
-// k's body runs to that frame on the buttons it has and guesses the rest (the last ones held), and
-// runs again from where a guess was wrong (partner.c). In the 16 MB (our SwanStation build), with
-// the bodies' snapshots after it. No ROLL_MAGIC (a LAN, the couch): the body runs on the presence's
-// buttons, as before.
+// Rollback (#86, design/rollback.md): online, the host writes each partner's buttons by frame as
+// they arrive, ahead of the played-out presence, and the frame the partner is at now. Partner
+// k's body runs to that frame on the buttons it has and guesses the rest, and runs again from where
+// a guess was wrong (partner.c). With each frame's buttons comes the partner's HP after that frame,
+// so a hit in its own game lands on its body at the frame it happened. A guess is the partner's
+// own suggestion when one came (its buttons as its app read them, before its game ran the frame:
+// Slippi's input suggestions), else the last buttons held. In the 16 MB (our SwanStation build),
+// with the bodies' snapshots after it. No ROLL_MAGIC (a LAN, the couch): the body runs on the
+// presence's buttons, as before.
 #define ROLL_ADDR 0x80800000
 #define ROLL_MAGIC 0x4C4C4F52 // 'ROLL'
 #define ROLL_PADS 32          // frames of buttons kept, a power of two
+#define ROLL_GUESSES 16       // frames of suggestions kept past the newest, a power of two
 typedef struct {
     /* 0x00 */ u32 magic;  // ROLL_MAGIC: the rest is good this frame (the host writes it last)
     /* 0x04 */ u32 newest; // the partner's newest frame whose buttons came
     /* 0x08 */ u32 target; // the frame the partner is at now (the body runs up to it)
     /* 0x0C */ u32 played; // the frame of the presence written this frame (the partner's spot then)
-    /* 0x10 */ u32 known;  // bit f % ROLL_PADS: pads[f % ROLL_PADS] is frame f's, f in (newest - ROLL_PADS, newest]
+    /* 0x10 */ u32 known;  // bit f % ROLL_PADS: pads[] and hps[] hold frame f's, f in (newest - ROLL_PADS, newest]
     /* 0x14 */ u16 pads[ROLL_PADS];
-} CoopRollIn; // size = 0x54
-#define ROLL_SIZE 0x54
+    /* 0x54 */ u16 hps[ROLL_PADS];       // the partner's HP after that frame (0xFFFF: not said)
+    /* 0x94 */ u32 guessed;              // bit f % ROLL_GUESSES: guesses[] holds a suggestion for f > newest
+    /* 0x98 */ u16 guesses[ROLL_GUESSES];
+    /* 0xB8 */ u32 spriteFrame;          // the partner's frame its sprites (weapons.c) are from
+    /* 0xBC */ s16 spriteX, spriteY;     // and where it stood then (the room's pixels)
+} CoopRollIn; // size = 0xC0
+#define ROLL_SIZE 0xC0
+#define ROLL_HP_NONE 0xFFFF
 #define ROLL_IN(k) ((volatile CoopRollIn*)(ROLL_ADDR + (k) * 0x100))
 // ...and for a guest's copies of a shared room (#292): the authority's frame the snapshot written
 // this frame was taken at, and the authority's frame now, by its clock (0, 0: not online).

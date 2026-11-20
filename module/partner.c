@@ -319,6 +319,44 @@ extern s16 g_SoundCommandRingBufferWritePos;  // DRA
 extern s16 g_SoundCommandRingBuffer[0x100];  // DRA
 
 static bool s_Again; // the body's frame was run again (rollback, Run): its sounds were heard
+// Rollback (Slippi's sound log): each frame run keeps the sounds it asked for. Run again after a
+// wrong guess, a frame's sounds that were heard the first time are dropped, and the ones the right
+// buttons brought (a swing the guess missed) play.
+#define ROLL_SFX 6
+typedef struct {
+    u8 n;
+    u8 pad_[3];
+    u16 ids[ROLL_SFX];
+} SfxLog;
+static SfxLog* s_SfxLog; // the frame being run's (NULL: not rolling)
+
+static void SfxAgain(void) {
+    SfxLog old = *s_SfxLog;
+    s16 pos, to = s_SfxPos;
+    s32 i;
+    u16 id;
+
+    s_SfxLog->n = 0;
+    for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        id = g_SfxRingBuffer[pos].sndId;
+        if (s_SfxLog->n < ROLL_SFX) {
+            s_SfxLog->ids[s_SfxLog->n++] = id;
+        }
+        for (i = 0; i < old.n && old.ids[i] != id; i++) {
+        }
+        if (s_Again && i < old.n) {
+            old.ids[i] = 0xFFFF; // heard: each heard once
+            continue;
+        }
+        g_SfxRingBuffer[to] = g_SfxRingBuffer[pos];
+        to = (to + 1) & 0xFF;
+    }
+    for (pos = to; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        g_SfxRingBuffer[pos].sndId = 0;
+    }
+    g_sfxRingBufferWritePos = to;
+    s_Again = false;
+}
 
 static void PartnerSounds(void) {
     s32 pct = (g_CoopLink.control >> CONTROL_PARTNER_VOL_SHIFT) & 0xFF, vol, pan;
@@ -332,14 +370,10 @@ static void PartnerSounds(void) {
         g_SoundCommandRingBuffer[pos] = 0;
     }
     g_SoundCommandRingBufferWritePos = s_CmdPos;
-    if (s_Again) { // a frame run again (rollback): heard the first time
-        for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
-            g_SfxRingBuffer[pos].sndId = 0;
-        }
-        g_sfxRingBufferWritePos = s_SfxPos;
-        s_Again = false;
-        return;
+    if (s_SfxLog) {
+        SfxAgain();
     }
+    s_Again = false;
     for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
         it = &g_SfxRingBuffer[pos];
         if (B->chr != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
@@ -936,11 +970,20 @@ static void PutStatus(void) {
 // Since the body never runs the weapons' code (WeaponsOff), its swings always come from the link.
 bool PartnerWeaponDiffers(s32 hand) { return true; }
 
+// Where the partner's own sprites and hitboxes (sent from its game: weapons.c, pvp.c) are drawn: moved
+// by where the body is drawn against where the partner stood when they were made. Rolling, that's
+// the spot its host gives for the sprites' own frame (the presence is from frames before them).
 void PartnerBodyOffset(s16* dx, s16* dy) {
     const Entity* body = (const Entity*)BODY_BUF;
+    volatile CoopRollIn* in = ROLL_IN(s_K);
+    s16 x = Presence()->x, y = Presence()->y;
 
-    *dx = body->posX.i.hi + B->scrollX - Presence()->x + (s_Roll[s_K].on ? s_Roll[s_K].drawX : 0);
-    *dy = body->posY.i.hi + B->scrollY - Presence()->y + (s_Roll[s_K].on ? s_Roll[s_K].drawY : 0);
+    if (s_Roll[s_K].on && in->magic == ROLL_MAGIC && (u32)(in->newest - in->spriteFrame) < ROLL_PADS) {
+        x = in->spriteX;
+        y = in->spriteY;
+    }
+    *dx = body->posX.i.hi + B->scrollX - x + (s_Roll[s_K].on ? s_Roll[s_K].drawX : 0);
+    *dy = body->posY.i.hi + B->scrollY - y + (s_Roll[s_K].on ? s_Roll[s_K].drawY : 0);
 }
 
 static void SwapOut(void) {
@@ -1246,7 +1289,7 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
         g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + hit;
         PLAYER.hitParams = DAMAGEKIND_1;
         PLAYER.hitPoints = hit + g_Status.defenseEquip;
-        g_CoopBodyHits += !again;
+        g_CoopBodyHits += !again && !s_SfxLog; // rolling: counted where it's new (RollFrame)
     }
     if (PartnerLive() && (p->flipX & FLIP_CARRIED)) { // hanging under a bat: where its own game holds it
         PLAYER.posX.val = (p->x - g_Tilemap.scrollX.i.hi) << 16;
@@ -1306,6 +1349,7 @@ typedef struct {
     u8 guessed;
     u8 primCount;
     s32 hit; // HP its game lost, given to it before that frame
+    SfxLog sfx; // the sounds that frame played (when it runs again, only what's new plays)
     Body b;
     u32 body[BODY_SIZE / 4];
     u32 statics[STATICS_MAX / 4];
@@ -1430,12 +1474,31 @@ static u16 PadAt(volatile CoopRollIn* in, u32 f, u8* guessed) {
         return in->pads[f % ROLL_PADS];
     }
     *guessed = 1;
+    if ((s32)(f - in->newest) > 0 && (s32)(f - in->newest) < ROLL_GUESSES) { // the partner's suggestion
+        for (g = f; (s32)(g - in->newest) > 0; g--) {                     // in effect from its frame on
+            if ((in->guessed >> (g % ROLL_GUESSES)) & 1) {
+                return in->guesses[g % ROLL_GUESSES];
+            }
+        }
+    }
     for (g = (s32)(f - in->newest) > 0 ? in->newest : f; (s32)(in->newest - g) < ROLL_PADS; g--) {
         if (PadKnown(in, g)) {
             return in->pads[g % ROLL_PADS];
         }
     }
     return B->prevPad;
+}
+
+// The HP the partner lost in its own game during frame f (0: none, or not known: a guess of none).
+static s32 HitAt(volatile CoopRollIn* in, u32 f) {
+    u16 before, after;
+
+    if (!PadKnown(in, f) || !PadKnown(in, f - 1)) {
+        return 0;
+    }
+    before = in->hps[(f - 1) % ROLL_PADS];
+    after = in->hps[f % ROLL_PADS];
+    return before != ROLL_HP_NONE && after != ROLL_HP_NONE && after && before > after ? before - after : 0;
 }
 
 // The body's spot (in the room) after frame f, as it ran it, or false (not kept).
@@ -1549,7 +1612,7 @@ static void RollFrame(const CoopPresence* p, s32 hit) {
         if (e->frame != f || !e->guessed || !PadKnown(in, f)) {
             continue;
         }
-        if (in->pads[f % ROLL_PADS] == e->pad) {
+        if (in->pads[f % ROLL_PADS] == e->pad && HitAt(in, f) == e->hit) {
             e->guessed = 0; // a right guess
             continue;
         }
@@ -1566,8 +1629,7 @@ static void RollFrame(const CoopPresence* p, s32 hit) {
         break;
     }
     RollPull(p, P);
-    hit += R->hit;
-    R->hit = 0;
+    (void)hit; // its hits come by frame with its buttons (HitAt), not from its status
     R->drawX = Slide(R->drawX);
     R->drawY = Slide(R->drawY);
     for (ran = 0; (s32)(R->s - T) < 0; ran++) {
@@ -1577,11 +1639,16 @@ static void RollFrame(const CoopPresence* p, s32 hit) {
         }
         again = (s32)(f - oldS) <= 0;
         pad = PadAt(in, f, &guessed);
-        h = again ? ROLL_RING(s_K)[f % ROLL_FRAMES].hit : hit;
-        if (!again) {
-            hit = 0;
+        h = HitAt(in, f); // where its game said it was hit: on that frame
+        if (!PadKnown(in, f - 1)) {
+            guessed = 1; // a hit we can't know yet
         }
+        g_CoopBodyHits += h && (!again || ROLL_RING(s_K)[f % ROLL_FRAMES].hit != h);
         Keep(f, pad, guessed, h);
+        s_SfxLog = &ROLL_RING(s_K)[f % ROLL_FRAMES].sfx;
+        if (!again) {
+            s_SfxLog->n = 0; // a new frame: nothing heard of it yet
+        }
         if ((s32)(f - R->lo) >= ROLL_FRAMES) {
             R->lo = f - ROLL_FRAMES + 1;
         }
@@ -1596,10 +1663,10 @@ static void RollFrame(const CoopPresence* p, s32 hit) {
             drawn = true;
         }
         SwapOut();
+        s_SfxLog = NULL;
         R->s = f;
         g_CoopRollFrames += !again;
     }
-    R->hit = hit; // no new frame ran: with the next
     g_CoopRollStartLine = start;
     if (!s_K) {
         g_CoopRollDrawn[0] = R->drawX;

@@ -14,9 +14,10 @@ FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
 STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
+STATUS_HP = 0x80097BA0  # g_Status.hp
 # Rollback (#86, link.h's CoopRollIn): each partner's buttons by frame, in the 16 MB, 0x100 apart
-ROLL_ADDR, ROLL_MAGIC, ROLL_PADS, ROLL_SIZE = 0x80800000, 0x4C4C4F52, 32, 0x54
-_ROLL = struct.Struct("<IIIII32H")
+ROLL_ADDR, ROLL_MAGIC, ROLL_PADS, ROLL_GUESSES, ROLL_SIZE, ROLL_HP_NONE = 0x80800000, 0x4C4C4F52, 32, 16, 0xC0, 0xFFFF
+_ROLL = struct.Struct("<IIIII32H32HI16HIhh")
 ROLL_SNAP_ADDR = ROLL_ADDR + 0x3F0  # a guest's copies (#292): the snapshot's frame, and its sender's now
 
 # M17 (3+ players): partners 1 and 2 (link.h's CoopPartnerIn, CoopLink.more) and their copies in the
@@ -277,6 +278,10 @@ class Mailbox:
         self.adapter.write_bytes(familiar_partner(k) + 0x20, blob[0x20:])
         self.adapter.write_bytes(familiar_partner(k), blob[:0x20])
 
+    def self_hp(self):
+        """This game's player's HP (g_Status.hp), for the partner's rollback of its body."""
+        return struct.unpack("<i", self.adapter.read_bytes(STATUS_HP, 4))[0]
+
     def self_status(self):
         """This game's player status (stats, level, equipment): g_Status's two ranges."""
         return b"".join(self.adapter.read_bytes(a, n) for a, n in STATUS_RANGES)
@@ -289,20 +294,28 @@ class Mailbox:
         self.adapter.write_bytes(status_partner(k), struct.pack("<I", STATUS_MAGIC))
 
     def write_roll(self, roll, k=0):
-        """Partner k's buttons by frame for its body's rollback (module/partner.c): roll is
-        (newest, target, played, {frame: buttons}), or None (no rollback: the body runs on the
-        presence's buttons). The magic goes last."""
+        """Partner k's buttons by frame for its body's rollback (module/partner.c), or None (no
+        rollback: the body runs on the presence's buttons). roll: link/rollback.py's Roll. The
+        magic goes last."""
         at = ROLL_ADDR + k * 0x100
         if roll is None:
             self.adapter.write_bytes(at, struct.pack("<I", 0))
             return
-        newest, target, played, pads = roll
-        slots, known = [0] * ROLL_PADS, 0
-        for f, pad in pads.items():
+        newest = roll.newest
+        pads, hps, known = [0] * ROLL_PADS, [ROLL_HP_NONE] * ROLL_PADS, 0
+        for f, (pad, hp) in roll.inputs.items():
             if 0 <= newest - f < ROLL_PADS:
-                slots[f % ROLL_PADS] = pad & 0xFFFF
+                pads[f % ROLL_PADS] = pad & 0xFFFF
+                hps[f % ROLL_PADS] = ROLL_HP_NONE if hp is None else max(0, min(0xFFFE, hp))
                 known |= 1 << (f % ROLL_PADS)
-        blob = _ROLL.pack(ROLL_MAGIC, newest & 0xFFFFFFFF, target & 0xFFFFFFFF, played & 0xFFFFFFFF, known, *slots)
+        guesses, guessed = [0] * ROLL_GUESSES, 0
+        for f, pad in roll.guesses.items():
+            if 0 < f - newest < ROLL_GUESSES:
+                guesses[f % ROLL_GUESSES] = pad & 0xFFFF
+                guessed |= 1 << (f % ROLL_GUESSES)
+        sf, (sx, sy) = roll.sprite
+        blob = _ROLL.pack(ROLL_MAGIC, newest & 0xFFFFFFFF, roll.target & 0xFFFFFFFF, roll.played & 0xFFFFFFFF, known,
+                          *pads, *hps, guessed, *guesses, sf & 0xFFFFFFFF, sx, sy)
         self.adapter.write_bytes(at + 4, blob[4:])
         self.adapter.write_bytes(at, blob[:4])
 

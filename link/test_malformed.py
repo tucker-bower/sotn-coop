@@ -115,6 +115,11 @@ def main():
     survives("sprites, hits and primitives that aren't", tr.TAG_SPRT, b"\x01" * 7)
     survives("hits cut short", tr.TAG_HITS, b"\x01" * 5)
     survives("primitives that aren't zlib's", tr.TAG_PRIM, b"not zlib")
+    survives("an empty INPT", tr.TAG_INPT, b"")
+    survives("an INPT that says more frames than it has", tr.TAG_INPT, b"\x40\x01\x02")
+    survives("an INPT of 255 frames", tr.TAG_INPT, b"\xff" * 1021)
+    survives("a SUGG cut short", tr.TAG_SUGG, b"\x01\x02")
+    survives("a SUGG far in the future", tr.TAG_SUGG, b"\xff\xff\xff\x7f\x01\x00")
     survives("an unknown tag", b"WHAT", bytes(40))
 
     # Bytes that unpack to far more than they are: never unpacked past what the game can hold

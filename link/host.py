@@ -12,8 +12,8 @@ from .mailbox import (CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_S
                       Presence)
 from .portraits import PORTRAIT_ADDR
 from .playout import Playout
-from .rollback import PadHistory
-from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
+from .rollback import PadHistory, inputs_payload, read_inputs
+from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_INPT, TAG_SUGG, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages, inflate)
 
 HELLO_EVERY = 60  # frames
@@ -54,6 +54,11 @@ class Host:
         self.pads = PadHistory()  # the partner's buttons by frame, for its body's rollback
         self.rollback = True      # tests turn it off to measure without it
         self.extrapolate = True   # a guest's copies moved on to now (#292); tests turn it off
+        self.suggestions = True   # send this player's buttons ahead of its frames (SUGG); tests turn it off
+        self._inputs = collections.deque(maxlen=8)  # this player's last frames' (buttons, HP), for INPT
+        self._raw = None          # the buttons the app gave the frame now running (PlayStation bits)
+        self._said = None         # the newest buttons the partner heard from us, real or suggested
+        self._drives = False      # last frame, the app's buttons were the player's (not a menu's, a scene's)
         self._roll_written = None
         self.restarts = 0
         self.connector = None  # finding the partner from a room code (link/connect.py)
@@ -171,6 +176,25 @@ class Host:
 
     def connect_status(self):
         return self.connector.status() if self.connector else None
+
+    def before_frame(self, pad):
+        """The app's buttons for the frame about to run (PlayStation bits), before it runs: a
+        suggestion to the partner if they're new (link/rollback.py)."""
+        self._raw = pad & 0xFFFF
+        self.suggest(pad)
+
+    def suggest(self, pad):
+        """The player's buttons changed while the app waits for the next frame: said at once, for that
+        frame (Slippi's input suggestions). Only while the buttons are what moves the player."""
+        pad &= 0xFFFF
+        if not (self.suggestions and self._drives and self.partner_hello) or pad == self._said:
+            return
+        self._said = pad
+        self.transport.send(TAG_SUGG, struct.pack("<IH", (self.transport.frame + 1) & 0xFFFFFFFF, pad))
+
+    def set_suggestions(self, on=True):
+        self.suggestions = on
+        return True
 
     def set_rollback(self, on=True):
         self.rollback = on
@@ -419,6 +443,10 @@ class Host:
             self.mailbox.set_rules(*self.rule_words)
         me = self.mailbox.self_presence()
         self.transport.send(TAG_PRESENCE, me.pack() + struct.pack("<H", me.pad & 0xFFFF))
+        self._inputs.append((me.pad & 0xFFFF, self.mailbox.self_hp()))
+        self.transport.send(TAG_INPT, inputs_payload(list(self._inputs)))
+        self._drives = self._raw is not None and (me.pad & 0xFFFF) == self._raw
+        self._said = me.pad & 0xFFFF
         sprites = self.mailbox.self_sprites()
         if sprites or self._sprites_sent:  # one empty message after the last, to clear them
             self.transport.send(TAG_SPRT, sprites)
@@ -453,7 +481,7 @@ class Host:
                 if self.playout:
                     pres = _presence(payload)
                     self.playout.push_presence(now, frame, pres)
-                    self.pads.push(frame, pres.pad)
+                    self.pads.spot(frame, pres.x, pres.y)  # its inputs come in INPT, with its HP
                 elif seq > self._latest_seq:  # UDP may reorder: keep the newest
                     self._latest_seq, latest = seq, _presence(payload)
             elif tag == TAG_SNAP:
@@ -474,6 +502,14 @@ class Host:
             elif tag == TAG_SPRT:
                 if seq > self._sprites_seq:  # the newest only
                     self._sprites_seq, sprites = seq, payload
+                    self.pads.sprite_frame = frame
+            elif tag == TAG_INPT:
+                for f, pad, hp in read_inputs(frame, payload):
+                    self.pads.push(f, pad, hp)
+            elif tag == TAG_SUGG:
+                if len(payload) >= 6:
+                    f, pad = struct.unpack_from("<IH", payload)
+                    self.pads.suggest(f, pad)
             elif tag == TAG_BYE:
                 self._check_bye(payload)
             elif tag == TAG_HELLO:

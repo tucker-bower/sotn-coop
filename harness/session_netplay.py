@@ -8,6 +8,7 @@ from session import session_scenario
 
 from coop_env import TOOLS
 from module import symbols
+from session_scenarios import heal
 from session_shared import into_hall
 
 PROFILE, SEED = "playtest", 1
@@ -18,6 +19,7 @@ STARTS = TOOLS["out"].parent / "fixtures" / "debug-starts"
 ENTITY_SIZE, PRIM_SIZE, PRIM_COUNT = 0xBC, 0x34, 0x500
 FLAGS_OFS, ID_OFS, PRIM_INDEX_OFS, EXT_OFS = 0x34, 0x26, 0x64, 0x7C  # Entity
 FLAG_HAS_PRIMS = 0x800000
+HP_ADDR = 0x80097BA0  # g_Status.hp (link/mailbox.py STATUS_HP)
 
 
 def afterimages(g):
@@ -96,16 +98,25 @@ def netplay_partner_on_time_alucard_and_richter(run):
     run.step(120)
     pads = _runner(7)
 
-    def phase(frames, start):
+    hits = {"b": 0, "body": 0}
+
+    def phase(frames, start, hurt=False):
         real, shown, drawn = [], [], []
         t0 = a.read("g_Timer")
+        hp, body_hits = b.read(HP_ADDR, "<i"), a.read(sym["g_CoopBodyHits"])
         for t in range(frames):
+            if hurt and t % 150 == 75 and b.read(HP_ADDR, "<i") > 20:  # a hit in his own game (HP down)
+                b.write(HP_ADDR, b.read(HP_ADDR, "<i") - 5, "<i")
             run.step(1, p1=("", pads[start + t]))
+            now = b.read(HP_ADDR, "<i")
+            hits["b"] += 0 < now < hp
+            hp = now
             together = a.snapshot()["room"] == b.snapshot()["room"]
             real.append(_world(b, "g_Entities") if together else None)
             shown.append(_world(a, body) if together else None)
             drawn.append((shown[-1][0] + a.read(sym["g_CoopRollDrawn"], "<h"),
                           shown[-1][1] + a.read(sym["g_CoopRollDrawn"], "<h", 2)) if together else None)
+        hits["body"] = a.read(sym["g_CoopBodyHits"]) - body_hits
         return real, shown, drawn, frames - (a.read("g_Timer") - t0)
 
     _, _, _, missed_lan = phase(600, 0)
@@ -119,17 +130,27 @@ def netplay_partner_on_time_alucard_and_richter(run):
     lag0 = _lag(shown0, real0)
     for g in (a, b):
         g.host("set_rollback", True)
+        g.host("set_suggestions", False)
+    run.step(120)
+    real2, shown2, _, _ = phase(600, 2400)
+    lag2 = _lag(shown2, real2)  # rollback without the partner's suggestions
+    for g in (a, b):
+        g.host("set_suggestions", True)
     run.step(120)
     rew0 = a.read(sym["g_CoopRollRewinds"])
-    real1, shown1, drawn1, missed = phase(900, 1500)
+    hits["b"] = 0
+    heal(b)
+    real1, shown1, drawn1, missed = phase(900, 1500, hurt=True)
     lag1 = _lag(shown1, real1)
     rewinds = a.read(sym["g_CoopRollRewinds"]) - rew0
     steps = [abs(drawn1[i + 1][0] - drawn1[i][0]) for i in range(len(drawn1) - 1) if drawn1[i] and drawn1[i + 1]]
     run.expect(len(steps) > 600, "B stays in A's room", frames=len(steps))
     run.expect(rewinds > 0, "A ran Richter again from a wrong guess", rewinds=rewinds,
                aborts=a.read(sym["g_CoopRollAborts"]), behind=a.read(sym["g_CoopRollBehind"]))
-    run.expect(lag1[0] <= 2 and lag1[0] < lag0[0], "Richter's body is shown on time (at most 2 frames behind)",
-               rollback=lag1, without=lag0)
+    run.expect(lag1[0] <= 1 and lag1[0] < lag0[0], "Richter's body is shown on time (at most a frame behind)",
+               rollback=lag1, without_suggestions=lag2, without=lag0)
+    run.expect(hits["b"] >= 5 and hits["body"] == hits["b"], "each hit Richter takes in his game lands on his body here, once",
+               his_game=hits["b"], body=hits["body"])
     run.expect(max(steps) <= 16, "a wrong guess slides the body back: no step over 16 px",
                biggest=max(steps), over_16=sum(s > 16 for s in steps))
     run.expect(missed <= missed_lan * 1.5 + 3, "A misses no more frames for it", missed=missed, lan=missed_lan,
