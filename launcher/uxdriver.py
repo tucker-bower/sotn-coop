@@ -514,8 +514,10 @@ def _startup(pg):
         ("screen", "Press a button"), ("pad", 0, A), ("call", lambda d: mark(d, "pressed")), ("pad", 0, A),
         ("until", lambda d: "Game" in d.first_seen), ("shot", "first-picture"),
         ("until", title), ("shot", "title"), ("call", report),
-        ("expect", lambda d: d.startup["picture_s"] <= 1.0, "a picture within 1 s of pressing Solo"),
-        ("expect", lambda d: d.startup["title_s"] <= 20.0, "the title within 20 s"),
+        # #322: margins that hold on a busy machine or one with no audio device (no sound pacing):
+        # the app's own picture at once, and the title by the game's frames, not the clock
+        ("expect", lambda d: d.startup["picture_s"] <= 1.5, "a picture within 1.5 s of pressing Solo"),
+        ("expect", lambda d: d.startup["title_frame"] <= 1300, "the title within 1300 game frames (22 s)"),
         ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]

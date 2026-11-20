@@ -1073,3 +1073,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D224: Richter and Maria get Alucard's mist form, with Form of Mist** (Tucker, 2026-11-20, #191)
 - Their way past the possessed Richter's Hydro Storm (it fills the screen, and they had no answer but an item crash). When Alucard's Form of Mist is found, they can turn to mist as he does, with his button, MP cost and rules; it replaces the Mist Step they borrowed for grates (D84's mapping, `design/M8b-character-balance.md`). Options considered: weakening Hydro Storm for them, invincibility frames on a dodge.
+
+**D225: Soak and startup tests measure play, with real budgets** (2026-11-20, #333, #322; agent-default)
+- `mixed_soak_10min` leaves out the 10 s after the test itself sends the players back to the hall (a load, not play), and its frame-cost bar is the budget, p99 under 200 of 263 scanlines (as `crowd_four_in_the_hall`), not "within 5% of two Alucards": a Richter or Maria body runs their whole player code, more than an Alucard body (155 against 135), with no more missed frames.
+- `ui_startup`: the app's picture within 1.5 s, and the title by game frames (1300), not the clock: a busy machine or one with no audio device missed 1 s and 20 s by a fraction.

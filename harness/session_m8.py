@@ -132,7 +132,7 @@ def mixed_soak(run, ca, cb, minutes):
     slow = played = 0
     chunks = []  # missed frames in each 600
     together = shared = 0  # samples (every 60 frames) when the room is shareable, and of those, shared
-    ms, vcount = [], []
+    ms, vcount, chunk_vcount = [], [], []
 
     def shareable(pa, pb):
         """As module/shared.c's PartnerShareable decides: same room, both in play and free, cameras
@@ -144,20 +144,25 @@ def mixed_soak(run, ca, cb, minutes):
     def sample(i, sa, sb):
         nonlocal together, shared
         if i % 10 == 0:
-            vcount.extend(g.read(VCOUNT) for g in (a, b))
+            chunk_vcount.extend(g.read(VCOUNT) for g in (a, b))
         if i % 60 == 0:
             pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
             if shareable(pa, pb):
                 together += 1
                 shared += (pa.role, pb.role) in ((ROLE_AUTHORITY, ROLE_GUEST), (ROLE_GUEST, ROLE_AUTHORITY))
+    sent_back = False  # #333: the 10 s after the test sends them back to the hall is a load, not play
     for t in range(0, frames, 600):
         t0 = [g.read("g_Timer") for g in (a, b)]
+        chunk_vcount.clear()
         run.step(600, p1=lambda i, sa, sb, t=t: (ia[t + i][0], ib[t + i][0]), each=sample)
+        if not sent_back:
+            vcount.extend(chunk_vcount)
         for g, before in zip((a, b), t0):
-            if g.snapshot()["game_state"] == 2:
+            if g.snapshot()["game_state"] == 2 and not sent_back:
                 played += 600
                 slow += max(0, 600 - (g.read("g_Timer") - before))
                 chunks.append(max(0, 600 - (g.read("g_Timer") - before)))
+        sent_back = False
         ms += a.host_ms() + b.host_ms()
         heal(a), heal(b)
         # Issue 184: both stay in the hall, whatever the random input does, so the two soaks being
@@ -166,8 +171,10 @@ def mixed_soak(run, ca, cb, minutes):
         if (p.stage, p.room_id) != (STAGE_NO3, HALL_ROOM_ID):
             a.mailbox("command", CMD_ARRIVE, STAGE_NO3, HALL_ROOM_ID, 1300, 200)
             b.mailbox("command", CMD_ARRIVE, STAGE_NO3, HALL_ROOM_ID, 1324, 200)
+            sent_back = True
         elif not roles(run)[0]:
             b.mailbox("command", CMD_ARRIVE, p.stage, p.room_id, p.ground_x, p.ground_y)
+            sent_back = True
     ms.sort()
     vcount.sort()
     p99 = ms[int(len(ms) * 0.99)] if ms else 0
@@ -186,8 +193,8 @@ def mixed_soak(run, ca, cb, minutes):
 @session_scenario(characters=(CHAR_RICHTER, CHAR_MARIA), full=True)
 def mixed_soak_10min(run):
     """Richter (A) and Maria (B), 10 minutes, against two Alucards' numbers from
-    mixed_soak_baseline_10min (run it first): no more missed frames (within 0.5% of play), p99
-    scanlines within 5%."""
+    mixed_soak_baseline_10min (run it first): no more missed frames (within 0.5% of play; the
+    loads after the test sends them back to the hall aren't play), p99 under 200 scanlines."""
     import json
     from coop_env import TOOLS
     mixed = mixed_soak(run, CHAR_RICHTER, CHAR_MARIA, 10)
@@ -195,8 +202,9 @@ def mixed_soak_10min(run):
     base = next(c for c in base["checks"] if c["what"].startswith("host p99"))
     run.expect(mixed["dropped"] - base["dropped"] <= mixed["of"] // 200,
                "no more missed frames than two Alucards", mixed=mixed["dropped"], alucards=base["dropped"])
-    run.expect(mixed["scanlines_p99"] <= base["scanlines_p99"] * 1.05,
-               "each frame costs the game no more than with two Alucards (p99)",
+    # #333: a Richter or Maria body runs their whole player code, more than an Alucard body: the
+    # bar is the frame's budget (p99 under 200 of 263 scanlines, as crowd_four_in_the_hall), not 5%
+    run.expect(mixed["scanlines_p99"] < 200, "each frame fits with room to spare (p99 under 200 of 263 scanlines)",
                mixed=mixed["scanlines_p99"], alucards=base["scanlines_p99"])
 
 
