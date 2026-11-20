@@ -9,6 +9,7 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `boss-rush.md` | Boss rush mode. Done. |
 | `M-castle-rules.md` | Every co-op change to the game as a setting of each castle. Done. |
 | `M20-randomizer.md` | Co-op on the randomizer, the first supported mod. In progress (#144). |
+| `M21-big-lobbies.md` | 8 to 32 players on one code: the nearest in full, the rest as puppets and map markers. Needs approval. |
 | `netplay-suite.md` | The 0.13 playtest's bugs, and the tests that reproduce them. In progress. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |
 | `M1-ghost-p2.md` | **Withdrawn.** A ghost second player in one game, dropped for one game per player. |
