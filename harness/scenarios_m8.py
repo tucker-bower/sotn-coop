@@ -962,3 +962,39 @@ def stone_breaks_with_presses(run, ch):
     x = e.snapshot()["x"]
     run.step(40, "right")
     run.expect(e.snapshot()["x"] != x, "immune: no stone", x=x, now=e.snapshot()["x"])
+
+
+@per_character
+def movement_stuck_fall_rescued(run, ch):
+    """#336: Richter ended up inside the floor at a room's bottom, falling without moving, for good.
+    Pushed into the floor there with a fall's speed, they're back on the floor within 2 seconds. And
+    standing still (Alucard first, then them) never counts as a stuck fall: no arrival."""
+    e, mb = run.emu, mailbox(run)
+
+    def stands(who):
+        busy, vy = 0, set()
+        for i in range(240):
+            run.step(1)
+            busy += bool(mb.self_presence().flags & BUSY)
+            vy.add(e.read(e.entity(0) + 0x0C, "<i"))
+        run.expect(not busy, f"{who} standing still: no rescue", busy_frames=busy, velocity_y=sorted(vy)[:4])
+    run.step(60)
+    stands("Alucard")
+    reload_as(run, mb, ch)
+    run.step(60)
+    stands(NAMES[ch])
+    p = mb.self_presence()
+    ground = (p.ground_x, p.ground_y)
+    pl = e.entity(0)
+    ys = []
+    sunk = e.read(pl + 0x06, "<h") + 24  # posY.i.hi: 24 px into the floor (the report's was)
+    for i in range(300):
+        if i < 100:  # held in the floor, falling (as the report's state was)
+            e.write(pl + 0x06, sunk, "<h")
+            e.write(pl + 0x0C, 7 << 16, "<i")  # velocityY: falling
+        run.step(1)
+        ys.append(mb.self_presence().y)
+    p = mb.self_presence()
+    run.expect(max(ys[:80]) >= ground[1] + 20, "he was in the floor", ys=ys[::15])
+    run.expect(abs(p.y - ground[1]) <= 16 and abs(p.x - ground[0]) <= 32, "back on the floor where he stood",
+               now=(p.x, p.y), ground=ground, ys=ys[::15])
