@@ -34,6 +34,7 @@ What's been built so far. Each milestone's acceptance criteria are in its design
 | — | Castle rules | Done | `M-castle-rules` |
 | M16 | Saturn Maria, the long-coat Richter, the Saturn select, the PSP Alucard voice | #48 | `M16-saturn-characters` |
 | M17 | 3-4 players online, a castle's Max players (couch stays two, D220) | Done: 1.3.0 | `M17-more-players` |
+| — | Rollback for the partner's body and guests' copies moved on to now, in our core's 16 MB (#86, #292) | Done | `rollback` |
 | M18 | Mac and Linux (Steam Deck) builds | #50 | `M18-mac-linux` |
 | M19 | Widescreen: 16:9 and 21:9, experimental, in 0.19.0 (32:9 later) | #51 | `M19-widescreen` |
 | M20 | Co-op on the randomizer, the first supported mod | #144 | `M20-randomizer` |

@@ -159,7 +159,7 @@ class Emu:
     def __enter__(self):
         self._session.__enter__()
         self.ram = self._session.core.get_memory(libretro.RETRO_MEMORY_SYSTEM_RAM)
-        self._ram_mask = len(self.ram) - 1  # 2MB or 8MB, both powers of two
+        self._ram_mask = len(self.ram) - 1  # 2 MB or 16 MB (our build: patches/swanstation.patch), powers of two
         return self
 
     def __exit__(self, *exc):

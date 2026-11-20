@@ -20,7 +20,7 @@ import collections
 import os
 from collections import OrderedDict
 
-WIRE_VERSION = 14
+WIRE_VERSION = 15
 _HEADER = struct.Struct("<4sII")  # tag, sequence number, the sender's frame
 TAG_PRESENCE = b"PRES"  # payload: presence (0x2C), then _PRES_TAIL
 TAG_EVENTS = b"EVTS"    # payload: first seq (u32), then events
@@ -32,6 +32,10 @@ TAG_CACK = b"CACK"      # payload: highest CTRL seq delivered in order (u32)
 TAG_PRIM = b"PRIM"      # payload: zlib of the sender's attack primitives (sprites.c)
 TAG_SPRT = b"SPRT"      # payload: the sender's sprites (CoopSprite records, sprites.c): its attacks, drawn by the partner
 TAG_HITS = b"HITS"      # payload: the sender's attack hitboxes (CoopHit records, pvp.c, M15)
+TAG_INPT = b"INPT"      # payload: count (u8), then for each of the sender's last frames, oldest first and the
+                        # header's frame last: its buttons (u16) and its player's HP after it (u16): rollback (#86)
+TAG_SUGG = b"SUGG"      # payload: a frame (u32) and the buttons (u16) the sender's player holds for it, read
+                        # before that frame ran: a guess for the partner's rollback (Slippi's input suggestions)
 TAG_BYE = b"BYE "       # payload: the sender's HELO sid (JSON): it is leaving (the app closed, or back to its menu)
 TAG_HELLO = b"HELO"     # payload: JSON {"link": WIRE_VERSION, "patch": target CRC32 or null}, once a second
 TAG_FWD = b"FWD "       # payload: a player number (u8), then a whole datagram: to that player (sent to

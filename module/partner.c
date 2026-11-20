@@ -113,6 +113,17 @@ static Body s_Bodies[COOP_PARTNERS];
 static Body* B = s_Bodies;
 static s32 s_K; // B's partner
 static bool s_BodiesSet;
+// Each body's rollback (RollFrame, below)
+typedef struct {
+    bool on;
+    u32 s;  // the last frame the body ran
+    u32 lo; // the oldest frame with a snapshot (the ring holds lo..s)
+    s32 hit; // a hit that came while the body had no frame to run: given with its next
+    s16 driftFrames;
+    s16 drawX, drawY;   // a rollback's correction, still to slide out: drawn this far from the body
+    s16 shiftX, shiftY; // its primitives were moved this much for the game's pass (DrawShift)
+} Roll;
+static Roll s_Roll[COOP_PARTNERS];
 
 static void SetBodies(void) {
     s32 k;
@@ -307,6 +318,46 @@ static s16 s_CmdPos;
 extern s16 g_SoundCommandRingBufferWritePos;  // DRA
 extern s16 g_SoundCommandRingBuffer[0x100];  // DRA
 
+static bool s_Again; // the body's frame was run again (rollback, Run): its sounds were heard
+// Rollback (Slippi's sound log): each frame run keeps the sounds it asked for. Run again after a
+// wrong guess, a frame's sounds that were heard the first time are dropped, and the ones the right
+// buttons brought (a swing the guess missed) play.
+#define ROLL_SFX 6
+typedef struct {
+    u8 n;
+    u8 pad_[3];
+    u16 ids[ROLL_SFX];
+} SfxLog;
+static SfxLog* s_SfxLog; // the frame being run's (NULL: not rolling)
+
+static void SfxAgain(void) {
+    SfxLog old = *s_SfxLog;
+    s16 pos, to = s_SfxPos;
+    s32 i;
+    u16 id;
+
+    s_SfxLog->n = 0;
+    for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        id = g_SfxRingBuffer[pos].sndId;
+        if (s_SfxLog->n < ROLL_SFX) {
+            s_SfxLog->ids[s_SfxLog->n++] = id;
+        }
+        for (i = 0; i < old.n && old.ids[i] != id; i++) {
+        }
+        if (s_Again && i < old.n) {
+            old.ids[i] = 0xFFFF; // heard: each heard once
+            continue;
+        }
+        g_SfxRingBuffer[to] = g_SfxRingBuffer[pos];
+        to = (to + 1) & 0xFF;
+    }
+    for (pos = to; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
+        g_SfxRingBuffer[pos].sndId = 0;
+    }
+    g_sfxRingBufferWritePos = to;
+    s_Again = false;
+}
+
 static void PartnerSounds(void) {
     s32 pct = (g_CoopLink.control >> CONTROL_PARTNER_VOL_SHIFT) & 0xFF, vol, pan;
     SfxRingBufferItem* it;
@@ -319,6 +370,10 @@ static void PartnerSounds(void) {
         g_SoundCommandRingBuffer[pos] = 0;
     }
     g_SoundCommandRingBufferWritePos = s_CmdPos;
+    if (s_SfxLog) {
+        SfxAgain();
+    }
+    s_Again = false;
     for (pos = s_SfxPos; pos != g_sfxRingBufferWritePos; pos = (pos + 1) & 0xFF) {
         it = &g_SfxRingBuffer[pos];
         if (B->chr != CharacterLoaded() && g_SfxData[it->sndId].vabid == PLAYER_VAB) {
@@ -331,25 +386,64 @@ static void PartnerSounds(void) {
     }
 }
 
-// Exchanges the game's copy with the partner's, a word at a time (region 0 first: the slots).
+// Our SwanStation's copy engine (patches/swanstation.patch, at 0x1F802100): a copy or an exchange
+// of whole words in a few cycles, where the CPU's own loop takes some 9 a word (the snapshots of
+// rollback, below, and Swap). Without it (another emulator), the CPU's loop.
+#define COPY_REGS ((volatile u32*)0x1F802100)
+#define COPY_MAGIC 0x59504F43 // 'COPY'
+static s8 s_CopyEngine = -1; // not asked yet
+static bool CopyEngine(void) {
+    if (s_CopyEngine < 0) {
+        s_CopyEngine = COPY_REGS[3] == COPY_MAGIC;
+    }
+    return s_CopyEngine;
+}
+static void CopyWords(void* dst, const void* src, u32 len) {
+    u32* d = dst;
+    const u32* w = src;
+
+    if (!len) {
+        return;
+    }
+    if (CopyEngine()) {
+        COPY_REGS[0] = (u32)dst;
+        COPY_REGS[1] = (u32)src;
+        COPY_REGS[2] = len;
+        COPY_REGS[3] = 1;
+        return;
+    }
+    for (len /= 4; len--;) {
+        *d++ = *w++;
+    }
+}
+static void ExchangeWords(void* a, void* b, u32 len) {
+    u32 *x = a, *y = b, t;
+
+    if (!len) {
+        return;
+    }
+    if (CopyEngine()) {
+        COPY_REGS[0] = (u32)a;
+        COPY_REGS[1] = (u32)b;
+        COPY_REGS[2] = len;
+        COPY_REGS[3] = 2;
+        return;
+    }
+    for (len /= 4; len--; x++, y++) {
+        t = *x;
+        *x = *y;
+        *y = t;
+    }
+}
+
+// Exchanges the game's copy with the partner's (region 0 first: the slots).
 static void Swap(void) {
     u32* body = BODY_BUF;
     s32 i;
-    u32 k, t;
 
     if (B->code || B->aluHere) {
-        u32* ram = (u32*)HDR_ADDR;
-        for (k = 0; k < B->hdrWords; k++) {
-            t = ram[k];
-            ram[k] = B->hdr[k];
-            B->hdr[k] = t;
-        }
-        ram = (u32*)g_api.o.spriteBanks + 16;
-        for (k = 0; k < BANKS; k++) {
-            t = ram[k];
-            ram[k] = B->banks[k];
-            B->banks[k] = t;
-        }
+        ExchangeWords((u32*)HDR_ADDR, B->hdr, B->hdrWords * 4);
+        ExchangeWords((u32*)g_api.o.spriteBanks + 16, B->banks, BANKS * 4);
     }
     // the 64 player slots: only those in use on either side (most are empty), and always the
     // player's (0). Its afterimages' (1-3: no id, but set up by AluInit and RicInit, slot 1
@@ -367,19 +461,11 @@ static void Swap(void) {
         } else if (i && !((Entity*)ram)->entityId && !((Entity*)body)->entityId) {
             continue;
         }
-        for (k = 0; k < 0xBC / 4; k++) {
-            t = ram[k];
-            ram[k] = body[k];
-            body[k] = t;
-        }
+        ExchangeWords(ram, body, 0xBC);
     }
     for (i = 1; i < LEN(s_Regions); i++) {
-        u32* ram = (u32*)s_Regions[i].addr;
-        for (k = 0; k < s_Regions[i].len / 4; k++) {
-            t = ram[k];
-            ram[k] = *body;
-            *body++ = t;
-        }
+        ExchangeWords((u32*)s_Regions[i].addr, body, s_Regions[i].len);
+        body += s_Regions[i].len / 4;
     }
 }
 
@@ -509,11 +595,11 @@ static s32 BuildOf(u32 chr) {
                                                           : -1;
 }
 
-// Build b's statics (B's character runs it) and buffer i: to the buffer, from it, or exchanged.
-static void Statics(s32 b, s32 i, s32 op) {
+// Build b's statics (B's character runs it) and a buffer: to the buffer, from it, or exchanged.
+static void StaticsBuf(s32 b, u32* buf, s32 op) {
     static const u32 bases[BUILDS] = {PARTNER_RIC_ADDR, PARTNER_MAR_ADDR, PARTNER_ULT_ADDR, PARTNER_SAT_ADDR};
     const FarTrailer* t = PartnerCode(B->chr);
-    u32 spans[3][2], *buf = s_Statics[i], *end = s_Statics[i] + STATICS_MAX / 4, *w, n, k, x;
+    u32 spans[3][2], *end = buf + STATICS_MAX / 4, n, k;
 
     if (!t) {
         return;
@@ -525,18 +611,19 @@ static void Statics(s32 b, s32 i, s32 op) {
     spans[2][0] = t->farAddr + t->farSize;
     spans[2][1] = t->sharedBss - spans[2][0];
     for (k = 0; k < 3; k++) {
-        w = (u32*)spans[k][0];
-        for (n = spans[k][1] / 4; n-- && buf < end; w++, buf++) {
-            x = *w;
-            if (op != STATICS_SAVE) {
-                *w = *buf;
-            }
-            if (op != STATICS_LOAD) {
-                *buf = x;
-            }
+        n = spans[k][1] / 4;
+        n = n < (u32)(end - buf) ? n : (u32)(end - buf);
+        if (op == STATICS_SAVE) {
+            CopyWords(buf, (u32*)spans[k][0], n * 4);
+        } else if (op == STATICS_LOAD) {
+            CopyWords((u32*)spans[k][0], buf, n * 4);
+        } else {
+            ExchangeWords((u32*)spans[k][0], buf, n * 4);
         }
+        buf += n;
     }
 }
+static void Statics(s32 b, s32 i, s32 op) { StaticsBuf(b, s_Statics[i], op); }
 
 static s32 FreeBuffer(void) {
     s32 i, k;
@@ -788,6 +875,7 @@ static void Make(void) {
         draw->tpage |= TPAGE_BANK_OF(B->bank);
     }
     B->made = true;
+    s_Roll[s_K].on = false;
 }
 
 // Entity positions are on screen (relative to the camera), and the camera moved while the copy
@@ -882,11 +970,20 @@ static void PutStatus(void) {
 // Since the body never runs the weapons' code (WeaponsOff), its swings always come from the link.
 bool PartnerWeaponDiffers(s32 hand) { return true; }
 
+// Where the partner's own sprites and hitboxes (sent from its game: weapons.c, pvp.c) are drawn: moved
+// by where the body is drawn against where the partner stood when they were made. Rolling, that's
+// the spot its host gives for the sprites' own frame (the presence is from frames before them).
 void PartnerBodyOffset(s16* dx, s16* dy) {
     const Entity* body = (const Entity*)BODY_BUF;
+    volatile CoopRollIn* in = ROLL_IN(s_K);
+    s16 x = Presence()->x, y = Presence()->y;
 
-    *dx = body->posX.i.hi + B->scrollX - Presence()->x;
-    *dy = body->posY.i.hi + B->scrollY - Presence()->y;
+    if (s_Roll[s_K].on && in->magic == ROLL_MAGIC && (u32)(in->newest - in->spriteFrame) < ROLL_PADS) {
+        x = in->spriteX;
+        y = in->spriteY;
+    }
+    *dx = body->posX.i.hi + B->scrollX - x + (s_Roll[s_K].on ? s_Roll[s_K].drawX : 0);
+    *dy = body->posY.i.hi + B->scrollY - y + (s_Roll[s_K].on ? s_Roll[s_K].drawY : 0);
 }
 
 static void SwapOut(void) {
@@ -988,9 +1085,11 @@ static void HideFlashes(void) {
 }
 
 // Back as the body left them, before its frame (hidden from the game's pass after its own).
+static void UndoShift(void);
 static void ShowPrims(void) {
     s32 i;
 
+    UndoShift();
     for (i = 0; i < B->primCount; i++) {
         if (B->primHidden[i]) {
             g_PrimBuf[B->prims[i]].drawMode &= ~DRAW_HIDE;
@@ -1020,6 +1119,7 @@ static void Drop(void) {
     }
     B->made = false;
     B->primCount = 0;
+    s_Roll[s_K].on = false;
 }
 
 // The harness's spike test only (OPT_PARTNER_SIM, no partner): a copy of player 1 on g_CoopSpikePad.
@@ -1120,6 +1220,8 @@ void PartnerFrame(void) {
             s_Bodies[k].made = false;
             s_Bodies[k].primCount = 0;
             s_Bodies[k].flashCount = 0;
+            s_Roll[k].on = false;
+            s_Roll[k].shiftX = s_Roll[k].shiftY = 0; // its primitives went with the load
         }
         return;
     }
@@ -1135,88 +1237,59 @@ void PartnerFrame(void) {
     B = s_Bodies;
 }
 
-// Partner s_K's body (B): made, updated and drawn, or dropped.
-static void BodyFrame(void) {
-    const CoopPresence* p = Presence();
+// HP the partner lost in its own game since the last frame (its status says): its own hit reaction
+// here, its own code's knockback and voice (cosmetic: the body's status is the partner's).
+static s32 HitIn(void) {
+    s32 hp, lost = 0;
+
+    if (!PartnerLive() || StatusIn()->magic != STATUS_MAGIC) {
+        return 0;
+    }
+    hp = ((const s32*)(StatusIn())->a)[1]; // g_Status.hp
+    if (B->partnerHp > hp && hp > 0) {
+        lost = B->partnerHp - hp;
+    }
+    B->partnerHp = hp;
+    return lost;
+}
+
+// Pulled to the partner's real spot when it drifts (swapped in).
+static void Pull(const CoopPresence* p) {
+    s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
+    s32 dx = x - PLAYER.posX.i.hi, dy = y - PLAYER.posY.i.hi;
+    bool off = Ease(dx) || Ease(dy);
+
+    B->driftFrames = off ? B->driftFrames + 1 : 0;
+    if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || B->driftFrames > DRIFT_FRAMES) {
+        // A door, a teleport, or a drift the easing can't undo (a body on a floor below its
+        // real spot falls back each frame): there at once.
+        PLAYER.posX.i.hi = x;
+        PLAYER.posY.i.hi = y;
+        PLAYER.velocityX = PLAYER.velocityY = 0;
+        B->driftFrames = 0;
+    } else {
+        // Drifting (its game's hit knocked it back, and not here): eased back, an eighth of the
+        // way a frame. Snapped at 48 px, Richter running "jumped all over" (#291).
+        PLAYER.posX.i.hi += Ease(dx);
+        PLAYER.posY.i.hi += Ease(dy);
+    }
+}
+
+// One frame of the body's own code on these buttons (swapped in). again: a frame it ran before,
+// run again from a rollback (its sounds were heard then: SwapOut drops them).
+static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
     Pad pad0;
     u32 options;
     Entity* cur;
     s32 i;
-    s32 t0;
-    u16 pad;
 
-    if (g_CoopBodyOff) { // tests: no body (what a game does without one)
-        if (B->made) {
-            Drop();
-        }
-        return;
-    }
-    if (B->made && !Spike() &&
-        (!PartnerLive() || !PartnerHere() || Presence()->character != B->chr || B->bodyDied ||
-         ((Presence()->flipX & FLIP_TELEPORT_IN) && !B->teleportSeen))) {
-        Drop(); // gone (from this room, or for good), or just revived: made again where they are
-        B->bodyDied = false;
-    }
-    B->teleportSeen = PartnerLive() && (Presence()->flipX & FLIP_TELEPORT_IN);
-    if (!Spike() && !(PartnerLive() && PartnerHere())) {
-        return;
-    }
-    if (!B->made) {
-        u16 m0 = VSync(1);
-        Make();
-        g_CoopMakeLines = (u16)(VSync(1) - m0);
-        B->scrollX = g_Tilemap.scrollX.i.hi;
-        B->scrollY = g_Tilemap.scrollY.i.hi;
-        if (PartnerLive()) { // where they are (their presence is in room pixels)
-            ((Entity*)BODY_BUF)->posX.i.hi = p->x - g_Tilemap.scrollX.i.hi;
-            ((Entity*)BODY_BUF)->posY.i.hi = p->y - g_Tilemap.scrollY.i.hi;
-        }
-        // That's this frame's share: with its first update and drawing too, a frame of play ran
-        // past its time (the game then skips a frame: player 1 moved a pixel less).
-        B->justMade = true;
-        return;
-    }
-    B->justMade = false;
-    pad = !PartnerLive() ? g_CoopSpikePad : Age() <= PARTNER_STALE_FRAMES ? PadIn() : 0;
-    t0 = VSync(1);
-    if (PartnerLive()) {
-        PutStatus();
-    }
-    ShowPrims();
-    SwapIn();
-    // Hit in its own game (its HP dropped): its own hit reaction here, its own code's knockback
-    // and voice, from the same HP to the same HP (cosmetic: the body's status is the partner's).
-    if (PartnerLive() && (StatusIn())->magic == STATUS_MAGIC) {
-        s32 hp = ((const s32*)(StatusIn())->a)[1]; // g_Status.hp
-        if (B->partnerHp > hp && hp > 0) {
-            // Its own code's sums can differ from its game's, and a body that died here stayed dead
-            // and unseen while the partner played on (playtest 0.14): it can't die of this.
-            g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + (B->partnerHp - hp);
-            PLAYER.hitParams = DAMAGEKIND_1;
-            PLAYER.hitPoints = B->partnerHp - hp + g_Status.defenseEquip;
-            g_CoopBodyHits++;
-        }
-        B->partnerHp = hp;
-    }
-    if (PartnerLive()) { // pulled to their real spot when it drifts
-        s16 x = p->x - g_Tilemap.scrollX.i.hi, y = p->y - g_Tilemap.scrollY.i.hi;
-        s32 dx = x - PLAYER.posX.i.hi, dy = y - PLAYER.posY.i.hi;
-        bool off = Ease(dx) || Ease(dy);
-
-        B->driftFrames = off ? B->driftFrames + 1 : 0;
-        if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || B->driftFrames > DRIFT_FRAMES) {
-            // A door, a teleport, or a drift the easing can't undo (a body on a floor below its
-            // real spot falls back each frame): there at once.
-            PLAYER.posX.i.hi = x;
-            PLAYER.posY.i.hi = y;
-            PLAYER.velocityX = PLAYER.velocityY = 0;
-            B->driftFrames = 0;
-        } else {
-            // Drifting (its game's hit knocked it back, and not here): eased back, an eighth of the
-            // way a frame. Snapped at 48 px, Richter running "jumped all over" (#291).
-            PLAYER.posX.i.hi += Ease(dx);
-            PLAYER.posY.i.hi += Ease(dy);
-        }
+    if (hit) {
+        // Its own code's sums can differ from its game's, and a body that died here stayed dead
+        // and unseen while the partner played on (playtest 0.14): it can't die of this.
+        g_Status.hp = g_Status.hpMax + PLAYER_HIT_MARGIN + hit;
+        PLAYER.hitParams = DAMAGEKIND_1;
+        PLAYER.hitPoints = hit + g_Status.defenseEquip;
+        g_CoopBodyHits += !again && !s_SfxLog; // rolling: counted where it's new (RollFrame)
     }
     if (PartnerLive() && (p->flipX & FLIP_CARRIED)) { // hanging under a bat: where its own game holds it
         PLAYER.posX.val = (p->x - g_Tilemap.scrollX.i.hi) << 16;
@@ -1256,8 +1329,418 @@ static void BodyFrame(void) {
     g_pads[0] = pad0;
     g_CoopOptions = options;
     B->bodyDied = (g_Player.status & PLAYER_STATUS_DEAD) && !(p->flags & PRESENCE_DEAD);
-    Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
-    SwapOut();
+    s_Again = again;
+}
+
+// --- Rollback (#86, design/rollback.md). Online, the host writes the partner's buttons by frame as
+// they come (link.h CoopRollIn), and the frame the partner is at now. The body runs up to that
+// frame: on its buttons where they came, on a guess where they haven't yet (the last ones held).
+// Before each frame it runs, its whole state is kept (RollSnap: the body, its statics, its
+// primitives); when the buttons come and a guess was wrong, it goes back to the state before that
+// frame and runs again from there, the frames it ran before without their sounds. So the partner
+// is shown where they are now, not where they were half a round trip and the jitter buffer ago.
+// The snapshots live in the 16 MB of our SwanStation build, and are taken by its copy engine.
+#define ROLL_FRAMES 32 // snapshots kept, a power of two
+#define ROLL_LEAD 12   // the most frames run on guesses (0.2 s)
+#define ROLL_LINES 100 // running again stops once it has taken this many scanlines (of a frame's 263)
+typedef struct {
+    u32 frame; // the partner's frame this is the state before
+    u16 pad;   // the buttons that frame ran on
+    u8 guessed;
+    u8 primCount;
+    s32 hit; // HP its game lost, given to it before that frame
+    SfxLog sfx; // the sounds that frame played (when it runs again, only what's new plays)
+    Body b;
+    u32 body[BODY_SIZE / 4];
+    u32 statics[STATICS_MAX / 4];
+    s16 primAt[PRIMS];
+    Primitive prims[PRIMS];
+} RollSnap;
+#define ROLL_RING(k) ((RollSnap*)(ROLL_ADDR + 0x1000) + (k) * ROLL_FRAMES)
+typedef char RollFits[ROLL_ADDR + 0x1000 + COOP_PARTNERS * ROLL_FRAMES * sizeof(RollSnap) <= 0x81000000 ? 1 : -1];
+u32 g_CoopRollFrames;   // tests (coop.map): frames run ahead
+u32 g_CoopRollRewinds;  // rollbacks
+u32 g_CoopRollAborts;   // rollbacks given up (a primitive it gave up was taken since)
+u32 g_CoopRollBehind;   // frames the body was drawn short of the partner's (no time to run them all)
+u32 g_CoopRollStartLine; // the scanline its turn started on, last frame (tests)
+u32 g_CoopRollLinesMax;  // the most scanlines a turn took
+s16 g_CoopRollDrawn[2];  // partner 0's body is drawn this far from where it is (tests: a correction sliding out)
+
+static bool RollOn(const CoopPresence* p) {
+    return PartnerLive() && ROLL_IN(s_K)->magic == ROLL_MAGIC && Age() <= PARTNER_STALE_FRAMES &&
+           !(p->flipX & FLIP_CARRIED) && CopyEngine();
+}
+
+// The body's primitives, from its slots in the copy (swapped out): as OwnPrims says of RAM.
+static s32 BodyPrims(s16* out) {
+    const Entity* e = (const Entity*)BODY_BUF;
+    Primitive* prim;
+    s32 i, n = 0;
+
+    for (i = 0; i < 64; i++, e++) {
+        if (!(e->flags & FLAG_HAS_PRIMS) || (i && i <= E_AFTERIMAGE_3 ? !B->otherChar : i && !e->entityId)) {
+            continue;
+        }
+        for (prim = &g_PrimBuf[e->primIndex]; prim && n < PRIMS; prim = prim->next) {
+            out[n++] = prim - g_PrimBuf;
+        }
+    }
+    return n;
+}
+
+// The body's state before frame f (swapped out), and what that frame runs on.
+static void Keep(u32 f, u16 pad, u8 guessed, s32 hit) {
+    RollSnap* r = &ROLL_RING(s_K)[f % ROLL_FRAMES];
+    s32 i;
+
+    r->frame = f;
+    r->pad = pad;
+    r->guessed = guessed;
+    r->hit = hit;
+    CopyWords(&r->b, B, sizeof(Body));
+    CopyWords(r->body, BODY_BUF, BODY_SIZE / 4 * 4);
+    if (B->code) {
+        StaticsIn();
+        StaticsBuf(BuildOf(B->chr), r->statics, STATICS_SAVE);
+    }
+    r->primCount = BodyPrims(r->primAt);
+    for (i = 0; i < r->primCount; i++) {
+        CopyWords(&r->prims[i], &g_PrimBuf[r->primAt[i]], sizeof(Primitive));
+    }
+}
+
+// Back to the state before frame f. Its primitives as they were: those it took since go back to the
+// game, and those it gave up since come back, unless something took them meanwhile (then it can't:
+// false, nothing changed).
+static bool Restore(u32 f) {
+    RollSnap* r = &ROLL_RING(s_K)[f % ROLL_FRAMES];
+    s16 now[PRIMS];
+    s32 n, i, j, hp;
+    bool reloaded, made, died, seen;
+    s16 drift;
+    u32 loaded;
+    Primitive* prim;
+
+    if (r->frame != f) {
+        return false;
+    }
+    n = BodyPrims(now);
+    for (i = 0; i < r->primCount; i++) {
+        for (j = 0; j < n && now[j] != r->primAt[i]; j++) {
+        }
+        if (j == n && (g_PrimBuf[r->primAt[i]].type != PRIM_NONE || r->prims[i].type == PRIM_ENV)) {
+            return false;
+        }
+    }
+    for (j = 0; j < n; j++) {
+        for (i = 0; i < r->primCount && r->primAt[i] != now[j]; i++) {
+        }
+        if (i == r->primCount) { // as FreePrimitives
+            prim = &g_PrimBuf[now[j]];
+            if (prim->type == PRIM_ENV) {
+                **(DR_ENV***)&prim->r1 = NULL;
+            }
+            prim->type = PRIM_NONE;
+        }
+    }
+    for (i = 0; i < r->primCount; i++) {
+        CopyWords(&g_PrimBuf[r->primAt[i]], &r->prims[i], sizeof(Primitive));
+    }
+    // what's the link's, or the game's, and not the body's: as it is now
+    reloaded = B->reloaded, made = B->made, died = B->bodyDied, seen = B->teleportSeen;
+    drift = B->driftFrames, loaded = B->bankLoaded, hp = B->partnerHp;
+    CopyWords(B, &r->b, sizeof(Body));
+    B->reloaded = reloaded, B->made = made, B->bodyDied = died, B->teleportSeen = seen;
+    B->driftFrames = drift, B->bankLoaded = loaded, B->partnerHp = hp;
+    B->justMade = false;
+    CopyWords(BODY_BUF, r->body, BODY_SIZE / 4 * 4);
+    if (B->code) {
+        StaticsIn();
+        StaticsBuf(BuildOf(B->chr), r->statics, STATICS_LOAD);
+    }
+    return true;
+}
+
+// Partner k's buttons for frame f: those that came, or a guess (the newest before it that came).
+static bool PadKnown(volatile CoopRollIn* in, u32 f) {
+    s32 back = in->newest - f;
+    return back >= 0 && back < ROLL_PADS && ((in->known >> (f % ROLL_PADS)) & 1);
+}
+static u16 PadAt(volatile CoopRollIn* in, u32 f, u8* guessed) {
+    u32 g;
+
+    if (PadKnown(in, f)) {
+        *guessed = 0;
+        return in->pads[f % ROLL_PADS];
+    }
+    *guessed = 1;
+    if ((s32)(f - in->newest) > 0 && (s32)(f - in->newest) < ROLL_GUESSES) { // the partner's suggestion
+        for (g = f; (s32)(g - in->newest) > 0; g--) {                     // in effect from its frame on
+            if ((in->guessed >> (g % ROLL_GUESSES)) & 1) {
+                return in->guesses[g % ROLL_GUESSES];
+            }
+        }
+    }
+    for (g = (s32)(f - in->newest) > 0 ? in->newest : f; (s32)(in->newest - g) < ROLL_PADS; g--) {
+        if (PadKnown(in, g)) {
+            return in->pads[g % ROLL_PADS];
+        }
+    }
+    return B->prevPad;
+}
+
+// The HP the partner lost in its own game during frame f (0: none, or not known: a guess of none).
+static s32 HitAt(volatile CoopRollIn* in, u32 f) {
+    u16 before, after;
+
+    if (!PadKnown(in, f) || !PadKnown(in, f - 1)) {
+        return 0;
+    }
+    before = in->hps[(f - 1) % ROLL_PADS];
+    after = in->hps[f % ROLL_PADS];
+    return before != ROLL_HP_NONE && after != ROLL_HP_NONE && after && before > after ? before - after : 0;
+}
+
+// The body's spot (in the room) after frame f, as it ran it, or false (not kept).
+static bool SpotAfter(u32 f, s16* x, s16* y) {
+    Roll* R = &s_Roll[s_K];
+    const RollSnap* r = &ROLL_RING(s_K)[(f + 1) % ROLL_FRAMES];
+    const Entity* e;
+
+    if ((s32)(f - R->s) >= 0) { // the body's now (it hasn't got as far as f: as near as it has)
+        e = (const Entity*)BODY_BUF;
+        *x = e->posX.i.hi + B->scrollX;
+        *y = e->posY.i.hi + B->scrollY;
+        return true;
+    }
+    if ((s32)(f + 1 - R->lo) < 0 || r->frame != f + 1) {
+        return false;
+    }
+    e = (const Entity*)r->body;
+    *x = e->posX.i.hi + r->b.scrollX;
+    *y = e->posY.i.hi + r->b.scrollY;
+    return true;
+}
+
+// As Pull, but against where the body was at the presence's frame P: what's wrong then is wrong in
+// every frame after it too, the kept ones included.
+static void RollPull(const CoopPresence* p, u32 P) {
+    Roll* R = &s_Roll[s_K];
+    Entity* e = (Entity*)BODY_BUF;
+    s16 x, y;
+    s32 dx, dy, mx, my;
+    u32 f;
+
+    if (!SpotAfter(P, &x, &y)) {
+        return;
+    }
+    dx = p->x - x;
+    dy = p->y - y;
+    R->driftFrames = Ease(dx) || Ease(dy) ? R->driftFrames + 1 : 0;
+    if (dx > SNAP_PX || -dx > SNAP_PX || dy > SNAP_PX || -dy > SNAP_PX || R->driftFrames > DRIFT_FRAMES) {
+        mx = dx, my = dy;
+        e->velocityX = e->velocityY = 0;
+        R->driftFrames = 0;
+    } else {
+        mx = Ease(dx), my = Ease(dy);
+    }
+    if (!mx && !my) {
+        return;
+    }
+    e->posX.i.hi += mx;
+    e->posY.i.hi += my;
+    for (f = (s32)(P + 1 - R->lo) > 0 ? P + 1 : R->lo; (s32)(f - R->s) <= 0; f++) {
+        RollSnap* r = &ROLL_RING(s_K)[f % ROLL_FRAMES];
+        if (r->frame == f) {
+            ((Entity*)r->body)->posX.i.hi += mx;
+            ((Entity*)r->body)->posY.i.hi += my;
+        }
+    }
+}
+
+// A rollback's correction is drawn sliding out, not jumped: a third a frame, at least 2 px. Past a
+// screen, it's a real move (a door): none.
+static s16 Slide(s32 d) {
+    s32 step = (d < 0 ? -d : d) / 3;
+
+    if (d > 256 || d < -256) {
+        return 0;
+    }
+    step = step < 2 ? 2 : step;
+    return d > step ? d - step : d < -step ? d + step : 0;
+}
+
+static void RollFrame(const CoopPresence* p, s32 hit) {
+    volatile CoopRollIn* in = ROLL_IN(s_K);
+    Roll* R = &s_Roll[s_K];
+    u32 T = in->target, F = in->newest, P = in->played, f, oldS, from;
+    RollSnap* e;
+    bool drawn = false, again;
+    u16 pad;
+    u8 guessed;
+    s32 h, ran, wasX, wasY;
+    bool rewound;
+    u16 start = VSync(1);
+
+    if ((s32)(T - F) > ROLL_LEAD) {
+        T = F + ROLL_LEAD;
+    }
+    if ((s32)(T - P) < 0) {
+        T = P;
+    }
+    if (!R->on || (s32)(T - R->s) > ROLL_FRAMES / 2 || (s32)(R->s - T) > ROLL_FRAMES / 2) {
+        // made just now, back from running on the presence, or the partner's frames started over
+        // (a reconnect): the body is where the presence was, at its frame
+        R->on = true;
+        R->s = P;
+        R->lo = P + 1;
+        R->hit = 0;
+        R->driftFrames = 0;
+        R->drawX = R->drawY = 0;
+    }
+    if ((s32)(T - R->s) < 0) {
+        T = R->s; // never back: it holds still until the partner's frames catch up
+    }
+    // A guess the buttons now say was wrong: back to the state before that frame.
+    oldS = R->s;
+    wasX = ((Entity*)BODY_BUF)->posX.i.hi + B->scrollX; // where it is now, as last run
+    wasY = ((Entity*)BODY_BUF)->posY.i.hi + B->scrollY;
+    rewound = false;
+    from = (s32)(R->lo - (F - ROLL_PADS + 1)) > 0 ? R->lo : F - ROLL_PADS + 1;
+    for (f = from; (s32)(f - R->s) <= 0 && (s32)(f - F) <= 0; f++) {
+        e = &ROLL_RING(s_K)[f % ROLL_FRAMES];
+        if (e->frame != f || !e->guessed || !PadKnown(in, f)) {
+            continue;
+        }
+        if (in->pads[f % ROLL_PADS] == e->pad && HitAt(in, f) == e->hit) {
+            e->guessed = 0; // a right guess
+            continue;
+        }
+        if (Restore(f)) {
+            R->s = f - 1;
+            rewound = true;
+            g_CoopRollRewinds++;
+        } else { // the guesses stand: the presence's pull puts it right
+            g_CoopRollAborts++;
+            for (; (s32)(f - oldS) <= 0; f++) {
+                ROLL_RING(s_K)[f % ROLL_FRAMES].guessed = 0;
+            }
+        }
+        break;
+    }
+    RollPull(p, P);
+    (void)hit; // its hits come by frame with its buttons (HitAt), not from its status
+    R->drawX = Slide(R->drawX);
+    R->drawY = Slide(R->drawY);
+    for (ran = 0; (s32)(R->s - T) < 0; ran++) {
+        f = R->s + 1;
+        if (ran && (u16)(VSync(1) - start) > ROLL_LINES) {
+            break; // out of time: the rest next frame (one frame always runs)
+        }
+        again = (s32)(f - oldS) <= 0;
+        pad = PadAt(in, f, &guessed);
+        h = HitAt(in, f); // where its game said it was hit: on that frame
+        if (!PadKnown(in, f - 1)) {
+            guessed = 1; // a hit we can't know yet
+        }
+        g_CoopBodyHits += h && (!again || ROLL_RING(s_K)[f % ROLL_FRAMES].hit != h);
+        Keep(f, pad, guessed, h);
+        s_SfxLog = &ROLL_RING(s_K)[f % ROLL_FRAMES].sfx;
+        if (!again) {
+            s_SfxLog->n = 0; // a new frame: nothing heard of it yet
+        }
+        if ((s32)(f - R->lo) >= ROLL_FRAMES) {
+            R->lo = f - ROLL_FRAMES + 1;
+        }
+        SwapIn();
+        Run(p, pad, h, again);
+        if (rewound && f == oldS) { // run again to where it was: what the rollback moved it by
+            R->drawX += wasX - (PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi);
+            R->drawY += wasY - (PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi);
+        }
+        if (f == T) {
+            Draw();
+            drawn = true;
+        }
+        SwapOut();
+        s_SfxLog = NULL;
+        R->s = f;
+        g_CoopRollFrames += !again;
+    }
+    g_CoopRollStartLine = start;
+    if (!s_K) {
+        g_CoopRollDrawn[0] = R->drawX;
+        g_CoopRollDrawn[1] = R->drawY;
+    }
+    if (!drawn) {
+        g_CoopRollBehind += R->s != T;
+        s_Again = false;
+        SwapIn();
+        Draw();
+        SwapOut();
+    }
+    if ((u16)(VSync(1) - start) > g_CoopRollLinesMax) {
+        g_CoopRollLinesMax = (u16)(VSync(1) - start);
+    }
+}
+
+// Partner s_K's body (B): made, updated and drawn, or dropped.
+static void BodyFrame(void) {
+    const CoopPresence* p = Presence();
+    s32 t0, hit;
+    u16 pad;
+
+    if (g_CoopBodyOff) { // tests: no body (what a game does without one)
+        if (B->made) {
+            Drop();
+        }
+        return;
+    }
+    if (B->made && !Spike() &&
+        (!PartnerLive() || !PartnerHere() || Presence()->character != B->chr || B->bodyDied ||
+         ((Presence()->flipX & FLIP_TELEPORT_IN) && !B->teleportSeen))) {
+        Drop(); // gone (from this room, or for good), or just revived: made again where they are
+        B->bodyDied = false;
+    }
+    B->teleportSeen = PartnerLive() && (Presence()->flipX & FLIP_TELEPORT_IN);
+    if (!Spike() && !(PartnerLive() && PartnerHere())) {
+        return;
+    }
+    if (!B->made) {
+        u16 m0 = VSync(1);
+        Make();
+        g_CoopMakeLines = (u16)(VSync(1) - m0);
+        B->scrollX = g_Tilemap.scrollX.i.hi;
+        B->scrollY = g_Tilemap.scrollY.i.hi;
+        if (PartnerLive()) { // where they are (their presence is in room pixels)
+            ((Entity*)BODY_BUF)->posX.i.hi = p->x - g_Tilemap.scrollX.i.hi;
+            ((Entity*)BODY_BUF)->posY.i.hi = p->y - g_Tilemap.scrollY.i.hi;
+        }
+        // That's this frame's share: with its first update and drawing too, a frame of play ran
+        // past its time (the game then skips a frame: player 1 moved a pixel less).
+        B->justMade = true;
+        return;
+    }
+    B->justMade = false;
+    t0 = VSync(1);
+    if (PartnerLive()) {
+        PutStatus();
+    }
+    ShowPrims();
+    hit = HitIn();
+    if (RollOn(p)) {
+        RollFrame(p, hit);
+    } else {
+        s_Roll[s_K].on = false;
+        pad = !PartnerLive() ? g_CoopSpikePad : Age() <= PARTNER_STALE_FRAMES ? PadIn() : 0;
+        SwapIn();
+        if (PartnerLive()) {
+            Pull(p);
+        }
+        Run(p, pad, hit, false);
+        Draw(); // in the same swap: each one costs some 12 scanlines (M13: the frame's budget)
+        SwapOut();
+    }
     g_CoopSpikeLines = (u16)(VSync(1) - t0); // a 16-bit counter: its update and drawing
     if (g_CoopSpikeLines > g_CoopSpikeMax) {
         g_CoopSpikeMax = g_CoopSpikeLines;
@@ -1332,6 +1815,48 @@ static void Tint(u32 gt4) {
 // copies into their polygons; after it, PartnerAfterPrims gives those polygons the bank's palette
 // too and takes the tag off again. (A pass of our own, with every other primitive hidden and
 // shown again, cost some 40 scanlines a frame: the mixed soak missed frames.)
+// The body's primitives moved with a rollback's correction for the game's pass, and back before
+// its next frame (ShowPrims): what's kept and run is where the body really is.
+static void ShiftPrim(Primitive* p, s32 dx, s32 dy) {
+    switch (p->type & 0xF) {
+    case PRIM_G4:
+    case PRIM_GT4:
+        p->x3 += dx;
+        p->y3 += dy;
+    case PRIM_GT3:
+        p->x2 += dx;
+        p->y2 += dy;
+    case PRIM_LINE_G2:
+        p->x1 += dx;
+        p->y1 += dy;
+    case PRIM_TILE:
+    case PRIM_SPRT:
+        p->x0 += dx;
+        p->y0 += dy;
+    }
+}
+static void DrawShift(s16 dx, s16 dy) {
+    Roll* R = &s_Roll[s_K];
+    s32 i;
+
+    for (i = 0; i < B->primCount && (dx || dy); i++) {
+        ShiftPrim(&g_PrimBuf[B->prims[i]], dx, dy);
+    }
+    R->shiftX = B->primCount ? dx : 0;
+    R->shiftY = B->primCount ? dy : 0;
+}
+static void UndoShift(void) {
+    Roll* R = &s_Roll[s_K];
+    s32 i;
+
+    if (R->shiftX || R->shiftY) {
+        for (i = 0; i < B->primCount; i++) {
+            ShiftPrim(&g_PrimBuf[B->prims[i]], -R->shiftX, -R->shiftY);
+        }
+    }
+    R->shiftX = R->shiftY = 0;
+}
+
 static s16 s_Tagged[PRIMS * COOP_PARTNERS]; // every body's (one pass draws them all)
 static s32 s_TagCount;
 
@@ -1382,7 +1907,14 @@ static void Draw(void) {
     static u16 frames[256];
     u32 gt4 = g_GpuUsage.gt4, gt3 = g_GpuUsage.gt3;
     s32 i;
+    s16 ox = s_Roll[s_K].on ? s_Roll[s_K].drawX : 0, oy = s_Roll[s_K].on ? s_Roll[s_K].drawY : 0;
 
+    for (i = 0; i < 64 && (ox || oy); i++) { // a rollback's correction sliding out (RollFrame)
+        if (!i || g_Entities[i].entityId || (i <= E_AFTERIMAGE_3 && B->otherChar)) {
+            g_Entities[i].posX.i.hi += ox;
+            g_Entities[i].posY.i.hi += oy;
+        }
+    }
     frames[0] = PLAYER.animCurFrame;
     PLAYER.animCurFrame = MAR_SAFE_FRAME(B->chr, &PLAYER);
     for (i = 1; i < 256; i++) {
@@ -1394,6 +1926,12 @@ static void Draw(void) {
     RenderEntities();
     for (i = 0; i < 256; i++) {
         g_Entities[i].animCurFrame = frames[i];
+    }
+    for (i = 0; i < 64 && (ox || oy); i++) {
+        if (!i || g_Entities[i].entityId || (i <= E_AFTERIMAGE_3 && B->otherChar)) {
+            g_Entities[i].posX.i.hi -= ox;
+            g_Entities[i].posY.i.hi -= oy;
+        }
     }
     if ((!B->otherChar || Twin()) && !(g_CoopLink.options & OPT_NO_TINT)) { // only two of a kind need telling apart
         Tint(gt4);
@@ -1408,6 +1946,7 @@ static void Draw(void) {
         HideFlashes();
         B->primCount = 0; // nothing of ours to give back but the flashes
     }
+    DrawShift(ox, oy);
     if (PartnerLive()) { // its familiar, beside the body (in RAM now: the copy holds player 1)
         FamiliarDraw(s_K, PLAYER.posX.i.hi + g_Tilemap.scrollX.i.hi - Presence()->x,
                      PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi - Presence()->y);

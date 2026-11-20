@@ -86,6 +86,8 @@ class _Worker:
         if cmd == "step":
             n, p1 = args
             for _ in range(n):
+                if self.linked:
+                    self.link_before(p1)
                 emu.step(1, p1)
                 self.clock["t"] += self.clock["dt"]
                 if self.linked:
@@ -140,7 +142,12 @@ class _Worker:
                 kind, k = target.rstrip("0123456789"), int(target[len(target.rstrip("0123456789")):])
                 obj = {"host": self.hosts, "transport": self.transports}[kind][k]
             return getattr(obj, name)(*a, **kw)
+        elif cmd == "suggest":  # the app's buttons changed while it waits for the next frame (rollback)
+            if self.linked:
+                self.link_before(args, suggest_only=True)
         elif cmd == "frame":  # real-time play: one frame, back with its picture and sound
+            if self.linked:
+                self.link_before(args)
             emu.step(1, args)
             if self.linked:
                 self.link_frame()
@@ -175,6 +182,22 @@ class _Worker:
 
     HOST_SETTINGS = {"set_player", "set_mod", "set_castle", "set_rules", "set_fresh", "set_portraits", "set_hello",
                      "set_player_id"}
+
+    def link_before(self, pad, suggest_only=False):
+        """The buttons for the frame about to run, to every partner's host (rollback suggestions).
+        Never in the way of the frame."""
+        try:
+            from emu import pad as as_mask
+            from link.rollback import ps_buttons
+            ps = ps_buttons(as_mask(pad))
+            hosts = self.room.all_hosts() if self.room is not None else self.hosts
+            for h in hosts:
+                if suggest_only:
+                    h.suggest(ps)
+                else:
+                    h.before_frame(ps)
+        except Exception:  # noqa: BLE001 - a suggestion is only ever a guess
+            self.suggest_errors = getattr(self, "suggest_errors", 0) + 1
 
     def link_hosts(self):
         if self.room is not None:
@@ -290,6 +313,10 @@ class Game:
         """One frame with this pad: ((w, h, mode, pixels) or None, audio bytes). With shared
         memory, pixels is the byte count in self.shm instead."""
         return self._ask("frame", pad)
+
+    def suggest(self, pad=0):
+        """The player's buttons changed between frames (online): to the partners now."""
+        return self._ask("suggest", pad)
 
     def frame_start(self, pad=0):
         """frame(), split in two so both games can run their frame at the same time."""
