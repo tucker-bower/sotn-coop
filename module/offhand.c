@@ -104,9 +104,11 @@ static void StubUnloaded(void) {
 
 static u8 Category(s32 hand) { return g_EquipDefs[g_Status.equipment[hand]].itemCategory; }
 
+// Shields too (#214, Tucker 2026-11-19): held, the shield's own guard entity (its weapon overlay)
+// stands in front of the player, and its hitbox blocks what can be blocked, as Alucard's does.
 static bool IsWeapon(u8 category) {
     return category == ITEM_S_SWORD || category == ITEM_SWORD || category == ITEM_FIST ||
-           category == ITEM_CLUB || category == ITEM_TWOHAND || category == ITEM_THROW_1;
+           category == ITEM_CLUB || category == ITEM_TWOHAND || category == ITEM_THROW_1 || category == ITEM_SHIELD;
 }
 
 // The weapon overlay of what's in that hand (0xFF: none, e.g. the empty hand).
@@ -333,6 +335,7 @@ static void Use(s32 hand) {
 static Entity s_Alu;
 static bool s_Swinging;
 static bool s_Fist; // that swing is a fist weapon's: Alucard's own arm is the punch (issue 123)
+static s8 s_Shield = -1; // the hand guarding with a shield, while its button is held (#214)
 static u16 s_Unk46;
 static bool s_Grounded; // the swing started on the ground
 
@@ -363,6 +366,7 @@ static void AluSwing(s32 hand) {
         LoadSheet(hand); // one sheet's room: the swinging hand's
     }
     s_Fist = eq->itemCategory == ITEM_FIST;
+    s_Shield = eq->itemCategory == ITEM_SHIELD ? hand : -1;
     g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
     PlayAnimation(D_800B0130, D_800B01B8);
     // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's
@@ -390,7 +394,12 @@ static void AluAnimate(void) {
     g_CurrentEntity = &s_Alu;
     PlayAnimation(D_800B0130, D_800B01B8);
     g_CurrentEntity = cur;
-    if (s_Alu.poseTimer < 0) {
+    if (s_Shield >= 0) { // a guard lasts while its button's held (the shield's entity leaves then too)
+        if (!(g_pads[0].pressed & (s_Shield ? PAD_CIRCLE : PAD_SQUARE))) {
+            s_Swinging = false;
+            s_Shield = -1;
+        }
+    } else if (s_Alu.poseTimer < 0) {
         s_Swinging = false;
     }
 }
