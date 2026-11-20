@@ -147,7 +147,8 @@ class Room:
         if self._relay is None:
             self._relay = self.connect_kw.get("relay") or default_relay()
         self._relay.publish(room_topic(self.code), {"role": "full", "token": room_token(self.code), "nonce": now,
-                                                    "players": len(self.players), "max": self.max_players})
+                                                    "players": len(self.players), "max": self.max_players,
+                                                    "seated": sorted(i for i in self._seated if i)})
 
     def _open_seat(self):
         seat = len(self.players)
