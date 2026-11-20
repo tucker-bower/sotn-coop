@@ -336,6 +336,14 @@ static Entity s_Alu;
 static bool s_Swinging;
 static bool s_Fist; // that swing is a fist weapon's: Alucard's own arm is the punch (issue 123)
 static s8 s_Shield = -1; // the hand guarding with a shield, while its button is held (#214)
+// #310: their swings ran their own time (about 60 frames for Richter, 16 for Maria, against his
+// 28 with a Short Sword), and a press meanwhile went to their own attack: a whip or owl hit with
+// every swing, 43 damage a second to his 30.
+// Their animation's end isn't Alucard's timing, so a swing lasts at least SWING_MIN frames (his
+// quickest second swing with a Short Sword is 28) and at most SWING_MAX.
+#define SWING_MIN 28
+#define SWING_MAX 40
+static u8 s_SwingAge;
 static u16 s_Unk46;
 static bool s_Grounded; // the swing started on the ground
 
@@ -367,6 +375,7 @@ static void AluSwing(s32 hand) {
     }
     s_Fist = eq->itemCategory == ITEM_FIST;
     s_Shield = eq->itemCategory == ITEM_SHIELD ? hand : -1;
+    s_SwingAge = 0;
     g_CurrentEntity = &s_Alu; // DRA advances Alucard's animation in the frame of the press too
     PlayAnimation(D_800B0130, D_800B01B8);
     // Their loops take entity 1 (E_FACTORY) as their own factory while its step is 0: DRA's
@@ -399,7 +408,7 @@ static void AluAnimate(void) {
             s_Swinging = false;
             s_Shield = -1;
         }
-    } else if (s_Alu.poseTimer < 0) {
+    } else if (++s_SwingAge >= SWING_MAX || (s_Alu.poseTimer < 0 && s_SwingAge >= SWING_MIN)) {
         s_Swinging = false;
     }
 }
@@ -682,6 +691,9 @@ void OffhandUpdate(void) {
     // so □ is taken out of them until it's let go, and out of what the partner's copy of us plays.
     if (s_SquareTaken && !(g_pads[0].pressed & PAD_SQUARE)) {
         s_SquareTaken = false;
+    }
+    if (!s_SquareTaken && s_Swinging && s_Shield != 0 && (g_pads[0].pressed & PAD_SQUARE) && Holds(0)) {
+        s_SquareTaken = true; // a press during the swing: dropped, as Alucard's is, not their own attack
     }
     if (!s_SquareTaken && (g_pads[0].tapped & PAD_SQUARE) && !(g_pads[0].pressed & PAD_UP) && Holds(0)) {
         s_SquareTaken = true;
