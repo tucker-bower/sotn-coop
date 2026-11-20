@@ -196,8 +196,8 @@ class _Worker:
                     h.suggest(ps)
                 else:
                     h.before_frame(ps)
-        except Exception:  # noqa: BLE001
-            self.link_errors = getattr(self, "link_errors", 0) + 1
+        except Exception:  # noqa: BLE001 - a suggestion is only ever a guess
+            self.suggest_errors = getattr(self, "suggest_errors", 0) + 1
 
     def link_hosts(self):
         if self.room is not None:

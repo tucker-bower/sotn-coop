@@ -94,8 +94,8 @@ def link_spec_conformance(run):
 
     frame(70)
     hello = [json.loads(p) for p in got.get(b"HELO", [])]
-    run.expect(hello and hello[0]["link"] == 14, "the host says HELO with link version 14", hello=hello[:1])
-    partner.send(b"HELO", json.dumps({"link": 14, "patch": None, "sid": "spec"}).encode())
+    run.expect(hello and hello[0]["link"] == 15, "the host says HELO with link version 15", hello=hello[:1])
+    partner.send(b"HELO", json.dumps({"link": 15, "patch": None, "sid": "spec"}).encode())
     pres = got.get(b"PRES", [])
     run.expect(pres and len(pres[-1]) == PRESENCE + PRES_TAIL, "PRES every frame, 0x2C + 16 bytes", count=len(pres))
     me = pres[-1]
@@ -144,7 +144,7 @@ def link_spec_conformance(run):
     frame(70)
     run.expect(not got.get(b"PRES") and got.get(b"HELO"), "then only HELO is sent (nothing relayed)",
                sent={k.decode(): len(v) for k, v in got.items()})
-    partner.send(b"HELO", json.dumps({"link": 14, "patch": None, "sid": "spec"}).encode())
+    partner.send(b"HELO", json.dumps({"link": 15, "patch": None, "sid": "spec"}).encode())
     frame(3)
     run.expect(host.mismatch is None, "a matching HELO lifts the refusal")
     transport.close()

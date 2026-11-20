@@ -23,6 +23,8 @@ A and B. A's two costs went to the emulator (D226): our SwanStation gives 16 MB,
 
 How A works (`module/partner.c` RollFrame, `link/rollback.py`): the host writes each partner's buttons by frame as they come (`CoopRollIn`, ahead of the playout), and the frame the partner is at now (the playout's fastest path plus half the round trip, at most 12 frames past the newest buttons). Before each frame the body runs, its state is kept: the body, its statics, its primitives. When buttons come that differ from a guess, the body goes back to before that frame and runs again, those frames' sounds dropped. The presence's pull works on where the body was at the presence's frame, and moves the kept frames after it too.
 
+Inputs and hits (D227): the partner's host sends each frame's buttons and its HP after the frame (`INPT`, the last 8 frames each time), so a hit in its own game lands on the body at that frame. Guesses are the partner's suggestions (`SUGG`, Slippi's input suggestions: its buttons as its app reads them, and as they change while it waits for the next frame), else the last buttons held. A frame run again plays only the sounds its first run didn't. The partner's swings, still sent from its game, are placed against where it stood at their own frame; they come a few frames after the body's attack starts (#343).
+
 How B works (`module/shared.c` Extrapolate): with each snapshot the host gives its frame and the authority's frame now. A copy is moved on by what it moved between its last two snapshots (so a many-part enemy's parts move together) for the snapshot's age, and on through a gap of up to 8 frames; a new snapshot that puts it somewhere else is eased in over a few frames (a jump of more than 64 px is a real one).
 
 ## Acceptance criteria
