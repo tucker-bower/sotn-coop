@@ -53,6 +53,9 @@ def main():
         if adb(serial, "shell", "ls", "-d", external, check=False).strip() == external:
             raise SystemExit(f"{external} is left from an earlier install: not a fresh start")
         adb(serial, "install", "-r", str(apk))
+        # A freshly booted emulator changes its configuration (assets, 0x80000000) a little after
+        # boot, which relaunches the activity and closes any SDL app: not something a player meets.
+        time.sleep(20)
         adb(serial, "logcat", "-c")
         adb(serial, "shell", "monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1")
         alive = True
@@ -63,6 +66,8 @@ def main():
                 break
         log = adb(serial, "logcat", "-d")
         (OUT / "logcat.txt").write_text(log)
+        # the app's own log (its Python errors, which a quit leaves out of logcat)
+        (OUT / "launcher.log").write_text(adb(serial, "shell", "cat", f"{external}/files/launcher.log", check=False))
         python = [line for line in log.splitlines() if " python  :" in line]
         errors = [line.split(" python  : ", 1)[1] for line in python if "Traceback" in line or "Error:" in line]
         check(alive, f"the app is still running {SECONDS} s after it opens")
