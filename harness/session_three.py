@@ -245,3 +245,40 @@ def online_4p_lossy(run):
     ages = [[g.mailbox("partner_age", k) for k in range(3)] for g in games]
     run.expect(all(a < 30 for row in ages for a in row), "every game hears all three partners", ages=ages)
     run.expect(all(g.mailbox("self_presence").flags & IN_PLAY for g in games), "all four still in play")
+
+
+@session_scenario(starts=("entrance",) * 4, characters=(CHAR_ALUCARD, CHAR_RICHTER, 2, CHAR_ALUCARD), full=True)
+def crowd_four_in_the_hall(run):
+    """D221's cost, measured: four players (Alucard, Richter, Maria, Alucard) mash buttons together in
+    the entrance's zombie hall, the busiest room in the early castle, for 2 minutes. Each game runs
+    three partner bodies there. Missed frames (g_Timer behind the emulated frames) stay under 2% of
+    play in every game, and the frame cost (scanlines of 263, after drawing) is reported."""
+    from lockstep import random_inputs
+    from session_m8 import HALL_ROOM_ID, STAGE_NO3, VCOUNT
+    from session_progress import arrive
+    from session_scenarios import heal
+    from link.mailbox import CMD_ARRIVE
+    games = run.s.games
+    for k, g in enumerate(games):
+        arrive(run, g, STAGE_NO3, HALL_ROOM_ID, 1290 + 12 * k, 200)
+    frames = 2 * 3600
+    inputs = [list(random_inputs(50 + k, frames)) for k in range(4)]
+    slow, played, vcount, made = [0] * 4, [0] * 4, [], [0] * 4
+    for t in range(0, frames, 600):
+        t0 = [g.read("g_Timer") for g in games]
+        run.step(600, lambda i, *s, t=t: tuple(inputs[k][t + i][0] for k in range(4)),
+                 lambda i, *s: vcount.extend(g.read(VCOUNT) for g in games) if i % 10 == 0 else None)
+        for k, g in enumerate(games):
+            if g.snapshot()["game_state"] == 2:
+                played[k] += 600
+                slow[k] += max(0, 600 - (g.read("g_Timer") - t0[k]))
+            made[k] = max(made[k], bin(g.read(symbols()["g_CoopBodiesMade"]) & 7).count("1"))
+            heal(g)
+            p = g.mailbox("self_presence")
+            if (p.stage, p.room_id) != (STAGE_NO3, HALL_ROOM_ID):
+                g.mailbox("command", CMD_ARRIVE, STAGE_NO3, HALL_ROOM_ID, 1290 + 12 * k, 200)
+    vcount.sort()
+    numbers = dict(dropped=slow, of=played, bodies=made, scanlines_p50=vcount[len(vcount) // 2],
+                   scanlines_p99=vcount[int(len(vcount) * 0.99)])
+    run.expect(max(made) == 3, "three partner bodies in a game at once", **numbers)
+    run.expect(all(s <= p // 50 for s, p in zip(slow, played)), "every game misses under 2% of its frames", **numbers)
