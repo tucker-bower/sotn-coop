@@ -187,7 +187,10 @@ void WidescreenFrame(void) {
     if (g_GameState == Game_Play) {
         WidescreenStage(windows && !g_CoopWideStageOff ? windows - DISP_STAGE_W : 0);
     }
-    if (!w || !stage || g_GameState != Game_Play) { // (the Game Over, the title: as the game draws them)
+    // #334: not while a stage loads either (past Play_PrepareNextStage, its fade): the core sends drawing,
+    // fills and copies in the band under twice the width to the second bank, and at 16:9 that band
+    // reaches the stage's texture pages, so the next stage's tiles went there and drew black
+    if (!w || !stage || g_GameState != Game_Play || g_GameStep > Play_PrepareNextStage) { // (the Game Over, the title)
         if (stage && d0->clip.w != DISP_STAGE_W) { // turned off in play: the game's own framebuffers
             SetStageDisplayBuffer();
         }

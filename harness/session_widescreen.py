@@ -33,3 +33,23 @@ def widescreen_partner_wider(run):
     run.step(30)
     run.expect(a.read(windows, "<i") == 0 and b.screenshot().size == (256, 240), "both 4:3 again",
                windows=a.read(windows, "<i"), size=b.screenshot().size)
+
+
+@session_scenario(starts=("entrance", "entrance"))
+def widescreen_next_stage_draws_its_background(run):
+    """#334: at 16:9, going into the Alchemy Lab from the entrance left only the sprites: the core
+    was wide while the stage loaded, and sent its tiles to the second bank. Both games arrive in the
+    Lab at 16:9 and draw its background (under half the picture black; it was 94%)."""
+    from session_progress import arrive
+    a, b = run.s.a, run.s.b
+    for g in (a, b):
+        g.host("set_player", options=1 << OPT_WIDE_SHIFT)
+    run.step(60)
+    arrive(run, a, 0x0C, 80, 100, 160)
+    arrive(run, b, 0x0C, 80, 130, 160)
+    run.step(120)
+    for g in (a, b):
+        img = g.screenshot().convert("L")
+        dark = sum(p < 12 for p in img.getdata()) / (img.size[0] * img.size[1])
+        run.expect(img.size[0] > 256 and dark < 0.5, f"game {g.name}: the Lab's background is drawn, wide",
+                   size=img.size, dark=round(dark, 2))
