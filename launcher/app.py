@@ -1565,7 +1565,12 @@ class Launcher:
         from ui.screens.discs import discs
         while True:
             # the randomizer and the BIOS: here until the game discs and the Options screen take them (design steps 7, 8)
-            got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, art=self.disc_art)
+            try:
+                got = discs(self.plain_menus(), self.disc_status, self.attach_disc, first_run, art=self.disc_art)
+            except Navigate:
+                if not first_run:
+                    raise  # (the home menu's loop goes there)
+                continue  # #337: before a disc there's no home menu to go from: stay here
             if got == "quit":
                 raise SystemExit
             elif got == "back" or (got == "continue" and self.disc()):

@@ -535,6 +535,38 @@ static void StuckWalkRescue(void) {
     }
 }
 
+// Stuck in a fall (#336): Richter, in the Marble Gallery, ended up inside the floor at the room's
+// bottom, falling (velocity down, not on the ground) without moving, and stayed there. A fall that
+// goes nowhere for FALL_STUCK_FRAMES puts the player back on their last spot on the floor.
+#define FALL_STUCK_FRAMES 90
+
+static void StuckFallRescue(void) {
+    static s32 y, safeX, safeY = -1;
+    static u16 still, safeRoom;
+    const CoopPresence* self = &g_CoopLink.self;
+    s32 now = PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi;
+
+    // The last spot stood on: on the ground and not falling (in the floor the game counts the
+    // player as on the ground too, so the presence's ground spot can be the sunk one)
+    if (InNormalPlay() && (g_Player.vram_flag & 1) && PLAYER.velocityY <= 0 && !still) {
+        safeX = self->x;
+        safeY = self->y;
+        safeRoom = self->roomId;
+    }
+    if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || g_CutsceneHasControl || g_Player.demo_timer ||
+        PLAYER.velocityY <= 0 || !(self->flags & PRESENCE_IN_PLAY) || now != y) {
+        y = now;
+        still = 0;
+    } else if (++still >= FALL_STUCK_FRAMES) {
+        still = 0;
+        if (safeY >= 0 && safeRoom == self->roomId) {
+            Arrive(self->stage, self->roomId, safeX, safeY);
+        } else {
+            Arrive(self->stage, self->roomId, self->groundX, self->groundY);
+        }
+    }
+}
+
 // Locked out of the fight (#248): a partner who stays at an arena's door while the other walks in
 // is shut out when the door closes (the fake trio's: and its way out loads the arena again, at the
 // door, so they're stuck in the doorway until the fight ends). In a boss fight both share, with a
@@ -932,6 +964,7 @@ bool ArriveFrame(void) {
     SkipVote();
     PullIn();
     StuckWalkRescue();
+    StuckFallRescue();
     LockedOutRescue();
     ArriveUpdate();
     if (!DeathUpdate()) {
