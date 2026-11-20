@@ -99,7 +99,7 @@ SCENE_SPEED = 8        # frames a scene runs per frame shown, with both players 
 def scene_speed(presences, solo):
     """How fast a game's scene runs: fast when every player in it asked to skip (issue 107)."""
     scene = [p for p in presences if p.flags & CUTSCENE]
-    return SCENE_SPEED if scene and (solo or len(scene) == 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
+    return SCENE_SPEED if scene and (solo or len(scene) >= 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
 
 
 def spell_options(spells):

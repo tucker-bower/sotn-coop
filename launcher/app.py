@@ -544,12 +544,21 @@ def wide_shape(settings):
     v = settings.get("wide", 0)
     return v if isinstance(v, int) and 0 <= v < len(WIDE_SHAPES) else 0
 
+def _discord_possible():
+    """Discord's status needs the desktop app (not Android) and our Discord application's id."""
+    import discord_status
+    return not ANDROID and bool(discord_status.CLIENT_ID)
+
+
 class Launcher:
     def __init__(self):
         pygame.init()
         self.settings = load_settings()
         import streamer
         streamer.on = bool(self.settings.get("streamer"))
+        from discord_status import DiscordStatus  # "Playing SoTN Co-op" on Discord (no Discord on Android)
+        self.discord = DiscordStatus(enabled=not ANDROID and self.settings.get("discord_status", True))
+        self.discord.set("In the menus")
         # Each seat's character (CHAR_*, design/M8): picked in the lobby, remembered.
         self.characters = [c if c in LOBBY and self.playable(c) else 2 if c == 3 and self.playable(2) else 0
                            for c in (list(self.settings.get("characters") or []) + [0, 0])[:2]]
@@ -2276,6 +2285,26 @@ class Launcher:
             g.host("set_player", character=self.characters[i], options=self.options(i), blob=blob)
 
     def run_view(self, s, playthrough, goal="", rules=None, joiner=False):
+        self.discord_playing(s, playthrough)
+        try:
+            return self._run_view(s, playthrough, goal, rules, joiner)
+        finally:
+            self.discord.set("In the menus")
+
+    def discord_playing(self, s, castle):
+        """The Discord status while a game runs: how, the castle, and online how many are in the room."""
+        rush = castle is not None and getattr(castle, "info", {}).get("rush") is not None
+        room = s.room_status() if getattr(s, "room_on", False) else None
+        how = "Boss rush" if rush else ("Online co-op" if hasattr(s, "local") else
+                                        "Playing solo" if getattr(s, "solo", False) or len(s.games) == 1 else "Couch co-op")
+        party = None
+        if room:
+            import rules as castle_rules
+            limit = castle_rules.clean((castle.info.get("rules") if castle is not None else None) or {})["max_players"]
+            party = (len(room.get("players") or [0, 1]), max(limit, len(room.get("players") or [])))
+        self.discord.set(how, f"Castle: {castle.name}" if castle is not None and getattr(castle, "name", "") else None, party)
+
+    def _run_view(self, s, playthrough, goal="", rules=None, joiner=False):
         import rules as castle_rules
         from gameview import GameView
         if self.sound:
@@ -2581,7 +2610,8 @@ class Launcher:
             s.local.host("set_rules", castle_rules.encode(rules), rules)  # the castle's: for the session (D162)
             room = self.room_code = self.castle_room(playthrough, make_room_code)
             self._clip_put(room)
-            s.start_room(room, True, pid=self.player_id(), app=VERSION)  # 3+ players: anyone with the code drops in (M17)
+            # anyone with the code drops in, up to the castle's Max players (M17: 2 unless it's chosen)
+            s.start_room(room, True, pid=self.player_id(), app=VERSION, max_players=rules["max_players"])
             self.room_info = f"Hosting room {room}, on UDP port {s.port}."
             try:
                 pvp_line = "\nPvP is on." if rules["pvp"] else ""
@@ -2983,6 +3013,8 @@ class Launcher:
                 switch("alucard_hud", "Alucard's health bar", "Richter and Maria get Alucard's display."),
                 switch("show_ping", "Show ping", "Online: your partner's ping, top right."),
                 switch("streamer", "Streamer mode", "Hides room codes and addresses on screen. They're still copied for you."),
+                *([switch("discord_status", "Show on Discord", "Your Discord status says you're playing SoTN Co-op.", True)]
+                  if _discord_possible() else []),
                 head("Controls"),
                 action("controls", "Your settings", "Each player's buttons, shortcuts and spells. Also in the pause menu."),
                 action("controllers", "Who plays with which controller", "Give each controller a player."),
@@ -3029,7 +3061,7 @@ class Launcher:
             if (step == 0) or (step > 0) != self.display.fullscreen:
                 self.display.toggle_fullscreen()
         else:  # a switch
-            defaults = {"partner_hp": True, "partner_tint": True, "menu_music": True}
+            defaults = {"partner_hp": True, "partner_tint": True, "menu_music": True, "discord_status": True}
             now = bool(st.get(key, defaults.get(key, False)))
             st[key] = (not now) if step == 0 else step > 0
         if key in ("menu_music", "menu_volume") and self.sound:
@@ -3038,6 +3070,11 @@ class Launcher:
         self.menubar.update(st)
         import streamer
         streamer.on = bool(st.get("streamer"))
+        if key == "discord_status":
+            from discord_status import DiscordStatus
+            self.discord.close()
+            self.discord = DiscordStatus(enabled=not ANDROID and st.get("discord_status", True))
+            self.discord.set("In the menus")
 
     def options_screen(self):
         from ui.screens.options import options

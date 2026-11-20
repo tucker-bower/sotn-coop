@@ -27,6 +27,8 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 
 ## Features
 
+**Up to four players:** online, each on their own PC or phone. A castle is for two unless its host sets Castle settings › Max players to 3 or 4. Then anyone with the room code can drop in, and each player keeps their own save slot in the castle.
+
 **Mods:** in Mods on the main menu, make a mod preset: a randomized castle in one click (pick a [randomizer](https://sotn.io) preset; the seed is random, or type one), any of SOTN Editor's hacks we've tested with co-op, or [Alternate Scarlet Symphony -Final-](https://github.com/pddmergilla/sotn-editor). Name your modded disc image, and a new castle can use it. Both players need the same preset.
 
 **Play your way**

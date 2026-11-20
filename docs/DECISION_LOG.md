@@ -1049,8 +1049,9 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D217: A Life or Heart Max Up that isn't a placed find is one find for both** (2026-11-19, #296; agent-default)
 - A boss's Life Max Up (`src/st/e_life_up.h`) has no castle flag, so it travels as EV_GRANT, and both games can make one. The partner's grant clears this game's still lying in the same stage, and two taken within 3 s are the same one. Options considered: no grant at all, each player taking their own (in a shared fight only the authority's game has one), or a castle flag of our own per boss (a table to keep).
 
-**D218: Richter and Maria get Alucard's curse, not yet his stone** (2026-11-19, #102; the details: agent-default)
-- A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off. Stone (mash to break free) is still to do.
+**D218: Richter and Maria get Alucard's curse and stone** (2026-11-19, #102; the details: agent-default)
+- A curse hit lasts his time; a hand's button does nothing while that hand holds something swung (whip, weapon, sub-weapon), but potions, food and Uncurse still work, so a cursed player can cure it. What lands is halved, as under poison. The "Alucard's stats" rule turns it off.
+- Stone holds them still until they press buttons 8 times (CON/16 fewer, at least 3), Start and Select aside. His own count (`GetStatusAilmentTimer`) came out near 1 for them, so one stray input broke it: a fixed count plays like his.
 
 **D219: 3-4 players in the app: drop-in rooms, and castle slots that follow players** (Tucker, 2026-11-18: a slot per player, drop-in joining; the details: agent-default, M17 step 6)
 - Host and Join by room code always make a Room (`link/mesh.py`), even for two: seats go in join order and the host's seat stays open while it plays. ip:port and connect codes still link two players directly.
@@ -1060,3 +1061,13 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D220: Three or more players means online, each on their own PC or phone; couch stays two** (Tucker, 2026-11-19)
 - M17's couch 2×2 (four emulators and controllers in one window) is dropped. Couch co-op stays two players; three and more play online, one player per machine.
+
+**D221: Up to 4 players is a castle setting, 2 by default** (Tucker, 2026-11-19: "compromises only felt by castles with max players 3 or 4"; the default: agent-default)
+- Castle settings' "Max players" (2, 3, 4) caps the room the host makes; a two-player castle never seats a third, so nothing three or four bodies cost (frame time, savestate size, room traffic) reaches it. Options considered: a global option (applies to castles that never wanted it), always 4 (a stranger's drop-in in every castle).
+
+**D222: Discord shows "Playing SoTN Co-op"** (Tucker, 2026-11-19; the details: agent-default)
+- Rich Presence over Discord's local IPC (`launcher/discord_status.py`), our own 150 lines rather than a library: no dependency, no network of ours, nothing when Discord isn't running. It shows what (menus, online, couch, solo, boss rush), the castle's name, the room's size and elapsed time; never a room code or address. An Options switch, "Show on Discord", on by default; not on Android (Discord there doesn't take local presence).
+- Needs the "SoTN Co-op" application id from Discord's developer portal (Tucker's account); without it the feature is off.
+
+**D223: An off-hand weapon swing lasts 28-40 frames for Richter and Maria** (2026-11-19, #310; agent-default)
+- Their swings ran on their own animation (Richter's about 60 frames, Maria's 16) and a press mid-swing brought out the whip or owl as well, so they out-damaged Alucard. Clamped to his length, and presses during a swing are the swing's: within 0.7-1.1x his damage a second (`damage_rate_first_hand_*`).

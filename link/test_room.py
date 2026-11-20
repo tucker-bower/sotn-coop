@@ -25,7 +25,7 @@ from test_malformed import MAILBOX, Memory  # noqa: E402
 CODE = "BAT-7K2Q"
 
 
-def room(kinds, seconds=60, pair_timeout=20):
+def room(kinds, seconds=60, pair_timeout=20, max_players=4):
     """kinds: each player's router. Returns the players as (memory, mailbox, room)."""
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
@@ -41,7 +41,7 @@ def room(kinds, seconds=60, pair_timeout=20):
         memory = Memory()
         mailbox = Mailbox(memory, MAILBOX)
         memory.write_bytes(MAILBOX + SELF, Presence(flags=1, stage=1, x=100 + n, y=50).pack())
-        return memory, mailbox, Room(mailbox, CODE, n == 0, new_transport, pair_timeout=pair_timeout,
+        return memory, mailbox, Room(mailbox, CODE, n == 0, new_transport, pair_timeout=pair_timeout, max_players=max_players,
                                      relay=relay, stun_servers=[s.addr for s in stuns], resolve=False,
                                      portmap=lambda port: None)
 
@@ -87,6 +87,12 @@ def main():
         want = {1: [2], 2: [1]} if relayed else {}
         check({k: v for k, v in through.items() if v} == want,
               f"{name}: {'1 and 2 go through player 0' if relayed else 'every pair is direct'} ({through})")
+
+    # D221: a castle for two (Max players 2) seats two; a third with the code isn't let in
+    players = room((CONE, CONE, CONE), seconds=30, max_players=2)
+    seats = [r.me for _, _, r in players]
+    check(seats[:2] == [0, 1] and seats[2] is None and not players[0][2].hosts.get(2),
+          f"Max players 2: the third isn't seated ({seats})")
 
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0

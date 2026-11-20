@@ -628,6 +628,11 @@ def _online_host(pg, code_file):
                  ("screen", "Online co-op: host"), ("key", pg.K_RETURN), ("screen", "Name your castle"), ("key", pg.K_RETURN),
                  ("screen", "Castle settings"), ("key", pg.K_DOWN), ("key", pg.K_RIGHT), ("key", pg.K_UP), ("key", pg.K_RETURN)])  # Mode: Boss rush (D137), Start
               if RUSH else
+              [("call", lambda d: setattr(d, "real_settings", True)),
+               ("screen", "Online co-op: host"), ("key", pg.K_RETURN), ("screen", "Name your castle"), ("type", "Tucker"),
+               ("key", pg.K_RETURN), ("screen", "Castle settings"), *[("key", pg.K_DOWN)] * 5, ("key", pg.K_RIGHT),  # Max players: 3 (under Start, Mode, Mod preset, Difficulty, Back to the defaults)
+               *[("key", pg.K_UP)] * 5, ("key", pg.K_RETURN)]
+              if PLAYERS == 3 else
               [("screen", "Online co-op: host"), ("key", pg.K_RETURN),       # New castle (D136)
                ("screen", "Name your castle"), ("type", "Tucker"), ("key", pg.K_RETURN)]),
             ("screen", "Press a button"), ("call", write_code), ("shot", "host-waiting"),
