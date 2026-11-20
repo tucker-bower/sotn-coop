@@ -1473,7 +1473,8 @@ const OverlayInfo* FindOverlay(s32 stage) {
 // Only online (the host gives the snapshot's frame): on a LAN, copies are as the snapshot has them.
 #define LEAD_MAX 12  // frames a copy is moved ahead, at most
 #define GAP_MAX 8    // ...and on through a gap of this many
-#define BLEND_MAX 24 // a jump further than this is a real one (a teleport): no easing
+#define MOVE_MAX 24  // px a frame: a copy that moved more between snapshots was put there (no motion)
+#define BLEND_MAX 64 // a jump further than this is a real one (a teleport): no easing
 static s32 s_AuthX[STAGE_SLOTS], s_AuthY[STAGE_SLOTS]; // the authority's spot at its last snapshot (room, 16.16)
 static s32 s_MotX[STAGE_SLOTS], s_MotY[STAGE_SLOTS];   // its motion a frame (16.16)
 static s32 s_OffX[STAGE_SLOTS], s_OffY[STAGE_SLOTS];   // the easing still to go (16.16)
@@ -1545,7 +1546,7 @@ static void Extrapolate(void) {
             wx = s_AuthX[i] + PX(s_ShownX[i]); // where it was shown last frame
             wy = s_AuthY[i] + PX(s_ShownY[i]);
             if (s_Have[i] && s_HaveId[i] == e->entityId && gap > 0 && gap <= GAP_MAX &&
-                ABS(ax - s_AuthX[i]) <= PX(BLEND_MAX) * gap && ABS(ay - s_AuthY[i]) <= PX(BLEND_MAX) * gap) {
+                ABS(ax - s_AuthX[i]) <= PX(MOVE_MAX) * gap && ABS(ay - s_AuthY[i]) <= PX(MOVE_MAX) * gap) {
                 // smoothed: an enemy that steps a pixel every few frames moves a fraction a frame
                 s_MotX[i] = (s_MotX[i] * 3 + (ax - s_AuthX[i]) / gap) / 4;
                 s_MotY[i] = (s_MotY[i] * 3 + (ay - s_AuthY[i]) / gap) / 4;

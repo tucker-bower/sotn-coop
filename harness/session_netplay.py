@@ -123,9 +123,6 @@ def netplay_partner_on_time_alucard_and_richter(run):
     rew0 = a.read(sym["g_CoopRollRewinds"])
     real1, shown1, drawn1, missed = phase(900, 1500)
     lag1 = _lag(shown1, real1)
-    import json as _js
-    (TOOLS["out"] / "netplay_partner_on_time_alucard_and_richter" / "series.json").write_text(
-        _js.dumps({"real": real1, "shown": shown1, "drawn": drawn1, "pads": pads[1500:2400]}))
     rewinds = a.read(sym["g_CoopRollRewinds"]) - rew0
     steps = [abs(drawn1[i + 1][0] - drawn1[i][0]) for i in range(len(drawn1) - 1) if drawn1[i] and drawn1[i + 1]]
     run.expect(len(steps) > 600, "B stays in A's room", frames=len(steps))
@@ -140,7 +137,6 @@ def netplay_partner_on_time_alucard_and_richter(run):
 
 
 STAGE_START, STAGE_SLOTS = 64, 192
-_DUMP = []
 CAMERA_LOCKED = 0x08000000
 
 
@@ -161,21 +157,23 @@ def _copies(g):
 
 def _drift(run, frames, pads):
     """Each frame, how far B's copies are from A's enemies now (px, x + y), of those moving in A's
-    game, and how far each copy moved on B's screen since the last frame."""
+    game, and how far each copy moved on B's screen since the last frame (but for 8 frames after
+    A's own enemy jumped)."""
     a, b = run.s.a, run.s.b
-    errs, steps, last, seen = [], [], {}, {}
+    errs, steps, last, seen, leapt = [], [], {}, {}, {}
     for t in range(frames):
         run.step(1, p1=pads(t))
         ca, cb = _copies(a), _copies(b)
         for i, (eid, x, y) in ca.items():  # moving in A's game: where it was 4 frames ago
             seen.setdefault(i, []).append((eid, x, y))
             del seen[i][:-5]
+            if len(seen[i]) > 1 and abs(x - seen[i][-2][1]) + abs(y - seen[i][-2][2]) > 16:
+                leapt[i] = t  # a real jump in A's game: B's copy makes it too, a little later
         for i, (eid, x, y) in cb.items():
             if i in ca and ca[i][0] == eid and len(seen[i]) == 5 and seen[i][0] != ca[i]:
                 errs.append(abs(x - ca[i][1]) + abs(y - ca[i][2]))
-            if i in last and last[i][0] == eid:
+            if i in last and last[i][0] == eid and t - leapt.get(i, -99) > 8:
                 steps.append(abs(x - last[i][1]) + abs(y - last[i][2]))
-        _DUMP.append({"a": ca, "b": cb})
         last = cb
     errs.sort()
     return errs, steps
@@ -194,17 +192,11 @@ def netplay_room_enemies_steady_on_lag(run):
     for g in (a, b):
         g.host("set_extrapolate", False)
     run.step(300)
-    _DUMP.clear()
     errs0, steps0 = _drift(run, 600, walk)
-    import json as _js
-    (TOOLS["out"] / "netplay_room_enemies_steady_on_lag" / "dump0.json").write_text(_js.dumps(_DUMP))
     for g in (a, b):
         g.host("set_extrapolate", True)
     run.step(120)
-    _DUMP.clear()
     errs1, steps1 = _drift(run, 600, lambda t: walk(t + 600))
-    import json as _js
-    (TOOLS["out"] / "netplay_room_enemies_steady_on_lag" / "dump.json").write_text(_js.dumps(_DUMP))
     med0, med1 = errs0[len(errs0) // 2], errs1[len(errs1) // 2]
     run.expect(len(errs1) > 300, "B mirrors A's moving enemies", samples=len(errs1))
     run.expect(med1 <= 8 and med1 < med0, "B's copies are within 8 px of A's enemies (median), nearer than without",

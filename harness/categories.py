@@ -115,7 +115,7 @@ EVERYDAY = {
     # network
     "launcher_link_errors", "link_backlog", "link_connect", "link_layout", "link_malformed", "link_portmap",
     "link_spec_conformance", "online_connect_codes", "online_in_process", "online_partner_leaves",
-    "online_version_mismatch", "ui_online",
+    "online_version_mismatch", "ui_online", "netplay_partner_on_time_alucard_and_richter", "netplay_room_enemies_steady_on_lag",
     # rules and pvp
     "pvp_death", "pvp_off", "pvp_spawn_protection", "rules_reach_the_game",
     # launcher and mods
