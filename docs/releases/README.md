@@ -9,6 +9,7 @@ Release notes for the versions we've published.
 | `v1.1.0.md` | Endings, boss arenas, bat carry and 21:9 fixed; typing with a cursor, one-press updates. |
 | `v1.1.1.md` | Richter's fight fixed (the orb, the portal, pausing); save history, reliable bug reports, a full disk handled. |
 | `v1.2.1.md` | Android: a new install no longer closes itself on its first screen. |
+| `v1.4.0.md` | Rollback online: the partner on time, their swings and sounds; join by address, a full room said. |
 | `v1.3.1.md` | Widescreen backgrounds in a new area, a player stuck in the floor, a first-start close. |
 | `v1.3.0.md` | Up to four players online (Max players), streamer mode, shields, curse and stone for Richter and Maria, and fixes. |
 | `v1.2.0.md` | Richter's and Maria's hands like Alucard's, hitboxes in bug reports; the Doppleganger10 crash and warp rooms fixed. |
