@@ -1057,3 +1057,6 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 - A player is known by a lasting id (`settings.json` `player_id`, sent in HELO), not their seat, which changes with join order. The castle file keeps each slot's id (format 2; format 1 still reads, slot 1 this machine's player as before).
 - A save asks every partner; each answer is kept under its player's id, so each machine keeps what it heard (the host all of them). The host's load gives each player their own slot, or a copy of its own to someone new; a player who drops in, or comes back, out of play, gets theirs after 5 s and arrives beside the host.
 - Options considered: slots by seat (a returning player could get someone else's save), the host's file only (joiners couldn't host later: M11).
+
+**D220: Three or more players means online, each on their own PC or phone; couch stays two** (Tucker, 2026-11-19)
+- M17's couch 2×2 (four emulators and controllers in one window) is dropped. Couch co-op stays two players; three and more play online, one player per machine.

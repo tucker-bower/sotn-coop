@@ -3,7 +3,7 @@
 **Status:** approved by Tucker (2026-10-27). Replaces backlog D48. Depends on M13.
 
 ## Goal
-As many players as the technology holds, each in their own game, one castle. Online first, then couch.
+As many players as the technology holds, each in their own game, one castle. Online, each player on their own PC or phone (couch stays two players: Tucker, 2026-11-19, D220).
 
 ## What changes
 The link was built per partner, so most of this is turning "the partner" into "the partners":
@@ -19,19 +19,17 @@ The link was built per partner, so most of this is turning "the partner" into "t
 - **Bosses:** enemy HP scales with the players in the session (1×, 2×, 2.75×, 3.5×: D213, already in); aggro picks among all of them; the boss pull-in brings everyone.
 - **Respawn:** at the nearest living partner. Everyone dead: reload the last joint save.
 - **Castles (M11):** more slots; every joiner keeps a copy.
-- **Couch:** 3 or 4 panes in one window (a 2×2 grid), a controller each.
 
 ## How many
 Limited by, in order: **VRAM** (each partner needs a bank: M13's layout), **CPU** (one partner update per partner per frame, on every machine), and **upload** (about 250 kbit/s per partner each way).
 - **Online cap: 4** at first. The suite then measures 5 and 6; the cap goes up if they hold on a mid-range PC.
-- **Couch cap: 4** (four emulators on one PC: CPU-bound, measured).
 - **Android: 2**, unless the Thor holds 3 (measured).
 
 ## Acceptance criteria
 1. Online with 3 and 4 games: every M12 shared-room test generalised (`m17_*`): progression converges, shared rooms with one authority and 2–3 guests, bosses with scaled HP and aggro across all players.
 2. A guest pair that can't reach each other directly plays through the host's forwarding.
 3. Players join and leave mid-session in any order with no lost progress and no stuck games (`m17_join_leave_fuzz`).
-4. Couch with 3 and 4 controllers at 60 fps on Tucker's PC.
+4. ~~Couch with 3 and 4 controllers~~: dropped (D220): couch stays two players.
 5. Frame cost and bandwidth measured at 4, 5 and 6 players; the caps set from them (and written in DECISIONS).
 6. A 4-player online session with simulated lag and loss holds (`online_4p_lossy`).
 
@@ -60,7 +58,7 @@ Everything today assumes one partner: about 1,500 references across `module/`, `
 3. **Hosts: the roster and the mesh.** `transport.py` is per peer; `host.py` keeps one per partner, maps each to a mailbox slot, and forwards between guests who can't reach each other (criterion 2). Python-only, so it's tested with fake games (`test_connect` with three).
 4. **Bodies: one per partner.** `partner.c`'s single body becomes an array (`Body`): swap regions per body, bank k + 1 for partner k, its own tint, and each partner's weapon swings and familiar from its own copies. Two partners on one character share its partner build, each with its own statics (D214). Tested with three games (`session_three.py`, `--full`): `partner_bodies_three_players`, `partner_bodies_two_richters`, `rules_enemy_hp_three_players`.
 5. **Shared rooms, progression, bosses, respawn** (criteria 1 and 3): the authority streams to each guest, merges take every partner, bosses go for every player, and a fallen player revives at a living partner (D215). Enemy HP scales by the players in the session (D213), not only the room: a player across the castle can arrive at any moment. Tested with three games: `shared_rooms_three_players`, `gold_pooled_three_players`, `castle_flags_rejoin_three_players`, `boss_aggro_three_players`.
-6. **Launcher:** a 4-player lobby, the map's colours, teleport choosing a partner, and couch 2×2 (criterion 4). Then the measurements and caps (criteria 5 and 6).
+6. **Launcher:** a 4-player lobby, the map's colours, teleport choosing a partner. Then the measurements and caps (criteria 5 and 6).
 
 ## Step 6 plan: the app (needs Tucker's approval, 2026-11-18)
 Steps 1–5 make three and four games work together when linked (the tests link them directly). Step 6 lets players do it from the app. Two choices are hard to reverse:
@@ -78,6 +76,6 @@ Steps 1–5 make three and four games work together when linked (the tests link 
 | **A. Drop in (recommended)** | The host's room stays open while it plays; anyone with the code joins mid-game and arrives at the host, and anyone who dropped out rejoins the same way (completes #318's Rejoin). The pause menu lists who's in. | ✅ Matches how people play: someone joins late or reconnects |
 | B. A lobby that waits | Everyone joins first; the host starts | ❌ Anyone who drops can't come back until the next session |
 
-**3. Couch with 3–4 controllers** (2×2 panes): after online, as the goal says, once the measurements (criterion 5) show four emulators hold 60 fps on Tucker's PC.
+**3. Couch with 3–4 controllers:** dropped (Tucker, 2026-11-19, D220): each player on their own PC is the standard way to play.
 
 Also for the release: the four-bank cores for Windows and Android (`bootstrap.sh swanstation_win swanstation_android`, `core_check`).
