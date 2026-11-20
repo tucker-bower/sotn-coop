@@ -11,6 +11,7 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `M20-randomizer.md` | Co-op on the randomizer, the first supported mod. In progress (#144). |
 | `M21-big-lobbies.md` | Co-op lobbies of 4 or 8: a 32 MB core, VRAM banks per character, seven partner slots. Needs approval (#330). |
 | `M22-battle-royale.md` | Battle royale for 8 to 32: puppets, each game its own enemies, a shrinking zone of rooms. Needs approval (#331). |
+| `rollback.md` | Lag hiding online: guests extrapolate a shared room (#292), then partner-body prediction; rollback weighed and set aside. Needs approval (#86). |
 | `netplay-suite.md` | The 0.13 playtest's bugs, and the tests that reproduce them. In progress. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |
 | `M1-ghost-p2.md` | **Withdrawn.** A ghost second player in one game, dropped for one game per player. |

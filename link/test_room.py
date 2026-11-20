@@ -93,6 +93,9 @@ def main():
     seats = [r.me for _, _, r in players]
     check(seats[:2] == [0, 1] and seats[2] is None and not players[0][2].hosts.get(2),
           f"Max players 2: the third isn't seated ({seats})")
+    third = players[2][2]._first.connector
+    check(third.state == "failed" and "room is full" in (third.reason or ""),
+          f"#332: the third hears the room is full, not a timeout ({third.state}: {third.reason})")
 
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0

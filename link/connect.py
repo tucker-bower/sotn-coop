@@ -291,9 +291,21 @@ class Connector:
                 self.relay.publish(self.topic, msg)
                 self._published = now
             other = "join" if self.role == "host" else "host"
-            msgs = [m for m in self.relay.poll(self.topic)
+            polled = self.relay.poll(self.topic)
+            msgs = [m for m in polled
                     if m.get("role") == other and m.get("token") == room_token(self.room)
                     and m.get("id") not in self.exclude]
+            # (not a joiner the room just seated: its "full" is this joiner, still connecting)
+            full = [m for m in polled if self.role == "join" and m.get("role") == "full"
+                    and m.get("token") == room_token(self.room) and self.id not in (m.get("seated") or [])]
+            if full and self.state == "waiting":  # #332: newer than any open seat's message
+                said = max(full, key=lambda m: m.get("nonce", 0))
+                if not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs):
+                    self.reason = (f"The room is full ({said.get('players', '?')} of {said.get('max', '?')} players). "
+                                   "The host can raise Max players in the castle's settings.")
+                    self._done("failed")
+                    log.warning("connect join: the room is full: %s", said)
+                    return self.state
             if msgs:
                 newest = max(msgs, key=lambda m: m.get("nonce", 0))
                 self.their_id = newest.get("id")
@@ -341,7 +353,7 @@ class Connector:
         if not self.theirs and getattr(self.relay, "error", None):
             return ("Couldn't reach the room-code server (ntfy.sh), so your partner's game couldn't be "
                     "found. Check this device's internet connection. On the same Wi-Fi, ask your "
-                    "partner to host and join with the ip:port it shows in Help ▸ About.")
+                    "partner to host: Join takes the address its pause menu and Help › About show (ip:port).")
         if not self.theirs:
             return ("Your partner's game never showed up for this room code. Check the code, and that "
                     "both of you are online.")

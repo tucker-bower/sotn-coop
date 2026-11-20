@@ -50,9 +50,25 @@ def main():
         check(last() == "", "long ago: no Rejoin")
         me.settings["last_room"] = ["junk"]
         check(last() == "", "junk in the settings: no Rejoin")
+    # #326: the host is shown its address, for a partner to Join by ip:port
+    import app
+    import link.rendezvous as rv
+    rv_local = rv.local_ip
+    rv.local_ip = lambda: "192.168.1.20"
+    fake = types.SimpleNamespace(hosting_session=types.SimpleNamespace(
+        port=47811, room_on=True, room_status=lambda tick: {"waiting": {"mine": [["192.168.1.20", 47811], ["93.184.216.34", 40001]]}}))
+    got = app.Launcher.host_addresses(fake)
+    check(got == ("192.168.1.20:47811", "93.184.216.34:40001"), f"hosting: the LAN ip:port and, once STUN found it, the internet one ({got})")
+    fake.host_addresses = lambda: got
+    info = app.Launcher.address_info(fake)
+    check("192.168.1.20:47811" in info and "93.184.216.34:40001" in info, "Help › About says them")
+    fake.hosting_session = None
+    check(app.Launcher.host_addresses(fake) is None, "not hosting: nothing")
+    rv.local_ip = rv_local
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
