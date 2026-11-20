@@ -189,3 +189,21 @@ def shared_room_lift_on_lag_alucard_and_richter(run):
         gaps.append(b.snapshot()["world_y"] - _elevator(b)[1])
     run.expect(_elevator(b)[1] < start - 400, "the elevator went up", start=start, now=_elevator(b)[1])
     run.expect(max(gaps) - min(gaps) <= 3, "Richter stood on it all the way", gaps=sorted(set(gaps))[:8])
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(1, 0))
+def partner_body_faces_the_partners_way_richter_and_alucard(run):
+    """#274: a body made facing the other way kept it until the partner pressed left or right, so a
+    sub-weapon thrown with no direction flew backwards on the other screen. Richter (A) turns left
+    and stands; in Alucard's game (B) his body is turned the wrong way: it faces left again within
+    a few frames, as A does."""
+    from session_three import body
+    a, b = run.s.a, run.s.b
+    run.step(120)
+    run.step(20, ("left", ""))
+    run.step(60)
+    run.expect(a.read(a.entity(0), "<H", 0x14) == 1, "Richter faces left")
+    b.write(body(b, 0), 0, "<H", 0x14)  # B's copy of him, made facing right
+    run.step(10)
+    run.expect(b.read(body(b, 0), "<H", 0x14) == 1, "his body in Alucard's game faces left again",
+               facing=b.read(body(b, 0), "<H", 0x14))

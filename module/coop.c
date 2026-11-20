@@ -140,7 +140,9 @@ static void CapturePresence(CoopPresence* p) {
     p->blendMode = pl->blendMode;
     p->zPriority = pl->zPriority;
     plDrawFlip = pl->unk5A < LEN(g_PlayerDraw) ? g_PlayerDraw[pl->unk5A].flipX : 0;
-    p->flipX = ((pl->facingLeft << 1) ^ plDrawFlip) | (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
+    // bit 0: the way the player faces (#274: a body that came in facing the other way threw backwards)
+    p->flipX = (((pl->facingLeft << 1) ^ plDrawFlip) & ~1) | (pl->facingLeft ? 1 : 0) |
+               (ArriveTeleportIn() ? FLIP_TELEPORT_IN : 0) |
                ((g_CoopLink.options & OPT_SHORTCUTS) ? FLIP_SHORTCUTS : 0) |
                (ArriveSkipVote() ? FLIP_SKIP_VOTE : 0) | CarryPresence() |
                (g_GameStep != Play_Default || ArriveBusy() ? FLIP_LOADING : 0);

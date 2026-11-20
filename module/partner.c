@@ -1226,6 +1226,11 @@ static void BodyFrame(void) {
     } else if (PartnerLive()) {
         pad |= FormButton(p);
     }
+    // Facing the partner's way (#274): a body made facing the other way kept it until the partner
+    // pressed left or right, and threw its sub-weapons backwards. Not while it turns itself.
+    if (PartnerLive() && !(pad & (PAD_LEFT | PAD_RIGHT)) && PLAYER.facingLeft != (p->flipX & 1)) {
+        PLAYER.facingLeft = p->flipX & 1;
+    }
     pad0 = g_pads[0];
     options = g_CoopOptions; // its one-button moves are on or off as the partner has them
     g_CoopOptions = (options & ~OPT_SHORTCUTS) | ((p->flipX & FLIP_SHORTCUTS) ? OPT_SHORTCUTS : 0);
