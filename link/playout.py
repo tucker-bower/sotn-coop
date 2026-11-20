@@ -49,6 +49,7 @@ class Playout:
         self._played_pres = None
         self.snap_played = -1
         self.late = 0          # presences that came after their frame was already played
+        self._base = None      # the fastest path's offset (s), as last measured
 
     def reset(self):
         self.__init__(self.fps)
@@ -97,6 +98,7 @@ class Playout:
         elif self._last_t is not None:
             self.delay = max(want, self.delay - DECAY_S * (now - self._last_t))
         self._last_t = now
+        self._base = base
         return base
 
     def pop(self, now):
@@ -110,6 +112,13 @@ class Playout:
             f, snap = self._snaps.popleft()
             self.snap_played = f
         return self._presence_at(play), snap
+
+    def partner_now(self, now, one_way_s):
+        """The sender's frame now (rollback, link/rollback.py): what the fastest path delivers
+        now, plus the fastest path's own one-way time. None before anything came."""
+        if self._base is None:
+            return None
+        return (now - self._base + one_way_s) * self.fps
 
     def _presence_at(self, play):
         fr = self._frames

@@ -43,7 +43,7 @@ SIZES = {
     "CoopPresence": mb.Presence.SIZE, "CoopEvent": mb.EVENT_SIZE, "CoopCommand": mb._COMMAND.size,
     "CoopSprite": mb.SPRITE_SIZE, "CoopHit": mb.HIT_SIZE, "CoopWeapon": mb.WEAPON_SIZE,
     "CoopFamiliar": mb.FAMILIAR_SIZE, "CoopStatus": 4 + sum(n for _, n in mb.STATUS_RANGES),
-    "CoopRing": 8 + mb.RING_SIZE * mb.EVENT_SIZE, "CoopPartnerIn": mb.MORE_SIZE,
+    "CoopRing": 8 + mb.RING_SIZE * mb.EVENT_SIZE, "CoopPartnerIn": mb.MORE_SIZE, "CoopRollIn": mb.ROLL_SIZE,
 }
 
 

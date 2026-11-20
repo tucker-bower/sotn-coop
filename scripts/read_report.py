@@ -25,7 +25,7 @@ def ram_of(path):
 
 
 def read(data, base, addr, n):
-    return data[base + (addr & 0x7FFFFF):base + (addr & 0x7FFFFF) + n]
+    return data[base + (addr & 0xFFFFFF):base + (addr & 0xFFFFFF) + n]
 
 
 def presence(raw):

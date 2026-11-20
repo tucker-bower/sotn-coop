@@ -1,3 +1,165 @@
+diff --git a/src/core/bus.cpp b/src/core/bus.cpp
+index 9240377..2fbb5cf 100644
+--- a/src/core/bus.cpp
++++ b/src/core/bus.cpp
+@@ -73,7 +73,7 @@ union MEMCTRL
+   };
+ };
+ 
+-std::bitset<RAM_8MB_CODE_PAGE_COUNT> m_ram_code_bits{};
++std::bitset<RAM_16MB_CODE_PAGE_COUNT> m_ram_code_bits{};
+ static uint32_t m_ram_code_page_count = 0;
+ uint8_t* g_ram = nullptr; // 2MB RAM
+ uint32_t g_ram_size = 0;
+@@ -177,9 +177,13 @@ bool DoState(StateWrapper& sw)
+ {
+   uint32_t ram_size = g_ram_size;
+   sw.DoEx(&ram_size, 52, static_cast<uint32_t>(RAM_2MB_SIZE));
++  // co-op: a state from before 16 MB holds 8 MB; it loads into the first 8 MB, the rest zeroed
++  const uint32_t state_ram_size = ram_size;
++  if (sw.IsReading() && ram_size == RAM_8MB_SIZE)
++    ram_size = RAM_16MB_SIZE;
+   if (ram_size != g_ram_size)
+   {
+-    const bool using_8mb_ram = (ram_size == RAM_8MB_SIZE);
++    const bool using_8mb_ram = (ram_size == RAM_16MB_SIZE);
+     ReleaseMemory();
+     if (!AllocateMemory(using_8mb_ram))
+       return false;
+@@ -193,7 +197,9 @@ bool DoState(StateWrapper& sw)
+   sw.Do(&m_bios_access_time);
+   sw.Do(&m_cdrom_access_time);
+   sw.Do(&m_spu_access_time);
+-  sw.DoBytes(g_ram, g_ram_size);
++  if (sw.IsReading() && state_ram_size < g_ram_size)
++    std::memset(g_ram + state_ram_size, 0, g_ram_size - state_ram_size);
++  sw.DoBytes(g_ram, state_ram_size);
+   sw.DoBytes(g_bios, BIOS_SIZE);
+   sw.DoArray(m_MEMCTRL.regs, countof(m_MEMCTRL.regs));
+   sw.Do(&m_ram_size_reg);
+@@ -264,15 +270,15 @@ bool AllocateMemory(bool enable_8mb_ram)
+     return false;
+ 
+   // Create the base views.
+-  const uint32_t ram_size = enable_8mb_ram ? RAM_8MB_SIZE : RAM_2MB_SIZE;
+-  const uint32_t ram_mask = enable_8mb_ram ? RAM_8MB_MASK : RAM_2MB_MASK;
++  const uint32_t ram_size = enable_8mb_ram ? RAM_16MB_SIZE : RAM_2MB_SIZE;
++  const uint32_t ram_mask = enable_8mb_ram ? RAM_16MB_MASK : RAM_2MB_MASK;
+   g_ram = static_cast<uint8_t*>(m_memory_arena.CreateViewPtr(MEMORY_ARENA_RAM_OFFSET, ram_size, true, false));
+   if (!g_ram)
+     return false;
+ 
+   g_ram_mask = ram_mask;
+   g_ram_size = ram_size;
+-  m_ram_code_page_count = enable_8mb_ram ? RAM_8MB_CODE_PAGE_COUNT : RAM_2MB_CODE_PAGE_COUNT;
++  m_ram_code_page_count = enable_8mb_ram ? RAM_16MB_CODE_PAGE_COUNT : RAM_2MB_CODE_PAGE_COUNT;
+   return true;
+ }
+ 
+@@ -414,23 +420,12 @@ void UpdateFastmemViews(CPUFastmemMode mode)
+     }
+   };
+ 
+-  // KUSEG - cached
+-  MapRAM(0x00000000);
+-  MapRAM(0x00200000);
+-  MapRAM(0x00400000);
+-  MapRAM(0x00600000);
+-
+-  // KSEG0 - cached
+-  MapRAM(0x80000000);
+-  MapRAM(0x80200000);
+-  MapRAM(0x80400000);
+-  MapRAM(0x80600000);
+-
+-  // KSEG1 - uncached
+-  MapRAM(0xA0000000);
+-  MapRAM(0xA0200000);
+-  MapRAM(0xA0400000);
+-  MapRAM(0xA0600000);
++  // co-op: only 2 MB has mirrors; a bigger RAM's would overwrite its own pages
++  for (uint32_t mirror_start : m_fastmem_ram_mirrors)
++  {
++    if (g_ram_size == RAM_2MB_SIZE || (mirror_start & 0x1FFFFFFFu) == 0)
++      MapRAM(mirror_start);
++  }
+ }
+ 
+ bool CanUseFastmemForAddress(VirtualMemoryAddress address)
+@@ -503,7 +498,8 @@ void SetCodePageFastmemProtection(uint32_t page_index, bool writable)
+     // mirrors...
+     const uint32_t ram_address = page_index * HOST_PAGE_SIZE;
+     for (uint32_t mirror_start : m_fastmem_ram_mirrors)
+-      SetLUTFastmemPage(mirror_start + ram_address, &g_ram[ram_address], writable);
++      if (g_ram_size == RAM_2MB_SIZE || (mirror_start & 0x1FFFFFFFu) == 0) // co-op: mirrors of 2 MB only
++        SetLUTFastmemPage(mirror_start + ram_address, &g_ram[ram_address], writable);
+   }
+ }
+ 
+@@ -526,7 +522,8 @@ void ClearRAMCodePageFlags()
+     {
+       const uint32_t addr = (i * HOST_PAGE_SIZE);
+       for (uint32_t mirror_start : m_fastmem_ram_mirrors)
+-        SetLUTFastmemPage(mirror_start + addr, &g_ram[addr], true);
++        if (g_ram_size == RAM_2MB_SIZE || (mirror_start & 0x1FFFFFFFu) == 0) // co-op: mirrors of 2 MB only
++          SetLUTFastmemPage(mirror_start + addr, &g_ram[addr], true);
+     }
+   }
+ }
+diff --git a/src/core/bus.h b/src/core/bus.h
+index 4f1b6bc..6fa0546 100644
+--- a/src/core/bus.h
++++ b/src/core/bus.h
+@@ -13,7 +13,9 @@ class StateWrapper;
+ namespace Bus {
+ 
+ inline constexpr uint32_t RAM_2MB_SIZE = 0x200000, RAM_2MB_MASK = RAM_2MB_SIZE - 1,
+-                     RAM_8MB_SIZE = 0x800000, RAM_8MB_MASK = RAM_8MB_SIZE - 1, RAM_MIRROR_END = 0x800000,
++                     RAM_8MB_SIZE = 0x800000, RAM_8MB_MASK = RAM_8MB_SIZE - 1,
++                     // co-op: the 8 MB option gives 16 MB, the 8 MB more at 0x800000, where the PS1 has nothing
++                     RAM_16MB_SIZE = 0x1000000, RAM_16MB_MASK = RAM_16MB_SIZE - 1, RAM_MIRROR_END = 0x1000000,
+                      EXP1_BASE = 0x1F000000, EXP1_SIZE = 0x800000, EXP1_MASK = EXP1_SIZE - 1, MEMCTRL_BASE = 0x1F801000,
+                      MEMCTRL_SIZE = 0x40, MEMCTRL_MASK = MEMCTRL_SIZE - 1, PAD_BASE = 0x1F801040, PAD_SIZE = 0x10,
+                      PAD_MASK = PAD_SIZE - 1, SIO_BASE = 0x1F801050, SIO_SIZE = 0x10, SIO_MASK = SIO_SIZE - 1,
+@@ -34,7 +36,7 @@ inline constexpr TickCount RAM_READ_TICKS = 6;
+ 
+ inline constexpr size_t
+   // Our memory arena contains storage for RAM.
+-  MEMORY_ARENA_SIZE = RAM_8MB_SIZE,
++  MEMORY_ARENA_SIZE = RAM_16MB_SIZE, // co-op: was RAM_8MB_SIZE
+ 
+   // Offsets within the memory arena.
+   MEMORY_ARENA_RAM_OFFSET = 0
+@@ -48,6 +50,7 @@ inline constexpr size_t
+ 
+ inline constexpr uint32_t RAM_2MB_CODE_PAGE_COUNT = (RAM_2MB_SIZE + (HOST_PAGE_SIZE + 1)) / HOST_PAGE_SIZE,
+                      RAM_8MB_CODE_PAGE_COUNT = (RAM_8MB_SIZE + (HOST_PAGE_SIZE + 1)) / HOST_PAGE_SIZE,
++                     RAM_16MB_CODE_PAGE_COUNT = (RAM_16MB_SIZE + (HOST_PAGE_SIZE + 1)) / HOST_PAGE_SIZE,
+ 
+                      FASTMEM_LUT_NUM_PAGES = 0x100000, // 0x100000000 >> 12
+   FASTMEM_LUT_NUM_SLOTS = FASTMEM_LUT_NUM_PAGES * 2;
+@@ -64,7 +67,7 @@ bool CanUseFastmemForAddress(VirtualMemoryAddress address);
+ void SetExpansionROM(std::vector<uint8_t> data);
+ void SetBIOS(const uint8_t *image, size_t image_size);
+ 
+-extern std::bitset<RAM_8MB_CODE_PAGE_COUNT> m_ram_code_bits;
++extern std::bitset<RAM_16MB_CODE_PAGE_COUNT> m_ram_code_bits;
+ extern uint8_t* g_ram;            // 2MB-8MB RAM
+ extern uint32_t g_ram_size;       // Active size of RAM.
+ extern uint32_t g_ram_mask;       // Active address bits for RAM.
+diff --git a/src/core/cpu_code_cache.cpp b/src/core/cpu_code_cache.cpp
+index fb62e9d..0c00c45 100644
+--- a/src/core/cpu_code_cache.cpp
++++ b/src/core/cpu_code_cache.cpp
+@@ -205,7 +205,7 @@ static void UnlinkBlock(CodeBlock* block);
+ static void ClearState();
+ 
+ static BlockMap s_blocks;
+-static std::array<std::vector<CodeBlock*>, Bus::RAM_8MB_CODE_PAGE_COUNT> m_ram_block_map;
++static std::array<std::vector<CodeBlock*>, Bus::RAM_16MB_CODE_PAGE_COUNT> m_ram_block_map;
+ 
+ #ifdef WITH_RECOMPILER
+ static HostCodeMap s_host_code_map;
 diff --git a/src/core/gpu.cpp b/src/core/gpu.cpp
 index bd443b7..3492014 100644
 --- a/src/core/gpu.cpp
@@ -505,8 +667,23 @@ index b7f6643..98e1e09 100644
  };
  
  struct GPUBackendDrawCommand : public GPUBackendCommand
+diff --git a/src/core/pgxp.cpp b/src/core/pgxp.cpp
+index 1c1eb1f..72f40da 100644
+--- a/src/core/pgxp.cpp
++++ b/src/core/pgxp.cpp
+@@ -29,8 +29,8 @@ namespace PGXP {
+ 
+ inline constexpr uint32_t VERTEX_CACHE_WIDTH = 0x800 * 2, VERTEX_CACHE_HEIGHT = 0x800 * 2,
+                      VERTEX_CACHE_SIZE = VERTEX_CACHE_WIDTH * VERTEX_CACHE_HEIGHT,
+-                     PGXP_MEM_SIZE = (Bus::RAM_8MB_SIZE + CPU::DCACHE_SIZE) / 4,
+-                     PGXP_MEM_SCRATCH_OFFSET = Bus::RAM_8MB_SIZE / 4;
++                     PGXP_MEM_SIZE = (Bus::RAM_16MB_SIZE + CPU::DCACHE_SIZE) / 4,
++                     PGXP_MEM_SCRATCH_OFFSET = Bus::RAM_16MB_SIZE / 4;
+ 
+ #define NONE 0
+ #define ALL 0xFFFFFFFF
 diff --git a/src/core/save_state_version.h b/src/core/save_state_version.h
-index 027db06..05acb87 100644
+index 027db06..5a258ab 100644
 --- a/src/core/save_state_version.h
 +++ b/src/core/save_state_version.h
 @@ -2,7 +2,7 @@
@@ -514,12 +691,12 @@ index 027db06..05acb87 100644
  
  static constexpr uint32_t SAVE_STATE_MAGIC = 0x43435544;
 -static constexpr uint32_t SAVE_STATE_VERSION = 57;
-+static constexpr uint32_t SAVE_STATE_VERSION = 59; // co-op: VRAM's extra banks (58: one)
++static constexpr uint32_t SAVE_STATE_VERSION = 60; // co-op: 16 MB RAM (59: VRAM's extra banks, 58: one)
  static constexpr uint32_t SAVE_STATE_MINIMUM_VERSION = 42;
  
  #pragma pack(push, 4)
 diff --git a/src/core/system.h b/src/core/system.h
-index dca5e57..88ecbb9 100644
+index dca5e57..e9e6201 100644
 --- a/src/core/system.h
 +++ b/src/core/system.h
 @@ -35,7 +35,7 @@ struct SystemBootParameters
@@ -527,7 +704,7 @@ index dca5e57..88ecbb9 100644
  
  // 5 megabytes is sufficient for now, at the moment they're around 4.3MB, or 10.3MB with 8MB RAM enabled.
 -inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 11 * 1024 * 1024;
-+inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 16 * 1024 * 1024; // co-op: + VRAM's three extra banks (was 11 MB)
++inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 32 * 1024 * 1024; // co-op: + VRAM's three extra banks, 16 MB RAM (was 11 MB)
  
  inline constexpr TickCount MASTER_CLOCK = 44100 * 0x300; // 33868800Hz or 33.8688MHz, also used as CPU clock
  

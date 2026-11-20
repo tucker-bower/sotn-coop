@@ -12,6 +12,7 @@ from .mailbox import (CHAR_BLOB_ADDR, EVENT_SIZE, FAMILIAR_SIZE, N_PRIMS, PRIM_S
                       Presence)
 from .portraits import PORTRAIT_ADDR
 from .playout import Playout
+from .rollback import PadHistory
 from .transport import (TAG_ACK, TAG_BYE, TAG_HITS, TAG_PRIM, TAG_SPRT, TAG_CACK, TAG_CTRL, TAG_EVENTS, TAG_HELLO, TAG_PRESENCE, TAG_SNAP,
                         WIRE_VERSION, ReliableChannel, ReliableMessages, inflate)
 
@@ -50,6 +51,10 @@ class Host:
         self.hello = {"link": WIRE_VERSION, "patch": patch_crc, "sid": os.urandom(4).hex()}
         self.partner_hello = None
         self.playout = Playout() if playout else None
+        self.pads = PadHistory()  # the partner's buttons by frame, for its body's rollback
+        self.rollback = True      # tests turn it off to measure without it
+        self.extrapolate = True   # a guest's copies moved on to now (#292); tests turn it off
+        self._roll_written = None
         self.restarts = 0
         self.connector = None  # finding the partner from a room code (link/connect.py)
         self.mismatch = None  # why the partner was refused, in words
@@ -167,6 +172,14 @@ class Host:
     def connect_status(self):
         return self.connector.status() if self.connector else None
 
+    def set_rollback(self, on=True):
+        self.rollback = on
+        return True
+
+    def set_extrapolate(self, on=True):
+        self.extrapolate = on
+        return True
+
     def set_playout(self, on=True):
         self.playout = Playout() if on else None
         return True
@@ -186,6 +199,30 @@ class Host:
         self.transport.reset_partner()
         if self.playout:
             self.playout.reset()
+        self.pads.reset()
+
+    def _write_roll(self, now):
+        """Online: the partner's buttons by frame, and the frame it's at now, for its body
+        (link/rollback.py). Otherwise none: the body runs on the presence's buttons."""
+        roll = None
+        if self.playout and self.rollback:
+            srtt = self.transport.rtt.srtt
+            at = self.playout.partner_now(now, (srtt or 0) / 2)
+            if at is not None:
+                roll = self.pads.roll(at, self.playout.played)
+        if roll is not None or self._roll_written is not None:
+            self.mailbox.write_roll(roll)
+        self._roll_written = roll
+
+    def _write_snap_clock(self, now):
+        at = None
+        if self.playout and self.extrapolate:
+            srtt = self.transport.rtt.srtt
+            at = self.playout.partner_now(now, (srtt or 0) / 2)
+        if at is None or self.playout.snap_played < 0:
+            self.mailbox.write_snap_clock(0, 0)
+        else:
+            self.mailbox.write_snap_clock(max(1, self.playout.snap_played), max(1, int(at)))
 
     def status(self):
         """Connection and handshake status for the launcher UI and tests."""
@@ -414,7 +451,9 @@ class Host:
             tag, seq, frame, payload, addr = dgram
             if tag == TAG_PRESENCE:
                 if self.playout:
-                    self.playout.push_presence(now, frame, _presence(payload))
+                    pres = _presence(payload)
+                    self.playout.push_presence(now, frame, pres)
+                    self.pads.push(frame, pres.pad)
                 elif seq > self._latest_seq:  # UDP may reorder: keep the newest
                     self._latest_seq, latest = seq, _presence(payload)
             elif tag == TAG_SNAP:
@@ -445,6 +484,7 @@ class Host:
             loss = self.transport.quality()["loss_pct"]
             self.playout.min_delay = 1 / 60 if loss else 0.0
             latest, snap = self.playout.pop(now)
+        self._write_roll(now)
         if latest is not None:
             self.mailbox.write_partner(latest)
             self.received += 1
@@ -458,6 +498,7 @@ class Host:
                 self.mailbox.write_partner_prims(prims)
         if snap is not None and self._room_partner(authority=True):
             self.mailbox.put_snapshot(snap)
+            self._write_snap_clock(now)
             self._note("in", f"snapshot ({len(snap)} bytes)")
         theirs = self.events.tick(reliable)
         if theirs and not self._room_partner():  # M17: another room's hits and spawns aren't this game's

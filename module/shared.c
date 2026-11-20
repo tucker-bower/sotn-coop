@@ -146,6 +146,7 @@ static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while t
 static u16 s_MirrorMore[STAGE_SLOTS];  // what the chain lacks of the authority's (SnapEntity.nMore)
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
+static u8 s_Fresh[STAGE_SLOTS];        // copied from the snapshot this frame (Extrapolate)
 static u8 s_TakenHere[STAGE_SLOTS];    // frames to keep not copying a drop this game took
 static u8 s_HitHold[STAGE_SLOTS];      // frames a copy this game hit stays invincible, whatever arrives
 static u8 s_Cooldowns[sizeof(((Entity*)0)->unk6D)]; // a copy's per-attacker hit cooldowns, kept over a snapshot
@@ -507,6 +508,7 @@ static void BecomeGuest(void) {
         s_Local[i] = false;
         s_TakenHere[i] = 0;
         s_HitHold[i] = 0;
+        s_Fresh[i] = false;
     }
     // (never the stubs themselves: put back, they'd stop the room for good)
     s_OrigUpdate = g_api.o.Update != GuestUpdate && g_api.o.Update != AuthorityStageUpdate ? g_api.o.Update
@@ -835,6 +837,7 @@ static void ApplySnapshot(void) {
         }
         r += sizeof(Entity);
         s_Mirrored[i] = true;
+        s_Fresh[i] = true;
         src = (const Primitive*)r;
         n = se->nPrims;
         s_MirrorMore[i] = se->nMore;
@@ -1460,6 +1463,127 @@ const OverlayInfo* FindOverlay(s32 stage) {
     return NULL;
 }
 
+// --- a guest's copies, online (#292, design/rollback.md option B)
+// A snapshot is the authority's room half a round trip and the playout's delay ago, and online they
+// come bunched up, with gaps: the copies stood still for a frame or two, then jumped, and were
+// always behind where the authority's enemies were. Each copy is moved on by its own motion (what
+// it moved between its last two snapshots, so the parts of a many-part enemy stay together) for the
+// frames its snapshot is old, and on through a gap; when the next snapshot lands somewhere else
+// than where the copy was shown, the difference is eased out over a few frames instead of a jump.
+// Only online (the host gives the snapshot's frame): on a LAN, copies are as the snapshot has them.
+#define LEAD_MAX 12  // frames a copy is moved ahead, at most
+#define GAP_MAX 8    // ...and on through a gap of this many
+#define BLEND_MAX 24 // a jump further than this is a real one (a teleport): no easing
+static s32 s_AuthX[STAGE_SLOTS], s_AuthY[STAGE_SLOTS]; // the authority's spot at its last snapshot (room, 16.16)
+static s32 s_MotX[STAGE_SLOTS], s_MotY[STAGE_SLOTS];   // its motion a frame (16.16)
+static s32 s_OffX[STAGE_SLOTS], s_OffY[STAGE_SLOTS];   // the easing still to go (16.16)
+static s16 s_ShownX[STAGE_SLOTS], s_ShownY[STAGE_SLOTS]; // px the copy is shown from the authority's spot
+static u8 s_Have[STAGE_SLOTS];  // the slot's copy has a spot from an earlier snapshot
+static u16 s_HaveId[STAGE_SLOTS];
+static u32 s_SnapFrame;         // the authority's frame of the last snapshot
+static s32 s_Lead, s_Gap;       // frames: its age when it came, and frames since
+u32 g_CoopCopiesEased;          // tests (coop.map): snapshots whose copies were eased, not jumped
+
+static void ShiftCopy(s32 i, s32 dx, s32 dy) {
+    Entity* e = &g_Entities[STAGE_ENTITY_START + i];
+    Primitive* p;
+    s32 n;
+
+    if (!dx && !dy) {
+        return;
+    }
+    e->posX.i.hi += dx;
+    e->posY.i.hi += dy;
+    if (s_MirrorPrims[i] < 0) {
+        return;
+    }
+    for (p = &g_PrimBuf[s_MirrorPrims[i]], n = s_MirrorCount[i]; p && n--; p = p->next) {
+        if (p->priority < UI_PRIORITY && !(p->drawMode & DRAW_ABSPOS)) {
+            ShiftPrim(p, dx, dy);
+        }
+    }
+}
+
+static bool Moves(const Entity* e) { return !e->unk68 && (e->flags & FLAG_POS_CAMERA_LOCKED); }
+
+#define PX(n) ((n) << 16)
+static void Extrapolate(void) {
+    u32 snapFrame = ROLL_SNAP[0], now = ROLL_SNAP[1];
+    s32 i, gap = 0, ax, ay, wx, wy, tx, ty;
+    bool fresh = false, eased = false;
+    Entity* e;
+
+    for (i = 0; i < STAGE_SLOTS && !fresh; i++) {
+        fresh = s_Fresh[i];
+    }
+    if (!now) { // not online: as the snapshot has them
+        for (i = 0; i < STAGE_SLOTS; i++) {
+            s_Fresh[i] = s_Have[i] = false;
+            s_ShownX[i] = s_ShownY[i] = 0;
+        }
+        return;
+    }
+    if (fresh) {
+        gap = snapFrame - s_SnapFrame;
+        s_Lead = (s32)(now - snapFrame);
+        s_Lead = s_Lead < 0 ? 0 : s_Lead > LEAD_MAX ? LEAD_MAX : s_Lead;
+        s_Gap = 0;
+        s_SnapFrame = snapFrame;
+    } else if (s_Gap < GAP_MAX) {
+        s_Gap++;
+    }
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        e = &g_Entities[STAGE_ENTITY_START + i];
+        if (!s_Mirrored[i] || !Moves(e)) {
+            s_Fresh[i] = s_Have[i] = false;
+            s_ShownX[i] = s_ShownY[i] = 0;
+            continue;
+        }
+        if (s_Fresh[i]) { // the authority's spot, just copied (nothing of ours added yet)
+            ax = e->posX.val + PX(g_Tilemap.scrollX.i.hi);
+            ay = e->posY.val + PX(g_Tilemap.scrollY.i.hi);
+            wx = s_AuthX[i] + PX(s_ShownX[i]); // where it was shown last frame
+            wy = s_AuthY[i] + PX(s_ShownY[i]);
+            if (s_Have[i] && s_HaveId[i] == e->entityId && gap > 0 && gap <= GAP_MAX &&
+                ABS(ax - s_AuthX[i]) <= PX(BLEND_MAX) * gap && ABS(ay - s_AuthY[i]) <= PX(BLEND_MAX) * gap) {
+                // smoothed: an enemy that steps a pixel every few frames moves a fraction a frame
+                s_MotX[i] = (s_MotX[i] * 3 + (ax - s_AuthX[i]) / gap) / 4;
+                s_MotY[i] = (s_MotY[i] * 3 + (ay - s_AuthY[i]) / gap) / 4;
+            } else {
+                s_MotX[i] = s_MotY[i] = 0;
+            }
+            tx = ax + s_MotX[i] * s_Lead;
+            ty = ay + s_MotY[i] * s_Lead;
+            if (s_Have[i] && s_HaveId[i] == e->entityId && ABS(wx - tx) <= PX(BLEND_MAX) &&
+                ABS(wy - ty) <= PX(BLEND_MAX)) {
+                s_OffX[i] = wx - tx;
+                s_OffY[i] = wy - ty;
+                eased |= ABS(wx - tx) >= PX(1) || ABS(wy - ty) >= PX(1);
+            } else {
+                s_OffX[i] = s_OffY[i] = 0;
+            }
+            s_AuthX[i] = ax;
+            s_AuthY[i] = ay;
+            s_ShownX[i] = s_ShownY[i] = 0; // the copy is at the authority's spot now
+            s_Have[i] = true;
+            s_HaveId[i] = e->entityId;
+            s_Fresh[i] = false;
+        }
+        s_OffX[i] = s_OffX[i] / 4 * 3; // eased out, a quarter a frame
+        s_OffY[i] = s_OffY[i] / 4 * 3;
+        if (!s_Have[i]) {
+            continue;
+        }
+        // in whole pixels of the room: the copy's own fraction stays the authority's
+        tx = ((s_AuthX[i] + s_MotX[i] * (s_Lead + s_Gap) + s_OffX[i]) >> 16) - (s_AuthX[i] >> 16);
+        ty = ((s_AuthY[i] + s_MotY[i] * (s_Lead + s_Gap) + s_OffY[i]) >> 16) - (s_AuthY[i] >> 16);
+        ShiftCopy(i, tx - s_ShownX[i], ty - s_ShownY[i]);
+        s_ShownX[i] = tx;
+        s_ShownY[i] = ty;
+    }
+    g_CoopCopiesEased += eased;
+}
+
 // --- per frame
 
 void SharedUpdate(void) {
@@ -1484,6 +1608,7 @@ void SharedUpdate(void) {
     if (s_Role == ROLE_GUEST) {
         KeepStubbed();
         ApplySnapshot();
+        Extrapolate();
     } else {
         RestoreOwnUpdate();
         if (g_api.o.Update == ((const Overlay*)STAGE_CODE)->Update) {

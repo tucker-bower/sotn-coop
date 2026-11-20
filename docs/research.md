@@ -92,8 +92,14 @@ Richter mode replaces `ARC_F` + servant + weapons (`8013C000–8017FFFF`) with `
 - Slot 1's `entityId` is DRA's afterimage counter (`alu_anim.c`), so it can't mean "this slot is empty".
 - Enemy targeting call sites (stages and bosses): `GetSideToPlayer` 419, `GetDistanceToPlayerX`/`Y` 350, `GetPlayerCollisionWith` 111 (platform collision, not targeting), direct `PLAYER.posX/posY` or `g_Entities[0]` about 135.
 
-## 8 MB RAM
-Enabled by writing the RAM_SIZE register at `0x1F801060`. Most modern emulators offer it, and modders commonly put a jump in the original code and new code in the 8 MB area.
+## 8 MB RAM, and our 16
+Enabled by writing the RAM_SIZE register at `0x1F801060`. Most modern emulators offer it, and modders commonly put a jump in the original code and new code in the 8 MB area. Our SwanStation build gives 16 MB with the same option (D226): 0x80800000-0x80FFFFFF is ours alone, for what only a game with a partner (always our core) uses. Nothing there may be needed to boot or play alone: `scripts/redux_check.sh` plays in PCSX-Redux's 8 MB.
+
+| From | To | What |
+|---|---|---|
+| 0x80800000 | 0x80800400 | Each partner's buttons by frame (`link.h` CoopRollIn, 0x100 apart), and the snapshot clock for a guest's copies (0x808003F0) |
+| 0x80801000 | 0x80C20280 | Rollback snapshots: 32 frames for each of 3 partners, 44 KB each (the body, its statics, its primitives; `partner.c` RollSnap) |
+| 0x80C20280 | 0x81000000 | **Free: 3.9 MB** |
 
 What co-op keeps there (2026-11-18, M17 step 4: three partners; the addresses are in `coop_api.h`, `link.h` and `offhand.c`):
 

@@ -4,7 +4,7 @@ import struct
 from dataclasses import astuple, dataclass
 
 COOP_MAGIC = 0x504F4F43  # 'COOP'
-LINK_VERSION = 16
+LINK_VERSION = 17
 # Hand weapons (link.h's CoopWeapon, module/weapons.c), in the 8MB, outside g_CoopLink
 WEAPON_SELF, WEAPON_PARTNER, WEAPON_HAND_SIZE = 0x80710000, 0x80720000, 0x8000
 WEAPON_MAGIC, WEAPON_SIZE = 0x534E5057, 0x7320
@@ -14,6 +14,10 @@ FAMILIAR_MAGIC, FAMILIAR_SIZE = 0x4C4D4146, 0x10420
 # M13: the partner's status for its body (link.h's CoopStatus): g_Status's two ranges
 STATUS_PARTNER, STATUS_MAGIC = 0x80730000, 0x53544154
 STATUS_RANGES = ((0x80097B9C, 0x4C), (0x80097BFC, 0x34))
+# Rollback (#86, link.h's CoopRollIn): each partner's buttons by frame, in the 16 MB, 0x100 apart
+ROLL_ADDR, ROLL_MAGIC, ROLL_PADS, ROLL_SIZE = 0x80800000, 0x4C4C4F52, 32, 0x54
+_ROLL = struct.Struct("<IIIII32H")
+ROLL_SNAP_ADDR = ROLL_ADDR + 0x3F0  # a guest's copies (#292): the snapshot's frame, and its sender's now
 
 # M17 (3+ players): partners 1 and 2 (link.h's CoopPartnerIn, CoopLink.more) and their copies in the
 # 8 MB; partner 0 is the fields and addresses above.
@@ -284,6 +288,29 @@ class Mailbox:
         self.adapter.write_bytes(status_partner(k) + 4, blob)
         self.adapter.write_bytes(status_partner(k), struct.pack("<I", STATUS_MAGIC))
 
+    def write_roll(self, roll, k=0):
+        """Partner k's buttons by frame for its body's rollback (module/partner.c): roll is
+        (newest, target, played, {frame: buttons}), or None (no rollback: the body runs on the
+        presence's buttons). The magic goes last."""
+        at = ROLL_ADDR + k * 0x100
+        if roll is None:
+            self.adapter.write_bytes(at, struct.pack("<I", 0))
+            return
+        newest, target, played, pads = roll
+        slots, known = [0] * ROLL_PADS, 0
+        for f, pad in pads.items():
+            if 0 <= newest - f < ROLL_PADS:
+                slots[f % ROLL_PADS] = pad & 0xFFFF
+                known |= 1 << (f % ROLL_PADS)
+        blob = _ROLL.pack(ROLL_MAGIC, newest & 0xFFFFFFFF, target & 0xFFFFFFFF, played & 0xFFFFFFFF, known, *slots)
+        self.adapter.write_bytes(at + 4, blob[4:])
+        self.adapter.write_bytes(at, blob[:4])
+
+    def write_snap_clock(self, frame, now):
+        """With a snapshot written online: the authority's frame it was taken at, and its frame
+        now (module/shared.c Extrapolate). (0, 0): not online, copies as the snapshot has them."""
+        self.adapter.write_bytes(ROLL_SNAP_ADDR, struct.pack("<II", frame & 0xFFFFFFFF, now & 0xFFFFFFFF))
+
     def write_partner(self, presence, k=0):
         self.adapter.write_bytes(self._p(k, "presence"), presence.pack())
         self.adapter.write_bytes(self._p(k, "pad"), struct.pack("<I", presence.pad))
@@ -405,7 +432,7 @@ class Partners:
 
     _PARTNER = {"partner_presence", "partner_age", "write_partner", "write_partner_prims", "write_partner_hits",
                 "partner_sprite_count", "write_partner_sprites", "write_partner_weapon", "write_partner_familiar",
-                "write_partner_status"}
+                "write_partner_status", "write_roll"}
 
     def __init__(self, mailbox):
         self.mailbox = mailbox

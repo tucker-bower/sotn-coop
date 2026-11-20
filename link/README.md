@@ -14,6 +14,7 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `natsim.py` | A virtual internet with home routers, for connection tests. |
 | `netsim.py` | A simulated bad connection, for tests and for trying one at home. |
 | `playout.py` | A jitter buffer that plays the partner's state back evenly. |
+| `rollback.py` | The partner's buttons by frame, and the frame it's at now, for its body's rollback in the game. |
 | `portmap.py` | Asks the home router to open the game's port. |
 | `portraits.py` | Reads Richter's and Maria's cutscene portraits from the player's disc for their pause menu. |
 | `rendezvous.py` | Connect codes, STUN and direct-IP parsing. |

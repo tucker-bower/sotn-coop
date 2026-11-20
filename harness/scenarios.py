@@ -31,7 +31,7 @@ def loader_from_boot(run):
     """M1 criterion 1: COOP.BIN is loaded by CoopBoot (module/boot.c) at the start of MainGame,
     so the module runs from the very first game frame, with no familiar involved."""
     e = run.emu
-    run.expect(len(e.ram) == 8 << 20, "emulator exposes 8MB of RAM", ram=len(e.ram))
+    run.expect(len(e.ram) == 16 << 20, "emulator exposes 16MB of RAM", ram=len(e.ram))
     for _ in range(60):  # boot to the title screen (how long depends on the BIOS)
         run.step(100)
         if e.read("g_GameState") == 1:

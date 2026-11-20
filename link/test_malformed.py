@@ -28,15 +28,15 @@ class Memory:
     """A game's 8 MB of RAM with only a mailbox in it, as an adapter (link/adapter.py)."""
 
     def __init__(self):
-        self.ram = bytearray(0x800000)
+        self.ram = bytearray(0x1000000)
         self.write_bytes(MAILBOX, struct.pack("<II", COOP_MAGIC, LINK_VERSION))
 
     def read_bytes(self, address, size):
-        a = address & 0x7FFFFF
+        a = address & 0xFFFFFF
         return bytes(self.ram[a:a + size])
 
     def write_bytes(self, address, data):
-        a = address & 0x7FFFFF
+        a = address & 0xFFFFFF
         assert a + len(data) <= len(self.ram), "a write past the end of RAM"
         self.ram[a:a + len(data)] = data
 
