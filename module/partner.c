@@ -1954,6 +1954,38 @@ static void WeaponPolys(u32 gt4, u32 gt3) {
         }
     }
 }
+// A body of player 1's character draws from player 1's graphics, but its own sprite frames, which
+// RenderEntities uploads to its g_PlayerDraw rects (in its bank: Make), are read from its bank too.
+// PlayerDraw.tpage is a byte, so the bank bits Make gave it were cut off: the body's polygons read
+// player 1's frame at the same place in the first bank, and the partner moved as this player did
+// (report 20261120-175435, two Alucards). Its polygons that sample one of its rects get the bank.
+u32 g_CoopBodyOwnFrames; // polygons of a same-character body's own frames, banked (tests read it: coop.map)
+static void BankOwnFrames(u32 gt4) {
+    const PlayerDraw* d;
+    POLY_GT4* q;
+    s32 i, u, v;
+
+    for (; gt4 < g_GpuUsage.gt4; gt4++) {
+        q = &g_CurrentBuffer->polyGT4[gt4];
+        if (q->tpage & TPAGE_BANKS) {
+            continue;
+        }
+        for (i = 0, d = g_PlayerDraw; i < 16; i++, d++) {
+            if (!d->rect0.w || !(d->rect0.y & VRAM_BANK_OF(3))) {
+                continue;
+            }
+            u = (d->rect0.x & 0x3F) * 4;
+            v = d->rect0.y & 0xFF;
+            if (q->u0 >= u && q->u0 <= u + d->rect0.w * 4 && q->v0 >= v && q->v0 < v + d->rect0.h && // (<=: flipped)
+                (q->tpage & 0x1F) == (d->tpage & 0x1F)) {
+                q->tpage |= TPAGE_BANK_OF(B->bank);
+                g_CoopBodyOwnFrames++;
+                break;
+            }
+        }
+    }
+}
+
 static void BankPolys(u32 gt4, u32 gt3) {
     for (; gt4 < g_GpuUsage.gt4; gt4++) {
         g_CurrentBuffer->polyGT4[gt4].tpage = BankTpage(g_CurrentBuffer->polyGT4[gt4].tpage, B->bank);
@@ -2129,8 +2161,11 @@ static void Draw(void) {
     }
     if (B->banked) {
         BankPolys(gt4, gt3);
-    } else if (B->wpnRun[0] || B->wpnRun[1]) {
-        WeaponPolys(gt4, gt3);
+    } else {
+        BankOwnFrames(gt4);
+        if (B->wpnRun[0] || B->wpnRun[1]) {
+            WeaponPolys(gt4, gt3);
+        }
     }
     if (B->banked) { // its whip and effects, drawn by the game from the bank
         TagPrims();

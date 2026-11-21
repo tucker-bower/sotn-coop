@@ -194,3 +194,35 @@ def ultimate_richter_in_the_castle(run):
     run.expect(mb.self_presence().character == CHAR_ALUCARD, "and loads back as Alucard")
 
 
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def ultimate_richter_keeps_his_colours_with_a_weapon(run):
+    """Report 20261119-213522 (1.2.1, #338): Ultimate Richter drawn in a weapon's colours, in a
+    magenta box, after a weapon was equipped. Closing the menu loads the hands' weapons, and their
+    24 palettes each (0x110-0x13F) go over his own (his is 0x120); Co-op Richter's are put back
+    after (offhand.c FixPalettes), and his weren't. After equipping a Short Sword in the menu, his
+    palettes (RAM and VRAM) are as they were."""
+    e, mb = run.emu, mailbox(run)
+    found = blobs()
+    run.expect(5 in found, "his blob is made (the dev Saturn disc: LOCAL.md)", has=sorted(found))
+    reload_as(run, mb, 5)
+    run.step(120)
+    clut = e.addr("g_Clut") + 0x2000 + 0x10 * 32  # palettes 0x110-0x13F
+    before_ram = e.read_bytes(clut, 48 * 32)
+    before_vram = e.vram_rect(0, 0xF1, 256, 3)
+    run.step(4, "start")
+    run.step(90)
+    run.expect(e.read("g_GameEngineStep") != 1, "the menu is open", step=e.read("g_GameEngineStep"))
+    e.write(0x80097C00, 19)  # g_Status.equipment[0]: a Short Sword
+    for _ in range(6):  # out of the menu
+        run.step(4, "start")
+        run.step(60)
+        if e.read("g_GameEngineStep") == 1:
+            break
+    run.step(120)
+    run.expect(e.read("g_GameEngineStep") == 1, "back in play")
+    after_ram = e.read_bytes(clut, 48 * 32)
+    run.expect(after_ram == before_ram, "his palettes (RAM) are his own, not the sword's",
+               changed=sum(a != b for a, b in zip(after_ram, before_ram)))
+    run.expect(e.vram_rect(0, 0xF1, 256, 3) == before_vram, "and so are VRAM's")

@@ -185,3 +185,51 @@ def partner_sounds_alucard_and_richter(run):
     run.expect(rendered == kinds, "the host plays every one of them from Richter's bank", kinds=kinds, rendered=rendered)
     peak = a.voices("mix_check")
     run.expect(peak > 1000, "mixed into A's sound, they're heard", peak=peak)
+
+
+POLY_GT4_SIZE, GT4_AT, GT4_COUNT = 0x34, 0x3C74, 768  # GpuBuffer.polyGT4 (include/game.h)
+DRAW_OFS = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)  # g_PlayerDraw in the body's copy (partner.c)
+
+
+def _own_frame_polys(g, body):
+    """Polygons in g's last frames that sample one of the body's own sprite frames (its 16
+    g_PlayerDraw rects, in its bank) from that bank."""
+    raw = g.read_bytes(body + DRAW_OFS, 16 * 0x28)
+    rects = []
+    for i in range(16):
+        x, y, w, h = struct.unpack_from("<4h", raw, i * 0x28)
+        if w and y & 0x600:
+            rects.append(((x & 0x3F) * 4, y & 0xFF, w * 4, h))
+    cur = g.read("g_CurrentBuffer")
+    n = 0
+    for buf in (cur, g.read(cur)):  # the buffer being built, and the one just shown
+        polys = g.read_bytes(buf + GT4_AT, GT4_COUNT * POLY_GT4_SIZE)
+        for i in range(GT4_COUNT):
+            q = polys[i * POLY_GT4_SIZE:(i + 1) * POLY_GT4_SIZE]
+            tpage = struct.unpack_from("<H", q, 0x1A)[0]  # u1 v1 tpage
+            if tpage & 0x4000 and any(u <= q[0x0C] <= u + w and v <= q[0x0D] < v + h for u, v, w, h in rects):
+                n += 1
+    return n
+
+
+@session_scenario()
+def partner_body_draws_its_own_pose_alucard_and_alucard(run):
+    """Report 20261120-175435 (1.3.1): with two of the same character, the partner "copies your own
+    character's animations". The body's frames went to its VRAM bank, but its polygons read the
+    first bank (PlayerDraw.tpage is a byte: the bank bits were cut off), where player 1's own frame
+    is. A's game draws B's body from B's frame in its bank, while A stands and B walks and jumps."""
+    from session_shared import into_hall
+    a, b = run.s.a, run.s.b
+    into_hall(run)
+    body = symbols()["g_CoopSpikeBody"]
+    seen = frames = 0
+    for t in range(120):
+        run.step(1, ("", "right+cross" if t % 40 < 10 else "left"))
+        if t % 10 == 9:
+            frames += 1
+            seen += _own_frame_polys(a, body) > 0
+    run.expect(a.read(body, "<H", 0x56) != a.read("g_Entities", "<H", 0x56), "B's body isn't in A's pose",
+               body=a.read(body, "<H", 0x56), a=a.read("g_Entities", "<H", 0x56))
+    run.expect(seen >= frames - 1, "A draws B's body from B's own frame, in its bank", frames=frames, seen=seen,
+               banked=a.read(symbols()["g_CoopBodyOwnFrames"]) if "g_CoopBodyOwnFrames" in symbols() else None)
+

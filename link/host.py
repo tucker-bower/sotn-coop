@@ -172,6 +172,7 @@ class Host:
         version = {"link": self.hello.get("link"), "app": kw.pop("app", None)}
         self.connector = Connector(self.transport, room, role, relay or default_relay(), self._hello_bytes,
                                    version=version, **kw)
+        self.hello["rid"] = self.connector.id  # its id on the relay: a room that seats it names it (#332)
         return True
 
     def connect_status(self):
@@ -377,6 +378,8 @@ class Host:
         if self.partner_hello and theirs.get("sid") != self.partner_hello.get("sid"):
             self._partner_restarted()
         self.partner_hello = theirs
+        if self.connector:  # linked: a "room is full" on the relay is about someone else (#332)
+            self.connector.linked = True
         if theirs.get("link") != self.hello["link"]:
             self.mismatch = (f"Your partner's co-op version is different (link {theirs.get('link')}, "
                              f"yours {self.hello['link']}): both need the same version.")

@@ -70,10 +70,17 @@ static u16 s_Bank[N_PAL * COLORS_PER_PAL]; // both hands' weapon palettes, as se
 static u16 s_Ids[N_PAL];                    // g_ClutIds, while RenderEntities borrows them
 static u8 s_PrevEngine; // g_GameEngineStep last frame
 
+// In play as a character other than Alucard: the menu's weapon loads go over their own palettes
+// (0x110-0x13F), which are put back after. Every one of them: Ultimate Richter's and the Marias'
+// came out in a weapon's colours, in a box (#338), while only the co-op characters' were.
+static bool PalettesKept(void) {
+    return g_GameState == Game_Play && g_GameEngineStep == Engine_Normal && g_StageId != STAGE_ST0 &&
+           CharacterLoaded() != CHAR_ALUCARD;
+}
+
 static bool InPlay(void) {
     // only the co-op characters' overlays run the weapons' entities (COOP_MARIA, COOP_RIC)
-    return g_GameState == Game_Play && g_GameEngineStep == Engine_Normal && g_StageId != STAGE_ST0 &&
-           CHAR_COOP(CharacterLoaded());
+    return PalettesKept() && CHAR_COOP(CharacterLoaded());
 }
 
 // After a load the game leaves the weapon overlays out for Richter's player code (DRA's
@@ -666,7 +673,7 @@ void OffhandUpdate(void) {
     if (g_GameState == Game_Play && CharacterLoaded() != CHAR_ALUCARD) {
         StubUnloaded();
     }
-    if (!InPlay()) {
+    if (!PalettesKept()) {
         s_PrevEngine = g_GameEngineStep;
         return;
     }
@@ -678,6 +685,9 @@ void OffhandUpdate(void) {
         FixPalettes(1);
     }
     s_PrevEngine = g_GameEngineStep;
+    if (!InPlay()) {
+        return;
+    }
     LoadWeapons();
     AluAnimate();
     if (s_PlaceIn && !--s_PlaceIn) {
