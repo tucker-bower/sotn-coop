@@ -91,6 +91,9 @@ def pair_code(code, a, b):
     return f"{code}:{min(a, b)}-{max(a, b)}"
 
 
+FULL_GRACE_S = 10  # the room has been full this long before it says so (#332)
+
+
 class Room:
     """3+ players online (M17, D211): this game's side of a room, and a Host per partner.
 
@@ -121,6 +124,7 @@ class Room:
         self._started = {}    # a guest: player -> when its pair began finding each other
         self._seated = set()  # player 0: the seated joiners' relay ids (the next seat skips them)
         self._full_said, self._relay = None, None  # player 0: "the room is full" on the relay (#332)
+        self._full_since = None  # when the last seat was taken
         self._seated_sids = set()  # ...and their HELO sids (the next seat refuses them)
         if hosting:
             self._open_seat()
@@ -141,6 +145,12 @@ class Room:
         from .connect import REPUBLISH_S, default_relay, room_token, room_topic
         clock = next(iter(self.hosts.values())).transport.clock
         now = clock()
+        if self._full_since is None:
+            self._full_since = now
+        # Not at once: the joiner just seated may still be connecting, and it read this as about itself
+        # (ui_online under load). By FULL_GRACE_S it has heard this host, and a third still hears it soon.
+        if now - self._full_since < FULL_GRACE_S:
+            return
         if self._full_said is not None and now - self._full_said < REPUBLISH_S:
             return
         self._full_said = now
@@ -151,6 +161,7 @@ class Room:
                                                     "seated": sorted(i for i in self._seated if i)})
 
     def _open_seat(self):
+        self._full_since = None
         seat = len(self.players)
         if seat >= self.max_players:
             self._pending = None

@@ -299,7 +299,7 @@ class Connector:
             # (not a joiner the room just seated: its "full" is this joiner, still connecting)
             full = [m for m in polled if self.role == "join" and m.get("role") == "full"
                     and m.get("token") == room_token(self.room) and self.id not in (m.get("seated") or [])]
-            if full and self.state == "waiting" and not self.linked:  # #332: newer than any open seat's message
+            if full and self.state in ("waiting", "punching") and not self.linked:  # #332: newer than any open seat's message
                 said = max(full, key=lambda m: m.get("nonce", 0))
                 if not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs):
                     self.reason = (f"The room is full ({said.get('players', '?')} of {said.get('max', '?')} players). "
