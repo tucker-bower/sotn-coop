@@ -48,6 +48,10 @@ if [ ! -d "$STAGE/python/Lib/site-packages/pygame" ]; then
         "$WINPY" -m pip install -q --target "$(W "$STAGE/python/Lib/site-packages")" pygame-ce "libretro.py==0.12.0" pillow </dev/null
     fi
 fi
+# certifi: Mozilla's CA list, fresh each release. Python on Windows reads only the roots already in
+# the Windows store, which can lack the room-code relay's (issue 351); link/tls.py trusts both.
+rm -rf "$STAGE"/python/Lib/site-packages/certifi*
+"$PY" -m pip install -q --no-deps --target "$STAGE/python/Lib/site-packages" certifi </dev/null
 
 A="$STAGE/app"
 cp "$MOD"/harness/{emu,session,coop_env,module,savestates,bots}.py "$A/harness/"

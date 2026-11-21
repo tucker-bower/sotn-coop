@@ -18,6 +18,7 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `rollback.py` | The partner's buttons by frame, and the frame it's at now, for its body's rollback in the game. |
 | `portmap.py` | Asks the home router to open the game's port. |
 | `portraits.py` | Reads Richter's and Maria's cutscene portraits from the player's disc for their pause menu. |
+| `tls.py` | The certificates the app's HTTPS trusts (the system's, certifi's and Android's), and a failure's cause in plain words. |
 | `rendezvous.py` | Connect codes, STUN and direct-IP parsing. |
 | `test_connect.py` | Connects every pair of router types on the virtual internet. |
 | `test_layout.py` | Checks `mailbox.py`'s offsets, constants and sizes against `module/link.h`. |
@@ -26,4 +27,5 @@ Everything between a running game and its partner: the mailbox, netcode and conn
 | `test_room.py` | 3 and 4 players from one room code (M17): seated in turn, every guest pair linked directly where the routers allow, and through player 0 where they don't. |
 | `test_three.py` | Three games linked in pairs (M17): each sees both others in its own partner slot, and events, sprites and weapon copies reach the right one; again with one pair going through player 0. |
 | `test_portmap.py` | Checks `portmap.py` against fake routers. |
+| `test_tls.py` | HTTPS trust without the system's roots, the relay's failure causes, and its backoff (issue 351). |
 | `transport.py` | Messages between hosts over UDP. |
