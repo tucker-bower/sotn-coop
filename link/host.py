@@ -378,6 +378,8 @@ class Host:
         if self.partner_hello and theirs.get("sid") != self.partner_hello.get("sid"):
             self._partner_restarted()
         self.partner_hello = theirs
+        if self.connector:  # linked: a "room is full" on the relay is about someone else (#332)
+            self.connector.linked = True
         if theirs.get("link") != self.hello["link"]:
             self.mismatch = (f"Your partner's co-op version is different (link {theirs.get('link')}, "
                              f"yours {self.hello['link']}): both need the same version.")

@@ -180,6 +180,7 @@ class Connector:
         # M17 (3+ players): this side's id on the relay, and the other sides' ids to pass over
         # (player 0's next seat skips the joiners it has seated: link/mesh.py)
         self.id, self.exclude, self.their_id = os.urandom(4).hex(), exclude, None
+        self.linked = False  # its host heard the partner's HELO: whatever the relay says, it's in
         self.mine, self.theirs = [], []
         self.their_nat = None
         self.nat = None
@@ -298,7 +299,7 @@ class Connector:
             # (not a joiner the room just seated: its "full" is this joiner, still connecting)
             full = [m for m in polled if self.role == "join" and m.get("role") == "full"
                     and m.get("token") == room_token(self.room) and self.id not in (m.get("seated") or [])]
-            if full and self.state == "waiting":  # #332: newer than any open seat's message
+            if full and self.state == "waiting" and not self.linked:  # #332: newer than any open seat's message
                 said = max(full, key=lambda m: m.get("nonce", 0))
                 if not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs):
                     self.reason = (f"The room is full ({said.get('players', '?')} of {said.get('max', '?')} players). "
