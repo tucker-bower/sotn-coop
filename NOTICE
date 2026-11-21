@@ -24,7 +24,7 @@ What the releases include, and under which licence (full texts in licenses/):
   the hacks we've tested write, made with the editor's own code by harness/make_hack_patches.py.
   https://github.com/pddmergilla/sotn-editor
 - Python: PSF License. The Windows build uses python.org's embeddable distribution.
-- libretro.py: MIT. pygame-ce (Windows) and pygame (Android): LGPL-2.1. Pillow: MIT-CMU.
+- libretro.py: MIT. pygame-ce (Windows) and pygame (Android): LGPL-2.1. Pillow: MIT-CMU. certifi (Windows, its CA list): MPL-2.0.
 - Android only: python-for-android (MIT), pyjnius (MIT), SDL2, SDL2_image, SDL2_mixer and
   SDL2_ttf (zlib), OpenSSL (Apache-2.0), libffi (MIT), libjpeg-turbo (IJG/BSD), libpng
   (libpng), SQLite (public domain).

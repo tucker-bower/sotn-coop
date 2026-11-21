@@ -29,10 +29,8 @@ import collections
 import io
 import json
 import logging
-import os
 import platform
 import re
-import ssl
 import threading
 import time
 import urllib.error
@@ -303,7 +301,8 @@ def send(path, note=""):
     req = urllib.request.Request(SEND_URL, data=json.dumps(body).encode(), method="POST", headers={
         "Authorization": f"Bearer {KEY_FILE.read_text().strip()}", "Content-Type": "application/json",
         "User-Agent": f"sotn-coop/{VERSION}"})
-    tls = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or None)  # as link/connect.py
+    from link.tls import context
+    tls = context()  # the system's roots and certifi's, as the relay (issue 351)
     try:
         with urllib.request.urlopen(req, timeout=120, context=tls if SEND_URL.startswith("https") else None) as r:
             r.read()

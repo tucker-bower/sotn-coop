@@ -7,6 +7,7 @@ pygame on Android finds no system fonts (`android/main.py` turns its fc-list sea
 
 ## Lessons
 **Testing**
+- **Python on Windows doesn't see every root Windows trusts.** It reads only the roots already in the store, and Windows fetches one only when its own networking first needs it. A PC that had never fetched ISRG Root X1 couldn't verify ntfy.sh (#351). To reproduce on Linux, point `SSL_CERT_FILE` and `SSL_CERT_DIR` at an empty file and folder (`link/test_tls.py`).
 - **Test the path players use.** Android's Python has no CA certificates, so every request to the room-code relay failed silently, and the Android tests never caught it because they joined by `ip:port`. `android/test_pair.py --room` now uses the real relay.
 - **A character applies from a game's next load.** The first PvP pairing tests were all two Alucards. Check that a test really runs as its character.
 - **`set_player` writes into the game at once.** It used to wait for the host's next frame, and Continue sends the joint save's load right after it: solo and online castles continued as Alucard in 0.16.0. Couch never showed it, because its session is created with the characters (`castle_continue_keeps_character`).
