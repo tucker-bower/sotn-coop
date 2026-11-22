@@ -518,9 +518,20 @@ def _startup(pg):
         # the app's own picture at once, and the title by the game's frames, not the clock
         ("expect", lambda d: d.startup["picture_s"] <= 1.5, "a picture within 1.5 s of pressing Solo"),
         ("expect", lambda d: d.startup["title_frame"] <= 1300, "the title within 1300 game frames (22 s)"),
-        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("key", pg.K_UP), ("key", pg.K_RETURN),
+        ("key", pg.K_ESCAPE), ("screen", "Paused"), ("wait", 10),
+        ("expect", lambda d: _gold(d.launcher.display.games_screenshot()) * 20 < _gold(d.launcher.display.screenshot()),
+         "a report's picture from the pause menu is the games, without the menu (it showed the room's IP address)"),
+        ("key", pg.K_UP), ("key", pg.K_RETURN),
         ("screen", "Home"), ("key", pg.K_UP), ("key", pg.K_RETURN),  # Quit
     ]
+
+
+def _gold(surface):
+    """How many of a picture's pixels are the menus' gold text (about 232, 200, 120)."""
+    import pygame
+    small = pygame.transform.scale(surface, (surface.get_width() // 4, surface.get_height() // 4))
+    return sum(1 for x in range(small.get_width()) for y in range(small.get_height())
+               if (lambda c: c[0] > 190 and 150 < c[1] < 225 and c[2] < 150)(small.get_at((x, y))))
 
 
 def _window(pg):

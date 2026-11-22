@@ -393,6 +393,18 @@ class Display:
             self._bar_key = key
         self._bar_tex.draw(dstrect=(0, h - BAR, w, BAR))
 
+    def games_screenshot(self):
+        """The games' pictures as the window shows them, without a menu over them: a bug report
+        from the pause menu showed its room code and IP address (2026-11-20)."""
+        try:
+            r = self.renderer
+            r.draw_color = (0, 0, 0, 255)
+            r.clear()
+            self._draw_games()
+            return r.to_surface()
+        except Exception:  # noqa: BLE001 - no games drawn yet
+            return self.screenshot()
+
     def screenshot(self):
         """The window as the player sees it (bug reports, tests): drawn again and read back,
         since what's on screen can't be read once it's been presented."""

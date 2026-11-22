@@ -8,6 +8,7 @@ void SharedAfterUpdate(void); // once per frame, after the game's update and Ren
 void SharedPresence(CoopPresence* p);
 void SharedHit(u8 type, u16 a, u32 b); // a partner hit event (EV_HIT / EV_HIT2)
 s32 SharedRole(void);                  // ROLE_*
+s32 SharedStageExtra(void);            // authority: how far to widen the stage's windows (px a side)
 
 // Drops: the same entity ids in every stage (src/st/*/*.h)
 #define E_PRIZE_DROP 3      // hearts, gold, subweapons

@@ -32,7 +32,17 @@ void FlushCache(void);                   // main.exe
 #define ROLE_SETTLE 4      // frames a role change must hold before it happens
 #define MAX_PRIMS_PER_ENTITY 64
 #define MAX_CHAIN MAX_PRIM_COUNT // no chain is longer: stops the count on a looped one
-#define CAMERA_NEAR 256    // shared only while the cameras are within a screen of each other
+#define CAMERA_NEAR 256    // shared only while the cameras are within a screen of each other...
+// ...and vertically within half a screen: the stage's code keeps entities alive and moving only to
+// 64 px past its screen (src/st/st_update.h), and nothing widens that up and down. A screen apart,
+// the guest saw the authority's world end: doors and relics never there, enemies frozen (#355).
+// Half a screen still lets a player who arrives or falls beside the partner join their room at
+// once (at 64, one fell through the partner's lift, which in its own world was elsewhere); the
+// guest's bottom or top 64 px can then miss an entity. Across, the authority's windows are
+// widened to the guest's camera (SharedStageExtra).
+#define CAMERA_NEAR_Y 128
+#define CAMERA_JOIN_Y 112  // a little closer to start sharing than to stay: no flapping at the edge
+#define STAGE_EXTRA_STEP 32 // the widening in steps: each new width patches the stage's code
 #define UI_PRIORITY 0x1E0  // primitives from here up are screen-space UI (message boxes, 0x1FC+)
 #define STAGE_CODE 0x80180000 // stage overlays load here (each starts with its Overlay table)
 
@@ -286,7 +296,7 @@ static bool PostRichterWalk(void) {
 // Partner k shares this room now (M17: any partner; two players: partner 0, as before).
 static bool PartnerShareable(s32 k) {
     const CoopPresence* p = PARTNER_PRESENCE(k);
-    s32 dx, dy;
+    s32 dx, dy, near_y;
 
     if (PARTNER_AGE(k) > 30 || !(p->flags & PRESENCE_IN_PLAY) ||
         (p->flags & (PRESENCE_BUSY | PRESENCE_DEAD | PRESENCE_PAUSED)) || !SAME_WORLD(p)) {
@@ -315,7 +325,25 @@ static bool PartnerShareable(s32 k) {
     }
     dx = p->scrollX - g_Tilemap.scrollX.i.hi;
     dy = p->scrollY - g_Tilemap.scrollY.i.hi;
-    return dx > -CAMERA_NEAR && dx < CAMERA_NEAR && dy > -CAMERA_NEAR && dy < CAMERA_NEAR;
+    near_y = s_Role != ROLE_NONE ? CAMERA_NEAR_Y : CAMERA_JOIN_Y;
+    return dx > -CAMERA_NEAR && dx < CAMERA_NEAR && dy >= -near_y && dy <= near_y;
+}
+
+// The authority's stage windows (spawn, update, keep) reach this far past its own screen on each
+// side, for the farthest guest's camera across (widescreen_stage.c widens them). 0: not needed.
+s32 SharedStageExtra(void) {
+    s32 k, d, most = 0;
+
+    if (s_Role != ROLE_AUTHORITY) {
+        return 0;
+    }
+    for (k = 0; k < COOP_PARTNERS; k++) {
+        if (PartnerShareable(k)) {
+            d = ABS(PARTNER_PRESENCE(k)->scrollX - g_Tilemap.scrollX.i.hi);
+            most = d > most ? d : most;
+        }
+    }
+    return (most + STAGE_EXTRA_STEP - 1) / STAGE_EXTRA_STEP * STAGE_EXTRA_STEP;
 }
 
 // Partner k's player number (the host's rank for this game is its own: link/mesh.py slot()).
@@ -447,6 +475,7 @@ static void TrackRoom(void) {
         s_RoomLeft = g_Tilemap.left;
         s_RoomTop = g_Tilemap.top;
         s_RoomFrames = 0;
+        VramForgetSent(); // the icons a guest was sent are this room's (a menu ends sharing for a moment: #354)
     } else if (s_RoomFrames < 0xFFFF) {
         s_RoomFrames++;
     }
@@ -1605,6 +1634,7 @@ void SharedUpdate(void) {
     DecideRole();
     s_NStageSfx = 0;
     VramRecord(s_Role == ROLE_AUTHORITY);
+    VramGuest(s_Role == ROLE_GUEST);
     SolidRecord(s_Role == ROLE_AUTHORITY);
     if (s_Role == ROLE_GUEST) {
         KeepStubbed();

@@ -9,5 +9,7 @@ void VramPatch(void);            // once in play: LoadImage comes through the mo
 void VramRecord(bool on);        // authority: record this frame's stage uploads
 s32 VramTake(u8* out, s32 room); // authority: move them into a snapshot; returns bytes
 void VramApply(const u8* in, s32 size); // guest
+void VramGuest(bool guest);             // each frame: a room's guest keeps the icons it was sent
+void VramForgetSent(void);              // a new room: the icons a guest was sent aren't kept
 
 #endif

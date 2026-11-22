@@ -11,6 +11,12 @@
 // guest's copy of the pickup draws from. LoadEquipIcon skips what its slot already holds, so in
 // play the authority clears that record each frame, and a guest who's just arrived is sent every
 // icon again.
+//
+// The guest keeps the icons it's sent (#354: a pickup drawn as "NOW MAKING", a relic as a sword).
+// Closing a menu or the save screen puts every slot back from DRA's record of what each slot
+// should hold (func_800EB6B4), and the guest's record never had the authority's pickups: icon 0,
+// DRA's "NOW MAKING" placeholder, filled them all. Its restore comes here instead, and puts back
+// what the authority sent.
 #define COOP_MODULE
 #include <game.h>
 #include "overlay_table.h"
@@ -34,6 +40,13 @@ u16 GetClut(s32 x, s32 y);                    // main.exe
 #define ICON_SLOTS 32
 #define NO_ICON 0xFFFF
 extern u16 D_801374F8[], D_80137538[]; // DRA: the icon and palette each slot holds
+extern u16 D_80137478[], D_801374B8[]; // DRA: what each slot should hold (put back after a menu)
+#define RESTORE_ICONS ((u32*)0x800EB6B4) // DRA's func_800EB6B4: every slot from D_80137478
+#define RESTORE_ICONS_FIRST 0x27BDFFE0
+#define ICON_X 0x280 // slot i: x ICON_X + (i & 7) * 4, y ICON_Y + (i / 8) * 16, 4 x 16 (4bpp)
+#define ICON_Y 0x180
+#define ICON_PAL_Y 0xFD // palettes: slot i's 16 colours at row 0xFD + i / 16, x (i % 16) * 16
+#define ICON_WORDS (4 * 16)
 #define J(target) (0x08000000 | (((u32)(target) & 0x0FFFFFFF) >> 2))
 
 // libgpu's queue (src/main/psxsdk/libgpu/sys.c): LoadImage is addque2(dws, rect, 8, p)
@@ -53,6 +66,13 @@ static bool s_FromStage; // inside LoadTPage / LoadClut called by the stage
 
 static u16 s_Icons[ICON_SLOTS], s_IconPals[ICON_SLOTS]; // what each slot held
 static s32 s_Resend;
+
+// guest: the icons and palettes the authority sent, by slot
+static u16 s_SentPix[ICON_SLOTS][ICON_WORDS];
+static u16 s_SentPal[ICON_SLOTS][COLORS_PER_PAL];
+static u32 s_SentIcons; // a bit per slot holding a sent icon
+static u32 s_SentRoom;  // the room they were sent in (stage, left, top)
+#define ROOM_NOW ((u32)g_StageId << 16 | (u32)(u8)g_Tilemap.left << 8 | (u8)g_Tilemap.top)
 
 static bool StageCaller(u32 caller) {
     const OverlayInfo* ovl;
@@ -110,12 +130,136 @@ u16 CoopLoadClut(u_long* clut, s32 x, s32 y) {
     return GetClut(x, y);
 }
 
+// DRA's restore (func_800EB6B4), with the slots a guest was sent put back as sent.
+void CoopRestoreIcons(void) {
+    RECT r;
+    s32 i, k;
+
+    for (i = 0; i < ICON_SLOTS; i++) {
+        if (!(s_SentIcons & (1 << i))) {
+            g_api.LoadEquipIcon(D_80137478[i], D_801374B8[i], i);
+            continue;
+        }
+        r.x = ICON_X + (i & 7) * 4;
+        r.y = ICON_Y + (i / 8) * 16;
+        r.w = 4;
+        r.h = 16;
+        LoadImage(&r, (u_long*)s_SentPix[i]);
+        for (k = 0; k < COLORS_PER_PAL; k++) {
+            g_Clut[1][i * COLORS_PER_PAL + k + 0xD00] = s_SentPal[i][k];
+        }
+        D_801374F8[i] = D_80137538[i] = NO_ICON; // DRA's own next load of this slot isn't skipped
+    }
+    LoadClut((u_long*)&g_Clut[1][0xD00], 0, ICON_PAL_Y);
+    LoadClut((u_long*)&g_Clut[1][0xE00], 0, ICON_PAL_Y + 1);
+}
+
+// A guest's slots are the authority's. Its own code still loads icons into them (an entity it
+// runs itself each frame, its own room for the frames after a menu), by its own numbering: while
+// it's a guest, outside a menu, those loads are dropped (CoopLoadEquipIcon), and every 10 frames
+// the icons it was sent go back in, for anything that got past.
+#define REAPPLY_EVERY 10
+#define LOAD_EQUIP_ICON_FIRST 0x27BDFFC8 // addiu sp, sp, -56
+static bool s_Guest;
+static u32 s_IconTramp[4]; // LoadEquipIcon's first two instructions, then a jump to its third
+
+static void Reapply(void) {
+    RECT r;
+    s32 i, k;
+
+    if (!s_SentIcons || s_SentRoom != ROOM_NOW) {
+        return;
+    }
+    for (i = 0; i < ICON_SLOTS; i++) {
+        if (s_SentIcons & (1 << i)) {
+            r.x = ICON_X + (i & 7) * 4;
+            r.y = ICON_Y + (i / 8) * 16;
+            r.w = 4;
+            r.h = 16;
+            LoadImage(&r, (u_long*)s_SentPix[i]);
+            for (k = 0; k < COLORS_PER_PAL; k++) {
+                g_Clut[1][i * COLORS_PER_PAL + k + 0xD00] = s_SentPal[i][k];
+            }
+        }
+    }
+    LoadClut((u_long*)&g_Clut[1][0xD00], 0, ICON_PAL_Y);
+    LoadClut((u_long*)&g_Clut[1][0xE00], 0, ICON_PAL_Y + 1);
+}
+
+void CoopLoadEquipIcon(s32 icon, s32 palette, s32 index) {
+    if (s_Guest && !D_800973EC && (u32)index < ICON_SLOTS && (s_SentIcons & (1 << index)) && s_SentRoom == ROOM_NOW) {
+        return; // the authority's icon is in that slot
+    }
+    ((void (*)(s32, s32, s32))s_IconTramp)(icon, palette, index);
+}
+
+// Each frame: this game is a room's guest, or isn't.
+void VramGuest(bool guest) {
+    static u8 s_Tick;
+
+    s_Guest = guest;
+    if (guest && ++s_Tick >= REAPPLY_EVERY) {
+        s_Tick = 0;
+        Reapply();
+    }
+}
+
+// The guest's copy of what an upload put in an icon slot or the icons' palette rows.
+static void KeepSent(const RECT* rect, const u16* p) {
+    s32 i, k, slot;
+
+    if (rect->w == 4 && rect->h == 16 && rect->x >= ICON_X && rect->x < ICON_X + 8 * 4 && !((rect->x - ICON_X) & 3) &&
+        rect->y >= ICON_Y && rect->y < ICON_Y + 4 * 16 && !((rect->y - ICON_Y) & 15)) {
+        slot = (rect->x - ICON_X) / 4 + (rect->y - ICON_Y) / 16 * 8;
+        __builtin_memcpy(s_SentPix[slot], p, sizeof(s_SentPix[slot]));
+        s_SentIcons |= 1 << slot;
+        s_SentRoom = ROOM_NOW;
+        return;
+    }
+    if (rect->x == 0 && rect->w == 0x100 && rect->h == 1 && (rect->y == ICON_PAL_Y || rect->y == ICON_PAL_Y + 1)) {
+        for (i = 0; i < 16; i++) {
+            slot = (rect->y - ICON_PAL_Y) * 16 + i;
+            for (k = 0; k < COLORS_PER_PAL; k++) {
+                s_SentPal[slot][k] = p[i * COLORS_PER_PAL + k];
+            }
+        }
+    }
+}
+
+// A new room: the slots hold the last room's authority's icons, which DRA's record knows nothing of.
+void VramForgetSent(void) {
+    s32 i;
+
+    if (s_SentRoom == ROOM_NOW) {
+        return; // sent in this room (the arrival's first snapshot can come before it's counted)
+    }
+    for (i = 0; i < ICON_SLOTS; i++) {
+        if (s_SentIcons & (1 << i)) {
+            D_801374F8[i] = D_80137538[i] = NO_ICON;
+        }
+    }
+    s_SentIcons = 0;
+}
+
 void VramPatch(void) {
     if (s_Patched) {
         return;
     }
     s_Patched = true;
+    if (RESTORE_ICONS[0] == RESTORE_ICONS_FIRST) {
+        RESTORE_ICONS[0] = J(CoopRestoreIcons);
+        RESTORE_ICONS[1] = 0;
+    }
+    if (((u32*)LOAD_EQUIP_ICON)[0] == LOAD_EQUIP_ICON_FIRST) {
+        s_IconTramp[0] = ((u32*)LOAD_EQUIP_ICON)[0];
+        s_IconTramp[1] = ((u32*)LOAD_EQUIP_ICON)[1]; // sw s2, 40(sp): neither depends on where it runs
+        s_IconTramp[2] = J(LOAD_EQUIP_ICON + 8);
+        s_IconTramp[3] = 0;
+        ((u32*)LOAD_EQUIP_ICON)[0] = J(CoopLoadEquipIcon);
+        ((u32*)LOAD_EQUIP_ICON)[1] = 0;
+    }
     if (LOAD_IMAGE[0] != LOAD_IMAGE_FIRST || LOAD_TPAGE[0] != LOAD_TPAGE_FIRST || LOAD_CLUT[0] != LOAD_CLUT_FIRST) {
+        FlushCache();
         return; // not the code we expect: leave it all alone
     }
     LOAD_IMAGE[0] = J(CoopLoadImage);
@@ -146,11 +290,12 @@ void VramRecord(bool on) {
             D_801374F8[i] = D_80137538[i] = NO_ICON;
         }
     }
-    while (s_Resend > 0) {
-        i = --s_Resend;
-        if (s_Icons[i]) { // one a frame: each brings its palette rows
+    if (s_Resend > 0) { // one a frame (each brings its palette rows), every slot: what this game's
+        i = --s_Resend;    // restore would put there, so the guest's restore keeps it all (#354)
+        if (s_Icons[i]) {
             g_api.LoadEquipIcon(s_Icons[i] - 1, s_IconPals[i], i);
-            break;
+        } else {
+            g_api.LoadEquipIcon(D_80137478[i], D_801374B8[i], i);
         }
     }
 }
@@ -179,6 +324,7 @@ void VramApply(const u8* in, s32 size) {
             return;
         }
         GPU_QUEUE->addque2(GPU_QUEUE->dws, (void*)rect, sizeof(RECT), (void*)(in + sizeof(RECT)));
+        KeepSent(rect, (const u16*)(in + sizeof(RECT)));
         in += sizeof(RECT) + bytes;
     }
 }

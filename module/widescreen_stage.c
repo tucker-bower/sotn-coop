@@ -40,6 +40,7 @@ static Patch s_Patches[MAX_PATCHES];
 static s32 s_Count;
 static void* s_PatchedUpdate; // which overlay's code is patched (its Update), and for what width
 static s32 s_PatchedExtra;
+s32 g_CoopStageExtra; // the px a side the stage's windows are widened by now (tests read it)
 
 static bool Imm(u32 ins) { return OP(ins) == OP_ADDIU || OP(ins) == OP_SLTI; }
 
@@ -101,6 +102,7 @@ static void Restore(void) {
     }
     s_PatchedUpdate = NULL;
     s_PatchedExtra = 0;
+    g_CoopStageExtra = 0;
 }
 
 // Each frame: the current stage's windows for the view's extra width (0: the game's own).
@@ -133,6 +135,7 @@ void WidescreenStage(s32 extra) {
         s_PatchedUpdate = (void*)o->Update;
         s_PatchedExtra = extra;
     }
+    g_CoopStageExtra = s_PatchedExtra;
     FlushCache();
 }
 

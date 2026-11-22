@@ -79,20 +79,32 @@ def main():
     _, ids = imap.search(None, query)
     ids = ids[0].split()
     print(f"{len(ids)} report email(s)")
+    try:
+        fetch(imap, ids, a.dry_run)
+    except imaplib.IMAP4.abort as e:  # Gmail's daily IMAP limits: the rest come next time
+        print(f"stopped: {e}")
+        return
+    imap.logout()
+
+
+def fetch(imap, ids, dry):
     for i in ids:
-        if a.dry_run:
-            _, data = imap.fetch(i, "(BODY.PEEK[HEADER.FIELDS (SUBJECT)])")
-            print(text_of(email.message_from_bytes(data[0][1])["Subject"]))
+        _, data = imap.fetch(i, "(BODY.PEEK[HEADER.FIELDS (SUBJECT)])")
+        subject = text_of(email.message_from_bytes(data[0][1])["Subject"])
+        m = re.search(r"Bug report (\S+(?: \(\d+\))?) \(", subject)
+        if dry or (m and (OUT / m.group(1) / "note.txt").exists()):  # here already: only the label
+            print(subject + ("" if dry else ": here already"))
+            if not dry:
+                imap.store(i, "+X-GM-LABELS", LABEL)
             continue
         _, data = imap.fetch(i, "(BODY.PEEK[])")
         msg = email.message_from_bytes(data[0][1])
-        dest = save(msg, a.dry_run)
+        dest = save(msg, dry)
         if dest is None:
             continue
         print(f"{dest.name}: {note_of(msg)[:100]}")
-        if not a.dry_run:
+        if not dry:
             imap.store(i, "+X-GM-LABELS", LABEL)
-    imap.logout()
 
 
 if __name__ == "__main__":

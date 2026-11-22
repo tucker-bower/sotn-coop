@@ -9,6 +9,7 @@
 #define COOP_MODULE
 #include <game.h>
 #include "link.h"
+#include "shared.h"
 
 u16 g_CoopWideWidth; // tests: the view's width in pixels, over the player's setting; 0: the setting's
 
@@ -163,7 +164,7 @@ static s32 WindowsWidth(s32 w) {
 }
 
 void WidescreenFrame(void) {
-    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[WidescreenShape()]) & ~1, i, windows;
+    s32 w = (g_CoopWideWidth ? g_CoopWideWidth : s_ShapeWidths[WidescreenShape()]) & ~1, i, windows, wide, share;
     DRAWENV* d0 = &g_GpuBuffers[0].draw;
     DRAWENV* d1 = &g_GpuBuffers[1].draw;
     static s32 s_Applied; // the width the framebuffers were last made (a change starts from it)
@@ -177,6 +178,11 @@ void WidescreenFrame(void) {
         w = 512; // two side by side in the bank's 1024 columns
     }
     windows = g_CoopWideWindows = WindowsWidth(w);
+    if (g_GameState == Game_Play) { // the stage's windows: as wide as the view, or a shared room's guest (#355)
+        wide = windows && !g_CoopWideStageOff ? windows - DISP_STAGE_W : 0;
+        share = SharedStageExtra();
+        WidescreenStage(share > wide ? share : wide);
+    }
     if (s_Off && !windows) { // (the default: as little as possible, the game's frame is tight)
         if (!(++s_Remind & 63)) {
             GP1(GP1_COOP_WIDE); // in case a state load left the core wide
@@ -184,9 +190,6 @@ void WidescreenFrame(void) {
         return;
     }
     s_Off = false;
-    if (g_GameState == Game_Play) {
-        WidescreenStage(windows && !g_CoopWideStageOff ? windows - DISP_STAGE_W : 0);
-    }
     // #334: not while a stage loads either (past Play_PrepareNextStage, its fade): the core sends drawing,
     // fills and copies in the band under twice the width to the second bank, and at 16:9 that band
     // reaches the stage's texture pages, so the next stage's tiles went there and drew black
