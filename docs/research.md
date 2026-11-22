@@ -7,6 +7,8 @@ pygame on Android finds no system fonts (`android/main.py` turns its fc-list sea
 
 ## Lessons
 **Testing**
+- **A stage's world ends 64 px past its screen.** Update freezes or destroys entities beyond -64..320 x and -64..288 y, and the spawner brings them in at the same edges (src/st/st_update.h). Anything that shows another camera's view of a room has to widen those windows (widescreen_stage.c) or stay within them (#355).
+- **Equipment icon 0 is a "NOW MAKING" placeholder.** A pickup drawn as "NOW MAKE" means its icon slot was reloaded from a record that never held it (#354).
 - **Python on Windows doesn't see every root Windows trusts.** It reads only the roots already in the store, and Windows fetches one only when its own networking first needs it. A PC that had never fetched ISRG Root X1 couldn't verify ntfy.sh (#351). To reproduce on Linux, point `SSL_CERT_FILE` and `SSL_CERT_DIR` at an empty file and folder (`link/test_tls.py`).
 - **Test the path players use.** Android's Python has no CA certificates, so every request to the room-code relay failed silently, and the Android tests never caught it because they joined by `ip:port`. `android/test_pair.py --room` now uses the real relay.
 - **A character applies from a game's next load.** The first PvP pairing tests were all two Alucards. Check that a test really runs as its character.

@@ -18,9 +18,8 @@ import pygame
 import crashwatch
 import report
 from paths import write_atomic
-from display import BAR
 from platform_android import ANDROID
-from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_HOLD, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, scene_speed,
+from link.mailbox import (BUSY, CONTROL_AGGRO_SHIFT, CONTROL_HOLD, CONTROL_MUTE_MUSIC, CONTROL_NO_AGGRO, CONTROL_PARTNER_VOL_SHIFT, CONTROL_PVP, CUTSCENE, IN_PLAY, online_scene_speed, scene_speed,
                           ROLE_AUTHORITY, ROLE_GUEST)
 
 STAGE_ST0 = 0x1F  # the prologue
@@ -578,8 +577,8 @@ class GameView:
         if not self.online:
             return scene_speed([g.mailbox("self_presence") for g in self.games], False)
         g = self.games[0]
-        linked = g.mailbox("partner_age") <= 30
-        return scene_speed([g.mailbox("self_presence")] + ([g.mailbox("partner_presence")] if linked else []), not linked)
+        partner = g.mailbox("partner_presence") if g.mailbox("partner_age") <= 30 else None
+        return online_scene_speed(g.mailbox("self_presence"), partner)
 
     def keep_playing(self):
         """While a box is up: online, this game runs on with no buttons held, or the partner's game
@@ -658,8 +657,7 @@ class GameView:
 
     def report(self, note=None, games=None):
         games = self.games if games is None else games
-        shot = self.display.screenshot()  # the window as it was: the games, not the note box
-        shot.fill((0, 0, 0), (0, shot.get_height() - BAR, shot.get_width(), BAR))  # it can show a path
+        shot = self.display.games_screenshot()  # the games: not the note box, the pause menu or the bar
         interactive = note is None
         held = interactive and self.online
         if held:  # online the game runs on behind the boxes (keep_playing), held still (#192)

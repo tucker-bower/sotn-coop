@@ -40,7 +40,7 @@ The downloads aren't code-signed, so your browser, Windows or Android may warn y
 - **Explore independently,** each on your own screen, and see your partner on the map.
 - **Shared progress, live:** relics, unlocked areas, the explored map, beaten bosses and max HP/MP/heart upgrades count for both of you. Gold is pooled, and each of you gets a copy of every item found in the castle.
 - **Shared saves:** saving in a coffin saves both games. Anyone can pick up a castle, and whoever joins keeps a copy to play solo or host later.
-- **Bug reports:** press F9 to send us a bug report if anything goes wrong.
+- **Bug reports:** press F9 to send us a bug report if anything goes wrong, in a game or in the launcher's menus.
 
 **Fight together**
 - **Your partner is a real second player** in your game, with their own character, attacks, familiar and sounds.

@@ -10,6 +10,7 @@ Release notes for the versions we've published.
 | `v1.1.1.md` | Richter's fight fixed (the orb, the portal, pausing); save history, reliable bug reports, a full disk handled. |
 | `v1.2.1.md` | Android: a new install no longer closes itself on its first screen. |
 | `v1.4.1.md` | Same-character partners move as themselves; the Ultimate characters keep their colours with a weapon. |
+| `v1.4.2.md` | Far-apart guests see the room; pickup icons after menus; room codes on more PCs; F9 in the launcher. |
 | `v1.4.0.md` | Rollback online: the partner on time, their swings and sounds; join by address, a full room said. |
 | `v1.3.1.md` | Widescreen backgrounds in a new area, a player stuck in the floor, a first-start close. |
 | `v1.3.0.md` | Up to four players online (Max players), streamer mode, shields, curse and stone for Richter and Maria, and fixes. |

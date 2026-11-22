@@ -10,6 +10,7 @@ from link.mailbox import CUTSCENE, FLIP_SKIP_VOTE, PAUSED
 from coop_env import TOOLS
 from link.mailbox import scene_speed
 from session_m8 import reload_game
+from session_progress import arrive
 
 NO0 = 0
 ENTITY_SIZE = 0xBC
@@ -57,6 +58,12 @@ def scene_skips_once_both_players_ask(run):
     run.step(30)
     votes = [g.mailbox("self_presence") for g in (a, b)]
     run.expect(scene_speed(votes, False) > 1, "two votes do", votes=[v.flip_x for v in votes])
+    import dataclasses
+    from link.mailbox import online_scene_speed
+    elsewhere = dataclasses.replace(votes[1], flags=votes[1].flags & ~CUTSCENE, flip_x=0)
+    run.expect(online_scene_speed(votes[0], elsewhere) > 1 and online_scene_speed(votes[0], None) > 1,
+               "online, A's own vote skips when B is in no scene (1.4.0: B in the castle, A in the Prologue)")
+    run.expect(online_scene_speed(dataclasses.replace(votes[0], flip_x=0), elsewhere) == 1, "but not without A's vote")
     run.step(2)
 
 
@@ -250,3 +257,50 @@ def shared_room_lightning_alucard_and_richter(run):
 @session_scenario(starts=("entrance", "entrance"), characters=(0, 2))
 def shared_room_lightning_alucard_and_maria(run):
     _lightning_looks_the_same(run)
+
+
+NO3, RELIC_ROOM, RELIC_SPOT = 0x41, 120, (215, 135)  # the entrance's Cube of Zoe, on its pedestal
+
+
+def _icon_tiles(g):
+    """Each of the 32 pickup icon slots' pixels and its 16 colours."""
+    pix, pal = g.vram_rect(0x280, 0x180, 32, 64), g.vram_rect(0, 0xFD, 256, 2)
+    return [(tuple(tuple(pix[(i // 8) * 16 + r][(i & 7) * 4:(i & 7) * 4 + 4]) for r in range(16)),
+             tuple(pal[i // 16][(i % 16) * 16:(i % 16) * 16 + 16])) for i in range(32)]
+
+
+@session_scenario()
+def pickup_icon_kept_after_menu(run):
+    """#354 (1.4.1): after a save's load, closing a menu put back every icon slot from the guest's
+    own record, and a pickup the authority's icon drew showed DRA's "NOW MAKING" placeholder (or a
+    stale sword on a relic). Both load a save by the Cube of Zoe, then B, the guest, opens and
+    closes the menu: the icons A sent are still in B's slots. (Failed on 1.4.1's module.)"""
+    a, b = run.s.a, run.s.b
+    arrive(run, a, NO3, RELIC_ROOM, *RELIC_SPOT)
+    arrive(run, b, NO3, RELIC_ROOM, *RELIC_SPOT)
+    for g in (a, b):  # both reports came after loading a save: its screen overwrites the icon slots
+        run.expect(reload_game(run, g), f"{'AB'[g is b]} loads a save here")
+    run.step(60)  # on A's ledge: beside it B falls, and a camera 60 px lower doesn't share (#355)
+    for _ in range(240):
+        run.step(1)
+        if b.mailbox("self_presence").role == 2:
+            break
+    run.step(120)  # the authority sends its icons again, one a frame
+    ta, tb = _icon_tiles(a), _icon_tiles(b)
+    held = struct.unpack("<32H", a.read_bytes(0x80137478, 64))  # DRA's D_80137478: the icon A put in each slot
+    sent = [i for i in range(32) if ta[i] == tb[i] and held[i]]
+    run.expect(sent, "B's icon slots got A's icons", slots=sent)
+    seen = []
+    for button, frames, gap in (("start", 7, 90), ("triangle", 6, 150)):  # in, and out (the rest would act in play)
+        run.step(frames, ("", button))
+        run.step(gap)
+        seen.append((button, b.mailbox("self_presence").flags & PAUSED, b.read("g_GameState")))
+    run.expect(seen[0][1], "B's menu opened", seen=seen)
+    run.expect(not b.mailbox("self_presence").flags & PAUSED, "B's menu is closed", flags=b.mailbox("self_presence").flags)
+    tb = _icon_tiles(b)
+    lost = [i for i in sent if tb[i] != ta[i]]
+    run.expect(b.mailbox("self_presence").role == 2, "B is A's guest again", a=str(a.mailbox("self_presence"))[:400],
+               b=str(b.mailbox("self_presence"))[:400])
+    run.expect(not lost, "after B's menu, B's slots still hold A's icons", lost=lost, sent=sent,
+               how=[("pixels" if tb[i][0] != ta[i][0] else "") + ("palette" if tb[i][1] != ta[i][1] else "") for i in lost],
+               held=[held[i] for i in lost], b_held=[b.read(0x80137478 + 2 * i, "<H") for i in lost])

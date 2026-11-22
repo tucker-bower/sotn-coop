@@ -107,6 +107,14 @@ def scene_speed(presences, solo):
     return SCENE_SPEED if scene and (solo or len(scene) >= 2) and all(p.flip_x & FLIP_SKIP_VOTE for p in scene) else 1
 
 
+def online_scene_speed(me, partner):
+    """scene_speed for an online game: its speed-up is its own, so a partner in no scene (still in
+    the castle while this one plays the Prologue: 1.4.0 report 20261121-012811), or not linked
+    (None), doesn't hold it back. One in a scene too votes as on the couch."""
+    in_scene = partner is not None and partner.flags & CUTSCENE
+    return scene_speed([me] + ([partner] if in_scene else []), not in_scene)
+
+
 def spell_options(spells):
     """OPT_* bits for four spell ids (or None) on the right stick: up, right, down, left."""
     return sum(((s + 1) if s is not None else 0) << (OPT_SPELL_SHIFT + 4 * k) for k, s in enumerate(spells))

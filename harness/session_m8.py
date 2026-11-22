@@ -240,7 +240,8 @@ def partner_graphics_stay_in_their_bank(run, ca, cb):
     run.expect(a.mailbox("partner_age") < 30 and a.mailbox("partner_presence").character == cb,
                f"B's {NAMES[cb]} is with A", age=a.mailbox("partner_age"))
     after = sheet()
-    changed = sum(1 for y in range(512) for x in range(512) if before[y][x] != after[y][x])
+    icons = lambda x, y: 0x80 <= x < 0xA0 and 0x180 <= y < 0x1C0  # the pickup icon slots (x 0x280): a shared room's (#354)
+    changed = sum(1 for y in range(512) for x in range(512) if before[y][x] != after[y][x] and not icons(x, y))
     run.expect(changed < 200, f"A's own textures are untouched by B's {NAMES[cb]}", pixels_changed=changed)
 
 
