@@ -25,8 +25,9 @@ from test_malformed import MAILBOX, Memory  # noqa: E402
 CODE = "BAT-7K2Q"
 
 
-def room(kinds, seconds=60, pair_timeout=20, max_players=4):
-    """kinds: each player's router. Returns the players as (memory, mailbox, room)."""
+def room(kinds, seconds=60, pair_timeout=20, max_players=4, gone=None):
+    """kinds: each player's router. gone: {player: second} when that one's app goes quiet. Returns
+    the players as (memory, mailbox, room)."""
     net = Internet()
     stuns = [StunServer(net, 3478), StunServer(net, 19302)]
     relay = MemoryRelay()
@@ -50,7 +51,9 @@ def room(kinds, seconds=60, pair_timeout=20, max_players=4):
         now[0] += 1 / 60
         if len(players) < len(kinds) and now[0] > 2 * len(players):  # a joiner every two seconds
             players.append(player(len(players), kinds[len(players)]))
-        for _, _, r in players:
+        for n, (_, _, r) in enumerate(players):
+            if gone and n in gone and now[0] >= gone[n]:
+                continue
             r.tick(game_running=r.me is not None and len(r.hosts) == len(kinds) - 1)
         for s in stuns:
             s.tick()
@@ -96,6 +99,12 @@ def main():
     third = players[2][2]._first.connector
     check(third.state == "failed" and "room is full" in (third.reason or ""),
           f"#332: the third hears the room is full, not a timeout ({third.state}: {third.reason})")
+
+    # #339: a joiner seated in the lobby that goes quiet gives its seat back, and the next gets it
+    players = room((CONE, CONE, CONE), seconds=60, max_players=2, gone={1: 3.0})
+    seats = [r.me for _, _, r in players]
+    check(seats[2] == 1 and sorted(players[0][2].players) == [0, 1],
+          f"#339: a seat left silent in the lobby goes to the next joiner ({seats}, {players[0][2].players})")
 
     print(f"\n{'all passed' if not failures else f'{len(failures)} FAILED'}")
     return 1 if failures else 0

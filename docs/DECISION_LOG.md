@@ -1114,3 +1114,4 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D233: Rescues for a room bounce, and for a copy that lost its primitives** (2026-11-23, #363, #335; agent-default)
 - A room change less than 8 frames of play after the last one is a bounce, and 3 in a row put the player on their last floor spot (D232's). No one walks through doors that fast. The report's loop couldn't be started from a fresh game, so this catches the loop rather than its cause.
 - A guest's copy whose primitives couldn't be allocated keeps the authority's primIndex. When the guest takes the room over, such copies are destroyed instead of run (the Spirit Orb hang's evidence: step 9 with no primitives of its own).
+- In the lobby, a seated joiner not heard for 5 s gives its seat back (seats are numbered lowest-free). Seats aren't freed in play, where rejoining goes through the old seat.

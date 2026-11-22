@@ -6,6 +6,7 @@ its datagram in TAG_FWD with the other's number, and player 0 sends it on in TAG
 sender's. On both guests a RelayTransport stands in for the missing link, so the host above it
 is the same as for a direct one."""
 
+import logging
 import collections
 
 from .transport import TAG_FWD, UdpTransport
@@ -91,7 +92,9 @@ def pair_code(code, a, b):
     return f"{code}:{min(a, b)}-{max(a, b)}"
 
 
+log = logging.getLogger(__name__)
 FULL_GRACE_S = 10  # the room has been full this long before it says so (#332)
+SEAT_SILENT_S = 5.0  # in the lobby, a seated joiner not heard for this long gives its seat back (#339)
 
 
 class Room:
@@ -160,9 +163,33 @@ class Room:
                                                     "players": len(self.players), "max": self.max_players,
                                                     "seated": sorted(i for i in self._seated if i)})
 
+    def _free_silent_seats(self):
+        """#339: a seat taken in the lobby by a joiner that went quiet (its app tried again with a
+        new connection, or closed) was held for good, and the room said "full" to that same player.
+        Before the game runs, a seat not heard from for SEAT_SILENT_S is given back."""
+        for n, host in list(self.hosts.items()):
+            t = host.transport
+            heard = t.last_rx_time
+            if n == 0 or heard is None or t.clock() - heard < SEAT_SILENT_S:
+                continue
+            log.info("room: seat %d silent for %.0f s in the lobby: given back", n, t.clock() - heard)
+            del self.hosts[n]
+            self.players.remove(n)
+            self.mesh.links.pop(n, None)
+            self._seated.discard(host.connector.their_id if host.connector else None)
+            self._seated.discard((host.partner_hello or {}).get("rid"))
+            self._seated_sids.discard((host.partner_hello or {}).get("sid"))
+            self._tell_roster()
+            if self._pending is None:
+                self._open_seat()
+
+    def _next_seat(self):
+        """The lowest seat number not taken (one given back in the lobby comes first)."""
+        return next(n for n in range(len(self.players) + 1) if n not in self.players)
+
     def _open_seat(self):
         self._full_since = None
-        seat = len(self.players)
+        seat = self._pending_seat = self._next_seat()
         if seat >= self.max_players:
             self._pending = None
             return
@@ -184,21 +211,23 @@ class Room:
         if self.me == 0:
             p = self._pending
             if p is not None and p.connector and p.connector.state == "connected":
-                seat = len(self.players)
+                seat = self._next_seat()
                 # the joiner's relay id: from its relay message, or its HELO (it may connect first
                 # another way, on a LAN, and the room's "full" must still name it: ui_online)
                 self._seated.add(p.connector.their_id or (p.partner_hello or {}).get("rid"))
                 self._seated_sids.add(p.partner_hello.get("sid"))
                 p.only_sid = p.partner_hello.get("sid")
                 self.hosts[seat] = p
-                self.players.append(seat)
+                self.players = sorted(self.players + [seat])
                 self._tell_roster()
                 self._open_seat()
             elif p is not None and p.connector and p.connector.state == "failed":
-                self.mesh.links.pop(len(self.players), None)
+                self.mesh.links.pop(self._pending_seat, None)
                 self._open_seat()  # that joiner couldn't reach us: wait for the next
             elif p is None and self.hosts:
                 self._say_full()
+            if not game_running:
+                self._free_silent_seats()
             return
         first = self._first
         if self.me is None and first.partner_hello and isinstance(first.partner_hello.get("seat"), int):
