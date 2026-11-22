@@ -40,6 +40,7 @@ PUNCH_EVERY_S = 0.1
 REPUBLISH_S = 20.0
 READ_RETRY_S, READ_RETRY_MAX_S = 2.0, 30.0   # reconnecting the relay's stream after an error, doubling
 RETRY_S = 5.0   # republishing while the relay is failing (ntfy.sh allows one request per 5 s)
+FULL_WAIT_S = 20.0  # "the room is full" for this long before a joiner gives up (#339)
 GAME_PORT = 47811  # the game's port when it's free (the launcher asks for it first), for the LAN broadcast
 BROADCAST_EVERY_S = 0.5
 log = logging.getLogger(__name__)
@@ -190,6 +191,7 @@ class Connector:
         # (player 0's next seat skips the joiners it has seated: link/mesh.py)
         self.id, self.exclude, self.their_id = os.urandom(4).hex(), exclude, None
         self.linked = False  # its host heard the partner's HELO: whatever the relay says, it's in
+        self._full_first = None  # when the room was first said to be full (FULL_WAIT_S)
         self.mine, self.theirs = [], []
         self.their_nat = None
         self.nat = None
@@ -310,7 +312,13 @@ class Connector:
                     and m.get("token") == room_token(self.room) and self.id not in (m.get("seated") or [])]
             if full and self.state in ("waiting", "punching") and not self.linked:  # #332: newer than any open seat's message
                 said = max(full, key=lambda m: m.get("nonce", 0))
-                if not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs):
+                newer = not msgs or said.get("nonce", 0) > max(m.get("nonce", 0) for m in msgs)
+                # Not at the first one (#339): a seat can be freed by a player who just left, or by
+                # this joiner's own last try (seen in a 1.4.2 report: refused for 20 s while
+                # rejoining, and in ui_online under load). It's full only if it stays so.
+                if newer and self._full_first is None:
+                    self._full_first = now
+                if newer and now - self._full_first >= FULL_WAIT_S:
                     self.reason = (f"The room is full ({said.get('players', '?')} of {said.get('max', '?')} players). "
                                    "The host can raise Max players in the castle's settings.")
                     self._done("failed")

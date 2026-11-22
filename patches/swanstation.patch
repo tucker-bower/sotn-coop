@@ -360,10 +360,10 @@ index bd443b7..3492014 100644
      {
        m_set_texture_disable_mask = static_cast<bool>(param & 0x01);
 diff --git a/src/core/gpu.h b/src/core/gpu.h
-index 0a0959f..bd99b34 100644
+index 0a0959f..b284e73 100644
 --- a/src/core/gpu.h
 +++ b/src/core/gpu.h
-@@ -22,6 +22,19 @@ class Timers;
+@@ -22,6 +22,22 @@ class Timers;
  class GPU
  {
  public:
@@ -379,11 +379,14 @@ index 0a0959f..bd99b34 100644
 +  {
 +    return CoopWide() && y < COOP_WIDE_BAND && x < 2u * m_coop_wide_width;
 +  }
-+  static constexpr uint32_t COOP_WIDE_BAND = 256;
++  // The framebuffers' lines: 240, not 256. The game keeps its palettes in lines 240-255 under them,
++  // and a palette read back while the view was wide came from the second bank, all zeros: a stage's
++  // 256 palettes black, so its tiles drew nothing (1.4.2 report 20261122-122929, #359).
++  static constexpr uint32_t COOP_WIDE_BAND = 240;
    enum class BlitterState : uint8_t
    {
      Idle,
-@@ -349,7 +362,7 @@ protected:
+@@ -349,7 +365,7 @@ protected:
  
    struct DrawMode
    {

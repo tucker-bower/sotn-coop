@@ -538,20 +538,44 @@ static void StuckWalkRescue(void) {
 // Stuck in a fall (#336): Richter, in the Marble Gallery, ended up inside the floor at the room's
 // bottom, falling (velocity down, not on the ground) without moving, and stayed there. A fall that
 // goes nowhere for FALL_STUCK_FRAMES puts the player back on their last spot on the floor.
+//
+// That spot is on the room's own floor (#364): stood on a lift, it was where the lift had been,
+// and once the lift had gone each rescue dropped the player down the empty shaft again, for good
+// (1.4.2 report 20261122-233011, revived onto the partner on the entrance's lift). A spot over a
+// solid tile is kept even into the next rooms: going back a room beats falling again.
 #define FALL_STUCK_FRAMES 90
+#define FEET_MIN 8 // px below the player's position where a floor tile counts as the one stood on
+#define FEET_MAX 40
+
+static bool Solid(s32 x, s32 y);
+u16 g_CoopSafeSpot[4]; // stage, room, x, y: where a stuck fall puts the player (tests read it)
+
+static bool OnTileFloor(void) {
+    s32 k;
+
+    for (k = FEET_MIN; k <= FEET_MAX; k += 4) {
+        if (Solid(PLAYER.posX.i.hi, PLAYER.posY.i.hi + k)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static void StuckFallRescue(void) {
-    static s32 y, safeX, safeY = -1;
-    static u16 still, safeRoom;
+    static s32 y;
+    static u16 still;
     const CoopPresence* self = &g_CoopLink.self;
     s32 now = PLAYER.posY.i.hi + g_Tilemap.scrollY.i.hi;
 
     // The last spot stood on: on the ground and not falling (in the floor the game counts the
-    // player as on the ground too, so the presence's ground spot can be the sunk one)
-    if (InNormalPlay() && (g_Player.vram_flag & 1) && PLAYER.velocityY <= 0 && !still) {
-        safeX = self->x;
-        safeY = self->y;
-        safeRoom = self->roomId;
+    // player as on the ground too, so the presence's ground spot can be the sunk one), over a tile
+    if (InNormalPlay() && g_GameEngineStep == Engine_Normal && (self->flags & PRESENCE_IN_PLAY) &&
+        !(self->flags & (PRESENCE_BUSY | PRESENCE_DEAD)) && !ArriveHeld() && (g_Player.vram_flag & 1) &&
+        PLAYER.velocityY <= 0 && !still && OnTileFloor()) {
+        g_CoopSafeSpot[0] = self->stage;
+        g_CoopSafeSpot[1] = self->roomId;
+        g_CoopSafeSpot[2] = self->x;
+        g_CoopSafeSpot[3] = self->y;
     }
     if (!InNormalPlay() || g_GameEngineStep != Engine_Normal || g_CutsceneHasControl || g_Player.demo_timer ||
         PLAYER.velocityY <= 0 || !(self->flags & PRESENCE_IN_PLAY) || now != y) {
@@ -559,8 +583,8 @@ static void StuckFallRescue(void) {
         still = 0;
     } else if (++still >= FALL_STUCK_FRAMES) {
         still = 0;
-        if (safeY >= 0 && safeRoom == self->roomId) {
-            Arrive(self->stage, self->roomId, safeX, safeY);
+        if (g_CoopSafeSpot[0] == self->stage && (g_CoopSafeSpot[2] || g_CoopSafeSpot[3])) {
+            Arrive(g_CoopSafeSpot[0], g_CoopSafeSpot[1], g_CoopSafeSpot[2], g_CoopSafeSpot[3]);
         } else {
             Arrive(self->stage, self->roomId, self->groundX, self->groundY);
         }
