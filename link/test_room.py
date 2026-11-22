@@ -89,7 +89,7 @@ def main():
               f"{name}: {'1 and 2 go through player 0' if relayed else 'every pair is direct'} ({through})")
 
     # D221: a castle for two (Max players 2) seats two; a third with the code isn't let in
-    players = room((CONE, CONE, CONE), seconds=30, max_players=2)
+    players = room((CONE, CONE, CONE), seconds=60, max_players=2)  # the grace, then FULL_WAIT_S
     seats = [r.me for _, _, r in players]
     check(seats[:2] == [0, 1] and seats[2] is None and not players[0][2].hosts.get(2),
           f"Max players 2: the third isn't seated ({seats})")
