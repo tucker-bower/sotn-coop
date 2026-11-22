@@ -153,6 +153,8 @@ static void (*s_OrigUpdate)(void);
 static void (*s_OrigSpawner)(void);
 static s16 s_MirrorPrims[STAGE_SLOTS]; // head index per slot, -1 if none
 static u8 s_MirrorCount[STAGE_SLOTS];  // primitives in that chain (kept while the count holds)
+static bool s_PrimsLost[STAGE_SLOTS];  // the authority's copy has primitives this one couldn't get
+u32 g_CoopPrimlessDropped;             // tests read it
 static u16 s_MirrorMore[STAGE_SLOTS];  // what the chain lacks of the authority's (SnapEntity.nMore)
 static u8 s_Mirrored[STAGE_SLOTS];     // the slot holds a copy (not a local entity)
 static u8 s_Local[STAGE_SLOTS];        // the slot holds scenery the guest runs itself
@@ -628,7 +630,24 @@ static void CompleteChains(void) {
     }
 }
 
+// A copy whose primitives couldn't be allocated (the buffer full: the Spirit Orb's Obtained
+// sparkle) still has the authority's primIndex. Run as this game's own, its code walks that chain
+// through other entities' primitives, into freed ones (0xFFFFFFFF), and the game hung (#335). It's
+// mid-effect anyway: it goes.
+static void DropPrimless(void) {
+    s32 i;
+
+    for (i = 0; i < STAGE_SLOTS; i++) {
+        if (s_PrimsLost[i] && g_Entities[STAGE_ENTITY_START + i].entityId) {
+            DestroyEntity(&g_Entities[STAGE_ENTITY_START + i]);
+            g_CoopPrimlessDropped++;
+        }
+        s_PrimsLost[i] = false;
+    }
+}
+
 static void StopBeingGuest(void) {
+    DropPrimless();
     CompleteChains();
     ResyncSpawner();
     if (g_api.o.Update == GuestUpdate) {
@@ -704,6 +723,7 @@ u32 g_CoopStaleHelpersCleared; // drawn helpers with no id a guest cleared (test
 static void ClearSlot(s32 i) {
     Entity* e = &g_Entities[STAGE_ENTITY_START + i];
 
+    s_PrimsLost[i] = false;
     if (s_Mirrored[i]) {
         FreeMirrorPrims(i);
         e->flags &= ~FLAG_HAS_PRIMS;
@@ -929,6 +949,7 @@ static void ApplySnapshot(void) {
             e->primIndex = s_MirrorPrims[i];
             e->flags |= FLAG_HAS_PRIMS;
         }
+        s_PrimsLost[i] = se->nPrims && !(e->flags & FLAG_HAS_PRIMS);
         PrimPointersIn(e, se->nPrims ? s_MirrorPrims[i] : -1);
     }
     for (i = 0; i < STAGE_SLOTS; i++) {

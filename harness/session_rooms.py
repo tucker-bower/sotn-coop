@@ -336,3 +336,49 @@ def movement_stuck_fall_rescued_onto_floor_not_a_lift(run):
     p = a.mailbox("self_presence")
     run.expect(p.room_id == before[1] and abs(p.ground_y - before[3]) < 24, "a stuck fall puts A back on that floor",
                at=(p.room_id, p.ground_x, p.ground_y), spot=before)
+
+
+PRIM_BUF, PRIM_SIZE, PRIM_ALLOC = 0x80086FEC, 0x34, 0x400
+
+
+def _fill_free_prims(g):
+    """Harness: every free primitive DRA can hand out marked taken (a hidden tile), as a busy room
+    leaves the pool. Returns how many."""
+    n = 0
+    for i in range(PRIM_ALLOC):
+        at = PRIM_BUF + i * PRIM_SIZE
+        if g.read(at + 7, "<B") == 0:
+            g.write(at + 7, 3, "<B")  # PRIM_TILE: taken
+            g.write(at + 0x32, 0x08, "<H")  # DRAW_HIDE
+            n += 1
+    return n
+
+
+@session_scenario()
+def guest_relic_taken_over_without_its_primitives(run):
+    """#335 (1.2.1 report 20261119-212343): the guest's Spirit Orb copy had no primitives of its own
+    (the pool full), only the authority's primIndex. When the guest took the room over mid-Obtained
+    the orb's own code walked that chain into freed primitives and the game hung. A picks up the
+    entrance's Cube of Zoe with B as the guest, its pool full; A leaves mid-animation and B takes the
+    room: B's game keeps running, and the copy without its primitives is gone."""
+    from module import symbols
+    a, b = run.s.a, run.s.b
+    arrive(run, a, NO3, RELIC_ROOM, RELIC_SPOT[0] - 40, RELIC_SPOT[1])
+    arrive(run, b, NO3, RELIC_ROOM, RELIC_SPOT[0] - 40, RELIC_SPOT[1])
+    for _ in range(120):
+        run.step(1)
+        if b.mailbox("self_presence").role == 2:
+            break
+    run.expect(b.mailbox("self_presence").role == 2, "B is A's guest by the relic")
+    filled = _fill_free_prims(b)
+    dropped = symbols()["g_CoopPrimlessDropped"]
+    before = b.read(dropped, "<I")
+    run.step(40, ("right", ""))  # A walks into the relic
+    run.step(20)
+    arrive(run, a, NO3, room_id(a, 17, 36), 60, 135)  # and leaves mid-animation: B runs the room now
+    beat = b.mailbox("heartbeat")
+    run.step(240)
+    run.expect(b.mailbox("heartbeat") != beat, "B's game keeps running after taking the room over",
+               beat=(beat, b.mailbox("heartbeat")), filled=filled)
+    run.expect(b.read(dropped, "<I") > before, "the copy without its primitives was dropped",
+               dropped=b.read(dropped, "<I") - before)

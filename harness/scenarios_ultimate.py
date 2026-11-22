@@ -226,3 +226,44 @@ def ultimate_richter_keeps_his_colours_with_a_weapon(run):
     run.expect(after_ram == before_ram, "his palettes (RAM) are his own, not the sword's",
                changed=sum(a != b for a, b in zip(after_ram, before_ram)))
     run.expect(e.vram_rect(0, 0xF1, 256, 3) == before_vram, "and so are VRAM's")
+
+
+
+@session_scenario(starts=("entrance", "entrance"), characters=(5, 0))
+def movement_room_bounce_rescued_ultimate_richter(run):
+    """#363 (1.4.2 report 20261122-172832): Ultimate Richter went back and forth between the Castle
+    Keep's (38,8) and (38,9) for good, each one placing him past the edge that sent him back. The
+    test puts him above (38,9)'s top each time he comes in, as the report's loop did: after a few
+    bounces he's put on the last floor he stood on, (38,8)'s, and stays there in play."""
+    from module import symbols
+    from session_m15 import load_characters
+    from session_progress import arrive
+    a = run.s.a
+    load_characters(run)
+    arrive(run, a, 0x0B, 32, 246, 120)  # (38,8), on its floor: the rescue's spot
+    run.step(60)
+    rescues = symbols()["g_CoopBounceRescues"]
+    before = a.read(rescues, "<I")
+    a.write(a.entity(0) + 6, 251, "<h")  # falling out of its bottom, as the report
+    a.write(a.entity(0) + 0x0C, 0x3800, "<i")
+    room, changes, placed = tuple(a.snapshot()["room"]), 0, True
+    for t in range(900):
+        run.step(1)
+        r = tuple(a.snapshot()["room"])
+        if a.read(rescues, "<I") != before:
+            break
+        if r != room:
+            changes, room, placed = changes + 1, r, False
+        if not placed and a.read("g_GameEngineStep") == 1:  # its first frame in play: the report's spots,
+            placed = True                                     # past the edge that sends him back, falling
+            y = -14 if r == (38, 9) else 251
+            a.write(a.entity(0) + 6, y, "<h")
+            a.write("g_PlayerY", y + a.read("g_Tilemap", "<h", 0xE), "<i")  # its world position, as the report's
+            a.write(a.entity(0) + 0x0C, 0x3800, "<i")
+    run.expect(a.read(rescues, "<I") > before, "the bouncing is noticed and rescued", changes=changes)
+    run.step(240)
+    still = tuple(a.snapshot()["room"])
+    run.step(120)
+    run.expect(still == (38, 8) and tuple(a.snapshot()["room"]) == still and a.mailbox("self_presence").flags & 1,
+               "back on (38,8)'s floor, staying there in play", room=a.snapshot()["room"],
+               ground=(a.mailbox("self_presence").ground_x, a.mailbox("self_presence").ground_y))

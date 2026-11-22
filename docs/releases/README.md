@@ -12,6 +12,7 @@ Release notes for the versions we've published.
 | `v1.4.1.md` | Same-character partners move as themselves; the Ultimate characters keep their colours with a weapon. |
 | `v1.4.2.md` | Far-apart guests see the room; pickup icons after menus; room codes on more PCs; F9 in the launcher. |
 | `v1.4.3.md` | Widescreen backgrounds no longer vanish; no endless fall after a revive onto a lift. |
+| `v1.4.4.md` | A rescue from a room-to-room loop; a guard against the Spirit Orb freeze. |
 | `v1.4.0.md` | Rollback online: the partner on time, their swings and sounds; join by address, a full room said. |
 | `v1.3.1.md` | Widescreen backgrounds in a new area, a player stuck in the floor, a first-start close. |
 | `v1.3.0.md` | Up to four players online (Max players), streamer mode, shields, curse and stone for Richter and Maria, and fixes. |

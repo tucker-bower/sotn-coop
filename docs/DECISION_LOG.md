@@ -1110,3 +1110,8 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 **D232: The core's wide band is the framebuffers' 240 lines, and a stuck fall's rescue spot is over solid tiles** (2026-11-22, #359, #364; agent-default)
 - The core sent everything a wide view touched in VRAM's lines 0-255 to the second bank. The game keeps its palettes in lines 240-255, and loads read them back, so a readback while wide got zeros: a stage's palettes went black and its tiles drew nothing. The band is now 240 lines, the framebuffers' own.
 - The stuck-fall rescue (#336) kept the last spot the player stood on, a lift included. Once the lift had gone, every rescue dropped the player down the shaft again. The spot is now the last one over a solid tile, while in play and not arriving, and it's kept across rooms.
+
+**D233: Rescues for a room bounce, and for a copy that lost its primitives** (2026-11-23, #363, #335; agent-default)
+- A room change less than 8 frames of play after the last one is a bounce, and 3 in a row put the player on their last floor spot (D232's). No one walks through doors that fast. The report's loop couldn't be started from a fresh game, so this catches the loop rather than its cause.
+- A guest's copy whose primitives couldn't be allocated keeps the authority's primIndex. When the guest takes the room over, such copies are destroyed instead of run (the Spirit Orb hang's evidence: step 9 with no primitives of its own).
+- In the lobby, a seated joiner not heard for 5 s gives its seat back (seats are numbered lowest-free). Seats aren't freed in play, where rejoining goes through the old seat.

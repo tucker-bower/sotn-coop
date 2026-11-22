@@ -591,6 +591,34 @@ static void StuckFallRescue(void) {
     }
 }
 
+// Bounced between rooms (#363): Ultimate Richter, in the Castle Keep, came into (38,9) above its
+// top edge, so it sent him back up, into (38,8) below its bottom edge, and back down, every 14
+// frames, for good. A room change after less than BOUNCE_PLAY frames in play since the last one is
+// a bounce (no one walks through doors that fast); BOUNCES of them put the player on their last
+// spot on the floor (StuckFallRescue's).
+#define BOUNCE_PLAY 8
+#define BOUNCES 3
+u32 g_CoopBounceRescues; // tests read it
+
+static void RoomBounceRescue(void) {
+    static s16 left = -1, top = -1;
+    static u16 played, bounces;
+
+    if (g_Tilemap.left != left || g_Tilemap.top != top) {
+        bounces = left >= 0 && played < BOUNCE_PLAY ? bounces + 1 : 0;
+        left = g_Tilemap.left;
+        top = g_Tilemap.top;
+        played = 0;
+        if (bounces >= BOUNCES && (g_CoopSafeSpot[2] || g_CoopSafeSpot[3])) {
+            bounces = 0;
+            g_CoopBounceRescues++;
+            Arrive(g_CoopSafeSpot[0], g_CoopSafeSpot[1], g_CoopSafeSpot[2], g_CoopSafeSpot[3]);
+        }
+    } else if (InNormalPlay() && g_GameEngineStep == Engine_Normal && played < 0xFFFF) {
+        played++;
+    }
+}
+
 // Locked out of the fight (#248): a partner who stays at an arena's door while the other walks in
 // is shut out when the door closes (the fake trio's: and its way out loads the arena again, at the
 // door, so they're stuck in the doorway until the fight ends). In a boss fight both share, with a
@@ -989,6 +1017,7 @@ bool ArriveFrame(void) {
     PullIn();
     StuckWalkRescue();
     StuckFallRescue();
+    RoomBounceRescue();
     LockedOutRescue();
     ArriveUpdate();
     if (!DeathUpdate()) {
