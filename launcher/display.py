@@ -192,6 +192,7 @@ class Display:
         self.corner = None  # Settings > Show ping: e.g. "62 ms", top right over the games
         self._corner_tex = self._corner_key = None
         self.on_resize = []
+        self.on_report = None  # F9 outside a game: the launcher's bug report (True: it was used)
         self.on_fullscreen = []  # f(fullscreen): the menu bar hides in fullscreen
         self._last = ("canvas", False)  # what the window shows: the canvas (over the games?), or the games
 
@@ -226,6 +227,8 @@ class Display:
 
     def handle(self, ev):
         """Window events the display looks after itself. True if it used the event."""
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_F9 and self.on_report and self.on_report() is not False:
+            return True  # a bug report from the launcher's menus (a game view keeps F9 for its own)
         if ev.type == pygame.KEYDOWN and (ev.key == pygame.K_F11 or
                                           (ev.key == pygame.K_RETURN and ev.mod & pygame.KMOD_ALT)):
             self.toggle_fullscreen()

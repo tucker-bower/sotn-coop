@@ -3,8 +3,10 @@
     python launcher/test_report.py
 """
 
+import base64
 import http.server
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -81,12 +83,30 @@ with tempfile.TemporaryDirectory() as d:
     check("launcher-errors.log" in files and "journal.json" in files, "the errors log and the journal are in it")
     size = len(games[0].save_state())
     check(len(files["now/A.state"]) == size and len(files[f"before/300_A.state"]) == size, "states keep their size")
+    with zipfile.ZipFile(path) as z:
+        kinds = {i.compress_type for i in z.infolist()}
+    check(kinds == {zipfile.ZIP_LZMA}, f"written with LZMA (two thirds of deflate's size): {kinds}")
     leaks = [(n, w) for n, data in files.items() for w in (str(Path(DISC).parent), home, NAME, PAD) for f in report.forms(w) if f in data]
     check(not leaks, f"no planted identifier anywhere in the report, binary files included: {leaks[:4]}")
     about = json.loads(files["about.json"])
     check(about["controllers"] == 1 and set(about["settings"]) == {"music"}, "about.json keeps only what's needed")
     check("time" not in about and "pads" not in about["settings"], "no timestamp or pads in about.json")
 
+
+
+# F9 in the launcher's menus: no games, the logs, scrubbed
+with tempfile.TemporaryDirectory() as d:
+    report.reports_dir = lambda: Path(d)
+    report.data_dir = lambda: Path(d)
+    Path(d, "launcher.log").write_text(f"lobby: connect gave up from 203.0.113.7 with {DISC}\n")
+    path = report.write_launcher(None, "the lobby froze")
+    with zipfile.ZipFile(path) as z:
+        files = {n: z.read(n) for n in z.namelist()}
+    about = json.loads(files["about.json"])
+    check(set(files) == {"about.json", "launcher.log"} and about["where"] == "launcher" and about["note"] == "the lobby froze",
+          f"a launcher report: about.json and the logs, no game state ({sorted(files)})")
+    check(b"203.0.113.7" not in files["launcher.log"] and str(Path(DISC).parent).encode() not in files["launcher.log"],
+          "its log has no IP address or disc folder")
 
 
 class NoPilGame(Game):
@@ -141,6 +161,23 @@ with tempfile.TemporaryDirectory() as d:
           "it goes to the reports address, with the zip")
     replies.append(429)
     check("429" in (report.send(zip_file) or ""), "a refusal is reported, not raised")
+
+    # a report over 9 MB goes as parts the inbox's reader takes (12 MB a file), and joins back whole
+    big = Path(d) / "big.zip"
+    with zipfile.ZipFile(big, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("now/A.state", os.urandom(20 * 2 ** 20))
+    replies.append(200)
+    check(report.send(big) is None, "a 20 MB report is sent")
+    names = [a["filename"] for a in got[-1]["attachments"]]
+    check(names == ["big.zip.part1-of-3", "big.zip.part2-of-3", "big.zip.part3-of-3"], f"as three parts: {names}")
+    out = Path(d) / "joined"
+    out.mkdir()
+    for a in got[-1]["attachments"]:
+        (out / a["filename"]).write_bytes(base64.b64decode(a["content"]))
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import join_report
+    check(join_report.join(out / "big.zip.part2-of-3").read_bytes() == big.read_bytes(),
+          "scripts/join_report.py puts the parts back into the same zip")
 
     # the outbox: one at a time, a failure tried again, nothing lost (a playtester's 4 of 7, 2026-11-14)
     report.reports_dir = lambda: Path(d)

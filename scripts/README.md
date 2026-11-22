@@ -18,6 +18,8 @@ Setup, build, generator and release tools.
 | `gen_overlay_table.py` | Generates `module/overlay_table.c`. |
 | `make_debug_starts.py` | Makes the harness's debug, boss and scene starts. |
 | `mingw-w64.cmake` | CMake toolchain for the Windows SwanStation build. |
+| `fetch_reports.py` | **Manual.** Fetches the players' emailed bug reports from the project's mailbox (IMAP, an app password in `~/.config/sotn-coop/gmail-imap.txt`), unpacked into `local/reports/`, each once. |
+| `join_report.py` | **Manual.** Joins a report sent in parts (each under 9 MB) back into its zip. |
 | `read_report.py` | **Manual.** Prints who was where in an unpacked F9 report, from its saved memory, and names what last hurt each player. |
 | `rebuild_fixtures.sh` | Rebuilds the disc, Maria and every savestate after a module change. |
 | `redux_check.sh` | Runs the module check in PCSX-Redux. |

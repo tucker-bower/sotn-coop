@@ -31,6 +31,7 @@ import json
 import logging
 import platform
 import re
+import struct
 import threading
 import time
 import urllib.error
@@ -50,6 +51,7 @@ SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
 KEY_FILE = Path(__file__).resolve().parent / "report_key.txt"
 MAX_SEND = 28 * 2 ** 20  # a bigger zip can be emailed by hand, or asked for
+PART_SIZE = 9 * 2 ** 20   # each attachment at most this: the inbox's reader takes 12 MB a file
 IP = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 SHARED_SETTINGS = ("music",)
 LOG_TAIL = 500_000  # characters of each log
@@ -297,7 +299,8 @@ def send(path, note=""):
         return "it's too big to send"
     body = {"from": SEND_FROM, "to": [REPORT_EMAIL], "subject": f"Bug report {path.stem} ({VERSION})",
             "text": note or "(no note)",
-            "attachments": [{"filename": path.name, "content": base64.b64encode(path.read_bytes()).decode()}]}
+            "attachments": [{"filename": path.name + suffix, "content": base64.b64encode(chunk).decode()}
+                            for suffix, chunk in parts(path.read_bytes())]}
     req = urllib.request.Request(SEND_URL, data=json.dumps(body).encode(), method="POST", headers={
         "Authorization": f"Bearer {KEY_FILE.read_text().strip()}", "Content-Type": "application/json",
         "User-Agent": f"sotn-coop/{VERSION}"})
@@ -329,21 +332,89 @@ def _png(surface_or_image):
     return buf.getvalue()
 
 
-def write(games, playthrough, window, rolling, inputs, frame_times, controllers, note="", extra=None,
-          taken=None, journal=None):
-    """Writes the report; returns its path. games: the session's two games. taken: snapshot()."""
+class _FastLZMA(zipfile.LZMACompressor):
+    """zipfile's LZMA at preset 1: a savestate in a quarter of a second, not a second, and still
+    two thirds of deflate's size (a 33 MB state: 1.84 MB, deflate 2.86 MB). Any unzip reads it."""
+
+    def _init(self):
+        import lzma
+        f = {"id": lzma.FILTER_LZMA1, "preset": 1}
+        props = lzma._encode_filter_properties(f)
+        self._comp = lzma.LZMACompressor(lzma.FORMAT_RAW, filters=[f])
+        return struct.pack("<BBH", 9, 4, len(props)) + props
+
+
+def _open_zip(path):
+    """A new report zip: LZMA where this Python has it (the Android app's doesn't), else deflate."""
+    try:
+        import lzma  # noqa: F401
+    except ImportError:
+        return zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED)
+    zipfile.LZMACompressor = _FastLZMA  # zipfile makes its compressors by this name
+    return zipfile.ZipFile(path, "x", zipfile.ZIP_LZMA)
+
+
+def parts(blob, size=PART_SIZE):
+    """The report's attachments: [(suffix, bytes)]. One part is the zip itself; more are its
+    bytes in order, named .part1-of-3 and so on (scripts/join_report.py puts them back)."""
+    chunks = [blob[i:i + size] for i in range(0, len(blob), size)] or [b""]
+    if len(chunks) == 1:
+        return [("", chunks[0])]
+    return [(f".part{k}-of-{len(chunks)}", c) for k, c in enumerate(chunks, 1)]
+
+
+def write_launcher(window, note=""):
+    """A report from the launcher's menus (F9 there, no game running): the window, the logs and
+    what this install is. Returns its path."""
     from link.mailbox import LINK_VERSION
     from link.transport import WIRE_VERSION
+    path = _new_path()
+    private = private_words([], None)
+    try:
+        with _open_zip(path) as z:
+            if window is not None:
+                z.writestr("now/window.png", _png(window))
+            patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
+            about = {"launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION, "where": "launcher",
+                     "patch": json.loads(patch.read_text()) if patch.exists() else None,
+                     "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
+                     "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
+                     "note": note}
+            z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
+            _add_logs(z, private)
+    except OSError:
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def _new_path():
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = reports_dir() / f"{stamp}.zip"
     k = 2
     while path.exists():
         path = reports_dir() / f"{stamp} ({k}).zip"
         k += 1
+    return path
+
+
+def _add_logs(z, private):
+    for name in ("launcher.log", "session.log", "launcher-errors.log"):
+        log = data_dir() / name
+        if log.exists():
+            z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+
+
+def write(games, playthrough, window, rolling, inputs, frame_times, controllers, note="", extra=None,
+          taken=None, journal=None):
+    """Writes the report; returns its path. games: the session's two games. taken: snapshot()."""
+    from link.mailbox import LINK_VERSION
+    from link.transport import WIRE_VERSION
+    path = _new_path()
     taken = taken or snapshot(games, None)
     private = private_words(games, playthrough)
     try:
-        with zipfile.ZipFile(path, "x", zipfile.ZIP_DEFLATED) as z:
+        with _open_zip(path) as z:
             for who, g, link in zip("AB", games, taken["links"]):
                 z.writestr(f"now/{who}.state", scrub_bytes(g.save_state(), private))
                 z.writestr(f"now/{who}.mcd", scrub_bytes(g.card(), private))
@@ -381,10 +452,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             }
             about.update(extra or {})
             z.writestr("about.json", scrub(json.dumps(about, indent=1, default=str), private))
-            for name in ("launcher.log", "session.log", "launcher-errors.log"):
-                log = data_dir() / name
-                if log.exists():
-                    z.writestr(name, scrub(log.read_text(errors="replace")[-LOG_TAIL:], private))
+            _add_logs(z, private)
     except OSError:  # a full disk: no half a report left behind (#277)
         path.unlink(missing_ok=True)
         raise

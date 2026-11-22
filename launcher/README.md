@@ -24,7 +24,7 @@ The app players run: menus, castles, both games on screen and bug reports.
 | `move.py` | Moves a player's things from Documents into the install's folder, once, whole or not at all. |
 | `paths.py` | Where the player's files live. |
 | `platform_android.py` | What the launcher needs from an Android device. |
-| `report.py` | F9: writes the bug report zip and emails it. |
+| `report.py` | F9: writes the bug report zip (LZMA; in the menus, the window and logs only) and emails it, in parts under 9 MB. |
 | `crashwatch.py` | Notices a game that has crashed or hung. |
 | `crash_window.py` | The bug report window after a crash: its own process, and nothing is sent unless the player says so. |
 | `sdlqueue.py` | Android's sound, pushed straight to SDL (SDL_QueueAudio). |

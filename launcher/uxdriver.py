@@ -580,6 +580,22 @@ def _menus(pg):
               ("key", pg.K_e), ("key", pg.K_RETURN), ("wait", 3), ("shot", "rules-sharing"),  # E: the Sharing page, One shared level
               ("expect", lambda d: saved_rules(d).get("shared_level") is False, "and a toggle"),
               ("key", pg.K_ESCAPE), ("screen", "which castle"), ("key", pg.K_ESCAPE), ("screen", "Home")]
+    def launcher_report(d):
+        import zipfile
+        from paths import data_dir, reports_dir
+        for z in sorted(reports_dir().glob("*.zip"), reverse=True):
+            about = json.loads(zipfile.ZipFile(z).read("about.json"))
+            logged = "launcher.log" in zipfile.ZipFile(z).namelist() or not (data_dir() / "launcher.log").exists()
+            print(f"launcher report {z.name}: {about.get('where')} {about.get('note')!r} log={logged}")
+            return about.get("where") == "launcher" and about.get("note") == "ab" and logged
+        return False
+    steps += [("key", pg.K_F9), ("screen", "Report a problem"), ("shot", "launcher-report"),
+              ("type", "ab"), ("key", pg.K_RETURN),
+              ("until", lambda d: d.heading in ("Send this report?", "Bug report saved")),
+              ("key", pg.K_RETURN),  # Keep it here (the first choice), or OK
+              ("until", lambda d: d.heading in ("Bug report kept", "Bug report saved", "Home")),
+              ("key", pg.K_RETURN), ("screen", "Home"),
+              ("expect", launcher_report, "F9 in the menus saves a launcher report: the note and launcher.log")]
     steps += [("menu", "quit")]
     return steps
 

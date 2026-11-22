@@ -561,6 +561,8 @@ class Launcher:
         self.display.on_fullscreen.append(lambda fs: self.menubar.show(not fs))
         self.ui = UI(self.display, self.action)
         self.screen = self.display.canvas
+        self.display.on_report = self.launcher_report
+        self._reporting = False
         from gameview import Pads
         self.pads = Pads((None, None))
         self.ui.pads = self.pads
@@ -2322,6 +2324,36 @@ class Launcher:
             raise SystemExit
         if isinstance(result, tuple) and result[0] == "navigate":
             raise Navigate(result[1])
+
+    def launcher_report(self):
+        """F9 in the launcher's menus: a note, then a report of the window and the logs, sent as
+        the game view's are (report.py's outbox). False while a game runs: F9 is the game's."""
+        import report
+        if self.view is not None or self._reporting:
+            return False
+        self._reporting = True
+        try:
+            shot = self.display.screenshot()
+            note = self.ask_text("Report a problem", "What happened? (optional)  Enter: save the report   Esc: cancel",
+                                 limit=300)
+            if note is None:
+                return True
+            try:
+                path = report.write_launcher(shot, note)
+            except OSError as e:
+                self.ui.message("Bug report not saved", f"{e.strerror or e}.")
+                return True
+            if not report.can_send():
+                self.ui.message("Bug report saved", f"{path.name} is in {path.parent}.\nPlease email it to {report.REPORT_EMAIL}.")
+            elif self.ui.confirm("Send this report?", "It emails your note, a screenshot and the launcher's logs to the "
+                                 "SOTN Co-op team.\nYour folders and IP address are removed.", yes="Send", no="Keep it here"):
+                report.queue_send(path, note)
+                self.ui.message("Bug report", "It's being sent in the background. Thank you!")
+            else:
+                self.ui.message("Bug report kept", f"{path.name} is in {path.parent}.")
+            return True
+        finally:
+            self._reporting = False
 
     @staticmethod
     def new_game_script(castle, joiner):
