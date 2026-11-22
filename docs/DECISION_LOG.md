@@ -1106,3 +1106,7 @@ Alucard's code does what the faerie's potion, Healing Mail, Blood Cloak and the 
 
 **D231: The guest keeps the pickup icons it's sent** (2026-11-21, #354; agent-default)
 - DRA puts every icon slot back from its own record after a menu or the save screen (func_800EB6B4). The guest's record never had the authority's pickups, so they became icon 0, the "NOW MAKING" placeholder. The module now runs that restore itself, `CoopRestoreIcons`, and puts back the pixels and palettes the guest was sent.
+
+**D232: The core's wide band is the framebuffers' 240 lines, and a stuck fall's rescue spot is over solid tiles** (2026-11-22, #359, #364; agent-default)
+- The core sent everything a wide view touched in VRAM's lines 0-255 to the second bank. The game keeps its palettes in lines 240-255, and loads read them back, so a readback while wide got zeros: a stage's palettes went black and its tiles drew nothing. The band is now 240 lines, the framebuffers' own.
+- The stuck-fall rescue (#336) kept the last spot the player stood on, a lift included. Once the lift had gone, every rescue dropped the player down the shaft again. The spot is now the last one over a solid tile, while in play and not arriving, and it's kept across rooms.

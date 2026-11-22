@@ -7,6 +7,7 @@ pygame on Android finds no system fonts (`android/main.py` turns its fc-list sea
 
 ## Lessons
 **Testing**
+- **The game's palettes live under its framebuffers, in VRAM lines 240-255** (x 0-255 DRA's, 256-511 g_Clut[2], 512-767 a stage's), and loads read them back into RAM (cd.c: the stage's graphics file into g_Clut[0], F_GAME's into g_Clut[1]). Our core's wide band once covered lines 0-255, so a readback while the view was wide got the second bank's zeros: a stage's palettes black, tiles invisible (#359). The band is 240 lines.
 - **A stage's world ends 64 px past its screen.** Update freezes or destroys entities beyond -64..320 x and -64..288 y, and the spawner brings them in at the same edges (src/st/st_update.h). Anything that shows another camera's view of a room has to widen those windows (widescreen_stage.c) or stay within them (#355).
 - **Equipment icon 0 is a "NOW MAKING" placeholder.** A pickup drawn as "NOW MAKE" means its icon slot was reloaded from a record that never held it (#354).
 - **Python on Windows doesn't see every root Windows trusts.** It reads only the roots already in the store, and Windows fetches one only when its own networking first needs it. A PC that had never fetched ISRG Root X1 couldn't verify ntfy.sh (#351). To reproduce on Linux, point `SSL_CERT_FILE` and `SSL_CERT_DIR` at an empty file and folder (`link/test_tls.py`).

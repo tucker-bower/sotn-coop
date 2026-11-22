@@ -45,7 +45,7 @@ from paths import data_dir, load_settings, reports_dir
 
 log = logging.getLogger("launcher")
 
-VERSION = "1.4.2"  # the launcher's
+VERSION = "1.4.3"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
 SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
@@ -53,7 +53,7 @@ KEY_FILE = Path(__file__).resolve().parent / "report_key.txt"
 MAX_SEND = 28 * 2 ** 20  # a bigger zip can be emailed by hand, or asked for
 PART_SIZE = 9 * 2 ** 20   # each attachment at most this: the inbox's reader takes 12 MB a file
 IP = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
-SHARED_SETTINGS = ("music",)
+SHARED_SETTINGS = ("music", "wide", "layout")  # nothing personal; the screen shape found #359
 LOG_TAIL = 500_000  # characters of each log
 MIN_FOLDER = 4  # not a drive's root
 MIN_NAME = 3  # a shorter typed name identifies no one, and its bytes turn up by chance in game RAM

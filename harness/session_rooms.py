@@ -304,3 +304,35 @@ def pickup_icon_kept_after_menu(run):
     run.expect(not lost, "after B's menu, B's slots still hold A's icons", lost=lost, sent=sent,
                how=[("pixels" if tb[i][0] != ta[i][0] else "") + ("palette" if tb[i][1] != ta[i][1] else "") for i in lost],
                held=[held[i] for i in lost], b_held=[b.read(0x80137478 + 2 * i, "<H") for i in lost])
+
+
+@session_scenario(starts=("nz0", "nz0"))
+def movement_stuck_fall_rescued_onto_floor_not_a_lift(run):
+    """#364 (1.4.2 report 20261122-233011): revived onto the partner's lift, the player fell down the
+    empty shaft, and the stuck-fall rescue put them back where the lift had been, again and again.
+    A lands on the Lab's lift: that's never the rescue spot (the floor it last stood on stays it,
+    in the room before). A stuck fall then puts A back on that floor, standing."""
+    from module import symbols
+    from session_progress import arrive
+    a = run.s.a
+    run.step(60)
+    spot = lambda: struct.unpack("<4H", a.read_bytes(symbols()["g_CoopSafeSpot"], 8))
+    before = spot()
+    run.expect(before[1] != 0 or before[3] != 0, "A has a rescue spot on the floor", spot=before)
+    room = room_id(a, 17, 28)
+    arrive(run, a, NZ0, room, 144, 560)
+    for t in range(300):  # down onto the lift
+        run.step(1)
+    on = a.mailbox("self_presence")
+    run.expect(on.room_id == room and spot() == before, "standing on the lift doesn't make it the rescue spot",
+               spot=spot(), before=before, at=(on.room_id, on.ground_x, on.ground_y))
+    a.write(a.entity(0) + 6, 250, "<h")  # stuck falling at the room's bottom edge, as the report
+    for t in range(300):
+        a.write(a.entity(0) + 0x0C, 0x40000, "<i")
+        run.step(1)
+        if a.mailbox("self_presence").room_id != room:
+            break
+    run.step(120)
+    p = a.mailbox("self_presence")
+    run.expect(p.room_id == before[1] and abs(p.ground_y - before[3]) < 24, "a stuck fall puts A back on that floor",
+               at=(p.room_id, p.ground_x, p.ground_y), spot=before)
