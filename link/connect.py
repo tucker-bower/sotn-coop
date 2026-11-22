@@ -26,18 +26,19 @@ import logging
 import os
 import re
 import socket
-import ssl
 import threading
 import time
 import urllib.request
 from pathlib import Path
 
+from . import tls
 from .transport import TAG_HELLO
 
 STUN_SERVERS = (("stun.l.google.com", 19302), ("stun.cloudflare.com", 3478))
 STUN_WAIT_S = 1.5
 PUNCH_EVERY_S = 0.1
 REPUBLISH_S = 20.0
+READ_RETRY_S, READ_RETRY_MAX_S = 2.0, 30.0   # reconnecting the relay's stream after an error, doubling
 RETRY_S = 5.0   # republishing while the relay is failing (ntfy.sh allows one request per 5 s)
 GAME_PORT = 47811  # the game's port when it's free (the launcher asks for it first), for the LAN broadcast
 BROADCAST_EVERY_S = 0.5
@@ -70,14 +71,13 @@ class NtfyRelay:
     URL = "https://ntfy.sh"
 
     def __init__(self):
-        # Android: the CA file android/main.py makes from the system's (its Python doesn't read
-        # SSL_CERT_FILE itself); elsewhere, the system's
-        self._tls = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or None)
+        self._tls = tls.context()  # the system's roots and certifi's (issue 351)
         self._msgs = {}
         self._subs = set()
         self._lock = threading.Lock()
         self._closed = False
         self.post_error = self.read_error = None  # the last failure, until a request works again
+        self.why = None  # the last failure in plain words, for the player (tls.why)
 
     @property
     def error(self):
@@ -96,6 +96,7 @@ class NtfyRelay:
                 self.post_error = None
             except Exception as e:  # noqa: BLE001 - offline or blocked: the lobby says so, the connector retries
                 self.post_error = repr(e)
+                self.why = tls.why(e) or self.why
                 log.warning("relay: posting failed: %r", e)
         threading.Thread(target=post, daemon=True).start()
 
@@ -110,10 +111,12 @@ class NtfyRelay:
     def _stream(self, topic):
         """One long-lived streaming request (one, not one a second: ntfy.sh limits requests)."""
         since = "10m"
+        wait = READ_RETRY_S
         while not self._closed:
             try:
                 with urllib.request.urlopen(f"{self.URL}/{topic}/json?since={since}", timeout=60, context=self._tls) as resp:
                     self.read_error = None
+                    wait = READ_RETRY_S
                     for line in resp:
                         if self._closed:
                             return
@@ -129,8 +132,14 @@ class NtfyRelay:
             except Exception as e:  # noqa: BLE001 - dropped or timed out: reconnect
                 if not isinstance(e, TimeoutError):
                     self.read_error = repr(e)
+                    self.why = tls.why(e) or self.why
                     log.warning("relay: reading failed: %r", e)
-                time.sleep(2)
+                    # backs off: retrying every 2 s spends ntfy.sh's per-IP budget, and its 429s
+                    # would then keep the relay failing after the first hiccup (issue 351)
+                    time.sleep(wait)
+                    wait = min(wait * 2, READ_RETRY_MAX_S)
+                else:
+                    time.sleep(READ_RETRY_S)
 
 
 class FileRelay:
@@ -352,7 +361,9 @@ class Connector:
 
     def _why(self):
         if not self.theirs and getattr(self.relay, "error", None):
-            return ("Couldn't reach the room-code server (ntfy.sh), so your partner's game couldn't be "
+            cause = getattr(self.relay, "why", None)
+            return ("Couldn't reach the room-code server (ntfy.sh)"
+                    + (f": {cause}" if cause else "") + ". So your partner's game couldn't be "
                     "found. Check this device's internet connection. On the same Wi-Fi, ask your "
                     "partner to host: Join takes the address its pause menu and Help › About show (ip:port).")
         if not self.theirs:
