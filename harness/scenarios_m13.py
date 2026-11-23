@@ -187,6 +187,51 @@ def partner_sounds_alucard_and_richter(run):
     run.expect(peak > 1000, "mixed into A's sound, they're heard", peak=peak)
 
 
+def _listen(games, frames):
+    """Each game's sound over these frames (16-bit stereo samples), the games run side by side as the
+    launcher runs them."""
+    from array import array
+    out = [array("h") for _ in games]
+    for _ in range(frames):
+        for g in games:
+            g.frame_start(0)
+        for x, g in zip(out, games):
+            sound = g.frame_end()[1]
+            x.frombytes(sound[:len(sound) // 2 * 2])
+    return out
+
+
+def _level(x):
+    return round(sum(abs(v) for v in x) / max(1, len(x)))
+
+
+def _clicks(x):
+    """Jumps of over 4000 between one sample and the next on a channel: the Alchemy Lab's own sound
+    has none."""
+    return sum(1 for i in range(2, len(x)) if abs(x[i] - x[i - 2]) > 4000)
+
+
+@session_scenario(starts=("nz0", "nz0"), audio=True)
+def music_mute_no_clicks(run):
+    """#347 (couch: crackling once the second player's game played music): the game's own sound
+    update set the CD volume back every frame, so the muted game's music came through in a slice of
+    each frame, under the other game's music. Muted, B is silent, with no clicks; unmuted, its music
+    is back. (The Alchemy Lab: the entrance's thunder is a sound effect.)"""
+    from link.mailbox import CONTROL_MUTE_MUSIC
+    a, b = run.s.a, run.s.b
+    _listen((a, b), 120)
+    b.mailbox("set_control", CONTROL_MUTE_MUSIC)
+    _listen((a, b), 30)
+    music, muted = _listen((a, b), 300)
+    b.mailbox("set_control", 0)
+    _listen((a, b), 60)
+    _, back = _listen((a, b), 180)
+    run.expect(_level(music) > 300 and _clicks(music) == 0, "A's music plays, cleanly", level=_level(music), clicks=_clicks(music))
+    run.expect(_clicks(muted) == 0, "muted, B's sound has no clicks", clicks=_clicks(muted), level=_level(muted))
+    run.expect(_level(muted) < _level(music) / 50, "muted, B is silent", level=_level(muted), music=_level(music))
+    run.expect(_level(back) > _level(music) / 2, "unmuted, B's music is back", level=_level(back), music=_level(music))
+
+
 POLY_GT4_SIZE, GT4_AT, GT4_COUNT = 0x34, 0x3C74, 768  # GpuBuffer.polyGT4 (include/game.h)
 DRAW_OFS = 64 * 0xBC + 0x3D0 + (0x80138454 - 0x80137FB4)  # g_PlayerDraw in the body's copy (partner.c)
 

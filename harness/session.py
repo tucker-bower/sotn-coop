@@ -685,15 +685,19 @@ class OnlineSession:
 # --- scenarios -------------------------------------------------------------------------------
 
 SESSION_SCENARIOS = {}
+AUDIO_SCENARIOS = set()  # session_scenario(audio=True): the games keep their sound (Game.frame)
 
 
-def session_scenario(starts=("entrance", "entrance"), discs=None, characters=None, full=False):
+def session_scenario(starts=("entrance", "entrance"), discs=None, characters=None, full=False, audio=False):
     """Like scenario.scenario, for two linked games (or three or four: one start each, M17). discs
     defaults to the co-op disc for each. characters: each game's CHAR_* (design/M8), from its next
-    load. full: only in the full suite."""
+    load. full: only in the full suite. audio: the games keep their sound, as in the launcher (step
+    them with Game.frame, which hands it back)."""
     def register(fn):
         from scenario import FULL_ONLY
         SESSION_SCENARIOS[fn.__name__] = (fn, starts, discs, characters)
+        if audio:
+            AUDIO_SCENARIOS.add(fn.__name__)
         if full:
             FULL_ONLY.add(fn.__name__)
         return fn
@@ -758,7 +762,7 @@ def run_session_scenario(name):
         if {2, 3, 4, 5} & set(characters or ()):  # the blob characters (the Marias, Ultimate Richter)
             from module import maria_blob
             blob = maria_blob()
-        with Session(discs or COOP_DISC, starts, characters=characters, blob=blob) as s:
+        with Session(discs or COOP_DISC, starts, characters=characters, blob=blob, audio=name in AUDIO_SCENARIOS) as s:
             run = SessionRun(s, name)
             try:
                 fn(run)

@@ -13,6 +13,7 @@ Release notes for the versions we've published.
 | `v1.4.2.md` | Far-apart guests see the room; pickup icons after menus; room codes on more PCs; F9 in the launcher. |
 | `v1.4.3.md` | Widescreen backgrounds no longer vanish; no endless fall after a revive onto a lift. |
 | `v1.4.4.md` | A rescue from a room-to-room loop; a guard against the Spirit Orb freeze. |
+| `v1.4.6.md` | Couch co-op: the crackle when the second game's music should be silent. |
 | `v1.4.5.md` | A rejoin skips the Prologue and catches up on relics, level, boss Life Max Ups and gear. |
 | `v1.4.0.md` | Rollback online: the partner on time, their swings and sounds; join by address, a full room said. |
 | `v1.3.1.md` | Widescreen backgrounds in a new area, a player stuck in the floor, a first-start close. |
