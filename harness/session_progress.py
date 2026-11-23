@@ -189,3 +189,90 @@ def map_shared(run):
 NZ0 = 0x0C
 
 
+
+
+# #356: a player back after leaving catches up on what the partner did meanwhile.
+RECORDS = 0x30  # g_Settings.timeAttackRecords
+BOSS_VESSELS = RECORDS + 31 * 4  # the boss Life Max Ups taken (module/progress.c)
+SLOGRA = 6  # TIMEATTACK_EVENT_SLOGRA_GAIBON_DEFEAT
+ALUCARD_SWORD = 123
+ST0 = 0x1F
+GAME_PLAY = 2
+
+
+def _relic(g):
+    return g.read(STATUS, "<B", RELICS + RELIC_CUBE_OF_ZOE) & 1
+
+
+def _partner_finds(b):
+    """B finds what A doesn't see: the Cube of Zoe, a boss's Life Max Up (its bit, +5), XP short of
+    the next level, and gold. Returns B's status after."""
+    run_b = status(b)
+    b.write(STATUS, run_b["relics"][RELIC_CUBE_OF_ZOE] | 3, "<B", RELICS + RELIC_CUBE_OF_ZOE)
+    b.write("g_Settings", b.read("g_Settings", "<i", BOSS_VESSELS) | 1 << SLOGRA, "<i", BOSS_VESSELS)
+    b.write(STATUS, run_b["hp_max"] + 5, "<i", HP_MAX)
+    b.write(STATUS, b.read("g_ExpNext", "<i", 4 * (run_b["level"] + 1)) - 1, "<i", EXP)
+    b.write(STATUS, run_b["gold"] + 1234, "<i", GOLD)
+    return status(b)
+
+
+@session_scenario(starts=("prologue", "entrance"))
+def prologue_skipped_when_partner_in_castle(run):
+    """#356 (1.4.0 report): a player who left before the first save room came back in a new game,
+    and replayed the Prologue alone while the partner waited in the castle. Now the Prologue ends at
+    once (with the no-damage bonus), and the player joins the partner caught up: Death took the
+    gear, and the relic, the boss's Life Max Up, the XP and the gold found meanwhile are theirs."""
+    a, b = run.s.a, run.s.b
+    run.step(5)
+    run.expect(a.read("g_StageId") == ST0, "A starts in the Prologue")
+    after = _partner_finds(b)
+    base, t = None, 0
+    for t in range(4800):
+        run.step(1)
+        if base is None and a.read("g_StageId") != ST0 and a.read("g_GameState") == GAME_PLAY:
+            base = status(a)  # Alucard's own start, before the partner's finds arrive
+        pa, pb = a.mailbox("self_presence"), b.mailbox("self_presence")
+        if base and pa.stage == pb.stage and pa.room_id == pb.room_id and pa.flags & IN_PLAY and not pa.flags & BUSY:
+            break
+    run.expect(base is not None, "A's Prologue ended", frames=t, a=a.snapshot())
+    run.expect(pa.stage == pb.stage and pa.room_id == pb.room_id, "A joined B in B's room", frames=t,
+               a=(pa.stage, pa.room_id), b=(pb.stage, pb.room_id))
+    run.step(180)
+    sa, sb = status(a), status(b)
+    run.expect(base["hp_max"] >= 75, "the no-damage bonus: Alucard starts at 75 max HP or more", hp_max=base["hp_max"])
+    run.expect(sa["equipment"][0] != ALUCARD_SWORD, "Death's scene, missed: A's gear is taken too",
+               hand=sa["equipment"][0])
+    run.expect(_relic(a), "A has the Cube of Zoe B found")
+    run.expect(sa["exp"] == sb["exp"] and sa["level"] == sb["level"], "A has B's XP and level",
+               a=(sa["level"], sa["exp"]), b=(sb["level"], sb["exp"]))
+    run.expect(sa["hp_max"] - base["hp_max"] == 5 and sa["level"] == base["level"],
+               "A got the boss's Life Max Up: +5", gained=sa["hp_max"] - base["hp_max"])
+    run.expect(sa["gold"] == sb["gold"], "A has the purse", a=sa["gold"], b=sb["gold"])
+    run.expect(sb["hp_max"] == after["hp_max"] and sb["gold"] == after["gold"], "B got nothing twice",
+               hp_max=(after["hp_max"], sb["hp_max"]), gold=(after["gold"], sb["gold"]))
+
+
+@session_scenario()
+def finds_caught_up_after_older_save(run):
+    """#356: A is away and comes back from an older save (what it had from B, gone): B's resync gives
+    it back the relic, the boss's Life Max Up and the XP, once, and nothing comes back to B twice."""
+    a, b = run.s.a, run.s.b
+    run.step(30)
+    a0 = status(a)
+    after = _partner_finds(b)
+    run.step(60)
+    run.expect(_relic(a) and status(a)["hp_max"] == a0["hp_max"] + 5, "live: A has the relic and the +5")
+    a.partition(True)
+    a.write(STATUS, 0, "<B", RELICS + RELIC_CUBE_OF_ZOE)
+    a.write("g_Settings", a.read("g_Settings", "<i", BOSS_VESSELS) & ~(1 << SLOGRA), "<i", BOSS_VESSELS)
+    a.write(STATUS, a0["hp_max"], "<i", HP_MAX)
+    a.write(STATUS, a0["exp"], "<i", EXP)
+    run.step(420)
+    a.partition(False)
+    run.step(180)
+    sa, sb = status(a), status(b)
+    run.expect(_relic(a), "A has the relic again")
+    run.expect(sa["hp_max"] == a0["hp_max"] + 5, "A has the boss's +5 again, once", gained=sa["hp_max"] - a0["hp_max"])
+    run.expect(sa["exp"] == sb["exp"], "A has B's XP", a=sa["exp"], b=sb["exp"])
+    run.expect(sb["hp_max"] == after["hp_max"] and sb["relics"] == after["relics"], "B got nothing twice",
+               hp_max=(after["hp_max"], sb["hp_max"]))

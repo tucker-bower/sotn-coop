@@ -116,7 +116,7 @@ Every datagram starts with a 12-byte header: `tag` (4 ASCII bytes), `seq` (u32, 
 | 5 | GOLD | — | the gold delta (s32) |
 | 6, 7 | HIT, HIT2 | a shared-room hit (`module/link.h`) | |
 | 8, 9, 10 | SPAWN ×3 | an entity the guest's hit detection made | |
-| 11 | RECORD | time attack event (0xFFFF: visited bits) | the record |
+| 11 | RECORD | time attack event; 31: boss Life Max Ups taken (bits, OR). 0xFFFF: visited bits, 0xFFFE: XP (the one behind takes it), 0xFFFD: asks for a resync, 0xFFFC: the purse (for a game that asked) | the record |
 | 12 | TAKEN | slot \| entityId << 8: a drop the guest took | — |
 
 Hosts don't interpret events: they move them between rings.
