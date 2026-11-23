@@ -24,8 +24,10 @@ def place(g):
 
 
 def bat(run, g):
-    """g turns into a bat and rises off the floor."""
-    g.write(SOUL_OF_BAT, ACTIVE, "<B")
+    """g turns into a bat and rises off the floor. Both have the relic, as in a real castle: one
+    only g has is sent to the partner as a find (#356), mid-test."""
+    for each in run.s.games:
+        each.write(SOUL_OF_BAT, ACTIVE, "<B")
     run.step(5)
     pads = lambda pad: (pad, "") if g is run.s.a else ("", pad)
     run.step(4, p1=pads("r1"))

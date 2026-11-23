@@ -211,7 +211,8 @@ def _partner_finds(b):
     b.write(STATUS, run_b["relics"][RELIC_CUBE_OF_ZOE] | 3, "<B", RELICS + RELIC_CUBE_OF_ZOE)
     b.write("g_Settings", b.read("g_Settings", "<i", BOSS_VESSELS) | 1 << SLOGRA, "<i", BOSS_VESSELS)
     b.write(STATUS, run_b["hp_max"] + 5, "<i", HP_MAX)
-    b.write(STATUS, b.read("g_ExpNext", "<i", 4 * (run_b["level"] + 1)) - 1, "<i", EXP)
+    from bossstarts import EXP_NEXT
+    b.write(STATUS, EXP_NEXT[run_b["level"] + 1] - 1, "<i", EXP)
     b.write(STATUS, run_b["gold"] + 1234, "<i", GOLD)
     return status(b)
 
