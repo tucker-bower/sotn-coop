@@ -94,6 +94,8 @@ PATHS = {
 # The PR gate (run.py with no tests named): the tests that have caught a bug alone (run.py --history),
 # and the few quick ones kept so every category has a check (2026-11-17: the suite was cut to them, D212).
 EVERYDAY = {
+    # a rejoin catches up (#356)
+    "prologue_skipped_when_partner_in_castle", "finds_caught_up_after_older_save",
     # other characters and their gear
     "bat_carry_alucard", "boss_arena_edge_richter_and_maria", "boss_life_up_once_alucard_and_richter", "damage_rate_richter", "shared_room_elevator_richter_and_alucard", "shared_room_lift_on_lag_alucard_and_richter",
     "familiar_faerie_potion_richter", "familiar_graphics_maria", "hit_shows_its_number_maria",

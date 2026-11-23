@@ -790,6 +790,51 @@ static bool PrologueCrawlSkip(void) {
     return true;
 }
 
+// #356: a player whose game starts the Prologue while the partner is already in the castle (back
+// after leaving before the first save room: Continue had no save, so a new game) doesn't play it
+// again. Once the partner has been in play in the castle for a moment (its castle flags and records
+// have arrived), this game ends the Prologue the way Dracula's fall does, with Richter at full
+// health: the no-damage bonus is kept. The crawl is skipped, and once in the castle the player joins
+// the partner. A Dracula time is needed for the bonus (InitStatsAndGear reads it; none counts as
+// the fastest): the partner's came with the records, or one that adds nothing.
+#define REJOIN_SKIP_WAIT 120 // frames the partner is seen in the castle first
+#define REJOIN_DRACULA_TIME 301 // seconds: no time bonus (src/dra/5F60C.c)
+static s16 s_RejoinSeen;
+static bool s_RejoinSkipped;
+
+static void PrologueRejoin(void) {
+    const CoopPresence* p = FOCUS;
+
+    if (s_RejoinSkipped) {
+        if (g_GameState == Game_PrologueEnd && g_StageId == STAGE_ST0 && (g_GameStep == 6 || g_GameStep == 7)) {
+            g_GameStep = CRAWL_SKIP_STEP;
+        } else if (g_StageId != STAGE_ST0 && CanBePulled(false) && !g_Player.demo_timer) {
+            s_RejoinSkipped = false;
+            if (PartnerReachable() && !BossHere()) {
+                Arrive(p->stage, p->roomId, p->groundX, p->groundY);
+                s_ArriveText = "Joined partner";
+            }
+        }
+        return;
+    }
+    if (!InNormalPlay() || g_StageId != STAGE_ST0 || !PartnerFresh() || p->stage == STAGE_ST0 ||
+        (p->flags & PRESENCE_DEAD)) {
+        s_RejoinSeen = 0;
+        return;
+    }
+    if (++s_RejoinSeen < REJOIN_SKIP_WAIT) {
+        return;
+    }
+    s_RejoinSeen = 0;
+    s_RejoinSkipped = true;
+    g_Status.hp = g_Status.hpMax;
+    if (!g_Settings.timeAttackRecords[TIMEATTACK_EVENT_DRACULA_DEFEAT]) {
+        g_Settings.timeAttackRecords[TIMEATTACK_EVENT_DRACULA_DEFEAT] = REJOIN_DRACULA_TIME;
+    }
+    g_GameState = Game_PrologueEnd;
+    g_GameStep = 0;
+}
+
 static void SkipVote(void) {
     const CoopPresence* p = FOCUS;
 
@@ -1014,6 +1059,7 @@ bool ArriveFrame(void) {
     TeleportInput();
     CutsceneTrack();
     SkipVote();
+    PrologueRejoin();
     PullIn();
     StuckWalkRescue();
     StuckFallRescue();

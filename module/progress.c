@@ -59,6 +59,27 @@ static s32 s_Gold;
 static s32 s_Records[TIMEATTACK_EVENT_END];
 static s32 s_Visited;
 #define RECORD_VISITED 0xFFFF // EV_RECORD a: the visited bits (D_8003CB00), not a record
+// A rejoining player catches up on the level too (#356): with a resync, each game sends its XP,
+// and the one behind takes it (events arrive in order, so a kill's EV_EXP before it isn't counted
+// twice). The game's own level-up check then levels up the normal way.
+#define RECORD_EXP 0xFFFE
+// The boss Life Max Ups taken (#356): a bit for each boss's time attack event, kept in an unused
+// record so it's saved with the castle and merged like the castle flags. A player who missed the
+// fight gets the +5 when the bit arrives, live or at a rejoin; no flag recorded these before.
+#define BOSS_VESSELS TIMEATTACK_EVENT_UNUSED_31
+#define BOSS_RECENT_FRAMES 3600 // a boss's record set this recently is the boss whose vessel this is
+static s32 s_LastBoss = -1, s_LastBossAt;
+static bool s_RecordsSettled; // a full pass since the last resync: a record that changes now was just set
+static u8 s_Relics[LEN(g_Status.relics)]; // the relics found, as last sent
+// The Prologue's progress isn't the castle's: Richter has every relic, and Alucard's stats, relics
+// and gold are set from scratch when it ends (InitStatsAndGear). There, only the shared Dracula's
+// events apply, and nothing but castle flags and records is sent. A game that comes into the
+// castle from it asks its partners for everything (#356): a player back in a new game while the
+// partner played on gets what was found, the level and the purse.
+#define RECORD_RESYNC 0xFFFD // asks the partner for a resync
+#define RECORD_GOLD 0xFFFC   // the purse, for a game that asked: the one behind takes it
+static bool s_AskResync, s_SendExp, s_SendGold;
+static u16 s_PrevStage;
 static bool s_InPlay;  // last frame was in play: the shadows are valid
 static bool s_PartnerGone[COOP_PARTNERS]; // no word from partner k for PARTNER_GONE_FRAMES
 #define PARTNER_GONE_FRAMES 300
@@ -166,6 +187,38 @@ static bool PartnerLinked(void) {
     return false;
 }
 
+static bool IsBossEvent(s32 i) {
+    return i > TIMEATTACK_EVENT_DRACULA_DEFEAT && i < TIMEATTACK_EVENT_FINAL_SAVEPOINT && i != TIMEATTACK_EVENT_SAVE_RICHTER;
+}
+
+static void BossRecorded(s32 i) {
+    if (IsBossEvent(i)) {
+        s_LastBoss = i;
+        s_LastBossAt = s_Frame;
+    }
+}
+
+// This game's player took a boss's Life Max Up (the game has added its +5): it goes to the partner
+// as the boss's bit. Taken here after the partner's bit came (both games made one, #296), this +5 is
+// one too many: back out. False when it's no known boss's: the old way (EV_GRANT).
+static bool BossVessel(void) {
+    s32* bits = &g_Settings.timeAttackRecords[BOSS_VESSELS];
+
+    if (!CollectingA(E_PRIZE_DROP) || !IsVesselDrop(g_CurrentEntity) || s_LastBoss < 0 ||
+        s_Frame - s_LastBossAt > BOSS_RECENT_FRAMES) {
+        return false;
+    }
+    if (*bits & (1 << s_LastBoss)) {
+        g_Status.hpMax -= 5;
+        if (g_Status.hp > g_Status.hpMax) {
+            g_Status.hp = g_Status.hpMax;
+        }
+    } else {
+        *bits |= 1 << s_LastBoss;
+    }
+    return true;
+}
+
 static s32 GrantWrap(s32 amount, s32 type) {
     // anything else with an amount is a kill's XP (type: the enemy's level)
     bool kill = amount != 0 && type != GRANT_LIFE_UP && type != GRANT_HEART_UP && type != GRANT_RELIC;
@@ -180,6 +233,9 @@ static s32 GrantWrap(s32 amount, s32 type) {
         amount = amount > 1 ? amount : 1;
     }
     ret = s_Grant(amount, type);
+    if (!s_Applying && ret == 0 && type == GRANT_LIFE_UP && BossVessel()) {
+        return ret;
+    }
     if (!s_Applying && ret == 0 && !PlacedFind() &&
         (type == GRANT_LIFE_UP || type == GRANT_HEART_UP || type == GRANT_RELIC)) {
         Emit(EV_GRANT, type, amount);
@@ -429,9 +485,13 @@ static void DetectRecords(void) {
             if (g_Settings.timeAttackRecords[i] && !Emit(EV_RECORD, i, g_Settings.timeAttackRecords[i])) {
                 return;
             }
+            if (!s_Records[i] && s_RecordsSettled) {
+                BossRecorded(i);
+            }
             s_Records[i] = g_Settings.timeAttackRecords[i];
         }
     }
+    s_RecordsSettled = true;
     if (g_Settings.D_8003CB00 != s_Visited && Emit(EV_RECORD, RECORD_VISITED, g_Settings.D_8003CB00)) {
         s_Visited = g_Settings.D_8003CB00;
     }
@@ -442,6 +502,21 @@ static void DetectGold(void) {
         s_Gold = g_Status.gold; // turned back on: only what changes from then on is shared
     } else if (g_Status.gold != s_Gold && Emit(EV_GOLD, 0, g_Status.gold - s_Gold)) {
         s_Gold = g_Status.gold;
+    }
+}
+
+// Relics found (#356): live finds go as EV_GRANT from GrantWrap; this also sends what a resync
+// sends, so a player back from an older save, or a new game, gets the relics found meanwhile.
+static void DetectRelics(void) {
+    s32 i;
+    u8 found;
+
+    for (i = 0; i < LEN(g_Status.relics); i++) {
+        found = g_Status.relics[i] & RELIC_FLAG_FOUND;
+        if (found && !s_Relics[i] && !Emit(EV_GRANT, GRANT_RELIC, i)) {
+            return;
+        }
+        s_Relics[i] = found;
     }
 }
 
@@ -520,9 +595,38 @@ static void Collect(s32 idx, u8 added) {
     }
 }
 
+// The partner took boss Life Max Ups this game hasn't: +5 for each, and this room's copy goes.
+static void ApplyBossVessels(u32 theirs) {
+    s32* bits = &g_Settings.timeAttackRecords[BOSS_VESSELS];
+    u32 added = theirs & ~*bits;
+    s32 i;
+
+    for (i = 0; i < 32; i++) {
+        if (added & (1 << i)) {
+            func_800FE044(5, GRANT_LIFE_UP);
+        }
+    }
+    if (added) {
+        DespawnVessels();
+    }
+    *bits |= theirs;
+    s_Records[BOSS_VESSELS] = *bits;
+}
+
+static void Resync(void);
+static void RobbedUpdate(void);
+
+static bool SharedEvent(u8 type) {
+    return type == EV_HIT || type == EV_HIT2 || type == EV_SPAWN || type == EV_SPAWN2 || type == EV_SPAWN3 ||
+           type == EV_TAKEN;
+}
+
 static void Apply(const CoopEvent* ev) {
     s32 delta;
 
+    if (g_StageId == STAGE_ST0 && !SharedEvent(ev->type)) {
+        return; // the Prologue: sent again once in the castle (RECORD_RESYNC)
+    }
     s_Applying = true;
     switch (ev->type) {
     case EV_FLAG:
@@ -564,6 +668,12 @@ static void Apply(const CoopEvent* ev) {
             }
             DespawnVessels();
         }
+        if (ev->a == GRANT_RELIC) {
+            if (ev->b >= LEN(g_Status.relics) || (g_Status.relics[ev->b] & RELIC_FLAG_FOUND)) {
+                break; // already found here (a resync sends every relic)
+            }
+            s_Relics[ev->b] = RELIC_FLAG_FOUND;
+        }
         func_800FE044(ev->b, ev->a);
         // Like the relic orb does: familiar cards arrive switched off.
         if (ev->a == GRANT_RELIC && ev->b >= RELIC_SWORD_CARD && ev->b < RELIC_FAERIE_CARD) {
@@ -582,9 +692,24 @@ static void Apply(const CoopEvent* ev) {
         if (ev->a == RECORD_VISITED) {
             g_Settings.D_8003CB00 |= ev->b;
             s_Visited = g_Settings.D_8003CB00;
+        } else if (ev->a == RECORD_EXP) {
+            if (ev->b > g_Status.exp && g_Status.level < 99) {
+                g_Status.exp = (s32)ev->b > g_ExpNext[99] ? g_ExpNext[99] : ev->b;
+            }
+        } else if (ev->a == BOSS_VESSELS) {
+            ApplyBossVessels(ev->b);
+        } else if (ev->a == RECORD_RESYNC) {
+            Resync();
+            s_SendGold = true;
+        } else if (ev->a == RECORD_GOLD) {
+            if ((s32)ev->b > g_Status.gold && !RULE_OFF(RULE_NO_SHARED_GOLD)) {
+                g_Status.gold = ev->b;
+                s_Gold = g_Status.gold;
+            }
         } else if (ev->a < TIMEATTACK_EVENT_END && !g_Settings.timeAttackRecords[ev->a]) {
             g_Settings.timeAttackRecords[ev->a] = ev->b;
             s_Records[ev->a] = ev->b;
+            BossRecorded(ev->a);
         }
         break;
     case EV_EXP: // the game's own level-up check sees it next frame
@@ -661,6 +786,7 @@ static void ApplyInbox(void) {
     if (s_NChanged) {
         RefreshGated();
         s_NChanged = 0;
+        RobbedUpdate(); // Death's flag can come after this game came into play (a rejoin, #356)
     }
 }
 
@@ -678,6 +804,24 @@ static void Resync(void) {
         s_Records[i] = 0;
     }
     s_Visited = 0;
+    s_RecordsSettled = false;
+    for (i = 0; i < LEN(s_Relics); i++) {
+        s_Relics[i] = 0;
+    }
+    s_SendExp = true;
+}
+
+// What a resync sends besides the shadows' diffs, each until the ring takes it.
+static void DetectCatchUp(void) {
+    if (s_AskResync && Emit(EV_RECORD, RECORD_RESYNC, 0)) {
+        s_AskResync = false;
+    }
+    if (s_SendExp && (!g_Status.exp || RULE_OFF(RULE_NO_SHARED_LEVEL) || Emit(EV_RECORD, RECORD_EXP, g_Status.exp))) {
+        s_SendExp = false;
+    }
+    if (s_SendGold && (RULE_OFF(RULE_NO_SHARED_GOLD) || Emit(EV_RECORD, RECORD_GOLD, g_Status.gold))) {
+        s_SendGold = false;
+    }
 }
 
 // Death's scene takes Alucard's gear from the players who see it, but the flag it sets also comes
@@ -711,6 +855,10 @@ void ProgressUpdate(void) {
         s_InPlay = true;
         Resync();
         RobbedUpdate();
+        if (s_PrevStage == STAGE_ST0 && g_StageId != STAGE_ST0) {
+            s_AskResync = true;
+        }
+        s_PrevStage = g_StageId;
     }
     // A partner back after 5 s away may have restarted from an older save: send everything
     // again, so they catch up on what was found meanwhile, or taken and not saved (#154). M17: a
@@ -725,7 +873,13 @@ void ProgressUpdate(void) {
     }
     DetectFlags();
     DetectMap();
-    DetectGold();
     DetectRecords();
+    if (g_StageId != STAGE_ST0) {
+        DetectGold();
+        DetectRelics();
+        DetectCatchUp();
+    } else {
+        s_Gold = g_Status.gold;
+    }
     ApplyInbox();
 }

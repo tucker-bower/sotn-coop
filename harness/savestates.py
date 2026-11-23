@@ -4,6 +4,7 @@
 
 Route (deterministic, ~30k frames, about 30 s at harness speed):
   boot -> File select -> New game -> name "A" -> opening video
+  -> prologue starts                                         => "prologue"
   -> prologue skipped by RAM poke (harness only, see skip_prologue)
   -> castle entrance (NO3) played by a bot up to Death taking the gear  => "entrance"
   -> warps to Alchemy Lab, Marble Gallery and Outer Wall with the same status  => "nz0", "no0", "no1"
@@ -122,6 +123,9 @@ def build(disc):
 
     with Emu(disc) as e:
         new_game(e)
+        if e.read("g_StageId") == STAGE_ST0 and e.read("g_GameState") == GAME_PLAY:
+            e.step(1)
+            e.save_state_file(out_dir / "prologue.state")  # Richter's first steps (#356's test)
         skip_prologue(e)
         castle = e.save_state()
         try:
