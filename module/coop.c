@@ -160,26 +160,34 @@ static void CapturePresence(CoopPresence* p) {
     SharedPresence(p);
 }
 
-void SetCdVolume(s8 s_num, s16 arg1, s16 arg2); // DRA
-extern s16 g_CdVolume;
-void SsSetSerialVol(s16 s_num, s16 voll, s16 volr);
 void SsSetMVol(s16 voll, s16 volr);
 extern s16 g_SeqPlayingId, g_volumeL, g_volumeR;
+extern u8 g_MuteCd;    // DRA: while set, its sound update (func_801361F8) sets the CD volume to 0
+extern s32 D_8013B694; // DRA: UnMuteCd counts it up, MuteCd zeroes it
 
-// CONTROL_MUTE_MUSIC: silence the CD (XA) music, and keep it silent through the game's own
-// volume changes (fades, stage changes) by setting it every frame. Unmuted, the game's own
-// volume comes back. The Librarian's music isn't on the CD: it's a sequence, with its own volume.
+// CONTROL_MUTE_MUSIC: silence the CD (XA) music through the game's own g_MuteCd, which its sound
+// update honours at the end of every frame. Writing the volume ourselves (before #347) lost to
+// that update, which set it back to g_CdVolume every frame: the muted game's music played in a
+// slice of each frame, a crackle under the other game's music. The game mutes the CD itself while
+// paused (MuteCd, UnMuteCd), so its own wish is kept, and given back on unmute. The Librarian's
+// music isn't on the CD: it's a sequence, with its own volume.
 static void MusicUpdate(void) {
     static bool muted;
+    static u8 gameMute; // what the game itself wants g_MuteCd to be
+    static s32 unmutes; // D_8013B694 when we last set g_MuteCd
 
     if (g_CoopLink.control & CONTROL_MUTE_MUSIC) {
-        SsSetSerialVol(0, 0, 0);
+        if (!muted || D_8013B694 != unmutes || !g_MuteCd) { // or the game called (Un)MuteCd since
+            gameMute = g_MuteCd;
+        }
+        g_MuteCd = 1;
+        unmutes = D_8013B694;
         if (g_SeqPlayingId) { // SsSeqSetVol left a third of it audible: the voices' master volume
             SsSetMVol(0, 0);
         }
         muted = true;
     } else if (muted) {
-        SetCdVolume(0, g_CdVolume, g_CdVolume);
+        g_MuteCd = gameMute;
         SsSetMVol(g_volumeL, g_volumeR);
         muted = false;
     }

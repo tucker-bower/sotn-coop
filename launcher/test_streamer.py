@@ -29,7 +29,7 @@ for text, want in (("Rejoin BAT-7K2Q", "Rejoin (hidden)"), ("Hosting room ORB-9X
                    ("2601:1c2:b00:3deb::1 or 2601:1c2:b00:3deb:f06d:c696:2337:acf1", "(hidden) or (hidden)"),
                    ("Ping 4:59 left, best 1:02.33", "Ping 4:59 left, best 1:02.33"),
                    ("K7M2-9P4Q-W3", "(hidden)"), ("Catches the bats", "Catches the bats"), ("Impulse", "Impulse"),
-                   ("Castle settings", "Castle settings"), ("Version 1.4.5", "Version 1.4.5")):
+                   ("Castle settings", "Castle settings"), ("Version 1.4.6", "Version 1.4.6")):
     got = streamer.hide(text)
     check(got == want if want is not None else "2337" not in got, f"{text!r} -> {got!r}")
 check(streamer.typed("BAT-7K2Q") == "........", "a code box shows dots")
