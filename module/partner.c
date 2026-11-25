@@ -256,6 +256,7 @@ static void (*s_WeaponEntity)(Entity*);
 // body's VRAM bank, where what it draws reads them. Not while the disc is busy: player 1's own
 // weapon may be on its way in (it would land in the body's copy).
 static bool PartnerLive(void);
+static bool HiddenWeapon(const Entity* e);
 static void CopyWords(void* dst, const void* src, u32 len);
 static void ExchangeWords(void* a, void* b, u32 len);
 #define CD_IDLE 0 // CdStep_None (include/disk.h)
@@ -1464,6 +1465,14 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
     B->prevPad = pad;
     cur = g_CurrentEntity;
     g_CurrentEntity = &PLAYER;
+    // ...and none left from a frame that ran that hand's weapon (#343) into one that doesn't: the
+    // partner ate its Pot Roast (the hand emptied) or the disc was busy, and the food it dropped ran
+    // from this game's own program for that hand, garbage for it (reports 20261123-151252, -222820)
+    for (i = 1; i < 64; i++) {
+        if (HiddenWeapon(&g_Entities[i])) {
+            DestroyEntity(&g_Entities[i]);
+        }
+    }
     if (B->code) { // as DRA runs Richter's (src/dra/5087C.c)
         ((PlayerOvl*)HDR_ADDR)->D_8013C000();
         ((PlayerOvl*)HDR_ADDR)->D_8013C008();
@@ -1472,8 +1481,7 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
         UpdatePlayerEntities();
     }
     for (i = 1; i < 64; i++) { // its weapons' and familiar's entities: not its to run (WeaponsOff)
-        u16 id = g_Entities[i].entityId;
-        if (id >= 0xD0 && !(id >= 0xE0 && B->wpnRun[(id - 0xE0) >> 4])) {
+        if (HiddenWeapon(&g_Entities[i])) {
             DestroyEntity(&g_Entities[i]);
         }
     }

@@ -332,6 +332,31 @@ static void Familiar(void) {
     s_FamLoading = true;
 }
 
+// Other mods' characters run their mod's code (D184: Ultimate Richter's is retail's), which can't run
+// a familiar's entities (0xD0-0xDF): with relics shared, a familiar card summoned one, and their
+// entity loop ran it from past the end of its own table (report 20261123-184145: Ultimate Richter's
+// Faerie Card hung the game). Their familiar cards stay off, and a familiar is taken out.
+void DestroyEntity(Entity* e); // DRA
+static void NoFamiliar(void) {
+    u32 c = CharacterLoaded();
+    s32 i;
+
+    if (c == CHAR_ALUCARD || CHAR_COOP(c) || g_StageId == STAGE_ST0) {
+        return;
+    }
+    for (i = 0; i < LEN(g_Status.relics); i++) {
+        if (g_api.relicDefs[i].unk0C > 0) { // a familiar's card
+            g_Status.relics[i] &= ~RELIC_FLAG_ACTIVE;
+        }
+    }
+    g_Servant = FAM_ACTIVE_NONE;
+    for (i = 1; i < STAGE_ENTITY_START; i++) {
+        if (g_Entities[i].entityId >= 0xD0 && g_Entities[i].entityId < 0xE0) {
+            DestroyEntity(&g_Entities[i]);
+        }
+    }
+}
+
 // Poison water (design/M8b §2): the stage marks it (g_unkGraphicsStruct.D_8009744C), and
 // Alucard's code takes 1 HP every 10 frames unless Holy Symbol is on (src/dra/692E8.c,
 // HandleDamage's kind 6). Richter's and Maria's never looked: the same rule for them, down to 1
@@ -876,6 +901,7 @@ void CharacterFrame(void) {
     }
     SaturnMariaHalt();
     Familiar();
+    NoFamiliar();
     PoisonWater();
     Poison();
     Curse();

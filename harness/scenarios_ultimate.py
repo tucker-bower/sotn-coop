@@ -267,3 +267,30 @@ def movement_room_bounce_rescued_ultimate_richter(run):
     run.expect(still == (38, 8) and tuple(a.snapshot()["room"]) == still and a.mailbox("self_presence").flags & 1,
                "back on (38,8)'s floor, staying there in play", room=a.snapshot()["room"],
                ground=(a.mailbox("self_presence").ground_x, a.mailbox("self_presence").ground_y))
+
+
+RELICS, FAERIE_CARD, FAM_ACTIVE_FAERIE = 0x80097964, 20, 3  # g_Status.relics; RELIC_FAERIE_CARD; include/game.h
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def ultimate_richter_familiar_card_stays_off(run):
+    """Report 20261123-184145 (1.4.6): Ultimate Richter used the Faerie Card (relics are shared) and
+    the game hung. His code is retail Richter's (D184), whose entity loop can't run a familiar's
+    entities: it ran the faerie from past the end of its own table. As the menu leaves it (the card
+    on, the faerie chosen), closing the menu: no familiar, the card off, and the game runs on."""
+    e, mb = run.emu, mailbox(run)
+    found = blobs()
+    run.expect(5 in found, "his blob is made (the dev Saturn disc: LOCAL.md)", has=sorted(found))
+    reload_as(run, mb, 5)
+    run.step(120)
+    run.step(2, "start")
+    run.step(60)
+    e.write(RELICS + FAERIE_CARD, 3, "<B")  # found, on
+    e.write("g_Servant", FAM_ACTIVE_FAERIE)
+    run.step(2, "start")
+    timer = e.read("g_Timer")
+    run.step(300)
+    familiar = [s for s in range(1, 64) if 0xD0 <= e.read("g_Entities", "<H", s * 0xBC + 0x26) < 0xE0]
+    run.expect(e.read("g_Timer") - timer > 250, "the game runs on", timer=(timer, e.read("g_Timer")))
+    run.expect(not familiar, "no familiar comes out", slots=familiar)
+    run.expect(not e.read(RELICS + FAERIE_CARD, "<B") & 2, "the card is off", relic=e.read(RELICS + FAERIE_CARD, "<B"))
