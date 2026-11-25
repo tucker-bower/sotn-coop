@@ -382,3 +382,45 @@ def guest_relic_taken_over_without_its_primitives(run):
                beat=(beat, b.mailbox("heartbeat")), filled=filled)
     run.expect(b.read(dropped, "<I") > before, "the copy without its primitives was dropped",
                dropped=b.read(dropped, "<I") - before)
+
+
+POT_ROAST = 0x43
+
+
+def _beats(run):
+    return [g.mailbox("heartbeat") for g in (run.s.a, run.s.b)]
+
+
+@session_scenario()
+def partner_eats_food_alucard_and_alucard(run):
+    """Reports 20261123-151252 and -222820 (1.4.6, online): food is used from a hand (Alucard drops
+    it, to pick up and eat), and both players held a Pot Roast. The partner's body runs the
+    partner's own hand weapon while this game's hand holds the same item (#343), so the partner's
+    dropped food was an entity of the body's (in both reports: slot 17, id 0xF0, in the body's
+    frame). Once that hand's program wasn't the body's to run (a hand changed, or the disc busy),
+    the body's next frame ran the entity from this game's own program for the hand: garbage, and
+    the game hung. Here: B's real dropped Pot Roast, put in A's body as the reports had it, and
+    A's own program for that hand a trap (an invalid instruction). A keeps running."""
+    from module import symbols
+    from session_m8 import reload_game
+    a, b = run.s.a, run.s.b
+    b.write(EQUIPMENT + 4, POT_ROAST, "<I")  # B's left hand: a Pot Roast, its program loaded
+    run.expect(reload_game(run, b), "B's load puts the Pot Roast in its hand")
+    a.write(EQUIPMENT + 4, 0, "<I")  # A's left hand: empty, its program unused...
+    run.expect(reload_game(run, a), "A reloads with an empty left hand")
+    p, q = a.mailbox("self_presence"), b.mailbox("self_presence")
+    if (q.stage, q.room_id) != (p.stage, p.room_id):
+        arrive(run, b, p.stage, p.room_id, p.ground_x + 24, p.ground_y)
+    run.step(120)
+    run.step(3, ("", "circle"))  # B drops its Pot Roast
+    run.step(2)
+    food = b.read_bytes(b.addr("g_Entities") + 17 * 0xBC, 0xBC)
+    run.expect(struct.unpack_from("<H", food, 0x26)[0] == 0xF0, "B's Pot Roast is out (slot 17, id 0xF0)",
+               entity=hex(struct.unpack_from("<H", food, 0x26)[0]), update=hex(struct.unpack_from("<I", food, 0x28)[0]))
+    a.write_bytes(WEAPON_PRG[1] + 0x40, b"\xff\xff\xff\xff" * ((0x3000 - 0x40) // 4))  # ...a trap there
+    a.write_bytes(symbols()["g_CoopSpikeBody"] + 17 * 0xBC, food)  # the body's own food, as in the reports
+    before = _beats(run)
+    run.step(300)
+    after = _beats(run)
+    run.expect(all(y - x > 250 for x, y in zip(before, after)), "both games keep running (their main loops: 300 frames)",
+               beats=(before, after))
