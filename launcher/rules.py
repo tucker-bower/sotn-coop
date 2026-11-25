@@ -43,7 +43,7 @@ TOGGLES = (
      True, OPT_NO_GROWTH),
     ("alucard_stats", "Richter and Maria use Alucard's stats",
      "Their damage and defense use STR, INT and gear.", True, OPT_NO_ALUCARD_STATS),
-    ("relic_moves", "Relics unlock Richter's and Maria's moves", "Their moves come from Alucard's relics.",
+    ("relic_moves", "Relics unlock Richter's and Maria's moves", "Their moves are locked behind obtaining relics.",
      True, OPT_NO_RELIC_MOVES),
     ("air_jumps", "Extra jumps", "Double and high jumps from Alucard's relics.", True, OPT_NO_AIR_JUMPS),
     ("offhand", "Weapons in Richter's and Maria's hands", "Square uses the first hand, Circle the second.", True,

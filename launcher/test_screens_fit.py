@@ -42,6 +42,8 @@ def main():
 
             def shown():
                 cut.extend((name, *o) for o in theme.overflows)
+                if os.environ.get("COOP_SHOTS"):  # a picture of each screen, to look at
+                    pygame.image.save(m.s, os.path.join(os.environ["COOP_SHOTS"], name.replace(":", "").replace("'", "") + ".png"))
                 show()
             m.show = shown
             try:
@@ -155,7 +157,10 @@ def main():
                 "playable": False, "note": "His Saturn coat, every move",
                 "needs": "Attach your Saturn disc (Japan) to unlock him.", "controls": "Shortcuts off ({t} / S)", "shortcuts": False}
         ready = dict(card, title="Player 1", character=4, name="Maria", version="Saturn", playable=True, ready=True, note="Her Saturn moves")
-        for name, cards, partner in (("lobby: couch", [ready, card], None),
+        import app as app_
+        richter = dict(card, title="Player 1", character=1, version="PlayStation", playable=True, note=app_.CHARACTER_NOTES[1],
+                       controls="Shortcuts on ({t} / S)", shortcuts=True)
+        for name, cards, partner in (("lobby: couch", [ready, card], None), ("lobby: Richter's note", [richter, card], None),
                                      ("lobby: host", [ready], (["It's on your clipboard:", "send it to them.", "",
                                                                "Waiting for your partner's game: 4:52 left"], False, "BAT-7K2Q")),
                                      ("lobby: joined", [card], (["Connected!", "ping 142 ms"], True, None))):

@@ -90,7 +90,7 @@ def card(m, box, c):
             t.text(s, "{v}", cx + half + 6, y)
         y += 12
     if c["playable"]:
-        for line in wrap(c["note"], (box.w - 12) // 8)[:1] if c["note"] else []:
+        for line in wrap(c["note"], (box.w - 12) // 8)[:2] if c["note"] else []:
             t.text_centre(s, line, cx, y, DIM)
             y += 10
         if c["controls"]:

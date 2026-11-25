@@ -297,6 +297,53 @@ static void Growth(void) {
     }
 }
 
+// #372: a relic that unlocks one of their moves says which (design/M8b §3's table), when relics
+// unlock their moves (the rule, on by default). Found here or by the partner; what a load brings
+// isn't news. Leap Stone's is no news when the extra jumps are off (their own jumps instead).
+typedef struct {
+    u8 relic;
+    const char* ric;
+    const char* mar;
+} MoveNews;
+static const MoveNews s_MoveNews[] = {
+    {RELIC_LEAP_STONE, "Backflip unlocked", "Double jump unlocked"},
+    {RELIC_GRAVITY_BOOTS, "High jump unlocked", "High jump unlocked"},
+    {RELIC_SOUL_OF_WOLF, "Slide unlocked", "Slide unlocked"},
+    {RELIC_POWER_OF_WOLF, "Slide kick unlocked", "Dive kick unlocked"},
+    {RELIC_SKILL_OF_WOLF, "Blade dash unlocked", "Blade dash unlocked"},
+    {RELIC_SOUL_OF_BAT, "Chained backflips unlocked", "Endless double jump unlocked"},
+    {RELIC_FORM_OF_MIST, "Mist step unlocked", "Mist step unlocked"},
+    {RELIC_POWER_OF_MIST, "Long mist step unlocked", "Long mist step unlocked"},
+    {RELIC_FIRE_OF_BAT, "Flame whip unlocked", "Fire guardians unlocked"},
+    {RELIC_ECHO_OF_BAT, "Item crashes unlocked", "Guardian crashes unlocked"},
+    {RELIC_FORCE_OF_ECHO, "Holy whip unlocked", "Homing guardians unlocked"},
+    {RELIC_GAS_CLOUD, "Poison crash unlocked", "Poison turtle crash unlocked"},
+};
+
+static void MoveNewsUpdate(void) {
+    static s32 s_For = -1; // the character the found flags below are for; -1: none yet
+    static u8 s_Found[LEN(s_MoveNews)];
+    u32 c = CharacterLoaded();
+    const MoveNews* m;
+    bool found;
+    s32 i;
+
+    if (!CHAR_COOP(c) || g_StageId == STAGE_ST0 || g_GameState != Game_Play || RULE_OFF(OPT_NO_RELIC_MOVES)) {
+        s_For = -1; // a load or the title in between: what's found then isn't news
+        return;
+    }
+    for (i = 0; i < LEN(s_MoveNews); i++) {
+        m = &s_MoveNews[i];
+        found = (g_Status.relics[m->relic] & RELIC_FLAG_FOUND) != 0;
+        if (s_For == (s32)c && found && !s_Found[i] &&
+            !(m->relic == RELIC_LEAP_STONE && RULE_OFF(OPT_NO_AIR_JUMPS))) {
+            CoopMessage(c == CHAR_RICHTER ? m->ric : m->mar);
+        }
+        s_Found[i] = found;
+    }
+    s_For = c;
+}
+
 // Familiars for Richter and Maria (design/M8b §3): a load skips the familiar for their player
 // code (src/dra/game_handlers.c), so the module loads it as the menu does when a card is on.
 // From then on the game keeps it, room to room, as for Alucard.
@@ -902,6 +949,7 @@ void CharacterFrame(void) {
     SaturnMariaHalt();
     Familiar();
     NoFamiliar();
+    MoveNewsUpdate();
     PoisonWater();
     Poison();
     Curse();

@@ -82,7 +82,8 @@ CHARACTERS = ("Alucard", "Richter", "Maria (PSP)", "Maria (PSP, Ultimate)", "Mar
 # remembered from before plays Maria (PSP)
 LOBBY = (0, 1, 2, 4, 5)
 # Under the name in the lobby: a few words, only where it helps
-CHARACTER_NOTES = ("", "", "", "", "Her Saturn moves", "His Saturn coat, every move")
+CHARACTER_NOTES = ("", "Relics unlock Richter's moves (on by default)", "Relics unlock Maria's moves (on by default)",
+                   "", "Her Saturn moves", "His Saturn coat, every move")  # #372: co-op's own rule (two lines)
 # The lobby's characters (issue 251): left / right picks one, up / down their version
 FAMILIES = (("Alucard", (0,)), ("Richter", (1, 5)), ("Maria", (2, 4)))
 VERSIONS = {1: "PlayStation", 5: "Saturn", 2: "PSP", 4: "Saturn"}
@@ -1899,16 +1900,18 @@ class Launcher:
             for sign, x in ((-1, r.left - 22), (1, r.right + 22)):
                 cy = r.centery
                 pygame.draw.polygon(s, DIM, [(x + sign * 7, cy), (x - sign * 5, cy - 8), (x - sign * 5, cy + 8)])
-        if playable and CHARACTER_NOTES[char]:
-            t = ui.small.render(_hide(CHARACTER_NOTES[char]), True, DIM)
-            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 140)))
+        from ui.theme import wrap
+        note = wrap(CHARACTER_NOTES[char], 32) if playable and CHARACTER_NOTES[char] else []
+        for k, line in enumerate(note):
+            t = ui.small.render(_hide(line), True, DIM)
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 140 + k * 18)))
         if not playable:  # a Maria without her disc
             for k, line in enumerate(NEEDS[char] + ("Cross / A: add it",)):
                 t = ui.small.render(_hide(line), True, DIM)
                 s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 138 + k * 18)))
         if playable and not shortcuts:  # (no list of the character's shortcuts: they're optional)
             t = ui.small.render(_hide("Shortcuts off (Triangle / Y)"), True, DIM)
-            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 162)))
+            s.blit(t, t.get_rect(midtop=(box.centerx, box.y + 162 + 18 * max(0, len(note) - 1))))
         if ready:
             t = ui.big.render(_hide("Ready!"), True, OK_GREEN)
         elif playable:

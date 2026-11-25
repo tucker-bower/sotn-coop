@@ -14,7 +14,7 @@
 static const char* s_Pending;
 static const u8* s_PendingName; // the game's own text (an item's name), not ASCII
 static s32 s_Wait;
-static u8 s_Text[64];
+u8 g_CoopMessageText[64]; // the last message shown, in the font's encoding (tests read it: coop.map)
 
 void CoopMessage(const char* text) {
     s_Pending = text;
@@ -31,17 +31,17 @@ static void Show(const char* text, bool onTop) {
         return;
     }
     // The 8x8 font's encoding: ASCII - 0x20, ended by 0xFF 0x00 (src/st/popup.h)
-    for (i = 0; text[i] && i < LEN(s_Text) - 2; i++) {
-        s_Text[i] = text[i] == MESSAGE_CROSS[0] ? CROSS_GLYPH : text[i] - 0x20;
+    for (i = 0; text[i] && i < LEN(g_CoopMessageText) - 2; i++) {
+        g_CoopMessageText[i] = text[i] == MESSAGE_CROSS[0] ? CROSS_GLYPH : text[i] - 0x20;
     }
-    s_Text[i++] = 0xFF;
-    s_Text[i] = 0;
+    g_CoopMessageText[i++] = 0xFF;
+    g_CoopMessageText[i] = 0;
     if (g_unkGraphicsStruct.BottomCornerTextTimer) { // what the game does before a new one
         g_api.FreePrimitives(g_unkGraphicsStruct.BottomCornerTextPrims);
         g_unkGraphicsStruct.BottomCornerTextTimer = 0;
     }
     bottomText = (void*)ovl->bottomText;
-    bottomText(s_Text, false);
+    bottomText(g_CoopMessageText, false);
     if (onTop && g_unkGraphicsStruct.BottomCornerTextPrims > 0) { // above a fade (0x1FD)
         // Within the 0x200 priorities there are: past them, the letters weren't drawn at all, and
         // a dead player saw an empty box (playtest 0.14). The box under its letters.
