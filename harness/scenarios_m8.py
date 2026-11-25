@@ -998,3 +998,30 @@ def movement_stuck_fall_rescued(run, ch):
     run.expect(max(ys[:80]) >= ground[1] + 20, "he was in the floor", ys=ys[::15])
     run.expect(abs(p.y - ground[1]) <= 16 and abs(p.x - ground[0]) <= 32, "back on the floor where he stood",
                now=(p.x, p.y), ground=ground, ys=ys[::15])
+
+
+RELICS_AT = 0x80097964  # g_Status.relics
+
+
+def shown_message(e):
+    """The module's last message (message.c), as text."""
+    from module import symbols
+    raw = e.read_bytes(symbols()["g_CoopMessageText"], 64)
+    return "".join(chr(b + 0x20) for b in raw[:raw.index(0xFF)]) if 0xFF in raw else ""
+
+
+@scenario(start="entrance", disc=COOP_DISC)
+def relic_move_news_maria(run):
+    """#372 (Tucker: "when Maria finds Soul of Wolf, is there a message that says blade dash
+    unlocked?"): with relics unlocking her moves (the default), a relic that unlocks one names it
+    as it's found, and nothing is said for what she already had."""
+    from link.mailbox import CHAR_MARIA
+    e, mb = run.emu, mailbox(run)
+    reload_as(run, mb, CHAR_MARIA)
+    run.step(120)
+    run.expect(shown_message(e) != "Blade dash unlocked", "nothing said before", shown=shown_message(e))
+    e.write(RELICS_AT + SKILL_OF_WOLF, 1, "<B")  # found, as a relic orb or the partner's find does
+    run.step(60)
+    from coop_env import TOOLS
+    e.screenshot(str(TOOLS["out"] / "relic_move_news_maria" / "blade-dash.png"))
+    run.expect(shown_message(e) == "Blade dash unlocked", "Skill of Wolf: Blade dash unlocked", shown=shown_message(e))
