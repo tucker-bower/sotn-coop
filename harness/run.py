@@ -190,6 +190,21 @@ def run_lanes(lanes, jobs, results, lock, t0, total, tag=""):
         t.join()
 
 
+def prune(out):
+    """Frees the disk an unattended run would fill (#224): the folders of tests that no longer
+    exist (their history stays in history.jsonl), and runs' temporary folders left over a day."""
+    import shutil
+    freed = 0
+    for d in out.iterdir() if out.is_dir() else []:
+        stale = (d.name not in ALL and (d / "report.json").exists()) or \
+                (d.name.startswith("tmp-run-") and time.time() - d.stat().st_mtime > 86400)
+        if d.is_dir() and stale:
+            freed += sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+            shutil.rmtree(d, ignore_errors=True)
+    if freed > 100e6:
+        print(f"freed {freed / 1e9:.1f} GB of old test output")
+
+
 def changed_files():
     """The files this branch changed from main, committed or not."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -334,6 +349,7 @@ if __name__ == "__main__":
     # (up to 445 MB each), and they filled a RAM-backed /tmp.
     from coop_env import TOOLS
     TOOLS["out"].mkdir(parents=True, exist_ok=True)
+    prune(TOOLS["out"])
     with tempfile.TemporaryDirectory(prefix="tmp-run-", dir=TOOLS["out"], ignore_cleanup_errors=True) as tmp:
         os.environ["TMPDIR"] = tmp
         tempfile.tempdir = None
