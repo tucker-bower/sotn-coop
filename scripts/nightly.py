@@ -9,6 +9,8 @@ one bug-fix release, and writes local/nightly/<date>.md, which is then emailed t
 --dry-run fetches nothing new and starts no agent: it prints what a run would do.
 --force runs the agent even with nothing new (it then works the open `bug` issues).
 --item reddit/<file> treats that file under local/ as new: a test of the agent's path.
+A night whose agent writes no summary (it couldn't sign in, say) leaves its items in
+local/nightly/pending.txt, and the next night retries them.
 
 Stops, doing nothing, when local/nightly.stop exists or an open issue is labelled pause-nightly.
 The agent signs in with the long-lived token from `claude setup-token`, kept in
@@ -31,6 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LOCAL = ROOT / "local"
 OUT = LOCAL / "nightly"
 STOP = LOCAL / "nightly.stop"
+PENDING = OUT / "pending.txt"  # items a failed night left unhandled; the next night retries them
 PROMPT = ROOT / "scripts/nightly_prompt.md"
 CONFIG = Path.home() / ".config/sotn-coop"
 INBOX = ("reports", "reddit")
@@ -120,7 +123,8 @@ def main():
         log("fetch: " + " / ".join(r.stdout.strip().splitlines()[:2]))
     except subprocess.TimeoutExpired:
         log("fetch timed out after 30 min; going on with what arrived")
-    new = sorted((inbox() - before) | set(a.item))
+    carried = set(PENDING.read_text().split()) if PENDING.exists() else set()
+    new = sorted((inbox() - before) | set(a.item) | {c for c in carried if (LOCAL / c).exists()})
     log(f"{len(new)} new: {', '.join(new) or 'nothing'}")
     if not new and not a.force:
         return 0
@@ -154,12 +158,16 @@ def main():
     log(f"agent ended: {code}")
     text = agent_log.read_text() if agent_log.exists() else ""
     if summary.exists():
+        PENDING.unlink(missing_ok=True)
         body = summary.read_text()
     elif "Failed to authenticate" in text:
         body = ("Couldn't sign in. In WSL, run `claude setup-token` and save the token it prints in "
                 "~/.config/sotn-coop/claude-token.\n\n" + "\n".join(f"- local/{n}" for n in new))
     else:
         body = f"The agent ended ({code}) without writing a summary. The end of its log ({agent_log}):\n\n{text[-3000:]}"
+    if not summary.exists():
+        PENDING.write_text("\n".join(new) + "\n")
+        log(f"{len(new)} item(s) carried to the next night")
     first = next((ln.strip("# ").strip() for ln in body.splitlines() if ln.strip()), "summary")
     email(f"SOTN Co-op nightly {day}: {first[:80]}", body)
     return 0
