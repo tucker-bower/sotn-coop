@@ -1,6 +1,6 @@
 # Maintenance mode: the project runs without Tucker
 
-**Status:** proposal, for Tucker's review (2026-11-26).
+**Status:** approved by Tucker on 2026-11-26, with changes (D236): spend little on contributor setup, since no one has asked to contribute; keep #300 and #301; keep the SOTN Ultimate and ASS compatibility work (#181, #52, maybe #48) in Up Next until Tucker says to start it.
 
 **Goal.** Tucker steps back. Players report bugs, and a nightly agent fixes the real ones and ships a minor release. Tucker reads the release notes now and then. The project is easy for someone else to build, fork or pick up, and it never depends on a server we run (D113; Tucker, 2026-11-23: "We cannot rely on a server, ever").
 
@@ -19,13 +19,13 @@
 ## On the Gemini review
 | Recommendation | Verdict | Why |
 |---|---|---|
-| Separate the app from `harness/` (#222) | **Do it** | Contributors can't tell shipped code from test code. Test-only controls (`partition`, `stall`) live in the class that runs real play. Moving the worker into `link/` doesn't change behaviour, and the gate proves that. |
-| Split `app.py` by screen | **Do it, lightly** | It makes contributing easier. Its main argument, Mac and touch controls multiplying the UI, goes away if we trim those (below). |
+| Separate the app from `harness/` (#222) | **Later** (backlog, per Tucker) | Contributors can't tell shipped code from test code. Test-only controls (`partition`, `stall`) live in the class that runs real play. Moving the worker into `link/` doesn't change behaviour, and the gate proves that. |
+| Split `app.py` by screen | **Later** (backlog, with #222) | It makes contributing easier. Its main argument, Mac and touch controls multiplying the UI, goes away if we trim those (below). |
 | Core vs. extras: a module folder split, a versioned mailbox header with an extension block, a vtable for characters | **Partly** | Moving the files into folders and enforcing which may include which is cheap. A versioned mailbox only matters across versions, and HELO already refuses a version mismatch. A vtable rewrite of `partner.c` is a lot of risk in our most fragile file, for little player value. |
 | `#ifdef` out the partner sim and the spike pad | **Do it** | Cheap. Release builds stop carrying test hooks. |
 | Clamp `EV_ITEM` and `partnerPrimCount` in C (#224) | **Do it** | Cheap. Bundle it with the next module change. |
 | Load a fresh `COOP.BIN` into old savestates | **Spike it first** | This would be the biggest speed-up for the nightly agent. But a savestate holds the module's data as well as its code, and their layout changes with almost any edit. An in-place swap breaks tests in ways that are hard to see. The safer versions: rebuild only the savestates the chosen tests use, in parallel, or re-run the module's init after the swap. Spend at most a day finding out which works. |
-| A clean-machine bootstrap (#87) | **Do it** | Nothing matters more for forkers. Run it in a fresh container on this PC, with the discs mounted read-only. |
+| A clean-machine bootstrap (#87) | **Only if needed** | It matters for forkers, and none have shown up. It's needed if the nightly loop moves machines. |
 | Finish 2.0: the inverted castle (#47) | **Keep, as the last milestone** | The inverted castle already plays (D133). What's left is coverage and endings, not new systems. |
 | Fix #335, #270, #166 and #352 | **The nightly loop takes them** | Except #352: the second relay must be a public one, never self-hosted. |
 | Mac and Linux builds (#50) | **Linux and Steam Deck only** | The dev machine is Linux, so a Linux build can be tested here. Mac needs hardware we don't have, plus paid signing and notarization. Leave it labelled `help wanted`. |
@@ -33,28 +33,20 @@
 
 ## Recommended plan
 
-### Short term (about 1–2 weeks of agent time, in this order)
+### Short term (in this order)
 1. **The nightly loop** (details below). It comes first because it's what takes Tucker out of the loop.
-2. **Trim the tracker.**
-   - Close what no one is going to build, as "not planned". The proposed list is at the end.
-   - Label the good ideas we won't build ourselves `help wanted`.
-   - Move the test-coverage backlog (#69–#76, #181) out, under D212: write tests when bugs show the need.
-3. **Bring CI back on GitHub's free runners**, for the checks that need no disc:
-   - our Python unit tests (patcher, link, launcher UI);
-   - the module and characters compiling, plus `check_dra_symbols`, which needs the decomp toolchain but not the game;
-   - the game-data check.
+2. **Trim the tracker** (done 2026-11-26).
+   - The issues listed at the end were closed as "not planned", and the good ideas we won't build ourselves were labelled `help wanted`.
+   - #300 and #301 stay planned.
+   - The compatibility work for SOTN Ultimate and ASS (#181, #52) waits in Up Next until Tucker says to start it.
+3. **Keep contributor setup small.** No one has asked to contribute, so there's no `CONTRIBUTING.md`, no issue templates and no CI rebuild. The dead `ci.yml` is deleted, so nothing claims to check what it doesn't. A bootstrap check in a clean container (#87) is worth doing only if the nightly loop ever has to move to another machine.
+4. **Cleanups that speed up the nightly fixes:**
+   - The #224 cleanups, including the C bounds checks.
+   - `#ifdef` out the test hooks from release builds.
+   - The fixture spike.
 
-   Game tests stay local, and the PR template says so.
-4. **Make the project easy for others to pick up.**
-   - Write `CONTRIBUTING.md` for humans: build, test, the PR rules, and what we accept.
-   - Add GitHub issue templates: Bug, which points to F9, and Idea.
-   - Verify the bootstrap in a clean container (#87).
-   - Make `AGENTS.md` describe the nightly loop.
-5. **Pay down the structure that slows every fix.**
-   - Separate the app from the harness (#222), and split `app.py` by screen.
-   - Do the #224 cleanups, including the C bounds checks, and `#ifdef` out the test hooks.
-   - Run the fixture spike.
-6. **Ship 1.5.0** once all of that is in, with a playtest sheet.
+   The bigger restructures (#222: separate the app from the harness, and split `app.py`) stay in the backlog. They only help human contributors.
+5. **Ship 1.5.0** once the loop has run a week.
 
 ### Mid term: how the project runs
 **The nightly loop.** It runs on this PC because the tests need the discs.
@@ -81,21 +73,23 @@
 - **Cost.** Most nights there's no new report: the fetch takes one minute and the agent exits without starting. A night with a real fix costs about what the 1.4.9 session did.
 - **Weak spot: the PC.** If it's off, the job waits for the next night. If the PC is ever retired, the loop moves with the discs to any Linux box, which is why the bootstrap must work on a clean machine.
 
-**How others contribute.** Community PRs run the GitHub-hosted CI. The nightly agent runs the game tests on them, and comments with the results. It never merges an outside PR: Tucker does, or nobody does.
+**Outside PRs.** If one ever arrives, the nightly agent runs the game tests on it and comments with the results. It never merges an outside PR: Tucker does, or nobody does.
 
 **Releases.** Bug-fix releases ship by themselves. Anything that changes features or feel waits for Tucker's `needs-tucker` decision.
 
 ### Long term: the remaining milestones
 | Milestone | What "done" is | Keep? |
 |---|---|---|
-| **1.5: Maintenance-ready** | The short-term list above. The nightly loop has run 7 nights in a row without help. CI is green on GitHub's runners. A clean container builds and passes the gate. | Yes, next |
+| **1.5: Maintenance-ready** | The short-term list above. The nightly loop has run 7 nights in a row without help. | Yes, next |
+| **SOTN Ultimate and ASS compatibility** (#181, #52, maybe #48) | Each mod is tested with co-op, and installable from the Mods menu | Yes, when Tucker says |
+| #300 and #301 | Their issues' Done when | Yes |
 | **2.0: The inverted castle** (#47) | The inverted castle's scenes are covered by a test. Every ending plays through for every pairing. Released as 2.0. | Yes, the last feature milestone |
 | **Linux and Steam Deck** (#50, cut down) | An AppImage that runs, gets through the gate on Linux, and is tested with a pad on a Deck-like setup. | Recommended. Your call. |
-| Mac (#50) | — | Trim to `help wanted` |
-| M21 lobbies of 4–8 (#330), M22 battle royale (#331) | — | Trim |
-| Thor dual screen (#55), DXC voice acting (#52), community characters (#56), the rest of Saturn (#48) | — | Trim |
+| Mac (#50) | — | Left in #50, unplanned |
+| M21 lobbies of 4–8 (#330), M22 battle royale (#331) | — | Trimmed |
+| Thor dual screen (#55), community characters (#56) | — | Trimmed |
 | Android touch controls (#81) | — | `help wanted` |
-| Code signing (#83), `.chd` images and a branded exe (#59) | — | Trim (signing costs money every year) |
+| Code signing (#83), `.chd` images and a branded exe (#59) | — | Trimmed (signing costs money every year) |
 
 After 2.0 the project is **feature-complete**. The nightly loop keeps it working, and new features come from contributors.
 
@@ -112,14 +106,11 @@ After 2.0 the project is **feature-complete**. The nightly loop keeps it working
 - [ ] `scripts/nightly.sh` runs headless from Task Scheduler. On a night with a planted test report, it opens an issue, fixes a seeded bug with a new failing-then-passing test, publishes a release, and emails a summary.
 - [ ] On a night with no new mail, the job exits in under 2 minutes without starting the agent.
 - [ ] Both `local/nightly.stop` and the `pause-nightly` label stop it.
-- [ ] GitHub-hosted CI is green on `main` and runs on fork PRs.
-- [ ] `scripts/bootstrap.sh` in a fresh container, with only the discs supplied, builds the disc and passes the gate.
-- [ ] No module under `launcher/` or `link/` imports from `harness/`, and a CI check enforces it.
-- [ ] `CONTRIBUTING.md` and issue templates exist, and the tracker holds only planned work, `help wanted` and bugs.
+- [x] The tracker holds only planned work, `help wanted` and bugs (2026-11-26).
 
-## Proposed closes ("not planned")
+## Trimmed (closed as "not planned", 2026-11-26)
 - #330 and #331: big lobbies and battle royale.
-- #55 Thor dual screen, #52 DXC voice acting, #56 community characters, #48 (what's left of the Saturn extras), #83 code signing, #59 `.chd` and branded exe, #53 rescue menu, #84 F9 form, #85 per-enemy ownership, #86 rollback for input (the body's rollback, D226, covers it).
+- #55 Thor dual screen, #56 community characters, #83 code signing, #59 `.chd` and branded exe, #53 rescue menu, #84 F9 form, #85 per-enemy ownership, #86 rollback for input (the body's rollback, D226, covers it).
 - The test backlog: #69–#76 and #181 (D212).
 
-These would go to `help wanted` instead: #50 (Mac half), #81 touch controls, #79 and #191 mist form, #37–#41 Richter feel, #32, #33, #35, #36, #42, #57, #80, #255, #301.
+Labelled `help wanted` instead: #81 touch controls, #79 and #191 mist form, #37–#41 Richter feel, #32, #33, #35, #36, #42, #57, #80, #255. The Mac half of #50 stays in that issue.
