@@ -13,6 +13,7 @@ Release notes for the versions we've published.
 | `v1.4.2.md` | Far-apart guests see the room; pickup icons after menus; room codes on more PCs; F9 in the launcher. |
 | `v1.4.3.md` | Widescreen backgrounds no longer vanish; no endless fall after a revive onto a lift. |
 | `v1.4.4.md` | A rescue from a room-to-room loop; a guard against the Spirit Orb freeze. |
+| `v1.4.9.md` | No more being stuck in one place after a LEVEL UP. |
 | `v1.4.8.md` | Richter's and Maria's relic-unlocked moves: a lobby note and "move unlocked" messages. |
 | `v1.4.7.md` | A freeze when the partner drops food; Ultimate Richter's familiar cards. |
 | `v1.4.6.md` | Couch co-op: the crackle when the second game's music should be silent. |

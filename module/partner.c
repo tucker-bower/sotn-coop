@@ -1429,7 +1429,9 @@ static void Pull(const CoopPresence* p) {
 
 // One frame of the body's own code on these buttons (swapped in). again: a frame it ran before,
 // run again from a rollback (its sounds were heard then: SwapOut drops them).
+extern s32 D_80137960, D_80137964, D_80137968; // DRA (5D5BC.c): LEVEL UP news still to show
 static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
+    s32 exp, levelNews[3], freeze;
     Pad pad0;
     u32 options;
     Entity* cur;
@@ -1473,6 +1475,19 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
             DestroyEntity(&g_Entities[i]);
         }
     }
+    // Player 1's level and EXP aren't in its status (STATUS_A), and its update runs first: when
+    // player 1's EXP reached a level, Alucard's code in the body made that level up (CheckAndDoLevelUp)
+    // and its LEVEL UP in the body's own slots, which freezes the game (unk28 3) until it ends. The
+    // partner leaving the room took the body and the freeze stayed for good (report
+    // 20261126-221635). A body casting Summon Spirit froze the same way. Its update sees no EXP to
+    // level with, and the freeze is left as it found it.
+    exp = g_Status.exp;
+    levelNews[0] = D_80137960;
+    levelNews[1] = D_80137964;
+    levelNews[2] = D_80137968;
+    freeze = g_unkGraphicsStruct.unk28;
+    g_Status.exp = 0;
+    D_80137960 = D_80137964 = D_80137968 = 0;
     if (B->code) { // as DRA runs Richter's (src/dra/5087C.c)
         ((PlayerOvl*)HDR_ADDR)->D_8013C000();
         ((PlayerOvl*)HDR_ADDR)->D_8013C008();
@@ -1480,6 +1495,11 @@ static void Run(const CoopPresence* p, u16 pad, s32 hit, bool again) {
         EntityAlucard();
         UpdatePlayerEntities();
     }
+    g_Status.exp = exp;
+    D_80137960 = levelNews[0];
+    D_80137964 = levelNews[1];
+    D_80137968 = levelNews[2];
+    g_unkGraphicsStruct.unk28 = freeze;
     for (i = 1; i < 64; i++) { // its weapons' and familiar's entities: not its to run (WeaponsOff)
         if (HiddenWeapon(&g_Entities[i])) {
             DestroyEntity(&g_Entities[i]);
