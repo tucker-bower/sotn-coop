@@ -22,7 +22,7 @@
 | Separate the app from `harness/` (#222) | **Later** (backlog, per Tucker) | Contributors can't tell shipped code from test code. Test-only controls (`partition`, `stall`) live in the class that runs real play. Moving the worker into `link/` doesn't change behaviour, and the gate proves that. |
 | Split `app.py` by screen | **Later** (backlog, with #222) | It makes contributing easier. Its main argument, Mac and touch controls multiplying the UI, goes away if we trim those (below). |
 | Core vs. extras: a module folder split, a versioned mailbox header with an extension block, a vtable for characters | **Partly** | Moving the files into folders and enforcing which may include which is cheap. A versioned mailbox only matters across versions, and HELO already refuses a version mismatch. A vtable rewrite of `partner.c` is a lot of risk in our most fragile file, for little player value. |
-| `#ifdef` out the partner sim and the spike pad | **Do it** | Cheap. Release builds stop carrying test hooks. |
+| `#ifdef` out the partner sim and the spike pad | **No** | The tests must run the build that ships; a test-only build would let the two drift apart. |
 | Clamp `EV_ITEM` and `partnerPrimCount` in C (#224) | **Do it** | Cheap. Bundle it with the next module change. |
 | Load a fresh `COOP.BIN` into old savestates | **Spike it first** | This would be the biggest speed-up for the nightly agent. But a savestate holds the module's data as well as its code, and their layout changes with almost any edit. An in-place swap breaks tests in ways that are hard to see. The safer versions: rebuild only the savestates the chosen tests use, in parallel, or re-run the module's init after the swap. Spend at most a day finding out which works. |
 | A clean-machine bootstrap (#87) | **Only if needed** | It matters for forkers, and none have shown up. It's needed if the nightly loop moves machines. |
@@ -34,7 +34,7 @@
 ## Recommended plan
 
 ### Short term (in this order)
-1. **The nightly loop** (details below). It comes first because it's what takes Tucker out of the loop.
+1. **The nightly loop** (details below). Built (#381), and it runs from Task Scheduler at 03:00. It needs a long-lived sign-in: `claude setup-token`, saved to `~/.config/sotn-coop/claude-token`.
 2. **Trim the tracker** (done 2026-11-26).
    - The issues listed at the end were closed as "not planned", and the good ideas we won't build ourselves were labelled `help wanted`.
    - #300 and #301 stay planned.
@@ -42,8 +42,8 @@
 3. **Keep contributor setup small.** No one has asked to contribute, so there's no `CONTRIBUTING.md`, no issue templates and no CI rebuild. The dead `ci.yml` is deleted, so nothing claims to check what it doesn't. A bootstrap check in a clean container (#87) is worth doing only if the nightly loop ever has to move to another machine.
 4. **Cleanups that speed up the nightly fixes:**
    - The #224 cleanups, including the C bounds checks.
-   - `#ifdef` out the test hooks from release builds.
-   - The fixture spike.
+   - The fixture spike, only if fixture rebuilds turn out to dominate the nightly runs' time.
+   - Done: `run.py` prunes old test output (#382), so unattended runs don't fill the disk.
 
    The bigger restructures (#222: separate the app from the harness, and split `app.py`) stay in the backlog. They only help human contributors.
 5. **Ship 1.5.0** once the loop has run a week.
