@@ -36,7 +36,8 @@ The game is mostly built, so the work is now feature requests and bug fixes, and
 3. **Design bigger work.** For a new feature or anything hard to reverse, write a one-page `docs/design/<name>.md` with 2–3 options, a recommendation, risks and **testable acceptance criteria**, link it from the issue, and don't write the code until Tucker approves it. Small spikes are fine. Bug fixes and small features need no design: the issue's "Done when" list is the spec. Designs are for future agents: record what was chosen and why, not status.
 4. **Build autonomously** on a branch named `coop-<short-name>`.
 5. **Open a PR** using the template below, with a `Fixes #n` line for each issue: one keyword covers one issue only. If PRs are stacked, confirm the work actually reached `main` after merging. Merging closes the issues; check that it did.
-6. **Playtest** at bigger releases: deliver an installer and APK, with a short sheet of what to try.
+6. **Nightly** (D236): `scripts/nightly.py` runs this loop on players' reports by itself each night, with `scripts/nightly_prompt.md`. Issues it can't settle are labelled `needs-tucker` or `needs-repro`.
+7. **Playtest** at bigger releases: deliver an installer and APK, with a short sheet of what to try.
 
 ## Decisions
 - **Reversible:** pick a sensible default, log it in `docs/DECISION_LOG.md` (choice, options considered, why, marked `agent-default`), and keep going. Don't block on Tucker.

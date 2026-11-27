@@ -18,6 +18,9 @@ Setup, build, generator and release tools.
 | `gen_overlay_table.py` | Generates `module/overlay_table.c`. |
 | `make_debug_starts.py` | Makes the harness's debug, boss and scene starts. |
 | `mingw-w64.cmake` | CMake toolchain for the Windows SwanStation build. |
+| `nightly.py` | The nightly maintenance run (D236): fetches the inbox, and when something's new runs a headless agent with `nightly_prompt.md`, then emails Tucker its summary. `local/nightly.stop` or an open `pause-nightly` issue stops it. |
+| `nightly_prompt.md` | The nightly agent's instructions: triage, fix with a failing-then-passing test, release at most once, summarize. |
+| `nightly_schedule.ps1` | Registers `nightly.py` in Windows Task Scheduler at 03:00, waking the PC, with no window. |
 | `fetch_reports.py` | **Manual.** Fetches the project mailbox (IMAP, an app password in `~/.config/sotn-coop/gmail-imap.txt`), each email once: the players' bug reports, unpacked into `local/reports/`, and Reddit's notices of replies to our posts and comments, into `local/reddit/`. |
 | `join_report.py` | **Manual.** Joins a report sent in parts (each under 9 MB) back into its zip. |
 | `read_report.py` | **Manual.** Prints who was where in an unpacked F9 report, from its saved memory, and names what last hurt each player. |
