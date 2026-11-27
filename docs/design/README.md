@@ -9,8 +9,9 @@ Designs for bigger work, each with its options, decisions and acceptance criteri
 | `boss-rush.md` | Boss rush mode. Done. |
 | `M-castle-rules.md` | Every co-op change to the game as a setting of each castle. Done. |
 | `M20-randomizer.md` | Co-op on the randomizer, the first supported mod. In progress (#144). |
-| `M21-big-lobbies.md` | Co-op lobbies of 4 or 8: a 32 MB core, VRAM banks per character, seven partner slots. Needs approval (#330). |
-| `M22-battle-royale.md` | Battle royale for 8 to 32: puppets, each game its own enemies, a shrinking zone of rooms. Needs approval (#331). |
+| `M21-big-lobbies.md` | Co-op lobbies of 4 or 8: a 32 MB core, VRAM banks per character, seven partner slots. Trimmed (D236). |
+| `M22-battle-royale.md` | Battle royale for 8 to 32: puppets, each game its own enemies, a shrinking zone of rooms. Trimmed (D236). |
+| `maintenance-mode.md` | The project without Tucker: a nightly agent fixes reported bugs and releases, CI on GitHub's runners, contributor docs, and the trimmed milestones (1.5, 2.0). Approved (D236). |
 | `rollback.md` | Lag hiding online: rollback for the partner's body, in our core's 16 MB with its copy engine, and guests' copies of a shared room moved on to now (#86, #292). |
 | `netplay-suite.md` | The 0.13 playtest's bugs, and the tests that reproduce them. In progress. |
 | `M0-harness.md` | Test harness, 8 MB check and disc builder. Done. |
