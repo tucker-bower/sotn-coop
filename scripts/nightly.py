@@ -11,6 +11,8 @@ one bug-fix release, and writes local/nightly/<date>.md, which is then emailed t
 --item reddit/<file> treats that file under local/ as new: a test of the agent's path.
 
 Stops, doing nothing, when local/nightly.stop exists or an open issue is labelled pause-nightly.
+The agent signs in with the long-lived token from `claude setup-token`, kept in
+~/.config/sotn-coop/claude-token (a normal sign-in expires within days).
 Windows Task Scheduler starts it at night (scripts/nightly_schedule.ps1). The summary email goes
 from the project mailbox (~/.config/sotn-coop/gmail-imap.txt) to the address in
 ~/.config/sotn-coop/nightly-to.txt; neither is ever in the repo.
@@ -18,6 +20,7 @@ from the project mailbox (~/.config/sotn-coop/gmail-imap.txt) to the address in
 import argparse
 import datetime
 import fcntl
+import os
 import smtplib
 import subprocess
 import sys
@@ -138,17 +141,25 @@ def main():
            "--add-dir", str(Path.home() / "sotn-coop"), "--output-format", "text"]
     log(f"agent starts ({a.hours} h at most)")
     agent_log = OUT / f"{day}.log"
+    env = dict(os.environ)
+    token = CONFIG / "claude-token"
+    if token.exists():
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = token.read_text().strip()
     with open(agent_log, "w") as f:
         try:
-            code = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT, timeout=a.hours * 3600).returncode
+            code = subprocess.run(cmd, cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT,
+                                  timeout=a.hours * 3600).returncode
         except subprocess.TimeoutExpired:
             code = "timed out"
     log(f"agent ended: {code}")
+    text = agent_log.read_text() if agent_log.exists() else ""
     if summary.exists():
         body = summary.read_text()
+    elif "Failed to authenticate" in text:
+        body = ("Couldn't sign in. In WSL, run `claude setup-token` and save the token it prints in "
+                "~/.config/sotn-coop/claude-token.\n\n" + "\n".join(f"- local/{n}" for n in new))
     else:
-        tail = agent_log.read_text()[-3000:] if agent_log.exists() else ""
-        body = f"The agent ended ({code}) without writing a summary. The end of its log ({agent_log}):\n\n{tail}"
+        body = f"The agent ended ({code}) without writing a summary. The end of its log ({agent_log}):\n\n{text[-3000:]}"
     first = next((ln.strip("# ").strip() for ln in body.splitlines() if ln.strip()), "summary")
     email(f"SOTN Co-op nightly {day}: {first[:80]}", body)
     return 0
