@@ -344,6 +344,35 @@ static void MoveNewsUpdate(void) {
     s_For = c;
 }
 
+// LEVEL UP and Summon Spirit freeze the game (Engine_5, unk28 3) until their own entity ends and
+// lifts it. One that went before it ended left the game frozen for good, the player standing still
+// (report 20261126-221635: LEVEL UP at level 2, online, no such entity left). With neither of them
+// in the player's slots for half a second, the freeze is lifted, as their end would.
+void EntityLevelUpAnimation(Entity* self); // DRA
+void EntitySummonSpirit(Entity* self);     // DRA
+#define FREEZE_LEVEL_UP 3
+#define FREEZE_GRACE 30
+static void FreezeRescue(void) {
+    static s32 orphaned;
+    s32 i;
+
+    if (g_GameState != Game_Play || g_GameEngineStep != Engine_5 || g_unkGraphicsStruct.unk28 != FREEZE_LEVEL_UP) {
+        orphaned = 0;
+        return;
+    }
+    for (i = 4; i < STAGE_ENTITY_START; i++) { // as UpdatePlayerEntities (1-3: the afterimages)
+        if (g_Entities[i].entityId && (g_Entities[i].pfnUpdate == EntityLevelUpAnimation ||
+                                       g_Entities[i].pfnUpdate == EntitySummonSpirit)) {
+            orphaned = 0; // still running (each sets the freeze from its own update)
+            return;
+        }
+    }
+    if (++orphaned >= FREEZE_GRACE) {
+        g_unkGraphicsStruct.unk28 = 0; // DRA's Engine_5 then goes back to normal play
+        orphaned = 0;
+    }
+}
+
 // Familiars for Richter and Maria (design/M8b §3): a load skips the familiar for their player
 // code (src/dra/game_handlers.c), so the module loads it as the menu does when a card is on.
 // From then on the game keeps it, room to room, as for Alucard.
@@ -947,6 +976,7 @@ void CharacterFrame(void) {
         g_api.o.UpdateStageEntities();
     }
     SaturnMariaHalt();
+    FreezeRescue();
     Familiar();
     NoFamiliar();
     MoveNewsUpdate();

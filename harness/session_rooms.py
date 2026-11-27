@@ -424,3 +424,47 @@ def partner_eats_food_alucard_and_alucard(run):
     after = _beats(run)
     run.expect(all(y - x > 250 for x, y in zip(before, after)), "both games keep running (their main loops: 300 frames)",
                beats=(before, after))
+
+
+ENTRANCE_ZOMBIES = str(TOOLS["out"].parent / "fixtures" / "debug-starts" / "Castle Entrance.state")
+ENGINE_NORMAL, ENGINE_FREEZE, FREEZE_LEVEL_UP = 1, 5, 3  # g_GameEngineStep (include/game.h); unk28
+
+
+def _freeze(g):
+    return g.read("g_GameEngineStep"), g.read("g_unkGraphicsStruct", "<i", 0x28)
+
+
+@session_scenario(starts=(ENTRANCE_ZOMBIES, ENTRANCE_ZOMBIES))
+def level_up_freeze_lifts_alucard_and_alucard(run):
+    """Report 20261126-221635 (1.4.8, online): A stood frozen for good after reaching level 2: the
+    game in LEVEL UP's freeze (Engine_5, unk28 3) with no LEVEL UP left to lift it. A put in that
+    state plays again within a second; and a real LEVEL UP (a kill, B beside A) still holds the game
+    for its whole animation, then lets go."""
+    from bots import walker
+    from launcher.bossstarts import EXP_NEXT
+    a, b = run.s.a, run.s.b
+    run.step(30)
+    a.write("g_unkGraphicsStruct", FREEZE_LEVEL_UP, "<i", 0x28)  # the report's state
+    a.write("g_GameEngineStep", ENGINE_FREEZE)
+    run.step(60)
+    run.expect(_freeze(a) == (ENGINE_NORMAL, 0), "the report's freeze, with nothing to lift it: lifted",
+               engine_step_and_freeze=_freeze(a))
+    level = a.read("g_Status", "<i", 0x284)
+    a.write("g_Status", EXP_NEXT[level + 1] - 1, "<i", 0x288)  # one short of a level
+    exp = a.read("g_Status", "<i", 0x288)
+    bot_a, bot_b = walker("left", attack_every=8), walker("left", attack_every=8)
+    for i in range(3000):  # into the corridor's zombies, together, until A's kill
+        run.step(1, p1=(bot_a(a.snapshot(), i), bot_b(b.snapshot(), i)))
+        if a.read("g_Status", "<i", 0x288) != exp:
+            break
+    run.expect(a.read("g_Status", "<i", 0x288) != exp, "A kills a zombie", where=a.snapshot())
+    held = 0
+    for _ in range(400):
+        run.step(1)
+        held += _freeze(a) == (ENGINE_FREEZE, FREEZE_LEVEL_UP)
+    run.expect(a.read("g_Status", "<i", 0x284) == level + 1, "A levelled up", level=(level, a.read("g_Status", "<i", 0x284)))
+    run.expect(held > FREEZE_GRACE_FRAMES, "its LEVEL UP held the game for its animation", frames=held)
+    run.expect(_freeze(a) == (ENGINE_NORMAL, 0), "then let go", engine_step_and_freeze=_freeze(a))
+
+
+FREEZE_GRACE_FRAMES = 30  # module/character.c FREEZE_GRACE
