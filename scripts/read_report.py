@@ -81,6 +81,8 @@ def report(folder, syms):
     folder = Path(folder)
     about = json.loads((folder / "about.json").read_text())
     print(f"== {folder.name}: {about.get('note')!r}")
+    if about.get("disc"):
+        print(f" disc: {about['disc']}")
     for name in sorted(folder.glob("before/*.state")) + [folder / "now/A.state"]:
         if not name.exists():
             continue

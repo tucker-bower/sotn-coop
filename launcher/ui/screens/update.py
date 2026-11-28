@@ -17,7 +17,7 @@ def update_prompt(m, new, mine, notes):
                 return buttons[sel][0]
             elif a == "back":
                 return "later"
-            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int):
+            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int) and a[1] < len(buttons):
                 sel = a[1]
                 if a[0] == "click":
                     return buttons[sel][0]

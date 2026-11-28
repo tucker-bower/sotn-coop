@@ -93,7 +93,7 @@ def options(m, rows, change, sel=0, title="Options", note="Also in the menu bar"
                 share = max(0.0, min(1.0, ((at[0] if at else BAR_X) - BAR_X) / BAR_W))
                 target = row["low"] + round(share * (row["high"] - row["low"]) / row["step"]) * row["step"]
                 change(row["key"], (target - row["value"]) // row["step"])
-            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and table[a[1]]["kind"] != "head":
+            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and a[1] < len(table) and table[a[1]]["kind"] != "head":
                 sel = a[1]
         table = rows()
         shown, names = shown_rows()

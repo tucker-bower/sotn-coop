@@ -76,7 +76,7 @@ def home(m, items, about, version, sel=0, note="", interrupt=None):
                 sel = len(items) - 1
             elif isinstance(a, tuple) and a[0] in ("hover", "click"):
                 hover = a[1] if isinstance(a[1], str) else None
-                if isinstance(a[1], int):
+                if isinstance(a[1], int) and a[1] < len(items):
                     sel = a[1]
                     if a[0] == "click":
                         return items[sel][0]

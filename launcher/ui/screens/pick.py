@@ -18,7 +18,7 @@ def pick(m, heading, items, about=""):
                 return items[sel][0]
             elif a == "back":
                 return None
-            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int):
+            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int) and a[1] < len(items):
                 sel = a[1]
                 if a[0] == "click":
                     return items[sel][0]

@@ -27,7 +27,7 @@ def castle_menu(m, heading, latest, has_castles, has_tests=False):
                 return items[sel][0]
             elif a == "back":
                 return None
-            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int):
+            elif isinstance(a, tuple) and a[0] in ("hover", "click") and isinstance(a[1], int) and a[1] < len(items):
                 sel = a[1]
                 if a[0] == "click":
                     return items[sel][0]
@@ -64,7 +64,7 @@ def castle_list(m, heading, castles, extras=(), sel=0):
         for a in m.poll():
             if a in ("up", "down"):
                 sel = move(sel, a, count)
-            elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int)):
+            elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int) and a[1] < count):
                 if isinstance(a, tuple):
                     sel = a[1]
                 return ("castle", castles[sel]) if sel < len(castles) else extras[sel - len(castles)][0]
@@ -74,7 +74,7 @@ def castle_list(m, heading, castles, extras=(), sel=0):
                 return ("rules", castles[sel])
             elif (a == "history" or a == ("click", "history")) and sel < len(castles):
                 return ("history", castles[sel])
-            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int):
+            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and a[1] < count:
                 sel = a[1]
         first = scroll(first, sel, inside[3] // ROW, count)
         m.begin(heading)
@@ -130,11 +130,11 @@ def save_history(m, name, labels, sel=0):
         for a in m.poll():
             if a in ("up", "down"):
                 sel = move(sel, a, len(rows))
-            elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int)):
+            elif a == "ok" or (isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int) and a[1] < len(rows)):
                 return a[1] if isinstance(a, tuple) else sel
             elif a == "back":
                 return None
-            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int):
+            elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and a[1] < len(rows):
                 sel = a[1]
         first = scroll(first, sel, inside[3] // ROW, len(rows))
         m.begin("Save history", name)
