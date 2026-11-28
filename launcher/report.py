@@ -45,7 +45,7 @@ from paths import data_dir, load_settings, reports_dir
 
 log = logging.getLogger("launcher")
 
-VERSION = "1.4.9"  # the launcher's
+VERSION = "1.4.10"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
 SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
