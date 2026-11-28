@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parent / "harness"))
+sys.path.insert(0, str(HERE.parent / "patcher"))
 import report  # noqa: E402
 
 failed = 0
@@ -72,7 +73,8 @@ class Castle:
 with tempfile.TemporaryDirectory() as d:
     report.reports_dir = lambda: Path(d)
     report.data_dir = lambda: Path(d)
-    report.load_settings = lambda: {"disc": DISC, "bios": None, "music": "auto", "pads": [PAD, None]}
+    report.load_settings = lambda: {"disc": DISC, "bios": None, "music": "auto", "pads": [PAD, None],
+                                    "game_discs": [{"id": "g1", "mods": [{"kind": "hacks", "ids": ["fast-warp"]}]}], "game_disc": "g1"}
     Path(d, "launcher-errors.log").write_text(f"Traceback in {DISC}\n")
     games = [Game([DISC, home, NAME]), Game([DISC, home, NAME])]
     journal = report.Journal()
@@ -91,6 +93,7 @@ with tempfile.TemporaryDirectory() as d:
     about = json.loads(files["about.json"])
     check(about["controllers"] == 1 and set(about["settings"]) == {"music"}, "about.json keeps only what's needed")
     check("time" not in about and "pads" not in about["settings"], "no timestamp or pads in about.json")
+    check("warp" in str(about.get("disc")).lower(), f"about.json says which mods made the disc in use: {about.get('disc')!r}")
 
 
 

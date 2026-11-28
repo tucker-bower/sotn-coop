@@ -204,6 +204,32 @@ def main():
         m, ui, _ = menus([[], [("mouse", 240, 246, True)]])
         check(castle_list(m, "Load castle", castles, extras) == ("history", castles[0]), "the mouse: a click on the footer's save history opens it")
 
+        # the mouse's first move on a new screen hits the last screen's rows (report 20261127-033803):
+        # a hover on row 9 of a long list must not pick a row a short menu doesn't have
+        from ui.screens.pick import pick
+        from ui.screens.update import update_prompt
+
+        def after_long_list(frames):
+            m, ui, _ = menus(frames)
+            ui._rects = [(k, pygame.Rect(0, k * 16, 480, 16)) for k in range(14)]
+            return m
+        stale = [[("mouse", 10, 9 * 16 + 4, False)], ["ok"]]
+        try:
+            got = pick(after_long_list(list(stale)), "Preset", [("rename", "Rename", "a"), ("remove", "Remove", "b")])
+        except IndexError as e:
+            got = e
+        check(got == "rename", f"a two-row choice ignores a hover on the last screen's ninth row: {got!r}")
+        try:
+            got = castle_menu(after_long_list(list(stale)), "Solo", last, True)
+        except IndexError as e:
+            got = e
+        check(got == "continue", f"...as does the castle screen: {got!r}")
+        try:
+            got = update_prompt(after_long_list(list(stale)), "9.9", "1.0", ["new"])
+        except IndexError as e:
+            got = e
+        check(got == "update", f"...and the update prompt: {got!r}")
+
         # who plays, from the menu bar's Continue and New, debug starts and save history (playtest 2026-11-14)
         import types
         import app

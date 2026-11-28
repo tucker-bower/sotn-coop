@@ -45,7 +45,7 @@ from paths import data_dir, load_settings, reports_dir
 
 log = logging.getLogger("launcher")
 
-VERSION = "1.4.9"  # the launcher's
+VERSION = "1.4.10"  # the launcher's
 REPORT_EMAIL = "sotncoop@gmail.com"
 SEND_URL = "https://api.resend.com/emails"
 SEND_FROM = "SOTN Co-op <onboarding@resend.dev>"
@@ -363,6 +363,16 @@ def parts(blob, size=PART_SIZE):
     return [(f".part{k}-of-{len(chunks)}", c) for k, c in enumerate(chunks, 1)]
 
 
+def game_disc(settings):
+    """The game disc in use, in words: "Co-op (no mods)", or its mods and seed (library.describe).
+    A crash inside a mod's own code needs to know which mod (report 20261127-033803)."""
+    try:
+        import library
+        return library.describe(library.current(settings)) or library.PLAIN
+    except Exception as e:  # noqa: BLE001: a report is still worth sending without it
+        return f"unknown ({type(e).__name__})"
+
+
 def write_launcher(window, note=""):
     """A report from the launcher's menus (F9 there, no game running): the window, the logs and
     what this install is. Returns its path."""
@@ -376,7 +386,7 @@ def write_launcher(window, note=""):
                 z.writestr("now/window.png", _png(window))
             patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
             about = {"launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION, "where": "launcher",
-                     "patch": json.loads(patch.read_text()) if patch.exists() else None,
+                     "patch": json.loads(patch.read_text()) if patch.exists() else None, "disc": game_disc(load_settings()),
                      "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
                      "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
                      "note": note}
@@ -442,7 +452,7 @@ def write(games, playthrough, window, rolling, inputs, frame_times, controllers,
             patch = Path(__file__).resolve().parent.parent / "patcher/manifest.json"
             about = {
                 "launcher": VERSION, "link": LINK_VERSION, "wire": WIRE_VERSION,
-                "patch": json.loads(patch.read_text()) if patch.exists() else None,
+                "patch": json.loads(patch.read_text()) if patch.exists() else None, "disc": game_disc(load_settings()),
                 "settings": {k: v for k, v in load_settings().items() if k in SHARED_SETTINGS},
                 "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
                 "controllers": len(controllers), "castle": bool(playthrough),

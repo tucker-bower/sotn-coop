@@ -395,9 +395,9 @@ class UI:
                     return sel
                 elif a == "back":
                     return None
-                elif isinstance(a, tuple) and a[0] == "hover":
+                elif isinstance(a, tuple) and a[0] == "hover" and isinstance(a[1], int) and a[1] < len(items):
                     sel = a[1]
-                elif isinstance(a, tuple) and a[0] == "click":
+                elif isinstance(a, tuple) and a[0] == "click" and isinstance(a[1], int) and a[1] < len(items):
                     return a[1]
             self.frame(heading, subtitle)
             lines = len(self.wrap(subtitle, self.small, SIZE[0] - 120)) if subtitle else 0
